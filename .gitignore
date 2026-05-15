@@ -60,10 +60,6 @@ docker-compose.override.yml
 *.db
 *.sqlite
 
-# === AI ===
-openspec/**
-CLAUDE.md
+# === local ===
 *.local.*
-GEMINI.md
-.agents/**
-.gemini/**
+openspec/**

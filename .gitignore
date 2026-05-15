@@ -1,6 +1,6 @@
 # === Build ===
-/bin/
-/tmp/
+app/bin/
+app/tmp/
 
 # === Go ===
 *.exe
@@ -13,14 +13,15 @@
 vendor/
 
 # === Swagger (auto-generated, don't track) ===
-/docs/docs.go
-/docs/swagger.json
-/docs/swagger.yaml
+app/docs/docs.go
+app/docs/swagger.json
+app/docs/swagger.yaml
 
 # === Environment ===
 .env
 .env.local
 .env.*.local
+app/.env
 
 # === IDE ===
 .idea/
@@ -42,8 +43,8 @@ coverage.out
 coverage.html
 
 # === Uploads (local dev) ===
-/uploads/
-/tmp/chunks/
+uploads/
+tmp/chunks/
 
 # === Frontend ===
 web/node_modules/

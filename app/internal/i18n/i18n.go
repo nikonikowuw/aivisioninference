@@ -1,0 +1,101 @@
+// Package i18n provides internationalization support for the niko-admin application.
+// It maps business error codes to translated messages in multiple languages.
+package i18n
+
+import (
+	"fmt"
+	"sync"
+
+	"github.com/niko-admin/niko-admin/internal/middleware"
+)
+
+var (
+	mu      sync.RWMutex
+	storage = map[string]map[int]string{
+		"en": {
+			0:     "success",
+			10001: "bad request",
+			20001: "unauthorized",
+			20002: "token expired",
+			20003: "invalid token",
+			20403: "refresh token reuse detected",
+			30001: "forbidden",
+			40001: "resource not found",
+			50001: "internal server error",
+		},
+		"zh": {
+			0:     "成功",
+			10001: "请求参数错误",
+			20001: "未登录",
+			20002: "Token已过期",
+			20003: "Token无效",
+			20403: "Token已被复用，所有设备已强制登出",
+			30001: "无权限",
+			40001: "资源不存在",
+			50001: "服务器内部错误",
+		},
+	}
+)
+
+// Translate returns the translated message for the given error code and language.
+// If lang is empty, it falls back to "en". If the language or code is not found,
+// it falls back to English. If still not found, returns "unknown error".
+func Translate(lang string, code int) string {
+	if lang == "" {
+		lang = middleware.DefaultLanguage
+	}
+
+	mu.RLock()
+	defer mu.RUnlock()
+
+	// Try the requested language first.
+	if msgs, ok := storage[lang]; ok {
+		if msg, ok := msgs[code]; ok {
+			return msg
+		}
+	}
+
+	// Fallback to English.
+	if msgs, ok := storage[middleware.DefaultLanguage]; ok {
+		if msg, ok := msgs[code]; ok {
+			return msg
+		}
+	}
+
+	return fmt.Sprintf("unknown error (code=%d)", code)
+}
+
+// RegisterMessages adds or overwrites translations for the given language.
+// It is safe to call concurrently.
+func RegisterMessages(lang string, msgs map[int]string) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if storage[lang] == nil {
+		storage[lang] = make(map[int]string)
+	}
+	for k, v := range msgs {
+		storage[lang][k] = v
+	}
+}
+
+// Languages returns the list of currently registered languages.
+func Languages() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	langs := make([]string, 0, len(storage))
+	for lang := range storage {
+		langs = append(langs, lang)
+	}
+	return langs
+}
+
+// HasLanguage reports whether translations exist for the given language code.
+func HasLanguage(lang string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	_, ok := storage[lang]
+	return ok
+}

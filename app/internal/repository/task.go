@@ -5,6 +5,9 @@
 package repository
 
 import (
+	"context"
+	"time"
+
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -21,33 +24,33 @@ func NewTaskRepository(db *gorm.DB) *TaskRepository {
 }
 
 // FindByID finds a task by its ID.
-func (r *TaskRepository) FindByID(id string) (*model.Task, error) {
+func (r *TaskRepository) FindByID(ctx context.Context, id string) (*model.Task, error) {
 	var item model.Task
-	err := r.db.Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
 // Create inserts a new task record.
-func (r *TaskRepository) Create(item *model.Task) error {
-	return r.db.Create(item).Error
+func (r *TaskRepository) Create(ctx context.Context, item *model.Task) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // Update saves changes to a task record.
-func (r *TaskRepository) Update(item *model.Task) error {
-	return r.db.Save(item).Error
+func (r *TaskRepository) Update(ctx context.Context, item *model.Task) error {
+	return r.db.WithContext(ctx).Save(item).Error
 }
 
 // Delete removes a task by its ID.
-func (r *TaskRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.Task{}).Error
+func (r *TaskRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Task{}).Error
 }
 
 // List returns a paginated list of tasks.
-func (r *TaskRepository) List(page, pageSize int) ([]model.Task, int64, error) {
+func (r *TaskRepository) List(ctx context.Context, page, pageSize int) ([]model.Task, int64, error) {
 	var items []model.Task
 	var total int64
 
-	query := r.db.Model(&model.Task{})
+	query := r.db.WithContext(ctx).Model(&model.Task{})
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -55,4 +58,34 @@ func (r *TaskRepository) List(page, pageSize int) ([]model.Task, int64, error) {
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
 	return items, total, err
+}
+
+// ListFiltered returns a paginated list of tasks with optional type/status filters.
+func (r *TaskRepository) ListFiltered(ctx context.Context, page, pageSize int, taskType, status string) ([]model.Task, int64, error) {
+	var items []model.Task
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.Task{})
+	if taskType != "" {
+		query = query.Where("type = ?", taskType)
+	}
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	return items, total, err
+}
+
+// UpdateStatus updates the status and optionally the finished_at timestamp of a task.
+func (r *TaskRepository) UpdateStatus(ctx context.Context, taskID, status string, finishedAt *time.Time) error {
+	return r.db.WithContext(ctx).Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+		"status":      status,
+		"finished_at": finishedAt,
+	}).Error
 }

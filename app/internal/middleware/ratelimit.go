@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,7 +22,7 @@ func RateLimit(rdb *redis.Client, requestsPerMinute int) gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		key := fmt.Sprintf("%s%s", rateLimitPrefix, clientIP)
 
-		ctx := context.Background()
+		ctx := c.Request.Context()
 
 		// INCR creates the key if it doesn't exist (TTL = 0 = no expiry yet)
 		count, err := rdb.Incr(ctx, key).Result()

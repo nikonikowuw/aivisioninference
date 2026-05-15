@@ -5,6 +5,8 @@
 package repository
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -21,38 +23,116 @@ func NewRoleRepository(db *gorm.DB) *RoleRepository {
 }
 
 // FindByID finds a role by its ID.
-func (r *RoleRepository) FindByID(id string) (*model.Role, error) {
+func (r *RoleRepository) FindByID(ctx context.Context, id string) (*model.Role, error) {
 	var item model.Role
-	err := r.db.Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
 // Create inserts a new role record.
-func (r *RoleRepository) Create(item *model.Role) error {
-	return r.db.Create(item).Error
+func (r *RoleRepository) Create(ctx context.Context, item *model.Role) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // Update saves changes to a role record.
-func (r *RoleRepository) Update(item *model.Role) error {
-	return r.db.Save(item).Error
+func (r *RoleRepository) Update(ctx context.Context, item *model.Role) error {
+	return r.db.WithContext(ctx).Save(item).Error
 }
 
 // Delete removes a role by its ID.
-func (r *RoleRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.Role{}).Error
+func (r *RoleRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Role{}).Error
 }
 
 // List returns a paginated list of roles.
-func (r *RoleRepository) List(page, pageSize int) ([]model.Role, int64, error) {
+func (r *RoleRepository) List(ctx context.Context, page, pageSize int) ([]model.Role, int64, error) {
 	var items []model.Role
 	var total int64
 
-	query := r.db.Model(&model.Role{})
+	query := r.db.WithContext(ctx).Model(&model.Role{})
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	return items, total, err
+}
+
+// FindByName finds a role by name.
+func (r *RoleRepository) FindByName(ctx context.Context, name string) (*model.Role, error) {
+	var role model.Role
+	err := r.db.WithContext(ctx).Where("name = ?", name).First(&role).Error
+	return &role, err
+}
+
+// CountByName counts roles with the given name, optionally excluding an ID.
+func (r *RoleRepository) CountByName(ctx context.Context, name string, excludeID string) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&model.Role{}).Where("name = ?", name)
+	if excludeID != "" {
+		query = query.Where("id != ?", excludeID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// CountAssignedUsers returns how many users are assigned to the given role.
+func (r *RoleRepository) CountAssignedUsers(ctx context.Context, roleID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("user_roles").Where("role_id = ?", roleID).Count(&count).Error
+	return count, err
+}
+
+// GetPermissionsByRoleID returns permissions assigned to a role via the join table.
+func (r *RoleRepository) GetPermissionsByRoleID(ctx context.Context, roleID string) ([]model.Permission, error) {
+	var permissions []model.Permission
+	err := r.db.WithContext(ctx).
+		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where("role_permissions.role_id = ?", roleID).
+		Order("permissions.sort_order ASC, permissions.created_at ASC").
+		Find(&permissions).Error
+	return permissions, err
+}
+
+// ReplacePermissions replaces all permission associations for a role in a transaction.
+func (r *RoleRepository) ReplacePermissions(ctx context.Context, roleID string, permissionIDs []string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("role_id = ?", roleID).Delete(&model.RolePermission{}).Error; err != nil {
+			return err
+		}
+		if len(permissionIDs) > 0 {
+			rolePerms := make([]model.RolePermission, 0, len(permissionIDs))
+			for _, pid := range permissionIDs {
+				rolePerms = append(rolePerms, model.RolePermission{
+					RoleID:       roleID,
+					PermissionID: pid,
+				})
+			}
+			return tx.Create(&rolePerms).Error
+		}
+		return nil
+	})
+}
+
+// ListFiltered returns a paginated list of roles with optional name/description filters.
+func (r *RoleRepository) ListFiltered(ctx context.Context, page, pageSize int, name, description string) ([]model.Role, int64, error) {
+	var items []model.Role
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.Role{})
+	if name != "" {
+		query = query.Where("name LIKE ?", "%"+name+"%")
+	}
+	if description != "" {
+		query = query.Where("description LIKE ?", "%"+description+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Offset(offset).Limit(pageSize).Order("sort_order ASC, created_at DESC").Find(&items).Error
 	return items, total, err
 }

@@ -2,23 +2,21 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
+	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 // PermissionHandler handles HTTP requests for Permission operations.
 type PermissionHandler struct {
-	db *gorm.DB
+	svc *service.PermissionService
 }
 
-// NewPermissionHandler creates a new PermissionHandler with the given database.
-func NewPermissionHandler(db *gorm.DB) *PermissionHandler {
-	return &PermissionHandler{db: db}
+// NewPermissionHandler creates a new PermissionHandler with the given dependencies.
+func NewPermissionHandler(svc *service.PermissionService) *PermissionHandler {
+	return &PermissionHandler{svc: svc}
 }
 
 // Tree returns all permissions organized as a tree structure.
@@ -31,30 +29,12 @@ func NewPermissionHandler(db *gorm.DB) *PermissionHandler {
 // @Router       /permissions/tree [get]
 // @Security     BearerAuth
 func (h *PermissionHandler) Tree(c *gin.Context) {
-	var all []model.Permission
-	if err := h.db.Order("sort_order ASC, created_at ASC").Find(&all).Error; err != nil {
-		zap.L().Error("list permissions failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
+	tree, err := h.svc.Tree(c.Request.Context())
+	if err != nil {
+		response.Err(c, err)
 		return
 	}
-
-	tree := buildPermissionTree(all, nil)
 	response.OK(c, tree)
-}
-
-// buildPermissionTree recursively builds a permission tree from a flat list.
-func buildPermissionTree(all []model.Permission, parentID *string) []model.Permission {
-	var result []model.Permission
-	for _, p := range all {
-		// Match nodes whose ParentID equals the given parentID (both nil for roots)
-		if (parentID == nil && p.ParentID == nil) ||
-			(parentID != nil && p.ParentID != nil && *parentID == *p.ParentID) {
-			node := p
-			node.Children = buildPermissionTree(all, &node.ID)
-			result = append(result, node)
-		}
-	}
-	return result
 }
 
 // Create creates a new permission.
@@ -75,47 +55,11 @@ func (h *PermissionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Check code uniqueness
-	var count int64
-	if err := h.db.Model(&model.Permission{}).Where("code = ?", req.Code).Count(&count).Error; err != nil {
-		zap.L().Error("check permission code uniqueness failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
-		return
-	}
-	if count > 0 {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "权限编码已存在"))
+	perm, err := h.svc.Create(c.Request.Context(), req)
+	if err != nil {
+		response.Err(c, err)
 		return
 	}
 
-	// Verify parent exists if specified
-	if req.ParentID != nil {
-		var parentCount int64
-		if err := h.db.Model(&model.Permission{}).Where("id = ?", *req.ParentID).Count(&parentCount).Error; err != nil {
-			zap.L().Error("check parent permission failed", zap.Error(err))
-			response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
-			return
-		}
-		if parentCount == 0 {
-			response.Err(c, apperrors.New(apperrors.ErrNotFound, "父级权限不存在"))
-			return
-		}
-	}
-
-	item := model.Permission{
-		Name:      req.Name,
-		Code:      req.Code,
-		Path:      req.Path,
-		Method:    req.Method,
-		Type:      req.Type,
-		ParentID:  req.ParentID,
-		SortOrder: req.SortOrder,
-	}
-
-	if err := h.db.Create(&item).Error; err != nil {
-		zap.L().Error("create permission failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
-		return
-	}
-
-	response.OK(c, item)
+	response.OK(c, perm)
 }

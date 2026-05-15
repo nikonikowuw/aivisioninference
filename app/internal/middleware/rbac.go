@@ -48,7 +48,7 @@ func RBAC(rdb *redis.Client, db *gorm.DB) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		method := c.Request.Method
 
-		allowed, err := CheckPermission(rdb, db, uid, path, method)
+		allowed, err := CheckPermission(c.Request.Context(), rdb, db, uid, path, method)
 		if err != nil {
 			zap.L().Error("rbac check failed",
 				zap.String("user_id", uid),
@@ -79,8 +79,7 @@ func RBAC(rdb *redis.Client, db *gorm.DB) gin.HandlerFunc {
 // CheckPermission verifies whether the given user has a permission matching
 // the specified path and method. It checks Redis cache first, falling back
 // to the database on cache miss.
-func CheckPermission(rdb *redis.Client, db *gorm.DB, userID, path, method string) (bool, error) {
-	ctx := context.Background()
+func CheckPermission(ctx context.Context, rdb *redis.Client, db *gorm.DB, userID, path, method string) (bool, error) {
 	cacheKey := fmt.Sprintf("%s%s", permCachePrefix, userID)
 
 	// Try cache first
@@ -107,7 +106,7 @@ func CheckPermission(rdb *redis.Client, db *gorm.DB, userID, path, method string
 		INNER JOIN user_roles ur ON ur.role_id = rp.role_id
 		WHERE ur.user_id = ?
 	`
-	if err := db.Raw(query, userID).Scan(&perms).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(query, userID).Scan(&perms).Error; err != nil {
 		return false, fmt.Errorf("failed to query permissions: %w", err)
 	}
 

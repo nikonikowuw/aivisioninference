@@ -15,6 +15,8 @@ import (
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
+	"github.com/niko-admin/niko-admin/internal/repository"
+	"github.com/niko-admin/niko-admin/internal/service"
 	"github.com/niko-admin/niko-admin/internal/task"
 )
 
@@ -73,8 +75,27 @@ func (r *Router) setupMiddleware() {
 func (r *Router) setupRoutes() {
 	v1 := r.engine.Group("/api/v1")
 
+	// Create repositories
+	userRepo := repository.NewUserRepository(r.db)
+	roleRepo := repository.NewRoleRepository(r.db)
+	permRepo := repository.NewPermissionRepository(r.db)
+	auditRepo := repository.NewAuditRepository(r.db)
+	fileRepo := repository.NewFileRepository(r.db)
+	taskRepo := repository.NewTaskRepository(r.db)
+	dashRepo := repository.NewDashboardRepository(r.db)
+
+	// Create services
+	authSvc := service.NewAuthService(userRepo, r.rdb, r.jwtManager)
+	userSvc := service.NewUserService(userRepo)
+	roleSvc := service.NewRoleService(roleRepo, r.rdb)
+	permSvc := service.NewPermissionService(permRepo)
+	fileSvc := service.NewFileService(fileRepo)
+	auditSvc := service.NewAuditService(auditRepo)
+	taskSvc := service.NewTaskService(taskRepo)
+	dashSvc := service.NewDashboardService(dashRepo)
+
 	// Auth (no auth required)
-	authHandler := handler.NewAuthHandler(r.db, r.rdb, r.jwtManager)
+	authHandler := handler.NewAuthHandler(authSvc)
 	v1.POST("/auth/login", authHandler.Login)
 	v1.POST("/auth/refresh", authHandler.Refresh)
 	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), authHandler.Logout)
@@ -90,7 +111,7 @@ func (r *Router) setupRoutes() {
 	authorized.Use(middleware.Auth(r.jwtManager))
 
 	// Users
-	userHandler := handler.NewUserHandler(r.db)
+	userHandler := handler.NewUserHandler(userSvc)
 	users := authorized.Group("/users")
 	{
 		users.GET("", userHandler.List)
@@ -101,7 +122,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Roles
-	roleHandler := handler.NewRoleHandler(r.db, r.rdb)
+	roleHandler := handler.NewRoleHandler(roleSvc)
 	roles := authorized.Group("/roles")
 	{
 		roles.GET("", roleHandler.List)
@@ -114,15 +135,15 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Permissions
-	permissionHandler := handler.NewPermissionHandler(r.db)
+	permHandler := handler.NewPermissionHandler(permSvc)
 	permissions := authorized.Group("/permissions")
 	{
-		permissions.GET("/tree", permissionHandler.Tree)
-		permissions.POST("", middleware.RBAC(r.rdb, r.db), permissionHandler.Create)
+		permissions.GET("/tree", permHandler.Tree)
+		permissions.POST("", middleware.RBAC(r.rdb, r.db), permHandler.Create)
 	}
 
 	// Files
-	fileHandler := handler.NewFileHandler(r.db)
+	fileHandler := handler.NewFileHandler(fileSvc)
 	files := authorized.Group("/files")
 	{
 		files.POST("/upload/init", fileHandler.InitUpload)
@@ -137,11 +158,11 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Audit Logs
-	auditHandler := handler.NewAuditHandler(r.db)
+	auditHandler := handler.NewAuditHandler(auditSvc)
 	authorized.GET("/audit-logs", middleware.RBAC(r.rdb, r.db), auditHandler.List)
 
 	// Tasks
-	taskHandler := handler.NewTaskHandler(r.db)
+	taskHandler := handler.NewTaskHandler(taskSvc)
 	tasks := authorized.Group("/tasks")
 	{
 		tasks.POST("", taskHandler.Create)
@@ -151,7 +172,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Dashboard
-	dashboardHandler := handler.NewDashboardHandler(r.db)
+	dashboardHandler := handler.NewDashboardHandler(dashSvc)
 	authorized.GET("/dashboard/stats", dashboardHandler.Stats)
 
 	// Swagger UI (non-production only)

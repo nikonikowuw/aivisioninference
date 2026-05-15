@@ -35,11 +35,18 @@ func OK(c *gin.Context, data interface{}) {
 }
 
 // Err sends an error response based on the AppError code.
-func Err(c *gin.Context, err *apperrors.AppError) {
-	httpStatus := codeToHTTPStatus(err.Code)
-	c.JSON(httpStatus, Response{
-		Code:    err.Code,
-		Message: err.Message,
+func Err(c *gin.Context, err error) {
+	if appErr, ok := err.(*apperrors.AppError); ok {
+		httpStatus := codeToHTTPStatus(appErr.Code)
+		c.JSON(httpStatus, Response{
+			Code:    appErr.Code,
+			Message: appErr.Message,
+		})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, Response{
+		Code:    apperrors.ErrInternal,
+		Message: "服务器内部错误",
 	})
 }
 

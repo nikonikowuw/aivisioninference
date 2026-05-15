@@ -5,6 +5,8 @@
 package repository
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -21,33 +23,33 @@ func NewPermissionRepository(db *gorm.DB) *PermissionRepository {
 }
 
 // FindByID finds a permission by its ID.
-func (r *PermissionRepository) FindByID(id string) (*model.Permission, error) {
+func (r *PermissionRepository) FindByID(ctx context.Context, id string) (*model.Permission, error) {
 	var item model.Permission
-	err := r.db.Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
 // Create inserts a new permission record.
-func (r *PermissionRepository) Create(item *model.Permission) error {
-	return r.db.Create(item).Error
+func (r *PermissionRepository) Create(ctx context.Context, item *model.Permission) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // Update saves changes to a permission record.
-func (r *PermissionRepository) Update(item *model.Permission) error {
-	return r.db.Save(item).Error
+func (r *PermissionRepository) Update(ctx context.Context, item *model.Permission) error {
+	return r.db.WithContext(ctx).Save(item).Error
 }
 
 // Delete removes a permission by its ID.
-func (r *PermissionRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.Permission{}).Error
+func (r *PermissionRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Permission{}).Error
 }
 
 // List returns a paginated list of permissions.
-func (r *PermissionRepository) List(page, pageSize int) ([]model.Permission, int64, error) {
+func (r *PermissionRepository) List(ctx context.Context, page, pageSize int) ([]model.Permission, int64, error) {
 	var items []model.Permission
 	var total int64
 
-	query := r.db.Model(&model.Permission{})
+	query := r.db.WithContext(ctx).Model(&model.Permission{})
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -55,4 +57,39 @@ func (r *PermissionRepository) List(page, pageSize int) ([]model.Permission, int
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
 	return items, total, err
+}
+
+// FindAllOrdered returns all permissions ordered by sort_order and created_at.
+func (r *PermissionRepository) FindAllOrdered(ctx context.Context) ([]model.Permission, error) {
+	var items []model.Permission
+	err := r.db.WithContext(ctx).Order("sort_order ASC, created_at ASC").Find(&items).Error
+	return items, err
+}
+
+// FindByCode finds a permission by its code.
+func (r *PermissionRepository) FindByCode(ctx context.Context, code string) (*model.Permission, error) {
+	var item model.Permission
+	err := r.db.WithContext(ctx).Where("code = ?", code).First(&item).Error
+	return &item, err
+}
+
+// CountByCode counts permissions with the given code.
+func (r *PermissionRepository) CountByCode(ctx context.Context, code string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.Permission{}).Where("code = ?", code).Count(&count).Error
+	return count, err
+}
+
+// FindByIDs returns permissions matching the given IDs.
+func (r *PermissionRepository) FindByIDs(ctx context.Context, ids []string) ([]model.Permission, error) {
+	var items []model.Permission
+	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&items).Error
+	return items, err
+}
+
+// ExistsByID checks if a permission with the given ID exists.
+func (r *PermissionRepository) ExistsByID(ctx context.Context, id string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.Permission{}).Where("id = ?", id).Count(&count).Error
+	return count > 0, err
 }

@@ -5,6 +5,8 @@
 package repository
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -21,33 +23,33 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 }
 
 // FindByID finds a user by its ID.
-func (r *UserRepository) FindByID(id string) (*model.User, error) {
+func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
 	var item model.User
-	err := r.db.Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
 // Create inserts a new user record.
-func (r *UserRepository) Create(item *model.User) error {
-	return r.db.Create(item).Error
+func (r *UserRepository) Create(ctx context.Context, item *model.User) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // Update saves changes to a user record.
-func (r *UserRepository) Update(item *model.User) error {
-	return r.db.Save(item).Error
+func (r *UserRepository) Update(ctx context.Context, item *model.User) error {
+	return r.db.WithContext(ctx).Save(item).Error
 }
 
 // Delete removes a user by its ID.
-func (r *UserRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.User{}).Error
+func (r *UserRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.User{}).Error
 }
 
 // List returns a paginated list of users.
-func (r *UserRepository) List(page, pageSize int) ([]model.User, int64, error) {
+func (r *UserRepository) List(ctx context.Context, page, pageSize int) ([]model.User, int64, error) {
 	var items []model.User
 	var total int64
 
-	query := r.db.Model(&model.User{})
+	query := r.db.WithContext(ctx).Model(&model.User{})
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -55,4 +57,83 @@ func (r *UserRepository) List(page, pageSize int) ([]model.User, int64, error) {
 	offset := (page - 1) * pageSize
 	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
 	return items, total, err
+}
+
+// FindByUsername finds a user by username with roles preloaded.
+func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Preload("Roles").Where("username = ?", username).First(&user).Error
+	return &user, err
+}
+
+// CountByUsername counts users with the given username, optionally excluding an ID.
+func (r *UserRepository) CountByUsername(ctx context.Context, username string, excludeID string) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&model.User{}).Where("username = ?", username)
+	if excludeID != "" {
+		query = query.Where("id != ?", excludeID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// ListWithRoles returns a paginated list of users with roles preloaded and optional filters.
+func (r *UserRepository) ListWithRoles(ctx context.Context, page, pageSize int, username, displayName string, status *int) ([]model.User, int64, error) {
+	var items []model.User
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.User{})
+	if username != "" {
+		query = query.Where("username LIKE ?", "%"+username+"%")
+	}
+	if displayName != "" {
+		query = query.Where("display_name LIKE ?", "%"+displayName+"%")
+	}
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Preload("Roles").Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	return items, total, err
+}
+
+// AssignRoles replaces all role associations for a user in a transaction.
+func (r *UserRepository) AssignRoles(ctx context.Context, userID string, roleIDs []string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var user model.User
+		if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
+			return err
+		}
+
+		if len(roleIDs) > 0 {
+			var roles []model.Role
+			if err := tx.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
+				return err
+			}
+			return tx.Model(&user).Association("Roles").Replace(roles)
+		}
+		return tx.Model(&user).Association("Roles").Clear()
+	})
+}
+
+// UpdatePassword updates only the password field for a user.
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("password", hashedPassword).Error
+}
+
+// UpdateLoginAttempts updates the login attempts counter.
+func (r *UserRepository) UpdateLoginAttempts(ctx context.Context, userID string, attempts int) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("login_attempts", attempts).Error
+}
+
+// FindByIDWithRoles finds a user by ID with roles preloaded.
+func (r *UserRepository) FindByIDWithRoles(ctx context.Context, id string) (*model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Preload("Roles").Where("id = ?", id).First(&user).Error
+	return &user, err
 }

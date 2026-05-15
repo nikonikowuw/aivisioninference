@@ -43,32 +43,32 @@ func main() {
 	}
 
 	// Seed default data.
-	seedData(db)
+	seedData(db, cfg.Seed)
 
 	log.Println("Migration completed successfully")
 }
 
 // seedData inserts the default admin user, role, and permissions if they do not exist.
-func seedData(db *gorm.DB) {
+func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 	// Check if admin user exists.
 	var count int64
-	db.Model(&model.User{}).Where("username = ?", "admin").Count(&count)
+	db.Model(&model.User{}).Where("username = ?", seedCfg.Username).Count(&count)
 	if count > 0 {
 		return
 	}
 
 	// Create admin user.
-	hashedPwd, err := hash.Hash("admin123")
+	hashedPwd, err := hash.Hash(seedCfg.Password)
 	if err != nil {
 		log.Printf("hash password: %v", err)
 		return
 	}
 
 	admin := model.User{
-		Username:    "admin",
+		Username:    seedCfg.Username,
 		Password:    hashedPwd,
-		Email:       "admin@example.com",
-		DisplayName: "管理员",
+		Email:       seedCfg.Email,
+		DisplayName: seedCfg.DisplayName,
 		Status:      1,
 	}
 	if err := db.Create(&admin).Error; err != nil {

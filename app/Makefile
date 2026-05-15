@@ -5,12 +5,21 @@ ENV           ?= dev
 GO_FLAGS      ?= -ldflags="-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(shell date +%Y%m%d%H%M%S)"
 VERSION       ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: dev build test lint clean help
+.PHONY: serve run dev test deploy build unit-test lint clean help
 
-## dev: 开发模式 — 启动依赖 + 热重载
-dev: docker-up
+## serve: 开发模式 — 启动依赖 + 热重载（需要 Docker）
+serve: docker-up
 	@echo "Starting development server with air..."
 	air
+
+# 空操作，使命令行参数 dev/test/deploy 不报错
+dev:
+test:
+deploy:
+
+## run: 本地运行（make run / make run dev / make run deploy，默认 dev）
+run:
+	NIKO_APP_ENV=$(if $(filter-out $@,$(MAKECMDGOALS)),$(filter-out $@,$(MAKECMDGOALS)),$(ENV)) go run $(MAIN_PATH)
 
 ## build: 编译当前平台二进制
 build:
@@ -32,8 +41,8 @@ swag:
 gen:
 	go run cmd/gen/main.go --all
 
-## test: 运行测试
-test:
+## unit-test: 运行测试
+unit-test:
 	go test -v -race -coverprofile=coverage.out ./...
 
 ## lint: 代码规范检查
@@ -68,12 +77,13 @@ init:
 	@sleep 3
 	go mod tidy
 	go run cmd/migrate/main.go
-	@echo "--- Init complete! Run 'make dev' to start ---"
+	@echo "--- Init complete! Run 'make serve' to start ---"
 
 ## help: 显示帮助信息
 help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Available targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^## [a-zA-Z_-]+:.*' $(MAKEFILE_LIST) | \
+		sed 's/^## //' | \
+		awk 'BEGIN {FS = ": "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'

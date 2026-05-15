@@ -32,15 +32,19 @@ type refreshTokenData struct {
 // Manager handles JWT token operations.
 type Manager struct {
 	secret           []byte
+	issuer           string
+	audience         string
 	accessExpireSec  int
 	refreshExpireSec int
 	redis            *redis.Client
 }
 
 // NewManager creates a new JWT Manager.
-func NewManager(secret string, accessExpireSec, refreshExpireSec int, rdb *redis.Client) *Manager {
+func NewManager(secret, issuer, audience string, accessExpireSec, refreshExpireSec int, rdb *redis.Client) *Manager {
 	return &Manager{
 		secret:           []byte(secret),
+		issuer:           issuer,
+		audience:         audience,
 		accessExpireSec:  accessExpireSec,
 		refreshExpireSec: refreshExpireSec,
 		redis:            rdb,
@@ -61,7 +65,8 @@ func (m *Manager) GenerateTokenPair(userID string, roleIDs []string) (accessToke
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(expiresIn) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			Issuer:    "niko-admin",
+			Issuer:    m.issuer,
+			Audience:  jwt.ClaimStrings{m.audience},
 		},
 	}
 

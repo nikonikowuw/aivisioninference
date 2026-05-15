@@ -73,6 +73,8 @@ func main() {
 	// Initialize JWT manager
 	jwtManager := jwt.NewManager(
 		cfg.JWT.Secret,
+		cfg.JWT.Issuer,
+		cfg.JWT.Audience,
 		cfg.JWT.AccessExpireSec,
 		cfg.JWT.RefreshExpireSec,
 		rdb,

@@ -5,6 +5,9 @@
 package repository
 
 import (
+	"context"
+	"time"
+
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -21,33 +24,101 @@ func NewFileRepository(db *gorm.DB) *FileRepository {
 }
 
 // FindByID finds a file by its ID.
-func (r *FileRepository) FindByID(id string) (*model.File, error) {
+func (r *FileRepository) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var item model.File
-	err := r.db.Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
 // Create inserts a new file record.
-func (r *FileRepository) Create(item *model.File) error {
-	return r.db.Create(item).Error
+func (r *FileRepository) Create(ctx context.Context, item *model.File) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // Update saves changes to a file record.
-func (r *FileRepository) Update(item *model.File) error {
-	return r.db.Save(item).Error
+func (r *FileRepository) Update(ctx context.Context, item *model.File) error {
+	return r.db.WithContext(ctx).Save(item).Error
 }
 
 // Delete removes a file by its ID.
-func (r *FileRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.File{}).Error
+func (r *FileRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.File{}).Error
 }
 
 // List returns a paginated list of files.
-func (r *FileRepository) List(page, pageSize int) ([]model.File, int64, error) {
+func (r *FileRepository) List(ctx context.Context, page, pageSize int) ([]model.File, int64, error) {
 	var items []model.File
 	var total int64
 
-	query := r.db.Model(&model.File{})
+	query := r.db.WithContext(ctx).Model(&model.File{})
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	return items, total, err
+}
+
+// FindByUploadID finds a FileChunk by its upload_id.
+func (r *FileRepository) FindByUploadID(ctx context.Context, uploadID string) (*model.FileChunk, error) {
+	var chunk model.FileChunk
+	err := r.db.WithContext(ctx).Where("upload_id = ?", uploadID).First(&chunk).Error
+	return &chunk, err
+}
+
+// CreateChunk inserts a new FileChunk record.
+func (r *FileRepository) CreateChunk(ctx context.Context, chunk *model.FileChunk) error {
+	return r.db.WithContext(ctx).Create(chunk).Error
+}
+
+// FindByUploadIDWithStatus finds a FileChunk by upload_id and status.
+func (r *FileRepository) FindByUploadIDWithStatus(ctx context.Context, uploadID, status string) (*model.FileChunk, error) {
+	var chunk model.FileChunk
+	err := r.db.WithContext(ctx).Where("upload_id = ? AND status = ?", uploadID, status).First(&chunk).Error
+	return &chunk, err
+}
+
+// UpdateChunkUploadedChunks updates the uploaded_chunks JSON field.
+func (r *FileRepository) UpdateChunkUploadedChunks(ctx context.Context, uploadID, uploadedChunksJSON string) error {
+	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Update("uploaded_chunks", uploadedChunksJSON).Error
+}
+
+// UpdateChunkStatus updates the status of a FileChunk.
+func (r *FileRepository) UpdateChunkStatus(ctx context.Context, uploadID, status string) error {
+	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Update("status", status).Error
+}
+
+// UpdateChunkCompleted marks a chunk upload as completed.
+func (r *FileRepository) UpdateChunkCompleted(ctx context.Context, uploadID string, completedAt *time.Time) error {
+	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Updates(map[string]interface{}{
+		"status":       "completed",
+		"completed_at": completedAt,
+	}).Error
+}
+
+// ListFiltered returns a paginated list of files with optional filters.
+func (r *FileRepository) ListFiltered(ctx context.Context, page, pageSize int, name, originalName, mimeType, storageType, uploaderID string) ([]model.File, int64, error) {
+	var items []model.File
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.File{})
+	if name != "" {
+		query = query.Where("name LIKE ?", "%"+name+"%")
+	}
+	if originalName != "" {
+		query = query.Where("original_name LIKE ?", "%"+originalName+"%")
+	}
+	if mimeType != "" {
+		query = query.Where("mime_type = ?", mimeType)
+	}
+	if storageType != "" {
+		query = query.Where("storage_type = ?", storageType)
+	}
+	if uploaderID != "" {
+		query = query.Where("uploader_id = ?", uploaderID)
+	}
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

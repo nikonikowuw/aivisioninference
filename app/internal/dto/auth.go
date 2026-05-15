@@ -18,7 +18,12 @@ type UserInfo struct {
 	ID          string   `json:"id"`
 	Username    string   `json:"username"`
 	DisplayName string   `json:"display_name"`
+	AvatarURL   string   `json:"avatar_url"`
+	Email       string   `json:"email"`
+	Status      int      `json:"status"`
 	Roles       []string `json:"roles"`
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
 }
 
 // RefreshResponse is the token refresh response.

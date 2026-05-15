@@ -4,6 +4,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -13,9 +14,12 @@ import (
 // Use db=0 for the default Redis database.
 func New(host string, port int, password string, db int) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", host, port),
-		Password: password,
-		DB:       db,
+		Addr:         fmt.Sprintf("%s:%d", host, port),
+		Password:     password,
+		DB:           db,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
 	})
 
 	ctx := context.Background()

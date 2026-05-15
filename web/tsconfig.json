@@ -1,7 +1,35 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+  "compilerOptions": {
+    "typeRoots": ["node_modules/@types", "src/types"],
+    "target": "ES2020",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": false,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "types": ["react", "react-dom"],
+    "paths": {
+      "assets/*": ["src/assets/*"],
+      "components/*": ["src/components/*"],
+      "contexts/*": ["src/contexts/*"],
+      "layouts/*": ["src/layouts/*"],
+      "theme/*": ["src/theme/*"],
+      "views/*": ["src/views/*"],
+      "variables/*": ["src/variables/*"],
+      "types/*": ["src/types/*"],
+      "services/*": ["src/services/*"],
+      "routes": ["src/routes"]
+    }
+  },
+  "include": ["src"]
 }

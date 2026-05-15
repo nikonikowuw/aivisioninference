@@ -20,6 +20,7 @@ type Config struct {
 	Log       LogConfig       `mapstructure:"log"`
 	CORS      CORSConfig      `mapstructure:"cors"`
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
+	Seed      SeedConfig      `mapstructure:"seed"`
 }
 
 // AppConfig holds application-level settings.
@@ -51,6 +52,8 @@ type RedisConfig struct {
 // JWTConfig holds JWT authentication settings.
 type JWTConfig struct {
 	Secret           string `mapstructure:"secret"`
+	Issuer           string `mapstructure:"issuer"`
+	Audience         string `mapstructure:"audience"`
 	AccessExpireSec  int    `mapstructure:"access_expire"`
 	RefreshExpireSec int    `mapstructure:"refresh_expire"`
 }
@@ -96,11 +99,21 @@ type RateLimitConfig struct {
 	RequestsPerMinute int `mapstructure:"requests_per_minute"`
 }
 
+// SeedConfig holds default seed data settings.
+type SeedConfig struct {
+	Username    string `mapstructure:"username"`
+	Password    string `mapstructure:"password"`
+	Email       string `mapstructure:"email"`
+	DisplayName string `mapstructure:"display_name"`
+}
+
 // Load reads configuration from files and environment variables.
 // Priority: env > .env > config.yaml > defaults.
 func Load() (*Config, error) {
-	v := viper.New()
+	// Load .env into OS environment (doesn't overwrite existing vars).
+	loadDotEnv(".env")
 
+	v := viper.New()
 	setDefaults(v)
 
 	// Determine the environment (default to "development").
@@ -109,19 +122,10 @@ func Load() (*Config, error) {
 		env = "development"
 	}
 
-	// Read the environment-specific config file.
+	// Merge environment-specific config file (lowest priority).
 	configPath := fmt.Sprintf("./configs/config.%s.yaml", env)
 	if _, err := os.Stat(configPath); err == nil {
 		v.SetConfigFile(configPath)
-		if err := v.ReadInConfig(); err != nil {
-			return nil, fmt.Errorf("read config file %s: %w", configPath, err)
-		}
-	}
-
-	// Read .env file if present.
-	if _, err := os.Stat(".env"); err == nil {
-		v.SetConfigFile(".env")
-		// Merge .env without overwriting existing config values.
 		_ = v.MergeInConfig()
 	}
 
@@ -138,7 +142,36 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-// setDefaults registers default configuration values.
+// loadDotEnv reads a .env file and sets variables in the OS environment.
+// Existing OS environment variables are not overwritten.
+func loadDotEnv(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		// 去除行内注释
+		if idx := strings.Index(value, "#"); idx != -1 {
+			value = strings.TrimSpace(value[:idx])
+		}
+		value = strings.Trim(value, "\"'")
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
+}
+
+// setDefaults registers default configuration values and binds environment variables.
 func setDefaults(v *viper.Viper) {
 	// App
 	v.SetDefault("app.name", "niko-admin")
@@ -162,6 +195,8 @@ func setDefaults(v *viper.Viper) {
 
 	// JWT
 	v.SetDefault("jwt.secret", "")
+	v.SetDefault("jwt.issuer", "niko-admin")
+	v.SetDefault("jwt.audience", "niko-admin")
 	v.SetDefault("jwt.access_expire", 3600)   // 1 hour
 	v.SetDefault("jwt.refresh_expire", 604800) // 7 days
 
@@ -170,6 +205,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.chunk_size", 5) // MB
 	v.SetDefault("storage.local.upload_dir", "./uploads")
 	v.SetDefault("storage.local.public_url", "/uploads")
+	v.SetDefault("storage.oss.endpoint", "")
+	v.SetDefault("storage.oss.access_key", "")
+	v.SetDefault("storage.oss.secret_key", "")
+	v.SetDefault("storage.oss.bucket", "")
+	v.SetDefault("storage.oss.use_ssl", true)
 
 	// Log
 	v.SetDefault("log.level", "info")
@@ -182,4 +222,13 @@ func setDefaults(v *viper.Viper) {
 
 	// Rate Limit
 	v.SetDefault("rate_limit.requests_per_minute", 60)
+
+	// Seed
+	v.SetDefault("seed.username", "admin")
+	v.SetDefault("seed.password", "admin123")
+	v.SetDefault("seed.email", "admin@example.com")
+	v.SetDefault("seed.display_name", "管理员")
+
+	// AutomaticEnv + SetEnvPrefix("NIKO") + SetEnvKeyReplacer(".", "_")
+	// 已自动处理所有环境变量映射，例如 NIKO_DB_HOST → db.host
 }

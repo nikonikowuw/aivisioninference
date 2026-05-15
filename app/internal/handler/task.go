@@ -1,27 +1,22 @@
 package handler
 
 import (
-	"time"
-
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
+	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 // TaskHandler handles HTTP requests for background task management.
 type TaskHandler struct {
-	db *gorm.DB
+	svc *service.TaskService
 }
 
-// NewTaskHandler creates a new TaskHandler with the given database.
-func NewTaskHandler(db *gorm.DB) *TaskHandler {
-	return &TaskHandler{db: db}
+// NewTaskHandler creates a new TaskHandler with the given dependencies.
+func NewTaskHandler(svc *service.TaskService) *TaskHandler {
+	return &TaskHandler{svc: svc}
 }
 
 // Create creates a new background task record.
@@ -42,21 +37,13 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		return
 	}
 
-	item := model.Task{
-		TaskID:     uuid.New().String(),
-		Type:       req.Type,
-		Payload:    req.Payload,
-		Status:     "pending",
-		MaxRetries: 3,
-	}
-
-	if err := h.db.Create(&item).Error; err != nil {
-		zap.L().Error("create task failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
+	task, err := h.svc.Create(c.Request.Context(), req)
+	if err != nil {
+		response.Err(c, err)
 		return
 	}
 
-	response.OK(c, item)
+	response.OK(c, task)
 }
 
 // List returns a paginated list of tasks with optional filters.
@@ -79,32 +66,16 @@ func (h *TaskHandler) List(c *gin.Context) {
 		return
 	}
 
-	page := req.GetPage()
-	pageSize := req.GetPageSize()
+	taskType := c.Query("type")
+	status := c.Query("status")
 
-	query := h.db.Model(&model.Task{})
-	if taskType := c.Query("type"); taskType != "" {
-		query = query.Where("type = ?", taskType)
-	}
-	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
-		zap.L().Error("count tasks failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
+	items, total, err := h.svc.List(c.Request.Context(), req.GetPage(), req.GetPageSize(), taskType, status)
+	if err != nil {
+		response.Err(c, err)
 		return
 	}
 
-	var items []model.Task
-	if err := query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&items).Error; err != nil {
-		zap.L().Error("list tasks failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
-		return
-	}
-
-	response.Page(c, items, total, page, pageSize)
+	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
 }
 
 // GetByID returns a task by its ID.
@@ -119,12 +90,12 @@ func (h *TaskHandler) List(c *gin.Context) {
 // @Security     BearerAuth
 func (h *TaskHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
-	var item model.Task
-	if err := h.db.Where("id = ?", id).First(&item).Error; err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrNotFound, "任务不存在"))
+	task, err := h.svc.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.Err(c, err)
 		return
 	}
-	response.OK(c, item)
+	response.OK(c, task)
 }
 
 // Cancel cancels a pending or running task.
@@ -139,31 +110,9 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 // @Security     BearerAuth
 func (h *TaskHandler) Cancel(c *gin.Context) {
 	id := c.Param("id")
-
-	var item model.Task
-	if err := h.db.Where("id = ?", id).First(&item).Error; err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrNotFound, "任务不存在"))
+	if err := h.svc.Cancel(c.Request.Context(), id); err != nil {
+		response.Err(c, err)
 		return
 	}
-
-	// Only allow cancelling pending or running tasks
-	if item.Status != "pending" && item.Status != "running" {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "任务状态不允许取消"))
-		return
-	}
-
-	now := time.Now()
-	if err := h.db.Model(&item).Updates(map[string]interface{}{
-		"status":      "cancelled",
-		"finished_at": &now,
-	}).Error; err != nil {
-		zap.L().Error("cancel task failed",
-			zap.String("task_id", id),
-			zap.Error(err),
-		)
-		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
-		return
-	}
-
 	response.OK(c, nil)
 }

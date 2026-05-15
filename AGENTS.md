@@ -165,57 +165,12 @@ niko-admin gen --list
 
 ## Skill Standards
 
-开发时必须遵循 `.claude/skills/` 中定义的规范：
+开发时必须遵循 `.claude/rules/` 中定义的规范：
 
-### golang-pro (Go 后端)
-
-负载此 skill 处理 Go 后端所有代码。关键规则：
-
-- 所有阻塞操作必须传 `context.Context`；协程必须有明确生命周期
-- 错误显式处理，禁止 `_` 忽略；错误传播用 `fmt.Errorf("%w", err)` 包装
-- 导出函数/类型/包必须有 GoDoc 注释；代码通过 `gofmt` + `golangci-lint`
-- 必须写表驱动测试，`-race` 检测通过，覆盖率 >= 80%
-- 泛型用 `X | Y` union 约束（1.18+），禁止无依据反射
-- 配置禁止硬编码，用 functional options 或环境变量
-- 分层单向依赖，禁止混合同步/异步模式
-
-### ui-ux-pro-max (前端 UI/UX)
-
-前端 UI 组件开发时参照。关键规则：
-
-- **无障碍（CRITICAL）**：颜色对比度 >= 4.5:1，可见 focus 环，`aria-label` 标注
-- **触控（CRITICAL）**：触摸目标 >= 44px，间距 >= 8px
-- **性能（HIGH）**：图片 WebP/AVIF + 响应式 + 懒加载；声明宽高防 CLS < 0.1
-- **风格（HIGH）**：统一 SVG 图标（Heroicons/Lucide），禁止 emoji 做功能图标
-- **布局（HIGH）**：移动优先，4/8dp 间距，固定元素预留 safe padding
-- **颜色（MEDIUM）**：语义化 token，禁止组件内直接 hex；暗色模式去饱和化
-- **动画（MEDIUM）**：<= 400ms，仅 transform/opacity；尊重 `prefers-reduced-motion`
-- **表单（MEDIUM）**：可见 label（禁止纯 placeholder），错误在字段下方
-
-### frontend-design (前端设计)
-
-前端页面/组件视觉设计时参照。关键规则：
-
-- 编码前确定美学方向（极简/极繁/复古未来/有机自然等），禁止 AI 风格
-- 字体必须独特，禁止 Inter/Roboto/Space Grotesk 等常见字体
-- 色彩强统一：主导色 + 锐利点缀色；CSS 变量管理
-- 动效集中高光时刻：页面加载交错入场，优先 CSS-only
-- 布局打破常规：不对称、重叠、对角线、大量负空间
-- 背景有氛围：渐变网格、噪点纹理、几何图案、分层透明
-- 每个设计独一无二，不同模块刻意变化字体/配色/布局
-- 复杂度匹配美学愿景：极繁要丰富效果，极简要精准克制
-
-### vercel-react-best-practices (React 性能)
-
-前端 React 组件开发时参照。关键规则：
-
-- **消瀑布（CRITICAL）**：独立异步 `Promise.all()` 并发；Suspense 边界先渲染骨架屏
-- **包体积（CRITICAL）**：禁止 barrel import（`export *`），直接源文件导入；重型组件 `next/dynamic` 懒加载
-- **安全（CRITICAL）**：Server Action 内独立验证认证/授权
-- **缓存（HIGH）**：`React.cache()` 去重；LRU 跨请求共享
-- **数据传输（HIGH）**：RSC 边界只传需要字段；避免服务端 `.filter()` 生成重复引用
-- **重渲染（MEDIUM）**：可从 props/state 计算的值禁止存 state；`useDeferredValue` 保输入响应
-- **正确性（MEDIUM）**：禁止组件内定义子组件；条件渲染用三元禁止 `&&`；昂贵 `useState` 初始值用函数
+- [golang-pro](.claude/rules/golang-pro.md) — Go 后端：Context 传播、错误处理、测试、层级架构
+- [ui-ux-pro-max](.claude/rules/ui-ux-pro-max.md) — 前端 UI：无障碍、触控、布局、暗色模式
+- [frontend-design](.claude/rules/frontend-design.md) — 前端视觉：字体、配色、动效、独特性
+- [vercel-react-best-practices](.claude/rules/vercel-react-best-practices.md) — React 性能：消瀑布、包体积、缓存、重渲染
 
 ## Security Notes
 

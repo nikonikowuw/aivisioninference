@@ -1,30 +1,31 @@
 /* eslint-disable */
 // Chakra Imports
-import { Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Link, Text, useColorModeValue } from '@chakra-ui/react';
+import { Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Icon, Link, Text, useColorModeValue } from '@chakra-ui/react';
 import { useState, useEffect } from 'react';
 import AdminNavbarLinks from 'components/navbar/NavbarLinksAdmin';
+import { useSidebar } from 'contexts/SidebarContext';
+import { IoMenuOutline } from 'react-icons/io5';
 
 export default function AdminNavbar(props: {
 	secondary: boolean;
-	message: string|boolean;
+	message: string | boolean;
 	brandText: string;
 	logoText: string;
 	fixed: boolean;
 	onOpen: (...args: any[]) => any;
 }) {
-	const [ scrolled, setScrolled ] = useState(false);
+	const [scrolled, setScrolled] = useState(false);
+	const { collapsed, setCollapsed } = useSidebar();
 
 	useEffect(() => {
 		window.addEventListener('scroll', changeNavbar);
-
 		return () => {
 			window.removeEventListener('scroll', changeNavbar);
 		};
 	});
 
-	const { secondary,  brandText } = props;
+	const { secondary, brandText } = props;
 
-	// Here are all the props that may change depending on navbar's type or state.(secondary, variant, scrolled)
 	let mainText = useColorModeValue('navy.700', 'white');
 	let secondaryText = useColorModeValue('gray.700', 'white');
 	let navbarPosition = 'fixed' as const;
@@ -72,10 +73,10 @@ export default function AdminNavbar(props: {
 			right={{ base: '12px', md: '30px', lg: '30px', xl: '30px' }}
 			px={{
 				sm: paddingX,
-				md: '10px'
+				md: '10px',
 			}}
 			ps={{
-				xl: '12px'
+				xl: '12px',
 			}}
 			pt='8px'
 			top={{ base: '12px', md: '16px', xl: '18px' }}
@@ -83,57 +84,64 @@ export default function AdminNavbar(props: {
 				base: 'calc(100vw - 6%)',
 				md: 'calc(100vw - 8%)',
 				lg: 'calc(100vw - 6%)',
-				xl: 'calc(100vw - 350px)',
-				'2xl': 'calc(100vw - 365px)'
+				xl: collapsed ? 'calc(100vw - 130px)' : 'calc(100vw - 350px)',
+				'2xl': collapsed ? 'calc(100vw - 130px)' : 'calc(100vw - 365px)',
 			}}>
 			<Flex
 				w='100%'
 				flexDirection={{
 					sm: 'column',
-					md: 'row'
+					md: 'row',
 				}}
 				alignItems={{ xl: 'center' }}
 				mb={gap}>
-				<Box mb={{ sm: '8px', md: '0px' }}>
-					<Breadcrumb>
-						<BreadcrumbItem color={secondaryText} fontSize='sm' mb='5px'>
-							<BreadcrumbLink href='#' color={secondaryText}>
-								Pages
-							</BreadcrumbLink>
-						</BreadcrumbItem>
-
-						<BreadcrumbItem color={secondaryText} fontSize='sm'>
-							<BreadcrumbLink href='#' color={secondaryText}>
-								{brandText}
-							</BreadcrumbLink>
-						</BreadcrumbItem>
-					</Breadcrumb>
-					{/* Here we create navbar brand, based on route name */}
-					<Link
+				<Flex alignItems='center' gap='12px'>
+					<Icon
+						as={IoMenuOutline}
 						color={mainText}
-						href='#'
-						bg='inherit'
-						borderRadius='inherit'
-						fontWeight='bold'
-						fontSize='34px'
-						_hover={{ color: { mainText } }}
-						_active={{
-							bg: 'inherit',
-							transform: 'none',
-							borderColor: 'transparent'
-						}}
-						_focus={{
-							boxShadow: 'none'
-						}}>
-						{brandText}
-					</Link>
-				</Box>
-				<Box ms='auto' w={{ sm: '100%', md: 'unset' }}>
-					<AdminNavbarLinks
-						secondary={props.secondary}
+						w='22px'
+						h='22px'
+						cursor='pointer'
+						onClick={() => setCollapsed(!collapsed)}
+						_hover={{ opacity: 0.7 }}
 					/>
+					<Box mb={{ sm: '8px', md: '0px' }}>
+						<Breadcrumb>
+							<BreadcrumbItem color={secondaryText} fontSize='sm' mb='5px'>
+								<BreadcrumbLink href='#' color={secondaryText}>
+									Pages
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+							<BreadcrumbItem color={secondaryText} fontSize='sm'>
+								<BreadcrumbLink href='#' color={secondaryText}>
+									{brandText}
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+						</Breadcrumb>
+						<Link
+							color={mainText}
+							href='#'
+							bg='inherit'
+							borderRadius='inherit'
+							fontWeight='bold'
+							fontSize='34px'
+							_hover={{ color: { mainText } }}
+							_active={{
+								bg: 'inherit',
+								transform: 'none',
+								borderColor: 'transparent',
+							}}
+							_focus={{
+								boxShadow: 'none',
+							}}>
+							{brandText}
+						</Link>
+					</Box>
+				</Flex>
+				<Box ms='auto' w={{ sm: '100%', md: 'unset' }}>
+					<AdminNavbarLinks secondary={props.secondary} />
 				</Box>
-			</Flex> 
+			</Flex>
 		</Box>
 	);
 }

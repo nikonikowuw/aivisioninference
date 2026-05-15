@@ -3,7 +3,6 @@ import {
   MdBarChart,
   MdPerson,
   MdHome,
-  MdLock,
   MdSecurity,
   MdVpnKey,
   MdFolder,
@@ -18,7 +17,6 @@ import Permissions from 'views/admin/permissions';
 import Files from 'views/admin/files';
 import AuditLogs from 'views/admin/audit-logs';
 import Tasks from 'views/admin/tasks';
-import SignInCentered from 'views/auth/signIn';
 
 const routes = [
   {
@@ -71,13 +69,6 @@ const routes = [
       <Icon as={MdAssignment} width="20px" height="20px" color="inherit" />
     ),
     component: <Tasks />,
-  },
-  {
-    name: '登录',
-    layout: '/auth',
-    path: '/sign-in',
-    icon: <Icon as={MdLock} width="20px" height="20px" color="inherit" />,
-    component: <SignInCentered />,
   },
 ];
 

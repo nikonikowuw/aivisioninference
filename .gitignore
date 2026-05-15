@@ -1,0 +1,69 @@
+# === Build ===
+/bin/
+/tmp/
+
+# === Go ===
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# === Swagger (auto-generated, don't track) ===
+/docs/docs.go
+/docs/swagger.json
+/docs/swagger.yaml
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+*.log
+/logs/
+
+# === Coverage ===
+coverage.out
+coverage.html
+
+# === Uploads (local dev) ===
+/uploads/
+/tmp/chunks/
+
+# === Frontend ===
+web/node_modules/
+web/dist/
+web/build/
+web/.cache/
+web/.env.local
+web/.env.*.local
+
+# === Docker ===
+docker-compose.override.yml
+
+# === Database ===
+*.db
+*.sqlite
+
+# === AI ===
+openspec/**
+CLAUDE.md
+*.local.*
+GEMINI.md
+.agents/**
+.gemini/**

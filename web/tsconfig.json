@@ -28,7 +28,9 @@
       "variables/*": ["src/variables/*"],
       "types/*": ["src/types/*"],
       "services/*": ["src/services/*"],
-      "routes": ["src/routes"]
+      "hooks/*": ["src/hooks/*"],
+      "router": ["src/router/index.tsx"],
+      "router/*": ["src/router/*"]
     }
   },
   "include": ["src"]

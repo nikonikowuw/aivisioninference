@@ -72,6 +72,16 @@ export const authApi = {
 };
 
 // Types
+export interface Menu {
+  id: string;
+  name: string;
+  code: string;
+  path: string;
+  icon: string;
+  sort_order: number;
+  children?: Menu[];
+}
+
 export interface User {
   id: string;
   username: string;
@@ -80,6 +90,7 @@ export interface User {
   avatar_url: string;
   status: number;
   roles: Role[];
+  menus: Menu[];
   created_at: string;
   updated_at: string;
 }

@@ -16,13 +16,17 @@ import { SidebarResponsive } from 'components/sidebar/Sidebar';
 import { useAuth } from 'contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
-import routes from 'routes';
+import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
+import { useSidebar } from 'contexts/SidebarContext';
 
 export default function HeaderLinks(props: { secondary: boolean; [key: string]: any }) {
 	const { secondary } = props;
 	const { colorMode, toggleColorMode } = useColorMode();
 	const { user, logout } = useAuth();
 	const navigate = useNavigate();
+	const { t } = useTranslation();
+	const { sidebarRoutes: routes } = useSidebar();
 
 	const navbarIcon = useColorModeValue('gray.400', 'white');
 	const menuBg = useColorModeValue('white', 'navy.800');
@@ -68,6 +72,7 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 					as={colorMode === 'light' ? IoMdMoon : IoMdSunny}
 				/>
 			</Button>
+			<LanguageSwitcher />
 			<Menu>
 				<MenuButton p='0px'>
 					<Avatar
@@ -94,7 +99,7 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 							fontWeight='700'
 							color={textColor}
 						>
-							{user?.display_name || user?.username || '用户'}
+							{user?.display_name || user?.username || t('common:user.defaultName')}
 						</Text>
 					</Flex>
 					<Flex flexDirection='column' p='10px'>
@@ -106,7 +111,7 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 							px='14px'
 							onClick={handleLogout}
 						>
-							<Text fontSize='sm'>退出登录</Text>
+							<Text fontSize='sm'>{t('common:user.logout')}</Text>
 						</MenuItem>
 					</Flex>
 				</MenuList>

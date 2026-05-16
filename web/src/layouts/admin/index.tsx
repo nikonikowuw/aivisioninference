@@ -1,127 +1,143 @@
 // Chakra imports
-import { Portal, Box, useDisclosure } from '@chakra-ui/react';
+import { Portal, Box, Text, useDisclosure, useColorModeValue } from '@chakra-ui/react';
 import Footer from 'components/footer/FooterAdmin';
 // Layout components
 import Navbar from 'components/navbar/NavbarAdmin';
 import Sidebar from 'components/sidebar/Sidebar';
 import { SidebarContext } from 'contexts/SidebarContext';
-import { useState } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
-import routes from 'routes';
+import { useState, useMemo, useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from 'contexts/AuthContext';
+import {
+  generateRoutesFromMenus,
+  generateSidebarRoutesFromMenus,
+  getActiveRouteFromMenus,
+} from '../../router';
 
 export default function Dashboard(props: { [x: string]: any }) {
-	const { ...rest } = props;
-	const [fixed] = useState(false);
-	const [collapsed, setCollapsed] = useState(false);
+  const { ...rest } = props;
+  const fixed = false;
+  const [collapsed, setCollapsed] = useState(false);
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  const location = useLocation();
+  const noAccessColor = useColorModeValue('gray.500', 'gray.400');
 
-	const getRoute = () => {
-		return window.location.pathname !== '/admin/full-screen-maps';
-	};
-	const getActiveRoute = (routes: RoutesType[]): string => {
-		let activeRoute = 'Default Brand Text';
-		for (let i = 0; i < routes.length; i++) {
-			if (
-				window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-			) {
-				return routes[i].name;
-			}
-		}
-		return activeRoute;
-	};
-	const getActiveNavbar = (routes: RoutesType[]): boolean => {
-		let activeNavbar = false;
-		for (let i = 0; i < routes.length; i++) {
-			if (
-				window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-			) {
-				return routes[i].secondary;
-			}
-		}
-		return activeNavbar;
-	};
-	const getActiveNavbarText = (routes: RoutesType[]): string | boolean => {
-		let activeNavbar = false;
-		for (let i = 0; i < routes.length; i++) {
-			if (
-				window.location.href.indexOf(routes[i].layout + routes[i].path) !== -1
-			) {
-				return routes[i].name;
-			}
-		}
-		return activeNavbar;
-	};
-	const getRoutes = (routes: RoutesType[]): any => {
-		return routes.map((route: RoutesType, key: any) => {
-			if (route.layout === '/admin') {
-				return (
-					<Route path={`${route.path}`} element={route.component} key={key} />
-				);
-			} else {
-				return null;
-			}
-		});
-	};
-	document.documentElement.dir = 'ltr';
-	const { onOpen } = useDisclosure();
+  const menusFingerprint = useMemo(() => {
+    const menus = user?.menus;
+    if (!menus || menus.length === 0) {
+      return '';
+    }
+    const walk = (items: typeof menus): string => {
+      return items
+        .map((m) => `${m.id}:${m.code}:${m.path}:${m.sort_order}|${walk(m.children || [])}`)
+        .join(',');
+    };
+    return walk(menus);
+  }, [user?.menus]);
 
-	const sidebarWidth = collapsed ? '80px' : '290px';
+  const menus = user?.menus || [];
 
-	return (
-		<Box>
-			<SidebarContext.Provider
-				value={{
-					collapsed,
-					setCollapsed,
-				}}>
-				<Sidebar routes={routes} display='none' {...rest} />
-				<Box
-					float='right'
-					minHeight='100vh'
-					height='100%'
-					overflow='auto'
-					position='relative'
-					maxHeight='100%'
-					w={{ base: '100%', xl: `calc(100% - ${sidebarWidth})` }}
-					maxWidth={{ base: '100%', xl: `calc(100% - ${sidebarWidth})` }}
-					transition='all 0.33s cubic-bezier(0.685, 0.0473, 0.346, 1)'
-					transitionDuration='.2s, .2s, .35s'
-					transitionProperty='top, bottom, width'
-					transitionTimingFunction='linear, linear, ease'>
-					<Portal>
-						<Box>
-							<Navbar
-								onOpen={onOpen}
-								logoText={'Niko Admin'}
-								brandText={getActiveRoute(routes)}
-								secondary={getActiveNavbar(routes)}
-								message={getActiveNavbarText(routes)}
-								fixed={fixed}
-								{...rest}
-							/>
-						</Box>
-					</Portal>
+  // 从用户菜单生成侧边栏路由
+  const sidebarRoutes = useMemo(() => {
+    if (menus.length > 0) {
+      return generateSidebarRoutesFromMenus(menus);
+    }
+    return [];
+  }, [menusFingerprint]);
 
-					{getRoute() ? (
-						<Box
-							mx='auto'
-							p={{ base: '20px', md: '30px' }}
-							pe='20px'
-							minH='100vh'
-							pt='50px'>
-							<Routes>
-								{getRoutes(routes)}
-								<Route
-									path='/'
-									element={<Navigate to='/admin/default' replace />}
-								/>
-							</Routes>
-						</Box>
-					) : null}
-					<Box>
-						<Footer />
-					</Box>
-				</Box>
-			</SidebarContext.Provider>
-		</Box>
-	);
+  // 从用户菜单生成路由组件
+  const dynamicRoutes = useMemo(() => {
+    if (menus.length > 0) {
+      return generateRoutesFromMenus(menus);
+    }
+    return [];
+  }, [menusFingerprint]);
+
+  // 获取当前激活的路由名称
+  const brandText = useMemo(() => {
+    if (menus.length > 0) {
+      return getActiveRouteFromMenus(menus, location.pathname);
+    }
+    return t('layout.sidebar.dashboard');
+  }, [menusFingerprint, location.pathname, t]);
+
+  useEffect(() => {
+    document.documentElement.dir = 'ltr';
+  }, []);
+
+  const getRoute = () => {
+    return location.pathname !== '/admin/full-screen-maps';
+  };
+
+  const { onOpen } = useDisclosure();
+
+  const sidebarWidth = collapsed ? '80px' : '290px';
+
+  return (
+    <Box>
+      <SidebarContext.Provider
+        value={{
+          collapsed,
+          setCollapsed,
+          sidebarRoutes,
+        }}>
+        <Sidebar routes={sidebarRoutes} display='none' {...rest} />
+        <Box
+          float='right'
+          minHeight='100vh'
+          height='100%'
+          overflow='auto'
+          position='relative'
+          maxHeight='100%'
+          w={{ base: '100%', xl: `calc(100% - ${sidebarWidth})` }}
+          maxWidth={{ base: '100%', xl: `calc(100% - ${sidebarWidth})` }}
+          transition='all 0.33s cubic-bezier(0.685, 0.0473, 0.346, 1)'
+          transitionDuration='.2s, .2s, .35s'
+          transitionProperty='top, bottom, width'
+          transitionTimingFunction='linear, linear, ease'>
+          <Portal>
+            <Box>
+              <Navbar
+                onOpen={onOpen}
+                logoText={'Niko Admin'}
+                brandText={brandText}
+                secondary={false}
+                message={brandText}
+                fixed={fixed}
+                {...rest}
+              />
+            </Box>
+          </Portal>
+
+          {getRoute() ? (
+            <Box
+              mx='auto'
+              p={{ base: '20px', md: '30px' }}
+              pe='20px'
+              minH='100vh'
+              pt='50px'>
+              {dynamicRoutes.length === 0 ? (
+                <Text color={noAccessColor} textAlign="center" mt="40px">
+                  {t('layout.sidebar.noAccess')}
+                </Text>
+              ) : (
+                <Routes>
+                  {dynamicRoutes}
+                  <Route
+                    path='/'
+                    element={<Navigate to='/admin/default' replace />}
+                  />
+                </Routes>
+              )}
+            </Box>
+          ) : null}
+          <Box>
+            <Footer />
+          </Box>
+        </Box>
+      </SidebarContext.Provider>
+    </Box>
+  );
 }

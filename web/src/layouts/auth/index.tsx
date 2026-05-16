@@ -1,42 +1,23 @@
-import { useState } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import routes from 'routes';
 
 // Chakra imports
 import { Box, useColorModeValue } from '@chakra-ui/react';
 
-// Layout components
-import { SidebarContext } from 'contexts/SidebarContext';
+// 懒加载认证页面
+const SignIn = lazy(() => import('views/auth/signIn'));
 
 // Custom Chakra theme
 export default function Auth() {
-  // states and functions
-  const [toggleSidebar, setToggleSidebar] = useState(false);
-  const getRoute = () => {
-    return window.location.pathname !== '/auth/full-screen-maps';
-  };
-  const getRoutes = (routes: RoutesType[]): any => {
-    return routes.map((route: RoutesType, key: any) => {
-      if (route.layout === '/auth') {
-        return (
-          <Route path={`${route.path}`} element={route.component} key={key} />
-        );
-      } else {
-        return null;
-      }
-    });
-  };
   const authBg = useColorModeValue('white', 'navy.900');
-  document.documentElement.dir = 'ltr';
+
+  useEffect(() => {
+    document.documentElement.dir = 'ltr';
+  }, []);
+
   return (
     <Box>
-      <SidebarContext.Provider
-        value={{
-          toggleSidebar,
-          setToggleSidebar,
-        }}
-      >
-        <Box
+      <Box
           bg={authBg}
           float="right"
           minHeight="100vh"
@@ -48,19 +29,23 @@ export default function Auth() {
           transitionProperty="top, bottom, width"
           transitionTimingFunction="linear, linear, ease"
         >
-          {getRoute() ? (
-            <Box mx="auto" minH="100vh">
-              <Routes>
-                {getRoutes(routes)}
-                <Route
-                  path="/"
-                  element={<Navigate to="/auth/sign-in/default" replace />}
-                />
-              </Routes>
-            </Box>
-          ) : null}
+          <Box mx="auto" minH="100vh">
+            <Routes>
+              <Route
+                path="/sign-in"
+                element={
+                  <Suspense fallback={<div>Loading...</div>}>
+                    <SignIn />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/"
+                element={<Navigate to="/auth/sign-in" replace />}
+              />
+            </Routes>
+          </Box>
         </Box>
-      </SidebarContext.Provider>
     </Box>
   );
 }

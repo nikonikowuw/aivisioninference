@@ -32,6 +32,11 @@ export const common = {
     forbidden: 'You do not have permission to perform this action',
     notFound: 'The requested resource was not found',
     serverError: 'Server error',
+    loadFailed: 'Failed to load data',
+  },
+  user: {
+    defaultName: 'User',
+    logout: 'Logout',
   },
   pagination: {
     total: '{{total}} total',

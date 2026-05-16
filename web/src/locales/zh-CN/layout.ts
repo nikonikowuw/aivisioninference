@@ -7,6 +7,7 @@ export const layout = {
     fileManagement: '文件管理',
     auditLogs: '审计日志',
     taskManagement: '任务管理',
+    noAccess: '暂无访问权限',
   },
   navbar: {
     profile: '个人资料',

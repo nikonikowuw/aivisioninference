@@ -32,6 +32,11 @@ export const common = {
     forbidden: '無權限執行此操作',
     notFound: '請求的資源不存在',
     serverError: '伺服器錯誤',
+    loadFailed: '載入失敗',
+  },
+  user: {
+    defaultName: '使用者',
+    logout: '登出',
   },
   pagination: {
     total: '共 {{total}} 筆',

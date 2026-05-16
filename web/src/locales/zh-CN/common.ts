@@ -32,6 +32,11 @@ export const common = {
     forbidden: '无权限执行此操作',
     notFound: '请求的资源不存在',
     serverError: '服务器错误',
+    loadFailed: '加载失败',
+  },
+  user: {
+    defaultName: '用户',
+    logout: '退出登录',
   },
   pagination: {
     total: '共 {{total}} 条',

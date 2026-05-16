@@ -7,6 +7,7 @@ export const layout = {
     fileManagement: 'File Management',
     auditLogs: 'Audit Logs',
     taskManagement: 'Task Management',
+    noAccess: 'No access',
   },
   navbar: {
     profile: 'Profile',

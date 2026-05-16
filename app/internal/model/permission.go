@@ -8,7 +8,6 @@ package model
 const (
 	PermTypeMenu   = "menu"
 	PermTypeButton = "button"
-	PermTypeAPI    = "api"
 )
 
 // Permission represents a menu item or API permission for RBAC.

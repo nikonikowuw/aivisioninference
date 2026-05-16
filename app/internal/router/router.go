@@ -136,7 +136,7 @@ func (r *Router) setupRoutes() {
 	{
 		users.GET("", userHandler.List)
 		users.POST("", middleware.RBAC(rbacCache, r.db), userHandler.Create)
-		users.GET("/:id", userHandler.GetByID)
+		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
 		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
 		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
 	}
@@ -147,10 +147,10 @@ func (r *Router) setupRoutes() {
 	{
 		roles.GET("", roleHandler.List)
 		roles.POST("", middleware.RBAC(rbacCache, r.db), roleHandler.Create)
-		roles.GET("/:id", roleHandler.GetByID)
+		roles.GET("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.GetByID)
 		roles.PUT("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Update)
 		roles.DELETE("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Delete)
-		roles.GET("/:id/permissions", roleHandler.GetPermissions)
+		roles.GET("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.GetPermissions)
 		roles.PUT("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.AssignPermissions)
 	}
 
@@ -171,11 +171,11 @@ func (r *Router) setupRoutes() {
 		files.POST("/upload/init", middleware.RBAC(rbacCache, r.db), fileHandler.InitUpload)
 		files.POST("/upload/:upload_id/chunk", middleware.RBAC(rbacCache, r.db), fileHandler.UploadChunk)
 		files.POST("/upload/:upload_id/complete", middleware.RBAC(rbacCache, r.db), fileHandler.CompleteUpload)
-		files.GET("/upload/:upload_id/progress", fileHandler.UploadProgress)
-		files.POST("/upload/check", fileHandler.CheckFile)
+		files.GET("/upload/:upload_id/progress", middleware.RBAC(rbacCache, r.db), fileHandler.UploadProgress)
+		files.POST("/upload/check", middleware.RBAC(rbacCache, r.db), fileHandler.CheckFile)
 		files.GET("", fileHandler.List)
-		files.GET("/:id", fileHandler.GetByID)
-		files.GET("/:id/download", fileHandler.Download)
+		files.GET("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.GetByID)
+		files.GET("/:id/download", middleware.RBAC(rbacCache, r.db), fileHandler.Download)
 		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
 	}
 

@@ -91,52 +91,63 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 			return fmt.Errorf("assign admin role: %w", err)
 		}
 
-		// Create menu permissions for sidebar and their button children.
+		// Create menu permissions and their button children.
+		// Button permissions carry API path+method for RBAC middleware checks.
 		type buttonInfo struct {
-			Code string
-			Name string
+			Code   string
+			Name   string
+			Path   string // API path for RBAC (empty = UI-only)
+			Method string // HTTP method for RBAC
 		}
 		menuList := []struct {
-			Name string
-			Code string
-			Path string
-			Icon string
+			Name    string
+			Code    string
+			Path    string // frontend route
+			Icon    string
 			Buttons []buttonInfo
 		}{
-			{Name: "仪表盘", Code: "dashboard", Path: "/default", Icon: "MdHome", Buttons: []buttonInfo{{Code: "dashboard:view", Name: "查看仪表盘"}}},
+			{Name: "仪表盘", Code: "dashboard", Path: "/default", Icon: "MdHome", Buttons: []buttonInfo{
+				{Code: "dashboard:view", Name: "查看仪表盘", Path: "/api/v1/dashboard/stats", Method: "GET"},
+			}},
 			{Name: "用户管理", Code: "users", Path: "/users", Icon: "MdPerson", Buttons: []buttonInfo{
-				{Code: "user:create", Name: "创建用户"},
-				{Code: "user:edit", Name: "编辑用户"},
-				{Code: "user:delete", Name: "删除用户"},
-				{Code: "user:view", Name: "查看用户"},
+				{Code: "user:create", Name: "创建用户", Path: "/api/v1/users", Method: "POST"},
+				{Code: "user:edit", Name: "编辑用户", Path: "/api/v1/users/*", Method: "PUT"},
+				{Code: "user:delete", Name: "删除用户", Path: "/api/v1/users/*", Method: "DELETE"},
+				{Code: "user:view", Name: "查看用户", Path: "/api/v1/users/*", Method: "GET"},
 			}},
 			{Name: "角色管理", Code: "roles", Path: "/roles", Icon: "MdSecurity", Buttons: []buttonInfo{
-				{Code: "role:create", Name: "创建角色"},
-				{Code: "role:edit", Name: "编辑角色"},
-				{Code: "role:delete", Name: "删除角色"},
-				{Code: "role:view", Name: "查看角色"},
+				{Code: "role:create", Name: "创建角色", Path: "/api/v1/roles", Method: "POST"},
+				{Code: "role:edit", Name: "编辑角色", Path: "/api/v1/roles/*", Method: "PUT"},
+				{Code: "role:delete", Name: "删除角色", Path: "/api/v1/roles/*", Method: "DELETE"},
+				{Code: "role:assign-permissions", Name: "分配权限", Path: "/api/v1/roles/*/permissions", Method: "PUT"},
+				{Code: "role:view-permissions", Name: "查看角色权限", Path: "/api/v1/roles/*/permissions", Method: "GET"},
+				{Code: "role:view", Name: "查看角色", Path: "/api/v1/roles/*", Method: "GET"},
 			}},
 			{Name: "权限管理", Code: "permissions", Path: "/permissions", Icon: "MdVpnKey", Buttons: []buttonInfo{
-				{Code: "permission:create", Name: "创建权限"},
-				{Code: "permission:edit", Name: "编辑权限"},
-				{Code: "permission:delete", Name: "删除权限"},
-				{Code: "permission:view", Name: "查看权限"},
+				{Code: "permission:create", Name: "创建权限", Path: "/api/v1/permissions", Method: "POST"},
+				{Code: "permission:edit", Name: "编辑权限", Path: "/api/v1/permissions/*", Method: "PUT"},
+				{Code: "permission:delete", Name: "删除权限", Path: "/api/v1/permissions/*", Method: "DELETE"},
+				{Code: "permission:view", Name: "查看权限", Path: "/api/v1/permissions/*", Method: "GET"},
 			}},
 			{Name: "文件管理", Code: "files", Path: "/files", Icon: "MdFolder", Buttons: []buttonInfo{
-				{Code: "file:upload", Name: "上传文件"},
-				{Code: "file:delete", Name: "删除文件"},
-				{Code: "file:view", Name: "查看文件"},
-				{Code: "file:download", Name: "下载文件"},
+				{Code: "file:upload", Name: "上传文件", Path: "/api/v1/files/upload/**", Method: "POST"},
+				{Code: "file:check", Name: "校验文件", Path: "/api/v1/files/upload/check", Method: "POST"},
+				{Code: "file:upload-progress", Name: "上传进度", Path: "/api/v1/files/upload/*/progress", Method: "GET"},
+				{Code: "file:delete", Name: "删除文件", Path: "/api/v1/files/*", Method: "DELETE"},
+				{Code: "file:view", Name: "查看文件", Path: "/api/v1/files/*", Method: "GET"},
+				{Code: "file:download", Name: "下载文件", Path: "/api/v1/files/*/download", Method: "GET"},
 			}},
-			{Name: "审计日志", Code: "audit-logs", Path: "/audit-logs", Icon: "MdHistory", Buttons: []buttonInfo{{Code: "audit:view", Name: "查看审计日志"}}},
+			{Name: "审计日志", Code: "audit-logs", Path: "/audit-logs", Icon: "MdHistory", Buttons: []buttonInfo{
+				{Code: "audit:view", Name: "查看审计日志", Path: "/api/v1/audit-logs", Method: "GET"},
+			}},
 			{Name: "任务管理", Code: "tasks", Path: "/tasks", Icon: "MdAssignment", Buttons: []buttonInfo{
-				{Code: "task:create", Name: "创建任务"},
-				{Code: "task:cancel", Name: "取消任务"},
-				{Code: "task:view", Name: "查看任务"},
+				{Code: "task:create", Name: "创建任务", Path: "/api/v1/tasks", Method: "POST"},
+				{Code: "task:cancel", Name: "取消任务", Path: "/api/v1/tasks/*/cancel", Method: "POST"},
+				{Code: "task:view", Name: "查看任务", Path: "/api/v1/tasks/*", Method: "GET"},
 			}},
 		}
 
-		var allMenus []model.Permission
+		var allPerms []model.Permission
 		for i, m := range menuList {
 			menu := model.Permission{
 				Name:      m.Name,
@@ -149,13 +160,15 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 			if err := tx.Create(&menu).Error; err != nil {
 				return fmt.Errorf("create menu %s: %w", m.Code, err)
 			}
-			allMenus = append(allMenus, menu)
+			allPerms = append(allPerms, menu)
 
 			// Create button permissions as children
 			for _, btn := range m.Buttons {
 				btnPerm := model.Permission{
 					Name:      btn.Name,
 					Code:      btn.Code,
+					Path:      btn.Path,
+					Method:    btn.Method,
 					Type:      "button",
 					ParentID:  &menu.ID,
 					SortOrder: 0,
@@ -163,33 +176,9 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 				if err := tx.Create(&btnPerm).Error; err != nil {
 					return fmt.Errorf("create button %s: %w", btn.Code, err)
 				}
-				allMenus = append(allMenus, btnPerm)
+				allPerms = append(allPerms, btnPerm)
 			}
 		}
-
-		// Create API permissions.
-		perms := []model.Permission{
-			{Name: "用户管理", Code: "user:list", Path: "/api/v1/users", Method: "GET", Type: "api"},
-			{Name: "创建用户", Code: "user:create", Path: "/api/v1/users", Method: "POST", Type: "api"},
-			{Name: "编辑用户", Code: "user:update", Path: "/api/v1/users/*", Method: "PUT", Type: "api"},
-			{Name: "删除用户", Code: "user:delete", Path: "/api/v1/users/*", Method: "DELETE", Type: "api"},
-			{Name: "角色管理", Code: "role:list", Path: "/api/v1/roles", Method: "GET", Type: "api"},
-			{Name: "创建角色", Code: "role:create", Path: "/api/v1/roles", Method: "POST", Type: "api"},
-			{Name: "编辑角色", Code: "role:update", Path: "/api/v1/roles/*", Method: "PUT", Type: "api"},
-			{Name: "删除角色", Code: "role:delete", Path: "/api/v1/roles/*", Method: "DELETE", Type: "api"},
-			{Name: "审计日志", Code: "audit:list", Path: "/api/v1/audit-logs", Method: "GET", Type: "api"},
-			{Name: "文件管理", Code: "file:list", Path: "/api/v1/files", Method: "GET", Type: "api"},
-			{Name: "任务管理", Code: "task:list", Path: "/api/v1/tasks", Method: "GET", Type: "api"},
-		}
-
-		for i := range perms {
-			if err := tx.Create(&perms[i]).Error; err != nil {
-				return fmt.Errorf("create permission %s: %w", perms[i].Code, err)
-			}
-		}
-
-		// Combine menus (including buttons) and API permissions.
-		allPerms := append(allMenus, perms...)
 
 		// Assign all permissions to admin role.
 		if err := tx.Model(&role).Association("Permissions").Append(allPerms); err != nil {

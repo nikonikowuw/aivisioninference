@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/model"
 	cachepkg "github.com/niko-admin/niko-admin/internal/pkg/cache"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 )
@@ -45,14 +48,14 @@ func RBAC(cache cachepkg.Cache, db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		path := c.Request.URL.Path
+		reqPath := path.Clean(c.Request.URL.Path)
 		method := c.Request.Method
 
-		allowed, err := CheckPermission(c.Request.Context(), cache, db, uid, path, method)
+		allowed, err := CheckPermission(c.Request.Context(), cache, db, uid, reqPath, method)
 		if err != nil {
 			zap.L().Error("rbac check failed",
 				zap.String("user_id", uid),
-				zap.String("path", path),
+				zap.String("req_path", reqPath),
 				zap.String("method", method),
 				zap.Error(err),
 			)
@@ -64,7 +67,7 @@ func RBAC(cache cachepkg.Cache, db *gorm.DB) gin.HandlerFunc {
 		if !allowed {
 			zap.L().Warn("permission denied",
 				zap.String("user_id", uid),
-				zap.String("path", path),
+				zap.String("req_path", reqPath),
 				zap.String("method", method),
 			)
 			c.Error(apperrors.New(apperrors.ErrForbidden, ""))
@@ -107,8 +110,9 @@ func CheckPermission(ctx context.Context, cache cachepkg.Cache, db *gorm.DB, use
 		INNER JOIN role_permissions rp ON rp.permission_id = p.id
 		INNER JOIN user_roles ur ON ur.role_id = rp.role_id
 		WHERE ur.user_id = ?
+		AND p.type != ?
 	`
-	if err := db.WithContext(ctx).Raw(query, userID).Scan(&perms).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(query, userID, model.PermTypeMenu).Scan(&perms).Error; err != nil {
 		return false, fmt.Errorf("failed to query permissions: %w", err)
 	}
 
@@ -128,16 +132,51 @@ func CheckPermission(ctx context.Context, cache cachepkg.Cache, db *gorm.DB, use
 }
 
 // matchPermission checks if any permission in the list matches the given
-// path and method. An empty path in the permission record acts as a wildcard
-// for the method (used for "access all" permissions).
-func matchPermission(perms []permission, path, method string) bool {
+// path and method.
+//
+// Matching rules:
+//   - Path "*" matches all paths (super-admin).
+//   - Method "*" matches all HTTP methods.
+//   - A path segment "*" matches exactly one path segment
+//     (e.g. "/api/v1/roles/*" matches "/api/v1/roles/42"
+//     but NOT "/api/v1/roles/42/permissions").
+//   - A trailing "/**" matches all subpaths
+//     (e.g. "/api/v1/files/upload/**" matches
+//     "/api/v1/files/upload/init" and "/api/v1/files/upload/123/chunk").
+//   - Otherwise, the path must match exactly.
+func matchPermission(perms []permission, reqPath, method string) bool {
 	for _, p := range perms {
 		if p.Path == "*" {
 			return true
 		}
-		if p.Path == path && (p.Method == "*" || p.Method == method) {
+		if p.Method != "*" && p.Method != method {
+			continue
+		}
+		if matchPath(p.Path, reqPath) {
 			return true
 		}
 	}
 	return false
+}
+
+func matchPath(pattern, reqPath string) bool {
+	if strings.HasSuffix(pattern, "/**") {
+		prefix := strings.TrimSuffix(pattern, "**")
+		return reqPath == strings.TrimSuffix(prefix, "/") || strings.HasPrefix(reqPath, prefix)
+	}
+
+	patternParts := strings.Split(pattern, "/")
+	pathParts := strings.Split(reqPath, "/")
+	if len(patternParts) != len(pathParts) {
+		return false
+	}
+	for i := range patternParts {
+		if patternParts[i] == "*" {
+			continue
+		}
+		if patternParts[i] != pathParts[i] {
+			return false
+		}
+	}
+	return true
 }

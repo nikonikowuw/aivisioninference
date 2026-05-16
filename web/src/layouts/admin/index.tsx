@@ -20,7 +20,7 @@ export default function Dashboard(props: { [x: string]: any }) {
   const fixed = false;
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t } = useTranslation('layout');
   const location = useLocation();
   const noAccessColor = useColorModeValue('gray.500', 'gray.400');
 
@@ -60,7 +60,7 @@ export default function Dashboard(props: { [x: string]: any }) {
     if (menus.length > 0) {
       return getActiveRouteFromMenus(menus, location.pathname);
     }
-    return t('layout.sidebar.dashboard');
+    return t('sidebar.dashboard');
   }, [menusFingerprint, location.pathname, t]);
 
   useEffect(() => {
@@ -120,7 +120,7 @@ export default function Dashboard(props: { [x: string]: any }) {
               pt='50px'>
               {dynamicRoutes.length === 0 ? (
                 <Text color={noAccessColor} textAlign="center" mt="40px">
-                  {t('layout.sidebar.noAccess')}
+                  {t('sidebar.noAccess')}
                 </Text>
               ) : (
                 <Routes>

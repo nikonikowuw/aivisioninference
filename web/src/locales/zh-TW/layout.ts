@@ -7,6 +7,7 @@ export const layout = {
     fileManagement: '檔案管理',
     auditLogs: '稽核日誌',
     taskManagement: '任務管理',
+    noAccess: '暫無存取權限',
   },
   navbar: {
     profile: '個人資料',

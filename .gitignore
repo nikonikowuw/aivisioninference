@@ -52,6 +52,7 @@ web/node_modules/
 web/dist/
 web/build/
 web/.cache/
+web/tsconfig.tsbuildinfo
 web/.env.local
 web/.env.*.local
 

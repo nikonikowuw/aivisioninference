@@ -11,6 +11,17 @@ import (
 
 const noRoleSentinel = 99999
 
+// checkRoleRootGuard 校验非 Root 用户不能修改系统管理员角色。
+func checkRoleRootGuard(roleLevel int, isRoot bool) error {
+	if isRoot {
+		return nil
+	}
+	if roleLevel == 1 {
+		return apperrors.New(apperrors.ErrHierarchyLevelRole, "")
+	}
+	return nil
+}
+
 // getUserLevel 获取用户拥有的最小角色层级，即最高权限层级。
 // 无角色用户返回最低权限哨兵值；数据库异常会记录日志并返回内部错误。
 func getUserLevel(ctx context.Context, userRepo *repository.UserRepository, userID string) (int, error) {

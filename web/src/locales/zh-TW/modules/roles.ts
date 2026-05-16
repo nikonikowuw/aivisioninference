@@ -25,6 +25,7 @@ export const roles = {
     level: {
       label: '等級',
       placeholder: '等級數值越小權限越高',
+      helper: '等級數值越小權限越高；最終權限校驗以後端規則為準',
     },
   },
   modal: {

@@ -36,9 +36,17 @@ func (r *RoleRepository) Create(ctx context.Context, item *model.Role) error {
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// Update saves changes to a role record.
+// Update saves mutable role fields.
 func (r *RoleRepository) Update(ctx context.Context, item *model.Role) error {
-	return r.db.WithContext(ctx).Save(item).Error
+	updates := map[string]any{
+		"name":        item.Name,
+		"description": item.Description,
+		"sort_order":  item.SortOrder,
+		"status":      item.Status,
+		"level":       item.Level,
+		"updated_by":  item.UpdatedBy,
+	}
+	return r.db.WithContext(ctx).Model(&model.Role{}).Where("id = ?", item.ID).Updates(updates).Error
 }
 
 // Delete removes a role by its ID and cleans up join tables.

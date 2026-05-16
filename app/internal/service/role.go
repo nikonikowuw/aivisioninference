@@ -83,6 +83,9 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
 	}
 
+	if err := checkRoleRootGuard(role.Level, isRoot); err != nil {
+		return err
+	}
 	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
 		return err
 	}
@@ -137,6 +140,9 @@ func (s *RoleService) Delete(ctx context.Context, id string, currentUserID strin
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
 	}
 
+	if err := checkRoleRootGuard(role.Level, isRoot); err != nil {
+		return err
+	}
 	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
 		return err
 	}
@@ -182,6 +188,9 @@ func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
 	}
 
+	if err := checkRoleRootGuard(role.Level, isRoot); err != nil {
+		return err
+	}
 	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
 		return err
 	}

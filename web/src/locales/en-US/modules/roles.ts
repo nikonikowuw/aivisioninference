@@ -25,6 +25,7 @@ export const roles = {
     level: {
       label: 'Level',
       placeholder: 'Lower number = higher authority',
+      helper: 'Lower numbers grant higher authority; final permission checks are enforced by the backend.',
     },
   },
   modal: {

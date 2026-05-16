@@ -9,16 +9,16 @@ const (
 	Success = 0
 
 	// Client errors (1xxxx).
-	ErrBadRequest          = 10001
-	ErrCannotDisableSelf   = 10002
-	ErrHierarchyLevelUser  = 10003
-	ErrHierarchyLevelRole  = 10004
+	ErrBadRequest         = 10001
+	ErrCannotDisableSelf  = 10002
+	ErrHierarchyLevelUser = 10003
+	ErrHierarchyLevelRole = 10004
 
 	// Auth errors (2xxxx).
-	ErrUnauthorized       = 20001
-	ErrTokenExpired       = 20002
-	ErrTokenInvalid       = 20003
-	ErrRefreshTokenReuse  = 20403
+	ErrUnauthorized      = 20001
+	ErrTokenExpired      = 20002
+	ErrTokenInvalid      = 20003
+	ErrRefreshTokenReuse = 20403
 
 	// Forbidden (3xxxx).
 	ErrForbidden = 30001
@@ -32,18 +32,18 @@ const (
 
 // Standard error messages keyed by code.
 var messages = map[int]string{
-	Success:              "success",
-	ErrBadRequest:          "请求参数错误",
-	ErrCannotDisableSelf:   "不能禁用自己",
-	ErrHierarchyLevelUser:  "没有权限操作同级或更高级别的用户",
-	ErrHierarchyLevelRole:  "没有权限操作同级或更高级别的角色",
-	ErrUnauthorized:      "未登录",
-	ErrTokenExpired:      "Token已过期",
-	ErrTokenInvalid:      "Token无效",
-	ErrRefreshTokenReuse: "Token已被复用",
-	ErrForbidden:         "无权限",
-	ErrNotFound:          "资源不存在",
-	ErrInternal:          "服务器内部错误",
+	Success:               "success",
+	ErrBadRequest:         "请求参数错误",
+	ErrCannotDisableSelf:  "不能禁用自己",
+	ErrHierarchyLevelUser: "没有权限操作同级或更高级别的用户",
+	ErrHierarchyLevelRole: "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
+	ErrUnauthorized:       "未登录",
+	ErrTokenExpired:       "Token已过期",
+	ErrTokenInvalid:       "Token无效",
+	ErrRefreshTokenReuse:  "Token已被复用",
+	ErrForbidden:          "无权限",
+	ErrNotFound:           "资源不存在",
+	ErrInternal:           "服务器内部错误",
 }
 
 // AppError represents a business-level error with a code and message.

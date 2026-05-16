@@ -20,6 +20,7 @@ import {
   ModalFooter,
   ModalCloseButton,
   FormControl,
+  FormHelperText,
   FormLabel,
   Input,
   Textarea,
@@ -74,6 +75,7 @@ export default function Roles() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Role | null>(null);
   const [form, setForm] = useState({ name: '', description: '', level: 100 });
+  const [isSaving, setIsSaving] = useState(false);
   const roleLevelMin = 1;
   const roleLevelMax = 99999;
   const [permTree, setPermTree] = useState<Permission[]>([]);
@@ -81,6 +83,7 @@ export default function Roles() {
   const [permRoleId, setPermRoleId] = useState<string>('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAssigningPerms, setIsAssigningPerms] = useState(false);
 
   const loadRoles = useCallback(async () => {
     try {
@@ -117,6 +120,7 @@ export default function Roles() {
       return;
     }
 
+    setIsSaving(true);
     try {
       if (editing) {
         await rolesApi.update(editing.id, form);
@@ -126,9 +130,11 @@ export default function Roles() {
         toast({ title: t('message.createSuccess'), status: 'success' });
       }
       onClose();
-      loadRoles();
+      await loadRoles();
     } catch (err) {
       toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -163,13 +169,16 @@ export default function Roles() {
   };
 
   const handleAssignPerms = async () => {
+    setIsAssigningPerms(true);
     try {
       await rolesApi.assignPermissions(permRoleId, selectedPerms);
       toast({ title: t('message.assignPermissionsSuccess'), status: 'success' });
       onPermClose();
-      loadRoles();
+      await loadRoles();
     } catch (err) {
       toast({ title: t('message.assignPermissionsFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsAssigningPerms(false);
     }
   };
 
@@ -293,11 +302,12 @@ export default function Roles() {
                 }}
                 placeholder={t('form.level.placeholder')}
               />
+              <FormHelperText>{t('form.level.helper')}</FormHelperText>
             </FormControl>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleSave}>{tCommon('button.save')}</Button>
+            <Button variant="brand" onClick={handleSave} isLoading={isSaving} isDisabled={isSaving}>{tCommon('button.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
@@ -315,7 +325,7 @@ export default function Roles() {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onPermClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleAssignPerms}>{tCommon('button.save')}</Button>
+            <Button variant="brand" onClick={handleAssignPerms} isLoading={isAssigningPerms} isDisabled={isAssigningPerms}>{tCommon('button.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

@@ -13,6 +13,7 @@ db:
   max_idle_conns: 10
 
 redis:
+  enable: true
   host: localhost
   port: 6379
   password: ""
@@ -51,5 +52,13 @@ cors:
     - Accept
     - Authorization
 
+proxy:
+  trusted_proxies: []
+  # 生产环境请显式配置受信任代理网段，例如：
+  # - 10.0.0.0/8
+  # - 172.16.0.0/12
+  # - 192.168.0.0/16
+
 rate_limit:
   requests_per_minute: 100
+

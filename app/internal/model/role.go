@@ -4,23 +4,19 @@
 
 package model
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
-
 // Role represents a role that groups permissions for RBAC.
 type Role struct {
-	ID          string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Name        string         `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"`
-	Description string         `gorm:"type:varchar(256)" json:"description"`
-	SortOrder   int            `gorm:"default:0" json:"sort_order"`
-	Status      int            `gorm:"type:smallint;default:1" json:"status"`
-	Permissions []Permission   `gorm:"many2many:role_permissions;" json:"permissions,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	BaseModel
+	Name        string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"`
+	Description string       `gorm:"type:varchar(256)" json:"description"`
+	SortOrder   int          `gorm:"default:0" json:"sort_order"`
+	Status      int          `gorm:"type:smallint;default:1" json:"status"`
+	Permissions []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"`
+}
+
+// SortableFields returns the fields allowed for sorting.
+func (Role) SortableFields() []string {
+	return []string{"created_at", "name", "sort_order"}
 }
 
 // RolePermission is the join table for Role <-> Permission many-to-many relationship.

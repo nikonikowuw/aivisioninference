@@ -4,24 +4,28 @@
 
 package model
 
-import (
-	"time"
-
-	"gorm.io/gorm"
+// Permission type constants.
+const (
+	PermTypeMenu   = "menu"
+	PermTypeButton = "button"
+	PermTypeAPI    = "api"
 )
 
 // Permission represents a menu item or API permission for RBAC.
 type Permission struct {
-	ID        string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Name      string         `gorm:"type:varchar(64);not null" json:"name"`
-	Code      string         `gorm:"type:varchar(128);uniqueIndex;not null" json:"code"`
-	Path      string         `gorm:"type:varchar(256)" json:"path"`
-	Method    string         `gorm:"type:varchar(10)" json:"method"`
-	Type      string         `gorm:"type:varchar(20);not null" json:"type"` // menu | api
-	ParentID  *string        `gorm:"type:uuid" json:"parent_id"`
-	SortOrder int            `gorm:"default:0" json:"sort_order"`
-	Children  []Permission   `gorm:"foreignKey:ParentID" json:"children,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	BaseModel
+	Name      string       `gorm:"type:varchar(64);not null" json:"name"`
+	Code      string       `gorm:"type:varchar(128);uniqueIndex;not null" json:"code"`
+	Path      string       `gorm:"type:varchar(256)" json:"path"`
+	Method    string       `gorm:"type:varchar(10)" json:"method"`
+	Type      string       `gorm:"type:varchar(20);not null" json:"type"`
+	Icon      string       `gorm:"type:varchar(64)" json:"icon"`
+	ParentID  *string      `gorm:"type:uuid" json:"parent_id"`
+	SortOrder int          `gorm:"default:0" json:"sort_order"`
+	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+}
+
+// SortableFields returns the fields allowed for sorting.
+func (Permission) SortableFields() []string {
+	return []string{"created_at", "name", "sort_order", "code"}
 }

@@ -1,17 +1,20 @@
 package middleware
 
 import (
+	"context"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
 )
 
 const (
-	// ContextKeyUserID is the gin context key for the authenticated user's ID.
+	// ContextKeyUserID is used only for gin.Context.Set/Get in HTTP handlers/middleware.
+	// Do not use it with context.WithValue; for request context use model.ContextKeyUserID.
 	ContextKeyUserID = "user_id"
 	// ContextKeyRoleIDs is the gin context key for the user's role IDs.
 	ContextKeyRoleIDs = "role_ids"
@@ -48,9 +51,14 @@ func Auth(jwtManager *jwtutil.Manager) gin.HandlerFunc {
 			return
 		}
 
-		// Set user info in context
+		// Set user info in gin context
 		c.Set(ContextKeyUserID, claims.UserID)
 		c.Set(ContextKeyRoleIDs, claims.RoleIDs)
+
+		// Set user info in request context (for GORM hooks)
+		ctx := c.Request.Context()
+		ctx = context.WithValue(ctx, model.ContextKeyUserID, claims.UserID)
+		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

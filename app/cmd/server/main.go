@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/config"
@@ -63,12 +64,17 @@ func main() {
 	}
 	zap.L().Info("database connected")
 
-	// Connect to Redis
-	rdb, err := cache.New(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
-	if err != nil {
-		zap.L().Fatal("failed to connect to redis", zap.Error(err))
+	// Connect to Redis (optional)
+	var rdb = (*redis.Client)(nil)
+	if cfg.Redis.Enable {
+		rdb, err = cache.New(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
+		if err != nil {
+			zap.L().Fatal("failed to connect to redis", zap.Error(err))
+		}
+		zap.L().Info("redis connected")
+	} else {
+		zap.L().Info("redis disabled by config")
 	}
-	zap.L().Info("redis connected")
 
 	// Initialize JWT manager
 	jwtManager := jwt.NewManager(
@@ -86,9 +92,11 @@ func main() {
 
 	// Create router
 	routerCfg := &router.Config{
-		AppEnv:            cfg.App.Env,
-		AllowOrigins:      cfg.CORS.AllowOrigins,
-		RequestsPerMinute: cfg.RateLimit.RequestsPerMinute,
+		AppEnv:                    cfg.App.Env,
+		AllowOrigins:              cfg.CORS.AllowOrigins,
+		RequestsPerMinute:         cfg.RateLimit.RequestsPerMinute,
+		TrustedProxies:            cfg.Proxy.TrustedProxies,
+		PermissionTreeRedisEnable: cfg.Redis.Enable,
 	}
 	r := router.New(db, rdb, jwtManager, hub, routerCfg)
 

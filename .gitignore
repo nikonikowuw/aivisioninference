@@ -1,6 +1,7 @@
 # === Build ===
 app/bin/
 app/tmp/
+app/server
 
 # === Go ===
 *.exe

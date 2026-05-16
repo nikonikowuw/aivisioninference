@@ -6,25 +6,25 @@ package model
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // User represents a system user with authentication and role associations.
 type User struct {
-	ID            string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Username      string         `gorm:"type:varchar(64);uniqueIndex;not null" json:"username"`
-	Password      string         `gorm:"type:varchar(256);not null" json:"-"`
-	Email         string         `gorm:"type:varchar(128);uniqueIndex" json:"email"`
-	DisplayName   string         `gorm:"type:varchar(128)" json:"display_name"`
-	AvatarURL     string         `gorm:"type:varchar(512)" json:"avatar_url"`
-	Status        int            `gorm:"type:smallint;default:1" json:"status"`
-	LoginAttempts int            `gorm:"default:0" json:"-"`
-	LockedUntil   *time.Time     `json:"-"`
-	Roles         []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	BaseModel
+	Username      string     `gorm:"type:varchar(64);uniqueIndex;not null" json:"username"`
+	Password      string     `gorm:"type:varchar(256);not null" json:"-"`
+	Email         string     `gorm:"type:varchar(128);uniqueIndex" json:"email"`
+	DisplayName   string     `gorm:"type:varchar(128)" json:"display_name"`
+	AvatarURL     string     `gorm:"type:varchar(512)" json:"avatar_url"`
+	Status        int        `gorm:"type:smallint;default:1" json:"status"`
+	LoginAttempts int        `gorm:"default:0" json:"-"`
+	LockedUntil   *time.Time `json:"-"`
+	Roles         []Role     `gorm:"many2many:user_roles;" json:"roles,omitempty"`
+}
+
+// SortableFields returns the fields allowed for sorting.
+func (User) SortableFields() []string {
+	return []string{"created_at", "username", "status"}
 }
 
 // UserRole is the join table for User <-> Role many-to-many relationship.

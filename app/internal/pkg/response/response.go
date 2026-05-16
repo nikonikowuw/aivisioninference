@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 )
 
 // Response is the standard API response wrapper.
@@ -29,7 +30,7 @@ type PageData struct {
 func OK(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		Code:    apperrors.Success,
-		Message: "success",
+		Message: i18n.Translate(c.GetString("lang"), apperrors.Success),
 		Data:    data,
 	})
 }
@@ -40,13 +41,13 @@ func Err(c *gin.Context, err error) {
 		httpStatus := codeToHTTPStatus(appErr.Code)
 		c.JSON(httpStatus, Response{
 			Code:    appErr.Code,
-			Message: appErr.Message,
+			Message: i18n.Translate(c.GetString("lang"), appErr.Code),
 		})
 		return
 	}
 	c.JSON(http.StatusInternalServerError, Response{
 		Code:    apperrors.ErrInternal,
-		Message: "服务器内部错误",
+		Message: i18n.Translate(c.GetString("lang"), apperrors.ErrInternal),
 	})
 }
 
@@ -54,7 +55,7 @@ func Err(c *gin.Context, err error) {
 func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 	c.JSON(http.StatusOK, Response{
 		Code:    apperrors.Success,
-		Message: "success",
+		Message: i18n.Translate(c.GetString("lang"), apperrors.Success),
 		Data: PageData{
 			List:     list,
 			Total:    total,

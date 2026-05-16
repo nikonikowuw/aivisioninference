@@ -21,6 +21,7 @@ type Config struct {
 	CORS      CORSConfig      `mapstructure:"cors"`
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
 	Seed      SeedConfig      `mapstructure:"seed"`
+	Proxy     ProxyConfig     `mapstructure:"proxy"`
 }
 
 // AppConfig holds application-level settings.
@@ -43,6 +44,7 @@ type DBConfig struct {
 
 // RedisConfig holds Redis connection settings.
 type RedisConfig struct {
+	Enable   bool   `mapstructure:"enable"`
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
 	Password string `mapstructure:"password"`
@@ -105,6 +107,11 @@ type SeedConfig struct {
 	Password    string `mapstructure:"password"`
 	Email       string `mapstructure:"email"`
 	DisplayName string `mapstructure:"display_name"`
+}
+
+// ProxyConfig holds trusted proxy settings for secure header validation.
+type ProxyConfig struct {
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
 }
 
 // Load reads configuration from files and environment variables.
@@ -188,6 +195,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("db.max_idle_conns", 5)
 
 	// Redis
+	v.SetDefault("redis.enable", true)
 	v.SetDefault("redis.host", "localhost")
 	v.SetDefault("redis.port", 6379)
 	v.SetDefault("redis.password", "")
@@ -228,6 +236,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("seed.password", "admin123")
 	v.SetDefault("seed.email", "admin@example.com")
 	v.SetDefault("seed.display_name", "管理员")
+
+	// Explicit env bindings for important toggles.
+	_ = v.BindEnv("redis.enable", "NIKO_REDIS_ENABLE")
 
 	// AutomaticEnv + SetEnvPrefix("NIKO") + SetEnvKeyReplacer(".", "_")
 	// 已自动处理所有环境变量映射，例如 NIKO_DB_HOST → db.host

@@ -4,30 +4,29 @@
 
 package model
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
+import "time"
 
 // File represents an uploaded file record.
 type File struct {
-	ID           string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	Name         string         `gorm:"type:varchar(256);not null" json:"name"`
-	OriginalName string         `gorm:"type:varchar(256);not null" json:"original_name"`
-	Path         string         `gorm:"type:varchar(512)" json:"path"`
-	Loid         *uint32        `json:"loid"` // PG Large Object OID
-	MimeType     string         `gorm:"type:varchar(128)" json:"mime_type"`
-	Size         int64          `json:"size"`
-	StorageType  string         `gorm:"type:varchar(20);not null" json:"storage_type"`
-	UploaderID   string         `gorm:"type:uuid;not null" json:"uploader_id"`
-	CreatedAt    time.Time      `json:"created_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	BaseModel
+	Name         string  `gorm:"type:varchar(256);not null" json:"name"`
+	OriginalName string  `gorm:"type:varchar(256);not null" json:"original_name"`
+	Path         string  `gorm:"type:varchar(512)" json:"path"`
+	Loid         *uint32 `json:"loid"` // PG Large Object OID
+	MimeType     string  `gorm:"type:varchar(128)" json:"mime_type"`
+	Size         int64   `json:"size"`
+	StorageType  string  `gorm:"type:varchar(20);not null" json:"storage_type"`
+}
+
+// SortableFields returns the fields allowed for sorting.
+func (File) SortableFields() []string {
+	return []string{"created_at", "name", "size"}
 }
 
 // FileChunk tracks the progress of a resumable chunked upload.
 type FileChunk struct {
-	UploadID       string     `gorm:"type:varchar(64);primaryKey" json:"upload_id"`
+	BaseModel
+	UploadID       string     `gorm:"type:varchar(64);uniqueIndex;not null" json:"upload_id"`
 	FileName       string     `gorm:"type:varchar(256);not null" json:"file_name"`
 	FileSize       int64      `json:"file_size"`
 	MD5            string     `gorm:"type:varchar(64);not null" json:"md5"`
@@ -35,8 +34,6 @@ type FileChunk struct {
 	Status         string     `gorm:"type:varchar(20);not null" json:"status"` // uploading|completed|expired
 	StorageType    string     `gorm:"type:varchar(20);not null" json:"storage_type"`
 	UploadedChunks string     `gorm:"type:text" json:"uploaded_chunks"` // JSON array of uploaded chunk indices
-	UploaderID     string     `gorm:"type:uuid;not null" json:"uploader_id"`
-	CreatedAt      time.Time  `json:"created_at"`
 	ExpiresAt      time.Time  `json:"expires_at"`
 	CompletedAt    *time.Time `json:"completed_at"`
 }

@@ -2,14 +2,13 @@
 package middleware
 
 import (
-	"fmt"
-	"net/http"
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/response"
 )
 
 // Recovery returns a Gin middleware that recovers from panics and returns
@@ -27,15 +26,8 @@ func Recovery() gin.HandlerFunc {
 					zap.String("path", c.Request.URL.Path),
 				)
 
-				// Create a unified error and attach to context
-				err := apperrors.New(apperrors.ErrInternal, fmt.Sprintf("服务器内部错误: %v", r))
-				c.Error(err)
-
-				// Abort with unified error format
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"code":    err.Code,
-					"message": err.Message,
-				})
+				response.Err(c, apperrors.New(apperrors.ErrInternal, "服务器内部错误"))
+				c.Abort()
 			}
 		}()
 

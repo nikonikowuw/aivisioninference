@@ -8,7 +8,7 @@ import "time"
 
 // Task represents an asynchronous background task.
 type Task struct {
-	ID           string     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	BaseModel
 	TaskID       string     `gorm:"type:varchar(128);uniqueIndex" json:"task_id"`
 	Type         string     `gorm:"type:varchar(64);not null" json:"type"`
 	Payload      string     `gorm:"type:text" json:"payload"`
@@ -17,7 +17,10 @@ type Task struct {
 	MaxRetries   int        `json:"max_retries"`
 	Result       string     `gorm:"type:text" json:"result"`
 	ErrorMessage string     `gorm:"type:text" json:"error_message"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
 	FinishedAt   *time.Time `json:"finished_at"`
+}
+
+// SortableFields returns the fields allowed for sorting.
+func (Task) SortableFields() []string {
+	return []string{"created_at", "type", "status"}
 }

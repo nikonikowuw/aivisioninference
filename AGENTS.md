@@ -24,44 +24,53 @@ Niko Admin is a backend admin scaffold built with **Gin + GORM + PostgreSQL + Re
 ## Commands
 
 ```bash
-make dev           # 开发模式（docker 依赖 + air 热重载）
-make build         # 编译当前平台
-make build-linux   # 交叉编译 Linux amd64
-make swag          # 生成 Swagger 文档
-make gen           # CRUD 代码生成
-make test          # 运行测试（-race -cover）
-make lint          # golangci-lint 检查
-make migrate       # 数据库迁移
-make docker-up     # 启动 postgres + redis
-make docker-down   # 停止容器
-make init          # 一键初始化（依赖 + .env + 迁移）
-make clean         # 清理构建产物
-make help          # 列出所有命令
+make serve        # 开发模式（docker 依赖 + air 热重载）
+make run          # 本地运行
+make build        # 编译当前平台
+make build-linux  # 交叉编译 Linux amd64
+make swag         # 生成 Swagger 文档
+make gen          # CRUD 代码生成
+make unit-test    # 运行测试（-race -cover）
+make lint         # golangci-lint 检查
+make migrate      # 数据库迁移
+make docker-up    # 启动 postgres + redis
+make docker-down  # 停止容器
+make init         # 一键初始化（依赖 + .env + 迁移）
+make clean        # 清理构建产物
+make help         # 列出所有命令
 ```
+
+> **注意**：以上命令需要在 `app/` 目录下执行。
 
 ## Project Structure
 
 ```
-cmd/                  # 入口 (server, migrate, gen)
-internal/
-  config/             # Viper 配置加载
-  middleware/         # Gin 中间件 (auth, rbac, cors, i18n, logger, recovery)
-  router/             # 路由注册
-  handler/            # HTTP Handler（Controller 层）
-  service/            # 业务逻辑层
-  repository/         # 数据访问层 (GORM)
-  model/              # GORM Model 定义
-  dto/                # 请求/响应 DTO
-  pkg/                # 内部工具 (jwt, hash, response, errors, validator)
-pkg/
-  gen/                # CRUD 代码生成器 (parser + templates)
-  storage/            # 文件存储抽象 (local/pg lo/oss)
-  swagger/            # Swagger 初始化
+app/                  # Go 后端
+  cmd/                # 入口 (server, migrate, gen)
+  internal/
+    config/           # Viper 配置加载
+    middleware/       # Gin 中间件 (auth, rbac, cors, i18n, logger, recovery)
+    router/           # 路由注册
+    handler/          # HTTP Handler（Controller 层）
+    service/          # 业务逻辑层
+    repository/       # 数据访问层 (GORM)
+    model/            # GORM Model 定义
+    dto/              # 请求/响应 DTO
+    pkg/              # 内部工具 (jwt, hash, response, errors, validator)
+    task/             # 异步任务处理
+  pkg/
+    gen/              # CRUD 代码生成器 (parser + templates)
+    storage/          # 文件存储抽象 (local/pg lo/oss)
+    swagger/          # Swagger 初始化
+  configs/            # 多环境 YAML 配置
+  docs/               # Swagger 生成文件 (gitignored)
 web/                  # 前端 React Admin
-configs/              # 多环境 YAML 配置
-docs/                 # Swagger 生成文件 (gitignored)
-bin/                  # 编译产物 (gitignored)
-tmp/                  # air + 分片临时文件 (gitignored)
+docs/                 # 产品文档
+openspec/             # OpenSpec 变更提案
+.claude/              # AI 规范与技能
+.opencode/            # opencode 配置
+docker-compose.yml
+tmp/                  # air 临时文件 (gitignored)
 ```
 
 ## Architecture
@@ -161,7 +170,7 @@ niko-admin gen --list
 - 框架：Go 标准 `testing` + `testify/assert`
 - 覆盖率目标：>= 70%
 - 文件命名：`*_test.go`
-- 运行：`make test`（带 `-race -coverprofile`）
+- 运行：`make unit-test`（带 `-race -coverprofile`）
 
 ## Skill Standards
 

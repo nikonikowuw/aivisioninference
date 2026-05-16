@@ -24,6 +24,11 @@ type AuditLog struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// SortableFields returns the fields allowed for sorting.
+func (AuditLog) SortableFields() []string {
+	return []string{"created_at", "action", "resource_type"}
+}
+
 // TableName overrides the default table name for AuditLog.
 func (AuditLog) TableName() string {
 	return "audit_logs"

@@ -21,7 +21,6 @@ func Logger() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		method := c.Request.Method
 		path := c.Request.URL.Path
-		errors := c.Errors.ByType(gin.ErrorTypePrivate).String()
 
 		fields := []zap.Field{
 			zap.Int("status", statusCode),
@@ -30,10 +29,11 @@ func Logger() gin.HandlerFunc {
 			zap.String("method", method),
 			zap.String("path", path),
 			zap.Int("body_size", c.Writer.Size()),
+			zap.Int("error_count", len(c.Errors)),
 		}
 
-		if errors != "" {
-			fields = append(fields, zap.String("errors", errors))
+		if len(c.Errors) > 0 {
+			fields = append(fields, zap.String("last_error", c.Errors.Last().Error()))
 		}
 
 		switch {

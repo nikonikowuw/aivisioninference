@@ -22,7 +22,7 @@
 | 数据库 | PostgreSQL | 16+ |
 | 缓存 | Redis | 7+ |
 | 任务队列 | [Asynq](https://github.com/hibiken/asynq) | v0.25+ |
-| 认证 | JWT (golang-jwt) | v5 |s
+| 认证 | JWT (golang-jwt) | v5 |
 | WebSocket | gorilla/websocket | v1.5+ |
 | API 文档 | [swaggo/swag](https://github.com/swaggo/swag) | v1.16+ |
 | 热重载 | [air](https://github.com/air-verse/air) | v1.51+ |
@@ -55,15 +55,16 @@
 
 ```bash
 git clone <repo-url> niko-admin
-cd niko-admin
+cd niko-admin/app
 make init
 ```
 
 ### 启动开发
 
 ```bash
+cd app
 # 启动 PostgreSQL + Redis + 热重载服务
-make dev
+make serve
 
 # Swagger UI 访问
 # http://localhost:8080/swagger/index.html
@@ -72,52 +73,59 @@ make dev
 ### 常用命令
 
 ```bash
-make dev           # 开发模式（依赖 + 热重载）
-make build         # 编译二进制
-make build-linux   # 交叉编译 Linux amd64
-make swag          # 生成 Swagger 文档
-make gen           # 代码生成（CRUD）
-make test          # 运行测试
-make lint          # 代码规范检查
-make migrate       # 执行数据库迁移
-make docker-build  # 构建 Docker 镜像
-make docker-up     # 启动容器服务
-make docker-down   # 停止容器服务
-make clean         # 清理构建产物
-make help          # 查看所有命令
+make serve        # 开发模式（依赖 + 热重载）
+make run          # 本地运行
+make build        # 编译二进制
+make build-linux  # 交叉编译 Linux amd64
+make swag         # 生成 Swagger 文档
+make gen          # 代码生成（CRUD）
+make unit-test    # 运行测试
+make lint         # 代码规范检查
+make migrate      # 执行数据库迁移
+make docker-build # 构建 Docker 镜像
+make docker-up    # 启动容器服务
+make docker-down  # 停止容器服务
+make clean        # 清理构建产物
+make help         # 查看所有命令
 ```
 
 ## 项目结构
 
 ```
 niko-admin/
-├── cmd/
-│   ├── server/            # 服务启动入口
-│   ├── migrate/           # 数据库迁移
-│   └── gen/               # 代码生成 CLI
-├── internal/
-│   ├── config/            # 配置定义 & 加载 (Viper)
-│   ├── middleware/         # Gin 中间件 (Auth/RBAC/CORS/i18n)
-│   ├── router/            # 路由注册
-│   ├── handler/           # HTTP Handler（REST 接口）
-│   ├── service/           # 业务逻辑层
-│   ├── repository/        # 数据访问层 (GORM)
-│   ├── model/             # GORM Model 定义
-│   ├── dto/               # 请求/响应 DTO
-│   └── pkg/               # 内部工具 (jwt/hash/response/errors)
-├── pkg/
-│   ├── gen/               # CRUD 代码生成器
-│   └── storage/           # 文件存储抽象 (local/pg/oss)
-├── docs/                  # Swagger 生成文件
+├── app/                   # Go 后端
+│   ├── cmd/
+│   │   ├── server/        # 服务启动入口
+│   │   ├── migrate/       # 数据库迁移
+│   │   └── gen/           # 代码生成 CLI
+│   ├── internal/
+│   │   ├── config/        # 配置定义 & 加载 (Viper)
+│   │   ├── middleware/    # Gin 中间件 (Auth/RBAC/CORS/i18n)
+│   │   ├── router/        # 路由注册
+│   │   ├── handler/       # HTTP Handler（REST 接口）
+│   │   ├── service/       # 业务逻辑层
+│   │   ├── repository/    # 数据访问层 (GORM)
+│   │   ├── model/         # GORM Model 定义
+│   │   ├── dto/           # 请求/响应 DTO
+│   │   ├── pkg/           # 内部工具 (jwt/hash/response/errors)
+│   │   └── task/          # 异步任务处理
+│   ├── pkg/
+│   │   ├── gen/           # CRUD 代码生成器
+│   │   └── storage/       # 文件存储抽象 (local/pg/oss)
+│   ├── configs/           # 多环境 YAML 配置
+│   ├── docs/              # Swagger 生成文件
+│   ├── Makefile
+│   ├── Dockerfile
+│   ├── go.mod
+│   └── .air.toml
 ├── web/                   # 前端 (React Admin)
-├── bin/                   # 编译产物
-├── tmp/                   # air 热重载临时文件
-├── .air.toml              # air 配置
-├── Makefile               # 构建系统
+├── docs/
+│   └── PRD.md             # 产品需求文档
+├── openspec/              # OpenSpec 变更提案
+├── .claude/               # AI 规范与技能
+├── .opencode/             # opencode 配置
 ├── docker-compose.yml
-├── Dockerfile
-├── .env.example
-└── go.mod
+└── tmp/                   # air 临时文件
 ```
 
 ## API 规范
@@ -156,6 +164,8 @@ niko-admin/
 从 GORM Model 一键生成 CRUD 代码骨架：
 
 ```bash
+cd app
+
 # 单个 Model
 niko-admin gen user            # 从 internal/model/user.go 生成
 
@@ -172,7 +182,7 @@ niko-admin gen --list
 
 **加载优先级**：环境变量 > `.env` 文件 > `config.dev.yaml` > 代码默认值
 
-复制 `.env.example` 为 `.env` 按需修改：
+复制 `app/.env.example` 为 `app/.env` 按需修改：
 
 ```bash
 NIKO_APP_ENV=dev

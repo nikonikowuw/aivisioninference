@@ -27,7 +27,7 @@ func NewRoleRepository(db *gorm.DB) *RoleRepository {
 // FindByID finds a role by its ID.
 func (r *RoleRepository) FindByID(ctx context.Context, id string) (*model.Role, error) {
 	var item model.Role
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Preload("Permissions").Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
@@ -70,7 +70,7 @@ func (r *RoleRepository) List(ctx context.Context, req dto.RoleListRequest) ([]m
 	err := query.Scopes(
 		scopes.Paginate(req.GetPage(), req.GetPageSize()),
 		scopes.OrderBy(req.Sort, req.Order, model.Role{}.SortableFields()...),
-	).Find(&items).Error
+	).Preload("Permissions").Find(&items).Error
 	return items, total, err
 }
 

@@ -36,6 +36,30 @@ import { useEffect, useState, useCallback } from 'react';
 import { rolesApi, permissionsApi, type Role, type Permission } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 
+function getDescendantIds(nodes: Permission[], id: string): string[] {
+  const ids: string[] = [];
+  const find = (list: Permission[]): boolean => {
+    for (const n of list) {
+      if (n.id === id) {
+        if (n.children) {
+          const walk = (children: Permission[]) => {
+            for (const c of children) {
+              ids.push(c.id);
+              if (c.children) walk(c.children);
+            }
+          };
+          walk(n.children);
+        }
+        return true;
+      }
+      if (n.children && find(n.children)) return true;
+    }
+    return false;
+  };
+  find(nodes);
+  return ids;
+}
+
 export default function Roles() {
   const { t } = useTranslation('modules/roles');
   const { t: tCommon } = useTranslation('common');
@@ -138,24 +162,41 @@ export default function Roles() {
   };
 
   const togglePerm = (id: string) => {
-    setSelectedPerms((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
-    );
+    setSelectedPerms((prev) => {
+      const isChecked = prev.includes(id);
+      const descendantIds = getDescendantIds(permTree, id);
+
+      if (isChecked) {
+        return prev.filter((p) => p !== id && !descendantIds.includes(p));
+      } else {
+        const newSet = new Set([...prev, id, ...descendantIds]);
+        return Array.from(newSet);
+      }
+    });
   };
 
   const renderPermTree = (nodes: Permission[], depth = 0) =>
-    nodes.map((p) => (
-      <Box key={p.id} ml={depth * 6}>
-        <Checkbox
-          isChecked={selectedPerms.includes(p.id)}
-          onChange={() => togglePerm(p.id)}
-          mb={1}
-        >
-          {p.name} ({p.code})
-        </Checkbox>
-        {p.children && renderPermTree(p.children, depth + 1)}
-      </Box>
-    ));
+    nodes.map((p) => {
+      const isLeaf = !p.children || p.children.length === 0;
+      const descendantIds = isLeaf ? [] : getDescendantIds(permTree, p.id);
+      const checkedDescendants = descendantIds.filter((id) => selectedPerms.includes(id));
+      const allChecked = isLeaf ? selectedPerms.includes(p.id) : checkedDescendants.length === descendantIds.length;
+      const someChecked = checkedDescendants.length > 0;
+
+      return (
+        <Box key={p.id} ml={depth * 6}>
+          <Checkbox
+            isChecked={allChecked}
+            isIndeterminate={someChecked && !allChecked}
+            onChange={() => togglePerm(p.id)}
+            mb={1}
+          >
+            {p.name} ({p.code})
+          </Checkbox>
+          {p.children && renderPermTree(p.children, depth + 1)}
+        </Box>
+      );
+    });
 
   if (loading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;

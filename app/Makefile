@@ -12,8 +12,12 @@ serve: docker-up
 	@echo "Starting development server with air..."
 	air
 
-# 空操作，使命令行参数 dev/test/deploy 不报错
+## dev: 本地热重载开发（无需 Docker，需自行启动 postgres+redis）
 dev:
+	@echo "Starting development server with air (local)..."
+	air
+
+# 空操作，使命令行参数 test/deploy 不报错
 test:
 deploy:
 

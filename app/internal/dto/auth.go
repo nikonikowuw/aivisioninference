@@ -13,17 +13,36 @@ type LoginResponse struct {
 	User        UserInfo `json:"user"`
 }
 
+// RoleInfo 角色信息
+type RoleInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// Menu 用户菜单项
+type Menu struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Code      string `json:"code"`
+	Path      string `json:"path"`
+	Icon      string `json:"icon"`
+	SortOrder int    `json:"sort_order"`
+	Children  []Menu `json:"children,omitempty"`
+}
+
 // UserInfo contains basic user information returned after auth.
 type UserInfo struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	DisplayName string   `json:"display_name"`
-	AvatarURL   string   `json:"avatar_url"`
-	Email       string   `json:"email"`
-	Status      int      `json:"status"`
-	Roles       []string `json:"roles"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	ID          string     `json:"id"`
+	Username    string     `json:"username"`
+	DisplayName string     `json:"display_name"`
+	AvatarURL   string     `json:"avatar_url"`
+	Email       string     `json:"email"`
+	Status      int        `json:"status"`
+	Roles       []RoleInfo `json:"roles"`
+	Menus       []Menu     `json:"menus"`
+	CreatedAt   string     `json:"created_at"`
+	UpdatedAt   string     `json:"updated_at"`
 }
 
 // RefreshResponse is the token refresh response.

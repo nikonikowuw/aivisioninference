@@ -29,7 +29,7 @@ func NewDashboardHandler(svc *service.DashboardService) *DashboardHandler {
 func (h *DashboardHandler) Stats(c *gin.Context) {
 	stats, err := h.svc.Stats(c.Request.Context())
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, stats)

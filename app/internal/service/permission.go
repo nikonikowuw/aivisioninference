@@ -2,33 +2,63 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	cachepkg "github.com/niko-admin/niko-admin/internal/pkg/cache"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
+const permissionTreeCacheKey = "perm:tree:all"
+
 // PermissionService handles business logic for Permission operations.
 type PermissionService struct {
 	permRepo *repository.PermissionRepository
+	cache    cachepkg.Cache
 }
 
 // NewPermissionService creates a new PermissionService.
-func NewPermissionService(permRepo *repository.PermissionRepository) *PermissionService {
-	return &PermissionService{permRepo: permRepo}
+func NewPermissionService(permRepo *repository.PermissionRepository, cache cachepkg.Cache) *PermissionService {
+	return &PermissionService{permRepo: permRepo, cache: cache}
 }
 
 // Tree returns all permissions as a tree structure.
 func (s *PermissionService) Tree(ctx context.Context) ([]model.Permission, error) {
+	if s.cache != nil {
+		cached, err := s.cache.Get(ctx, permissionTreeCacheKey)
+		if err == nil {
+			var tree []model.Permission
+			unmarshalErr := json.Unmarshal(cached, &tree)
+			if unmarshalErr == nil {
+				return tree, nil
+			}
+			zap.L().Warn("unmarshal permission tree cache failed", zap.Error(unmarshalErr))
+		}
+	}
+
 	all, err := s.permRepo.FindAllOrdered(ctx)
 	if err != nil {
 		zap.L().Error("list permissions failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
-	return buildPermissionTree(all, nil), nil
+	tree := buildPermissionTree(all, nil)
+
+	if s.cache != nil {
+		if data, marshalErr := json.Marshal(tree); marshalErr == nil {
+			if setErr := s.cache.Set(ctx, permissionTreeCacheKey, data, 10*time.Minute); setErr != nil {
+				zap.L().Warn("set permission tree cache failed", zap.Error(setErr))
+			}
+		} else {
+			zap.L().Warn("marshal permission tree cache failed", zap.Error(marshalErr))
+		}
+	}
+
+	return tree, nil
 }
 
 // buildPermissionTree recursively builds a permission tree from a flat list.
@@ -43,6 +73,100 @@ func buildPermissionTree(all []model.Permission, parentID *string) []model.Permi
 		}
 	}
 	return result
+}
+
+// invalidateTreeCache deletes the permission tree cache.
+func (s *PermissionService) invalidateTreeCache(ctx context.Context) {
+	if s.cache != nil {
+		if err := s.cache.Del(ctx, permissionTreeCacheKey); err != nil {
+			zap.L().Warn("invalidate permission tree cache failed", zap.Error(err))
+		}
+	}
+}
+
+// Update updates an existing permission.
+func (s *PermissionService) Update(ctx context.Context, id string, req dto.UpdatePermissionRequest) error {
+	perm, err := s.permRepo.FindByID(ctx, id)
+	if err != nil {
+		return apperrors.New(apperrors.ErrNotFound, "权限不存在")
+	}
+
+	if req.Code != "" && req.Code != perm.Code {
+		count, err := s.permRepo.CountByCode(ctx, req.Code)
+		if err != nil {
+			zap.L().Error("check permission code uniqueness failed", zap.Error(err))
+			return apperrors.New(apperrors.ErrInternal, "")
+		}
+		if count > 0 {
+			return apperrors.New(apperrors.ErrBadRequest, "权限编码已存在")
+		}
+	}
+
+	if req.Name != "" {
+		perm.Name = req.Name
+	}
+	if req.Code != "" {
+		perm.Code = req.Code
+	}
+	if req.Path != "" {
+		perm.Path = req.Path
+	}
+	if req.Method != "" {
+		perm.Method = req.Method
+	}
+	if req.Type != "" {
+		perm.Type = req.Type
+	}
+	if req.Icon != "" {
+		perm.Icon = req.Icon
+	}
+	if req.ParentID != nil {
+		perm.ParentID = req.ParentID
+	}
+	if req.SortOrder != nil {
+		perm.SortOrder = *req.SortOrder
+	}
+
+	if err := s.permRepo.Update(ctx, perm); err != nil {
+		zap.L().Error("update permission failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
+
+	s.invalidateTreeCache(ctx)
+	return nil
+}
+
+// Delete deletes a permission and its descendants after checking none are assigned to roles.
+func (s *PermissionService) Delete(ctx context.Context, id string) error {
+	if _, err := s.permRepo.FindByID(ctx, id); err != nil {
+		return apperrors.New(apperrors.ErrNotFound, "权限不存在")
+	}
+
+	descendants, err := s.permRepo.FindDescendantIDs(ctx, id)
+	if err != nil {
+		zap.L().Error("find descendant permissions failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
+
+	checkIDs := append([]string{id}, descendants...)
+	for _, pid := range checkIDs {
+		roleCount, err := s.permRepo.CountAssignedRoles(ctx, pid)
+		if err != nil {
+			zap.L().Error("check permission usage failed", zap.Error(err))
+			return apperrors.New(apperrors.ErrInternal, "")
+		}
+		if roleCount > 0 {
+			return apperrors.New(apperrors.ErrBadRequest, "该权限或其子权限已分配给角色，无法删除")
+		}
+	}
+
+	if err := s.permRepo.Delete(ctx, id); err != nil {
+		zap.L().Error("delete permission failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
+
+	s.invalidateTreeCache(ctx)
+	return nil
 }
 
 // Create creates a new permission after validation.
@@ -82,5 +206,6 @@ func (s *PermissionService) Create(ctx context.Context, req dto.CreatePermission
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	s.invalidateTreeCache(ctx)
 	return &item, nil
 }

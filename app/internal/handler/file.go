@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -39,16 +38,13 @@ func NewFileHandler(svc *service.FileService) *FileHandler {
 func (h *FileHandler) InitUpload(c *gin.Context) {
 	var req dto.InitUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	userID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := userID.(string)
-
-	chunk, err := h.svc.InitUpload(c.Request.Context(), req, uid)
+	chunk, err := h.svc.InitUpload(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -74,19 +70,19 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	indexStr := c.PostForm("index")
 	index, err := strconv.Atoi(indexStr)
 	if err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "无效的分片索引"))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, "无效的分片索引"))
 		return
 	}
 
 	file, _, err := c.Request.FormFile("chunk")
 	if err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "缺少分片文件"))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, "缺少分片文件"))
 		return
 	}
 	defer file.Close()
 
 	if err := h.svc.SaveChunk(c.Request.Context(), uploadID, index, file); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -108,7 +104,7 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 
 	fileRecord, err := h.svc.CompleteUpload(c.Request.Context(), uploadID)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -130,7 +126,7 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 
 	progress, err := h.svc.GetUploadProgress(c.Request.Context(), uploadID)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -151,13 +147,13 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 func (h *FileHandler) CheckFile(c *gin.Context) {
 	var req dto.CheckFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	result, err := h.svc.CheckFile(c.Request.Context(), req.MD5)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -167,13 +163,12 @@ func (h *FileHandler) CheckFile(c *gin.Context) {
 // List returns a paginated list of files with optional filters.
 //
 // @Summary      文件列表
-// @Description  分页查询文件列表，支持按文件名、MIME 类型、存储类型、上传者筛选
+// @Description  分页查询文件列表，支持按关键词、MIME 类型、存储类型筛选
 // @Tags         文件管理
 // @Produce      json
 // @Param        page         query   int     false  "页码"       default(1)
 // @Param        page_size    query   int     false  "每页数量"   default(20)
-// @Param        name         query   string  false  "文件名搜索"
-// @Param        original_name query  string  false  "原始文件名搜索"
+// @Param        keyword      query   string  false  "关键词搜索（文件名/原始名）"
 // @Param        mime_type    query   string  false  "MIME 类型筛选"
 // @Param        storage_type query   string  false  "存储类型筛选"
 // @Param        uploader_id  query   string  false  "上传者 ID 筛选"
@@ -181,21 +176,15 @@ func (h *FileHandler) CheckFile(c *gin.Context) {
 // @Router       /files [get]
 // @Security     BearerAuth
 func (h *FileHandler) List(c *gin.Context) {
-	var req dto.PageRequest
+	var req dto.FileListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	name := c.Query("name")
-	originalName := c.Query("original_name")
-	mimeType := c.Query("mime_type")
-	storageType := c.Query("storage_type")
-	uploaderID := c.Query("uploader_id")
-
-	items, total, err := h.svc.List(c.Request.Context(), req.GetPage(), req.GetPageSize(), name, originalName, mimeType, storageType, uploaderID)
+	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -216,7 +205,7 @@ func (h *FileHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	file, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, file)
@@ -238,7 +227,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 
 	info, err := h.svc.GetDownloadInfo(c.Request.Context(), id, rangeHeader)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -250,9 +239,9 @@ func (h *FileHandler) Download(c *gin.Context) {
 			return
 		}
 
-		if err := service.WriteRange(c.Writer, info.FilePath, start, end, info.ContentType); err != nil {
+		if err := service.WriteRange(c.Writer, info.FilePath, start, end, info.FileSize, info.ContentType); err != nil {
 			zap.L().Error("write range failed", zap.Error(err))
-			response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
+			c.Error(apperrors.New(apperrors.ErrInternal, ""))
 			return
 		}
 		return
@@ -278,7 +267,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 func (h *FileHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, nil)

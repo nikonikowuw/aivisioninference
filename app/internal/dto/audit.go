@@ -1,6 +1,12 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+)
+
+const DateTimeFormat = time.RFC3339
 
 // AuditLogResponse is the audit log data returned in API responses.
 type AuditLogResponse struct {
@@ -21,9 +27,28 @@ type AuditLogResponse struct {
 // ListAuditLogRequest is the request for listing audit logs with filters.
 type ListAuditLogRequest struct {
 	PageRequest
-	UserID       *string `form:"user_id"`
-	Action       string  `form:"action"`
-	ResourceType string  `form:"resource_type"`
-	StartTime    string  `form:"start_time"`
-	EndTime      string  `form:"end_time"`
+	Keyword      string     `form:"keyword"`
+	Action       string     `form:"action"`
+	ResourceType string     `form:"resource_type"`
+	StartTime    string     `form:"start_time"`
+	EndTime      string     `form:"end_time"`
+	FromTime     *time.Time `form:"-"` // parsed by service, used by FilterScopes
+	ToTime       *time.Time `form:"-"` // parsed by service, used by FilterScopes
+}
+
+func (r *ListAuditLogRequest) FilterScopes() []scopes.Scope {
+	var sc []scopes.Scope
+	if r.Keyword != "" {
+		sc = append(sc, scopes.MultiLike([]string{"username", "action", "resource_type", "request_path"}, r.Keyword))
+	}
+	if r.Action != "" {
+		sc = append(sc, scopes.Eq("action", r.Action))
+	}
+	if r.ResourceType != "" {
+		sc = append(sc, scopes.Eq("resource_type", r.ResourceType))
+	}
+	if r.FromTime != nil || r.ToTime != nil {
+		sc = append(sc, scopes.TimeRange("created_at", r.FromTime, r.ToTime))
+	}
+	return sc
 }

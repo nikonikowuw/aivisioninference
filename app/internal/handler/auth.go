@@ -7,6 +7,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -35,17 +36,17 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	result, err := h.svc.Login(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
-	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", false, true)
+	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", httpx.IsSecureRequest(c), true)
 
 	response.OK(c, dto.LoginResponse{
 		AccessToken: result.AccessToken,
@@ -66,18 +67,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil || refreshToken == "" {
-		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, "缺少刷新令牌"))
+		c.Error(apperrors.New(apperrors.ErrUnauthorized, "缺少刷新令牌"))
 		return
 	}
 
-	accessToken, newRefreshToken, expiresIn, err := h.svc.RefreshTokens(refreshToken)
+	accessToken, newRefreshToken, expiresIn, err := h.svc.RefreshTokens(c.Request.Context(), refreshToken)
 	if err != nil {
 		zap.L().Warn("refresh token failed", zap.Error(err))
-		response.Err(c, apperrors.New(apperrors.ErrTokenInvalid, "刷新令牌无效或已过期"))
+		c.Error(apperrors.New(apperrors.ErrTokenInvalid, "刷新令牌无效或已过期"))
 		return
 	}
 
-	c.SetCookie("refresh_token", newRefreshToken, 7*24*3600, "/", "", false, true)
+	c.SetCookie("refresh_token", newRefreshToken, 7*24*3600, "/", "", httpx.IsSecureRequest(c), true)
 
 	response.OK(c, dto.RefreshResponse{
 		AccessToken: accessToken,
@@ -98,7 +99,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" && len(authHeader) > 7 {
 		tokenString := authHeader[7:]
-		if err := h.svc.RevokeAccessToken(tokenString); err != nil {
+		if err := h.svc.RevokeAccessToken(c.Request.Context(), tokenString); err != nil {
 			zap.L().Warn("revoke access token failed", zap.Error(err))
 		}
 	}
@@ -108,7 +109,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		userID, exists := c.Get(middleware.ContextKeyUserID)
 		if exists {
 			if uid, ok := userID.(string); ok {
-				if err := h.svc.RevokeAllRefreshTokens(uid); err != nil {
+				if err := h.svc.RevokeAllRefreshTokens(c.Request.Context(), uid); err != nil {
 					zap.L().Warn("revoke refresh tokens failed",
 						zap.String("user_id", uid),
 						zap.Error(err),
@@ -118,7 +119,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 	}
 
-	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	c.SetCookie("refresh_token", "", -1, "/", "", httpx.IsSecureRequest(c), true)
 	response.OK(c, nil)
 }
 
@@ -135,19 +136,19 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, exists := c.Get(middleware.ContextKeyUserID)
 	if !exists {
-		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, ""))
+		c.Error(apperrors.New(apperrors.ErrUnauthorized, ""))
 		return
 	}
 
 	uid, ok := userID.(string)
 	if !ok || uid == "" {
-		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, ""))
+		c.Error(apperrors.New(apperrors.ErrUnauthorized, ""))
 		return
 	}
 
 	info, err := h.svc.GetMe(c.Request.Context(), uid)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -169,26 +170,27 @@ func (h *AuthHandler) Me(c *gin.Context) {
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	var req dto.ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	userID, exists := c.Get(middleware.ContextKeyUserID)
 	if !exists {
-		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, ""))
+		c.Error(apperrors.New(apperrors.ErrUnauthorized, ""))
 		return
 	}
 
 	uid, ok := userID.(string)
 	if !ok || uid == "" {
-		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, ""))
+		c.Error(apperrors.New(apperrors.ErrUnauthorized, ""))
 		return
 	}
 
 	if err := h.svc.ChangePassword(c.Request.Context(), uid, req.OldPassword, req.NewPassword); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
 	response.OK(c, nil)
 }
+

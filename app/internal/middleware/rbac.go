@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	cachepkg "github.com/niko-admin/niko-admin/internal/pkg/cache"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 )
 
@@ -29,7 +29,7 @@ const (
 // has permission for the requested path and method. It reads user_id from
 // the gin.Context (set by the Auth middleware). The permission is resolved
 // by calling CheckPermission internally.
-func RBAC(rdb *redis.Client, db *gorm.DB) gin.HandlerFunc {
+func RBAC(cache cachepkg.Cache, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get(ContextKeyUserID)
 		if !exists {
@@ -48,7 +48,7 @@ func RBAC(rdb *redis.Client, db *gorm.DB) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		method := c.Request.Method
 
-		allowed, err := CheckPermission(c.Request.Context(), rdb, db, uid, path, method)
+		allowed, err := CheckPermission(c.Request.Context(), cache, db, uid, path, method)
 		if err != nil {
 			zap.L().Error("rbac check failed",
 				zap.String("user_id", uid),
@@ -79,15 +79,17 @@ func RBAC(rdb *redis.Client, db *gorm.DB) gin.HandlerFunc {
 // CheckPermission verifies whether the given user has a permission matching
 // the specified path and method. It checks Redis cache first, falling back
 // to the database on cache miss.
-func CheckPermission(ctx context.Context, rdb *redis.Client, db *gorm.DB, userID, path, method string) (bool, error) {
+func CheckPermission(ctx context.Context, cache cachepkg.Cache, db *gorm.DB, userID, path, method string) (bool, error) {
 	cacheKey := fmt.Sprintf("%s%s", permCachePrefix, userID)
 
 	// Try cache first
-	cached, err := rdb.Get(ctx, cacheKey).Bytes()
-	if err == nil && len(cached) > 0 {
-		var perms []permission
-		if err := json.Unmarshal(cached, &perms); err == nil {
-			return matchPermission(perms, path, method), nil
+	if cache != nil {
+		cached, err := cache.Get(ctx, cacheKey)
+		if err == nil && len(cached) > 0 {
+			var perms []permission
+			if err := json.Unmarshal(cached, &perms); err == nil {
+				return matchPermission(perms, path, method), nil
+			}
 		}
 	}
 
@@ -111,12 +113,14 @@ func CheckPermission(ctx context.Context, rdb *redis.Client, db *gorm.DB, userID
 	}
 
 	// Update cache
-	if data, err := json.Marshal(perms); err == nil {
-		if err := rdb.Set(ctx, cacheKey, data, permCacheTTL).Err(); err != nil {
-			zap.L().Warn("failed to cache permissions",
-				zap.String("user_id", userID),
-				zap.Error(err),
-			)
+	if cache != nil {
+		if data, err := json.Marshal(perms); err == nil {
+			if err := cache.Set(ctx, cacheKey, data, permCacheTTL); err != nil {
+				zap.L().Warn("failed to cache permissions",
+					zap.String("user_id", userID),
+					zap.Error(err),
+				)
+			}
 		}
 	}
 

@@ -39,9 +39,46 @@ func (r *PermissionRepository) Update(ctx context.Context, item *model.Permissio
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// Delete removes a permission by its ID.
+// queryDescendantIDs runs a recursive CTE to find all descendants of the given ID.
+func (r *PermissionRepository) queryDescendantIDs(db *gorm.DB, id string) ([]string, error) {
+	var ids []string
+	err := db.Raw(`
+		WITH RECURSIVE descendants AS (
+			SELECT id FROM permissions WHERE parent_id = ?
+			UNION ALL
+			SELECT p.id FROM permissions p INNER JOIN descendants d ON p.parent_id = d.id
+		)
+		SELECT id FROM descendants
+	`, id).Scan(&ids).Error
+	return ids, err
+}
+
+// FindDescendantIDs returns all descendant permission IDs for the given permission
+// using a single PostgreSQL recursive CTE query.
+func (r *PermissionRepository) FindDescendantIDs(ctx context.Context, id string) ([]string, error) {
+	return r.queryDescendantIDs(r.db.WithContext(ctx), id)
+}
+
+// Delete removes a permission by its ID, its descendants, and cleans up join tables.
 func (r *PermissionRepository) Delete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Permission{}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		descendants, err := r.queryDescendantIDs(tx, id)
+		if err != nil {
+			return err
+		}
+		allIDs := append([]string{id}, descendants...)
+
+		if err := tx.Where("permission_id IN ?", allIDs).Delete(&model.RolePermission{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id IN ?", descendants).Delete(&model.Permission{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id = ?", id).Delete(&model.Permission{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // List returns a paginated list of permissions.
@@ -92,4 +129,24 @@ func (r *PermissionRepository) ExistsByID(ctx context.Context, id string) (bool,
 	var count int64
 	err := r.db.WithContext(ctx).Model(&model.Permission{}).Where("id = ?", id).Count(&count).Error
 	return count > 0, err
+}
+
+// CountAssignedRoles returns how many roles are assigned the given permission.
+func (r *PermissionRepository) CountAssignedRoles(ctx context.Context, permissionID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("role_permissions").Where("permission_id = ?", permissionID).Count(&count).Error
+	return count, err
+}
+
+// FindMenusByRoleIDs returns menu and button type permissions for given role IDs.
+func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs []string) ([]model.Permission, error) {
+	var items []model.Permission
+	err := r.db.WithContext(ctx).
+		Distinct("permissions.*").
+		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where("role_permissions.role_id IN ?", roleIDs).
+		Where("permissions.type IN ?", []string{model.PermTypeMenu, model.PermTypeButton}).
+		Order("permissions.sort_order ASC, permissions.created_at ASC").
+		Find(&items).Error
+	return items, err
 }

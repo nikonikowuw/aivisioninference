@@ -28,8 +28,8 @@ func NewRoleService(roleRepo *repository.RoleRepository, rdb *redis.Client) *Rol
 }
 
 // List returns a paginated list of roles with optional filters.
-func (s *RoleService) List(ctx context.Context, page, pageSize int, name, description string) ([]model.Role, int64, error) {
-	return s.roleRepo.ListFiltered(ctx, page, pageSize, name, description)
+func (s *RoleService) List(ctx context.Context, req dto.RoleListRequest) ([]model.Role, int64, error) {
+	return s.roleRepo.List(ctx, req)
 }
 
 // Create creates a new role.
@@ -91,8 +91,12 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 	if req.Description != "" {
 		role.Description = req.Description
 	}
-	role.SortOrder = req.SortOrder
-	role.Status = req.Status
+	if req.SortOrder != nil {
+		role.SortOrder = *req.SortOrder
+	}
+	if req.Status != nil {
+		role.Status = *req.Status
+	}
 
 	if err := s.roleRepo.Update(ctx, role); err != nil {
 		zap.L().Error("update role failed", zap.Error(err))

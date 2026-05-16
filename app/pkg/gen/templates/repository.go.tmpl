@@ -5,9 +5,13 @@
 package repository
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
 // {{.Name}}Repository handles database operations for {{.Name}} model.
@@ -21,38 +25,40 @@ func New{{.Name}}Repository(db *gorm.DB) *{{.Name}}Repository {
 }
 
 // FindByID finds a {{.PackageName}} by its ID.
-func (r *{{.Name}}Repository) FindByID(id string) (*model.{{.Name}}, error) {
+func (r *{{.Name}}Repository) FindByID(ctx context.Context, id string) (*model.{{.Name}}, error) {
 	var item model.{{.Name}}
-	err := r.db.Where("id = ?", id).First(&item).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
 // Create inserts a new {{.PackageName}} record.
-func (r *{{.Name}}Repository) Create(item *model.{{.Name}}) error {
-	return r.db.Create(item).Error
+func (r *{{.Name}}Repository) Create(ctx context.Context, item *model.{{.Name}}) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
 
 // Update saves changes to a {{.PackageName}} record.
-func (r *{{.Name}}Repository) Update(item *model.{{.Name}}) error {
-	return r.db.Save(item).Error
+func (r *{{.Name}}Repository) Update(ctx context.Context, item *model.{{.Name}}) error {
+	return r.db.WithContext(ctx).Save(item).Error
 }
 
 // Delete removes a {{.PackageName}} by its ID.
-func (r *{{.Name}}Repository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&model.{{.Name}}{}).Error
+func (r *{{.Name}}Repository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.{{.Name}}{}).Error
 }
 
-// List returns a paginated list of {{.Plural}}.
-func (r *{{.Name}}Repository) List(page, pageSize int) ([]model.{{.Name}}, int64, error) {
+// List returns a paginated list of {{.Plural}} with optional filters.
+func (r *{{.Name}}Repository) List(ctx context.Context, req dto.{{.Name}}ListRequest) ([]model.{{.Name}}, int64, error) {
 	var items []model.{{.Name}}
 	var total int64
 
-	query := r.db.Model(&model.{{.Name}}{})
+	query := r.db.WithContext(ctx).Model(&model.{{.Name}}{}).Scopes(req.FilterScopes()...)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	err := query.Scopes(
+		scopes.Paginate(req.GetPage(), req.GetPageSize()),
+		scopes.OrderBy(req.Sort, req.Order, model.{{.Name}}{}.SortableFields()...),
+	).Find(&items).Error
 	return items, total, err
 }

@@ -10,7 +10,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
 // TaskRepository handles database operations for Task model.
@@ -45,40 +47,20 @@ func (r *TaskRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Task{}).Error
 }
 
-// List returns a paginated list of tasks.
-func (r *TaskRepository) List(ctx context.Context, page, pageSize int) ([]model.Task, int64, error) {
+// List returns a paginated list of tasks with optional filters.
+func (r *TaskRepository) List(ctx context.Context, req dto.TaskListRequest) ([]model.Task, int64, error) {
 	var items []model.Task
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.Task{})
+	query := r.db.WithContext(ctx).Model(&model.Task{}).Scopes(req.FilterScopes()...)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
-	return items, total, err
-}
-
-// ListFiltered returns a paginated list of tasks with optional type/status filters.
-func (r *TaskRepository) ListFiltered(ctx context.Context, page, pageSize int, taskType, status string) ([]model.Task, int64, error) {
-	var items []model.Task
-	var total int64
-
-	query := r.db.WithContext(ctx).Model(&model.Task{})
-	if taskType != "" {
-		query = query.Where("type = ?", taskType)
-	}
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	err := query.Scopes(
+		scopes.Paginate(req.GetPage(), req.GetPageSize()),
+		scopes.OrderBy(req.Sort, req.Order, model.Task{}.SortableFields()...),
+	).Find(&items).Error
 	return items, total, err
 }
 

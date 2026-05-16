@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/niko-admin/niko-admin/internal/pkg/scopes"
+
 // InitUploadRequest is the request body for initializing a chunked upload.
 type InitUploadRequest struct {
 	FileName    string `json:"file_name" binding:"required"`
@@ -25,4 +27,31 @@ type UploadProgressResponse struct {
 	UploadID       string `json:"upload_id"`
 	UploadedChunks []int  `json:"uploaded_chunks"`
 	TotalChunks    int    `json:"total_chunks"`
+}
+
+// FileListRequest is the request for listing files with filters.
+type FileListRequest struct {
+	PageRequest
+	Keyword    string `form:"keyword"`
+	MimeType   string `form:"mime_type"`
+	StorageType string `form:"storage_type"`
+	// UploaderID filters by upload creator. Maps to created_by via BaseModel.
+	UploaderID string `form:"uploader_id"`
+}
+
+func (r *FileListRequest) FilterScopes() []scopes.Scope {
+	var sc []scopes.Scope
+	if r.Keyword != "" {
+		sc = append(sc, scopes.MultiLike([]string{"name", "original_name"}, r.Keyword))
+	}
+	if r.MimeType != "" {
+		sc = append(sc, scopes.Eq("mime_type", r.MimeType))
+	}
+	if r.StorageType != "" {
+		sc = append(sc, scopes.Eq("storage_type", r.StorageType))
+	}
+	if r.UploaderID != "" {
+		sc = append(sc, scopes.Eq("created_by", r.UploaderID))
+	}
+	return sc
 }

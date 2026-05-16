@@ -9,7 +9,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
 // UserRepository handles database operations for User model.
@@ -39,23 +41,50 @@ func (r *UserRepository) Update(ctx context.Context, item *model.User) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// Delete removes a user by its ID.
-func (r *UserRepository) Delete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.User{}).Error
+// UpdateWithRoles updates a user and assigns roles in a single transaction.
+func (r *UserRepository) UpdateWithRoles(ctx context.Context, user *model.User, roleIDs []string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(user).Error; err != nil {
+			return err
+		}
+		if roleIDs != nil {
+			var roles []model.Role
+			if err := tx.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
+				return err
+			}
+			return tx.Model(user).Association("Roles").Replace(roles)
+		}
+		return nil
+	})
 }
 
-// List returns a paginated list of users.
-func (r *UserRepository) List(ctx context.Context, page, pageSize int) ([]model.User, int64, error) {
+// Delete removes a user by its ID and cleans up join tables.
+func (r *UserRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", id).Delete(&model.UserRole{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id = ?", id).Delete(&model.User{}).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// List returns a paginated list of users with optional filters.
+func (r *UserRepository) List(ctx context.Context, req dto.UserListRequest) ([]model.User, int64, error) {
 	var items []model.User
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.User{})
+	query := r.db.WithContext(ctx).Model(&model.User{}).Scopes(req.FilterScopes()...)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	err := query.Scopes(
+		scopes.Paginate(req.GetPage(), req.GetPageSize()),
+		scopes.OrderBy(req.Sort, req.Order, model.User{}.SortableFields()...),
+	).Preload("Roles").Find(&items).Error
 	return items, total, err
 }
 
@@ -77,47 +106,21 @@ func (r *UserRepository) CountByUsername(ctx context.Context, username string, e
 	return count, err
 }
 
-// ListWithRoles returns a paginated list of users with roles preloaded and optional filters.
-func (r *UserRepository) ListWithRoles(ctx context.Context, page, pageSize int, username, displayName string, status *int) ([]model.User, int64, error) {
-	var items []model.User
-	var total int64
-
-	query := r.db.WithContext(ctx).Model(&model.User{})
-	if username != "" {
-		query = query.Where("username LIKE ?", "%"+username+"%")
-	}
-	if displayName != "" {
-		query = query.Where("display_name LIKE ?", "%"+displayName+"%")
-	}
-	if status != nil {
-		query = query.Where("status = ?", *status)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	err := query.Preload("Roles").Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
-	return items, total, err
-}
-
-// AssignRoles replaces all role associations for a user in a transaction.
-func (r *UserRepository) AssignRoles(ctx context.Context, userID string, roleIDs []string) error {
+// CreateWithRoles creates a user and assigns roles in a single transaction.
+// If role assignment fails, the user creation is rolled back.
+func (r *UserRepository) CreateWithRoles(ctx context.Context, user *model.User, roleIDs []string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var user model.User
-		if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
+		if err := tx.Create(user).Error; err != nil {
 			return err
 		}
-
 		if len(roleIDs) > 0 {
 			var roles []model.Role
 			if err := tx.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
 				return err
 			}
-			return tx.Model(&user).Association("Roles").Replace(roles)
+			return tx.Model(user).Association("Roles").Replace(roles)
 		}
-		return tx.Model(&user).Association("Roles").Clear()
+		return nil
 	})
 }
 

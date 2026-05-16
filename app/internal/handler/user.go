@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
@@ -25,37 +23,26 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 // List returns a paginated list of users with optional search filters.
 //
 // @Summary      用户列表
-// @Description  分页查询用户列表，支持按用户名、显示名、状态筛选
+// @Description  分页查询用户列表，支持按关键词、状态筛选
 // @Tags         用户管理
 // @Produce      json
-// @Param        page         query   int     false  "页码"       default(1)
-// @Param        page_size    query   int     false  "每页数量"   default(20)
-// @Param        username     query   string  false  "用户名搜索"
-// @Param        display_name query   string  false  "显示名搜索"
-// @Param        status       query   int     false  "状态筛选 (1=启用 0=禁用)"
+// @Param        page       query   int     false  "页码"       default(1)
+// @Param        page_size  query   int     false  "每页数量"   default(20)
+// @Param        keyword    query   string  false  "关键词搜索（用户名/显示名/邮箱）"
+// @Param        status     query   int     false  "状态筛选 (1=启用 0=禁用)"
 // @Success      200  {object}  dto.Response{data=dto.PageData{list=[]model.User}}
 // @Router       /users [get]
 // @Security     BearerAuth
 func (h *UserHandler) List(c *gin.Context) {
-	var req dto.PageRequest
+	var req dto.UserListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	username := c.Query("username")
-	displayName := c.Query("display_name")
-
-	var statusPtr *int
-	if statusStr := c.Query("status"); statusStr != "" {
-		if s, err := strconv.Atoi(statusStr); err == nil {
-			statusPtr = &s
-		}
-	}
-
-	items, total, err := h.svc.List(c.Request.Context(), req.GetPage(), req.GetPageSize(), username, displayName, statusPtr)
+	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -76,13 +63,13 @@ func (h *UserHandler) List(c *gin.Context) {
 func (h *UserHandler) Create(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	user, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -103,7 +90,7 @@ func (h *UserHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	user, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, user)
@@ -125,12 +112,12 @@ func (h *UserHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	if err := h.svc.Update(c.Request.Context(), id, req); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -154,7 +141,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	uid, _ := currentUserID.(string)
 
 	if err := h.svc.Delete(c.Request.Context(), id, uid); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 

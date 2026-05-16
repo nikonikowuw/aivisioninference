@@ -10,7 +10,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
 // FileRepository handles database operations for File model.
@@ -45,18 +47,20 @@ func (r *FileRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.File{}).Error
 }
 
-// List returns a paginated list of files.
-func (r *FileRepository) List(ctx context.Context, page, pageSize int) ([]model.File, int64, error) {
+// List returns a paginated list of files with optional filters.
+func (r *FileRepository) List(ctx context.Context, req dto.FileListRequest) ([]model.File, int64, error) {
 	var items []model.File
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.File{})
+	query := r.db.WithContext(ctx).Model(&model.File{}).Scopes(req.FilterScopes()...)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
+	err := query.Scopes(
+		scopes.Paginate(req.GetPage(), req.GetPageSize()),
+		scopes.OrderBy(req.Sort, req.Order, model.File{}.SortableFields()...),
+	).Find(&items).Error
 	return items, total, err
 }
 
@@ -97,33 +101,7 @@ func (r *FileRepository) UpdateChunkCompleted(ctx context.Context, uploadID stri
 	}).Error
 }
 
-// ListFiltered returns a paginated list of files with optional filters.
-func (r *FileRepository) ListFiltered(ctx context.Context, page, pageSize int, name, originalName, mimeType, storageType, uploaderID string) ([]model.File, int64, error) {
-	var items []model.File
-	var total int64
-
-	query := r.db.WithContext(ctx).Model(&model.File{})
-	if name != "" {
-		query = query.Where("name LIKE ?", "%"+name+"%")
-	}
-	if originalName != "" {
-		query = query.Where("original_name LIKE ?", "%"+originalName+"%")
-	}
-	if mimeType != "" {
-		query = query.Where("mime_type = ?", mimeType)
-	}
-	if storageType != "" {
-		query = query.Where("storage_type = ?", storageType)
-	}
-	if uploaderID != "" {
-		query = query.Where("uploader_id = ?", uploaderID)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&items).Error
-	return items, total, err
+// DeleteChunkByUploadID removes a FileChunk record by upload_id.
+func (r *FileRepository) DeleteChunkByUploadID(ctx context.Context, uploadID string) error {
+	return r.db.WithContext(ctx).Where("upload_id = ?", uploadID).Delete(&model.FileChunk{}).Error
 }

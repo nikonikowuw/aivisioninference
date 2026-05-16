@@ -22,29 +22,29 @@ func NewAuditHandler(svc *service.AuditService) *AuditHandler {
 // List returns a paginated list of audit logs with optional filters.
 //
 // @Summary      审计日志列表
-// @Description  分页查询审计日志，支持按用户、操作、资源类型、时间范围筛选
+// @Description  分页查询审计日志，支持按关键词、操作、资源类型筛选
 // @Tags         审计日志
 // @Produce      json
 // @Param        page          query   int     false  "页码"        default(1)
 // @Param        page_size     query   int     false  "每页数量"    default(20)
-// @Param        user_id       query   string  false  "用户 ID 筛选"
+// @Param        keyword       query   string  false  "关键词搜索（用户名/操作/资源）"
 // @Param        action        query   string  false  "操作类型筛选"
 // @Param        resource_type query   string  false  "资源类型筛选"
-// @Param        start_time    query   string  false  "开始时间 (RFC3339)"
-// @Param        end_time      query   string  false  "结束时间 (RFC3339)"
+// @Param        start_time    query   string  false  "开始时间 (RFC3339)"  Format(date-time)
+// @Param        end_time      query   string  false  "结束时间 (RFC3339)"  Format(date-time)
 // @Success      200  {object}  dto.Response{data=dto.PageData{list=[]dto.AuditLogResponse}}
 // @Router       /audit-logs [get]
 // @Security     BearerAuth
 func (h *AuditHandler) List(c *gin.Context) {
 	var req dto.ListAuditLogRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	result, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 

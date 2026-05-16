@@ -42,8 +42,8 @@ func (s *TaskService) Create(ctx context.Context, req dto.CreateTaskRequest) (*m
 }
 
 // List returns a paginated list of tasks with optional filters.
-func (s *TaskService) List(ctx context.Context, page, pageSize int, taskType, status string) ([]model.Task, int64, error) {
-	return s.taskRepo.ListFiltered(ctx, page, pageSize, taskType, status)
+func (s *TaskService) List(ctx context.Context, req dto.TaskListRequest) ([]model.Task, int64, error) {
+	return s.taskRepo.List(ctx, req)
 }
 
 // GetByID returns a task by its ID.

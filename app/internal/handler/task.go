@@ -33,13 +33,13 @@ func NewTaskHandler(svc *service.TaskService) *TaskHandler {
 func (h *TaskHandler) Create(c *gin.Context) {
 	var req dto.CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	task, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -49,29 +49,27 @@ func (h *TaskHandler) Create(c *gin.Context) {
 // List returns a paginated list of tasks with optional filters.
 //
 // @Summary      任务列表
-// @Description  分页查询任务列表，支持按类型、状态筛选
+// @Description  分页查询任务列表，支持按关键词、类型、状态筛选
 // @Tags         任务管理
 // @Produce      json
 // @Param        page      query   int     false  "页码"       default(1)
 // @Param        page_size query   int     false  "每页数量"   default(20)
+// @Param        keyword   query   string  false  "关键词搜索"
 // @Param        type      query   string  false  "任务类型筛选"
 // @Param        status    query   string  false  "任务状态筛选 (pending|running|completed|failed)"
 // @Success      200  {object}  dto.Response{data=dto.PageData{list=[]model.Task}}
 // @Router       /tasks [get]
 // @Security     BearerAuth
 func (h *TaskHandler) List(c *gin.Context) {
-	var req dto.PageRequest
+	var req dto.TaskListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	taskType := c.Query("type")
-	status := c.Query("status")
-
-	items, total, err := h.svc.List(c.Request.Context(), req.GetPage(), req.GetPageSize(), taskType, status)
+	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -92,7 +90,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	task, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, task)
@@ -111,7 +109,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 func (h *TaskHandler) Cancel(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.svc.Cancel(c.Request.Context(), id); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, nil)

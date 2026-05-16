@@ -2,20 +2,13 @@ package repository
 
 import (
 	"context"
-	"time"
 
-	"github.com/niko-admin/niko-admin/internal/model"
 	"gorm.io/gorm"
-)
 
-// AuditLogFilters holds typed filter parameters for audit log queries.
-type AuditLogFilters struct {
-	UserID       string
-	Action       string
-	ResourceType string
-	StartTime    *time.Time
-	EndTime      *time.Time
-}
+	"github.com/niko-admin/niko-admin/internal/dto"
+	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+)
 
 // AuditRepository handles database operations for AuditLog model.
 type AuditRepository struct {
@@ -33,51 +26,18 @@ func (r *AuditRepository) Create(ctx context.Context, log *model.AuditLog) error
 }
 
 // List returns a paginated list of audit logs with optional filters.
-func (r *AuditRepository) List(ctx context.Context, page, pageSize int, filters map[string]interface{}) ([]model.AuditLog, int64, error) {
+func (r *AuditRepository) List(ctx context.Context, req dto.ListAuditLogRequest) ([]model.AuditLog, int64, error) {
 	var logs []model.AuditLog
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{})
-	for k, v := range filters {
-		query = query.Where(k, v)
-	}
-
+	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).Scopes(req.FilterScopes()...)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&logs).Error
-	return logs, total, err
-}
-
-// ListWithFilters returns a paginated list of audit logs with typed filters.
-func (r *AuditRepository) ListWithFilters(ctx context.Context, page, pageSize int, filters AuditLogFilters) ([]model.AuditLog, int64, error) {
-	var logs []model.AuditLog
-	var total int64
-
-	query := r.db.WithContext(ctx).Model(&model.AuditLog{})
-	if filters.UserID != "" {
-		query = query.Where("user_id = ?", filters.UserID)
-	}
-	if filters.Action != "" {
-		query = query.Where("action = ?", filters.Action)
-	}
-	if filters.ResourceType != "" {
-		query = query.Where("resource_type = ?", filters.ResourceType)
-	}
-	if filters.StartTime != nil {
-		query = query.Where("created_at >= ?", *filters.StartTime)
-	}
-	if filters.EndTime != nil {
-		query = query.Where("created_at <= ?", *filters.EndTime)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&logs).Error
+	err := query.Scopes(
+		scopes.Paginate(req.GetPage(), req.GetPageSize()),
+		scopes.OrderBy(req.Sort, req.Order, model.AuditLog{}.SortableFields()...),
+	).Find(&logs).Error
 	return logs, total, err
 }

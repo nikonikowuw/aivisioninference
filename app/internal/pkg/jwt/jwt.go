@@ -141,31 +141,74 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 // RefreshTokens rotates the refresh token and issues a new token pair.
 // If the provided refresh token has been reused (already deleted), it revokes
 // all refresh tokens for that user as a security measure.
-func (m *Manager) RefreshTokens(refreshToken string) (accessToken string, newRefreshToken string, expiresIn int, err error) {
-	ctx := context.Background()
+func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (accessToken string, newRefreshToken string, expiresIn int, err error) {
 
 	// Find the refresh token in Redis by scanning for the token value
 	// We need to look up the token across all users. The key format is
 	// refresh:{user_id}:{token_id}, so we scan.
 	pattern := fmt.Sprintf("refresh:*:%s", refreshToken)
-	keys, err := m.redis.Keys(ctx, pattern).Result()
-	if err != nil {
-		return "", "", 0, fmt.Errorf("failed to scan refresh tokens: %w", err)
+	var keys []string
+	var cursor uint64
+	for {
+		var scannedKeys []string
+		var nextCursor uint64
+		var scanErr error
+		scannedKeys, nextCursor, scanErr = m.redis.Scan(ctx, cursor, pattern, 100).Result()
+		if scanErr != nil {
+			return "", "", 0, fmt.Errorf("failed to scan refresh tokens: %w", scanErr)
+		}
+		keys = append(keys, scannedKeys...)
+		if nextCursor == 0 {
+			break
+		}
+		cursor = nextCursor
 	}
 
 	if len(keys) == 0 {
-		// Refresh token not found — possible reuse of a revoked token.
-		// In a production system you'd want to log this as a security event.
-		// Since we can't determine the user from a deleted key, we just reject.
-		return "", "", 0, appErrRefreshTokenInvalid
+		reusedBy, getErr := m.redis.Get(ctx, fmt.Sprintf("refresh:used:%s", refreshToken)).Result()
+		if getErr == nil && reusedBy != "" {
+			if revokeErr := m.RevokeAllRefreshTokens(ctx, reusedBy); revokeErr != nil {
+				return "", "", 0, fmt.Errorf("failed to revoke reused refresh tokens: %w", revokeErr)
+			}
+			return "", "", 0, appErrRefreshTokenReuse
+		}
+		if getErr != nil && getErr != redis.Nil {
+			return "", "", 0, fmt.Errorf("failed to check refresh token reuse marker: %w", getErr)
+		}
+		return "", "", 0, appErrRefreshTokenExpired
 	}
 
-	oldKey := keys[0]
-
-	// Retrieve stored data
-	dataBytes, err := m.redis.Get(ctx, oldKey).Bytes()
-	if err != nil {
-		return "", "", 0, fmt.Errorf("failed to get refresh token data: %w", err)
+	var (
+		oldKey   string
+		dataBytes []byte
+	)
+	for _, key := range keys {
+		b, getErr := m.redis.GetDel(ctx, key).Bytes()
+		if getErr == redis.Nil {
+			continue
+		}
+		if getErr != nil {
+			return "", "", 0, fmt.Errorf("failed to consume refresh token data: %w", getErr)
+		}
+		if len(b) == 0 {
+			continue
+		}
+		oldKey = key
+		dataBytes = b
+		break
+	}
+	if oldKey == "" {
+		reusedBy, getErr := m.redis.Get(ctx, fmt.Sprintf("refresh:used:%s", refreshToken)).Result()
+		if getErr == nil && reusedBy != "" {
+			if revokeErr := m.RevokeAllRefreshTokens(ctx, reusedBy); revokeErr != nil {
+				return "", "", 0, fmt.Errorf("failed to revoke reused refresh tokens: %w", revokeErr)
+			}
+			return "", "", 0, appErrRefreshTokenReuse
+		}
+		if getErr != nil && getErr != redis.Nil {
+			return "", "", 0, fmt.Errorf("failed to check refresh token reuse marker: %w", getErr)
+		}
+		return "", "", 0, appErrRefreshTokenExpired
 	}
 
 	var data refreshTokenData
@@ -174,11 +217,11 @@ func (m *Manager) RefreshTokens(refreshToken string) (accessToken string, newRef
 	}
 
 	userID := data.UserID
-
-	// Delete the old refresh token (rotation)
-	if err := m.redis.Del(ctx, oldKey).Err(); err != nil {
-		return "", "", 0, fmt.Errorf("failed to delete old refresh token: %w", err)
+	if err := m.redis.Set(ctx, fmt.Sprintf("refresh:used:%s", refreshToken), userID, time.Duration(m.refreshExpireSec)*time.Second).Err(); err != nil {
+		return "", "", 0, fmt.Errorf("failed to set refresh token reuse marker: %w", err)
 	}
+
+	// old token is already consumed by GETDEL during rotation.
 
 	// Generate new token pair
 	// We need the user's roles to include in the new access token. Since the
@@ -201,7 +244,7 @@ func (m *Manager) RefreshTokens(refreshToken string) (accessToken string, newRef
 
 // RevokeAccessToken adds the token to the Redis blacklist with a TTL equal
 // to the remaining token expiry time.
-func (m *Manager) RevokeAccessToken(tokenString string) error {
+func (m *Manager) RevokeAccessToken(ctx context.Context, tokenString string) error {
 	// Parse without validation to extract expiry
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return m.secret, nil
@@ -227,7 +270,6 @@ func (m *Manager) RevokeAccessToken(tokenString string) error {
 		ttl = time.Duration(m.accessExpireSec) * time.Second
 	}
 
-	ctx := context.Background()
 	hash := sha256.Sum256([]byte(tokenString))
 	blacklistKey := fmt.Sprintf("blacklist:access:%s", hex.EncodeToString(hash[:]))
 
@@ -245,13 +287,24 @@ func (m *Manager) RevokeAccessToken(tokenString string) error {
 
 // RevokeAllRefreshTokens deletes all refresh tokens for a user.
 // Used for security: when a refresh token reuse is detected, invalidate everything.
-func (m *Manager) RevokeAllRefreshTokens(userID string) error {
-	ctx := context.Background()
+func (m *Manager) RevokeAllRefreshTokens(ctx context.Context, userID string) error {
 	pattern := fmt.Sprintf("refresh:%s:*", userID)
 
-	keys, err := m.redis.Keys(ctx, pattern).Result()
-	if err != nil {
-		return fmt.Errorf("failed to scan refresh tokens for revocation: %w", err)
+	var keys []string
+	var cursor uint64
+	for {
+		var scannedKeys []string
+		var nextCursor uint64
+		var err error
+		scannedKeys, nextCursor, err = m.redis.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("failed to scan refresh tokens for revocation: %w", err)
+		}
+		keys = append(keys, scannedKeys...)
+		if nextCursor == 0 {
+			break
+		}
+		cursor = nextCursor
 	}
 
 	if len(keys) == 0 {
@@ -289,7 +342,8 @@ func (m *Manager) RevokeRefreshToken(userID, tokenID string) error {
 
 // Sentinel errors for the jwt package.
 var (
-	appErrTokenInvalid       = fmt.Errorf("令牌无效")
-	appErrTokenRevoked       = fmt.Errorf("令牌已被撤销")
-	appErrRefreshTokenInvalid = fmt.Errorf("刷新令牌无效")
+	appErrTokenInvalid         = fmt.Errorf("令牌无效")
+	appErrTokenRevoked         = fmt.Errorf("令牌已被撤销")
+	appErrRefreshTokenExpired  = fmt.Errorf("刷新令牌已过期")
+	appErrRefreshTokenReuse    = fmt.Errorf("刷新令牌疑似重用")
 )

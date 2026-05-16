@@ -2,9 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -28,39 +27,26 @@ type ListResult struct {
 	Total int64
 }
 
-// List returns a paginated list of audit logs with typed filters.
+// List returns a paginated list of audit logs with optional filters.
 func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*ListResult, error) {
-	page := req.GetPage()
-	pageSize := req.GetPageSize()
-
-	filters := repository.AuditLogFilters{
-		Action:       req.Action,
-		ResourceType: req.ResourceType,
-	}
-
-	if req.UserID != nil && *req.UserID != "" {
-		filters.UserID = *req.UserID
-	}
-
 	if req.StartTime != "" {
-		startTime, err := time.Parse(time.RFC3339, req.StartTime)
+		t, err := time.Parse(dto.DateTimeFormat, req.StartTime)
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "start_time 格式错误，请使用 RFC3339")
+			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("start_time 格式错误，应为 %s", dto.DateTimeFormat))
 		}
-		filters.StartTime = &startTime
+		req.FromTime = &t
 	}
 	if req.EndTime != "" {
-		endTime, err := time.Parse(time.RFC3339, req.EndTime)
+		t, err := time.Parse(dto.DateTimeFormat, req.EndTime)
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "end_time 格式错误，请使用 RFC3339")
+			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("end_time 格式错误，应为 %s", dto.DateTimeFormat))
 		}
-		filters.EndTime = &endTime
+		req.ToTime = &t
 	}
 
-	logs, total, err := s.auditRepo.ListWithFilters(ctx, page, pageSize, filters)
+	logs, total, err := s.auditRepo.List(ctx, req)
 	if err != nil {
-		zap.L().Error("list audit logs failed", zap.Error(err))
-		return nil, apperrors.New(apperrors.ErrInternal, "")
+		return nil, err
 	}
 
 	list := make([]dto.AuditLogResponse, 0, len(logs))

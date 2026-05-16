@@ -36,7 +36,7 @@ func NewFileService(fileRepo *repository.FileRepository) *FileService {
 }
 
 // InitUpload creates a chunked upload session.
-func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest, userID string) (*model.FileChunk, error) {
+func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest) (*model.FileChunk, error) {
 	storageType := req.StorageType
 	if storageType == "" {
 		storageType = "local"
@@ -51,7 +51,6 @@ func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest,
 		Status:         "uploading",
 		StorageType:    storageType,
 		UploadedChunks: "[]",
-		UploaderID:     userID,
 		ExpiresAt:      time.Now().Add(24 * time.Hour),
 	}
 
@@ -126,6 +125,18 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在或已过期")
 	}
 
+	canceled := false
+	defer func() {
+		if canceled {
+			if err := s.fileRepo.DeleteChunkByUploadID(context.WithoutCancel(ctx), uploadID); err != nil {
+				zap.L().Warn("cleanup canceled upload chunk record failed", zap.String("upload_id", uploadID), zap.Error(err))
+			}
+			if err := os.RemoveAll(filepath.Join(chunkDir, uploadID)); err != nil {
+				zap.L().Warn("cleanup canceled upload chunk dir failed", zap.String("upload_id", uploadID), zap.Error(err))
+			}
+		}
+	}()
+
 	var uploaded []int
 	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
 		return nil, apperrors.New(apperrors.ErrBadRequest, "分片状态异常")
@@ -137,6 +148,11 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	chunkDirPath := filepath.Join(chunkDir, uploadID)
 	mergedPath := filepath.Join(chunkDirPath, "merged")
 
+	if err := ctx.Err(); err != nil {
+		canceled = true
+		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
+	}
+
 	mergedFile, err := os.Create(mergedPath)
 	if err != nil {
 		zap.L().Error("create merged file failed", zap.Error(err))
@@ -145,6 +161,10 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	defer mergedFile.Close()
 
 	for i := 0; i < chunk.TotalChunks; i++ {
+		if err := ctx.Err(); err != nil {
+			canceled = true
+			return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
+		}
 		chunkPath := filepath.Join(chunkDirPath, fmt.Sprintf("chunk_%d", i))
 		chunkFile, err := os.Open(chunkPath)
 		if err != nil {
@@ -153,12 +173,20 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		}
 		if _, err := io.Copy(mergedFile, chunkFile); err != nil {
 			chunkFile.Close()
+			if ctx.Err() != nil {
+				canceled = true
+			}
 			zap.L().Error("merge chunk failed", zap.Int("index", i), zap.Error(err))
 			return nil, apperrors.New(apperrors.ErrInternal, "")
 		}
 		chunkFile.Close()
 	}
 	mergedFile.Close()
+
+	if err := ctx.Err(); err != nil {
+		canceled = true
+		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
+	}
 
 	mergedData, err := os.ReadFile(mergedPath)
 	if err != nil {
@@ -197,7 +225,6 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		MimeType:     detectMimeType(chunk.FileName),
 		Size:         chunk.FileSize,
 		StorageType:  chunk.StorageType,
-		UploaderID:   chunk.UploaderID,
 	}
 
 	if err := s.fileRepo.Create(ctx, &fileRecord); err != nil {
@@ -236,8 +263,8 @@ func (s *FileService) CheckFile(ctx context.Context, md5Hash string) (*dto.Check
 }
 
 // List returns a paginated list of files with optional filters.
-func (s *FileService) List(ctx context.Context, page, pageSize int, name, originalName, mimeType, storageType, uploaderID string) ([]model.File, int64, error) {
-	return s.fileRepo.ListFiltered(ctx, page, pageSize, name, originalName, mimeType, storageType, uploaderID)
+func (s *FileService) List(ctx context.Context, req dto.FileListRequest) ([]model.File, int64, error) {
+	return s.fileRepo.List(ctx, req)
 }
 
 // GetByID returns a file by its ID.
@@ -351,25 +378,24 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 }
 
 // WriteRange writes a byte range from a file to an http.ResponseWriter.
-func WriteRange(w http.ResponseWriter, filePath string, start, end int64, contentType string) error {
+func WriteRange(w http.ResponseWriter, filePath string, start, end, totalSize int64, contentType string) error {
 	length := end - start + 1
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, start+length))
+	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, totalSize))
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.WriteHeader(http.StatusPartialContent)
 
-	buf := make([]byte, length)
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	_, err = file.ReadAt(buf, start)
-	if err != nil {
+
+	if _, err := file.Seek(start, io.SeekStart); err != nil {
 		return err
 	}
-	_, err = w.Write(buf)
+	_, err = io.CopyN(w, file, length)
 	return err
 }
 

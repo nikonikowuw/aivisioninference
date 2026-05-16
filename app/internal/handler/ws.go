@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 
 	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
-	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 )
 
@@ -60,6 +60,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 
 	if tokenString == "" {
 		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, "缺少认证令牌"))
+		c.Abort()
 		return
 	}
 
@@ -68,6 +69,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	if err != nil {
 		zap.L().Debug("ws auth failed", zap.Error(err))
 		response.Err(c, apperrors.New(apperrors.ErrTokenInvalid, "令牌无效或已过期"))
+		c.Abort()
 		return
 	}
 

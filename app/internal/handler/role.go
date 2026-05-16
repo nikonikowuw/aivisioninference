@@ -22,29 +22,25 @@ func NewRoleHandler(svc *service.RoleService) *RoleHandler {
 // List returns a paginated list of roles with optional search filters.
 //
 // @Summary      角色列表
-// @Description  分页查询角色列表，支持按名称、描述筛选
+// @Description  分页查询角色列表，支持关键词搜索
 // @Tags         角色管理
 // @Produce      json
-// @Param        page        query   int     false  "页码"       default(1)
-// @Param        page_size   query   int     false  "每页数量"   default(20)
-// @Param        name        query   string  false  "角色名称搜索"
-// @Param        description query   string  false  "描述搜索"
+// @Param        page       query   int     false  "页码"       default(1)
+// @Param        page_size  query   int     false  "每页数量"   default(20)
+// @Param        keyword    query   string  false  "关键词搜索（名称/描述）"
 // @Success      200  {object}  dto.Response{data=dto.PageData{list=[]model.Role}}
 // @Router       /roles [get]
 // @Security     BearerAuth
 func (h *RoleHandler) List(c *gin.Context) {
-	var req dto.PageRequest
+	var req dto.RoleListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	name := c.Query("name")
-	description := c.Query("description")
-
-	items, total, err := h.svc.List(c.Request.Context(), req.GetPage(), req.GetPageSize(), name, description)
+	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -65,13 +61,13 @@ func (h *RoleHandler) List(c *gin.Context) {
 func (h *RoleHandler) Create(c *gin.Context) {
 	var req dto.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	role, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -92,7 +88,7 @@ func (h *RoleHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	role, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, role)
@@ -114,12 +110,12 @@ func (h *RoleHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	if err := h.svc.Update(c.Request.Context(), id, req); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 
@@ -139,7 +135,7 @@ func (h *RoleHandler) Update(c *gin.Context) {
 func (h *RoleHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, nil)
@@ -159,7 +155,7 @@ func (h *RoleHandler) GetPermissions(c *gin.Context) {
 	id := c.Param("id")
 	permissions, err := h.svc.GetPermissions(c.Request.Context(), id)
 	if err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 	response.OK(c, permissions)
@@ -181,12 +177,12 @@ func (h *RoleHandler) AssignPermissions(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.AssignPermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	if err := h.svc.AssignPermissions(c.Request.Context(), id, req); err != nil {
-		response.Err(c, err)
+		c.Error(err)
 		return
 	}
 

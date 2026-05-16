@@ -23,8 +23,8 @@ func NewUserService(userRepo *repository.UserRepository) *UserService {
 }
 
 // List returns a paginated list of users with optional filters.
-func (s *UserService) List(ctx context.Context, page, pageSize int, username, displayName string, status *int) ([]model.User, int64, error) {
-	return s.userRepo.ListWithRoles(ctx, page, pageSize, username, displayName, status)
+func (s *UserService) List(ctx context.Context, req dto.UserListRequest) ([]model.User, int64, error) {
+	return s.userRepo.List(ctx, req)
 }
 
 // Create creates a new user with password hashing and optional role association.
@@ -53,15 +53,9 @@ func (s *UserService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 		Status:      req.Status,
 	}
 
-	if err := s.userRepo.Create(ctx, &user); err != nil {
+	if err := s.userRepo.CreateWithRoles(ctx, &user, req.RoleIDs); err != nil {
 		zap.L().Error("create user failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
-	}
-
-	if len(req.RoleIDs) > 0 {
-		if err := s.userRepo.AssignRoles(ctx, user.ID, req.RoleIDs); err != nil {
-			zap.L().Error("assign user roles failed", zap.Error(err))
-		}
 	}
 
 	return s.userRepo.FindByIDWithRoles(ctx, user.ID)
@@ -106,17 +100,13 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 	if req.AvatarURL != "" {
 		user.AvatarURL = req.AvatarURL
 	}
-	user.Status = req.Status
-
-	if err := s.userRepo.Update(ctx, user); err != nil {
-		zap.L().Error("update user failed", zap.Error(err))
-		return apperrors.New(apperrors.ErrInternal, "")
+	if req.Status != nil {
+		user.Status = *req.Status
 	}
 
-	if req.RoleIDs != nil {
-		if err := s.userRepo.AssignRoles(ctx, id, req.RoleIDs); err != nil {
-			zap.L().Error("update user roles failed", zap.Error(err))
-		}
+	if err := s.userRepo.UpdateWithRoles(ctx, user, req.RoleIDs); err != nil {
+		zap.L().Error("update user failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
 	return nil

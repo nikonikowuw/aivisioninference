@@ -3,16 +3,20 @@ package router
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/middleware"
+	"github.com/niko-admin/niko-admin/internal/pkg/cache"
+	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
@@ -32,14 +36,18 @@ type Router struct {
 
 // Config holds router-level configuration.
 type Config struct {
-	AppEnv            string
-	AllowOrigins      []string
-	RequestsPerMinute int
+	AppEnv                    string
+	AllowOrigins              []string
+	RequestsPerMinute         int
+	TrustedProxies            []string
+	PermissionTreeRedisEnable bool
 }
 
 // New creates a new Router with all dependencies wired.
 func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config) *Router {
 	engine := gin.New()
+
+	httpx.TrustedProxies = cfg.TrustedProxies
 
 	r := &Router{
 		engine:     engine,
@@ -70,6 +78,8 @@ func (r *Router) setupMiddleware() {
 	if r.config.RequestsPerMinute > 0 {
 		r.engine.Use(middleware.RateLimit(r.rdb, r.config.RequestsPerMinute))
 	}
+
+	r.engine.Use(middleware.ErrorHandler())
 }
 
 func (r *Router) setupRoutes() {
@@ -85,10 +95,20 @@ func (r *Router) setupRoutes() {
 	dashRepo := repository.NewDashboardRepository(r.db)
 
 	// Create services
-	authSvc := service.NewAuthService(userRepo, r.rdb, r.jwtManager)
+	authSvc := service.NewAuthService(userRepo, permRepo, r.rdb, r.jwtManager)
 	userSvc := service.NewUserService(userRepo)
 	roleSvc := service.NewRoleService(roleRepo, r.rdb)
-	permSvc := service.NewPermissionService(permRepo)
+	var permCache cache.Cache
+	if r.config.PermissionTreeRedisEnable && r.rdb != nil {
+		permCache = cache.NewRedisCache(r.rdb)
+	} else {
+		if r.config.PermissionTreeRedisEnable && r.rdb == nil {
+			zap.L().Warn("permission tree redis cache enabled but redis client is nil, fallback to memory")
+		}
+		permCache = cache.NewMemoryCache(5 * time.Minute)
+	}
+	permSvc := service.NewPermissionService(permRepo, permCache)
+	rbacCache := permCache
 	fileSvc := service.NewFileService(fileRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	taskSvc := service.NewTaskService(taskRepo)
@@ -115,10 +135,10 @@ func (r *Router) setupRoutes() {
 	users := authorized.Group("/users")
 	{
 		users.GET("", userHandler.List)
-		users.POST("", middleware.RBAC(r.rdb, r.db), userHandler.Create)
+		users.POST("", middleware.RBAC(rbacCache, r.db), userHandler.Create)
 		users.GET("/:id", userHandler.GetByID)
-		users.PUT("/:id", middleware.RBAC(r.rdb, r.db), userHandler.Update)
-		users.DELETE("/:id", middleware.RBAC(r.rdb, r.db), userHandler.Delete)
+		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
+		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
 	}
 
 	// Roles
@@ -126,12 +146,12 @@ func (r *Router) setupRoutes() {
 	roles := authorized.Group("/roles")
 	{
 		roles.GET("", roleHandler.List)
-		roles.POST("", middleware.RBAC(r.rdb, r.db), roleHandler.Create)
+		roles.POST("", middleware.RBAC(rbacCache, r.db), roleHandler.Create)
 		roles.GET("/:id", roleHandler.GetByID)
-		roles.PUT("/:id", middleware.RBAC(r.rdb, r.db), roleHandler.Update)
-		roles.DELETE("/:id", middleware.RBAC(r.rdb, r.db), roleHandler.Delete)
+		roles.PUT("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Update)
+		roles.DELETE("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Delete)
 		roles.GET("/:id/permissions", roleHandler.GetPermissions)
-		roles.PUT("/:id/permissions", middleware.RBAC(r.rdb, r.db), roleHandler.AssignPermissions)
+		roles.PUT("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.AssignPermissions)
 	}
 
 	// Permissions
@@ -139,41 +159,43 @@ func (r *Router) setupRoutes() {
 	permissions := authorized.Group("/permissions")
 	{
 		permissions.GET("/tree", permHandler.Tree)
-		permissions.POST("", middleware.RBAC(r.rdb, r.db), permHandler.Create)
+		permissions.POST("", middleware.RBAC(rbacCache, r.db), permHandler.Create)
+		permissions.PUT("/:id", middleware.RBAC(rbacCache, r.db), permHandler.Update)
+		permissions.DELETE("/:id", middleware.RBAC(rbacCache, r.db), permHandler.Delete)
 	}
 
 	// Files
 	fileHandler := handler.NewFileHandler(fileSvc)
 	files := authorized.Group("/files")
 	{
-		files.POST("/upload/init", fileHandler.InitUpload)
-		files.POST("/upload/:upload_id/chunk", fileHandler.UploadChunk)
-		files.POST("/upload/:upload_id/complete", fileHandler.CompleteUpload)
+		files.POST("/upload/init", middleware.RBAC(rbacCache, r.db), fileHandler.InitUpload)
+		files.POST("/upload/:upload_id/chunk", middleware.RBAC(rbacCache, r.db), fileHandler.UploadChunk)
+		files.POST("/upload/:upload_id/complete", middleware.RBAC(rbacCache, r.db), fileHandler.CompleteUpload)
 		files.GET("/upload/:upload_id/progress", fileHandler.UploadProgress)
 		files.POST("/upload/check", fileHandler.CheckFile)
 		files.GET("", fileHandler.List)
 		files.GET("/:id", fileHandler.GetByID)
 		files.GET("/:id/download", fileHandler.Download)
-		files.DELETE("/:id", fileHandler.Delete)
+		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
 	}
 
 	// Audit Logs
 	auditHandler := handler.NewAuditHandler(auditSvc)
-	authorized.GET("/audit-logs", middleware.RBAC(r.rdb, r.db), auditHandler.List)
+	authorized.GET("/audit-logs", middleware.RBAC(rbacCache, r.db), auditHandler.List)
 
 	// Tasks
 	taskHandler := handler.NewTaskHandler(taskSvc)
 	tasks := authorized.Group("/tasks")
 	{
-		tasks.POST("", taskHandler.Create)
+		tasks.POST("", middleware.RBAC(rbacCache, r.db), taskHandler.Create)
 		tasks.GET("", taskHandler.List)
 		tasks.GET("/:id", taskHandler.GetByID)
-		tasks.POST("/:id/cancel", taskHandler.Cancel)
+		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
 	}
 
 	// Dashboard
 	dashboardHandler := handler.NewDashboardHandler(dashSvc)
-	authorized.GET("/dashboard/stats", dashboardHandler.Stats)
+	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
 
 	// Swagger UI (non-production only)
 	if r.config.AppEnv != "prod" {

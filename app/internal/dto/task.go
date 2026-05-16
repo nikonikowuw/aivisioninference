@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/niko-admin/niko-admin/internal/pkg/scopes"
+
 // CreateTaskRequest is the request body for creating a task.
 type CreateTaskRequest struct {
 	Type    string `json:"type" binding:"required"`
@@ -20,4 +22,26 @@ type TaskResponse struct {
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
 	FinishedAt   *string `json:"finished_at"`
+}
+
+// TaskListRequest is the request for listing tasks with filters.
+type TaskListRequest struct {
+	PageRequest
+	Keyword string `form:"keyword"`
+	Type    string `form:"type"`
+	Status  string `form:"status"`
+}
+
+func (r *TaskListRequest) FilterScopes() []scopes.Scope {
+	var sc []scopes.Scope
+	if r.Keyword != "" {
+		sc = append(sc, scopes.MultiLike([]string{"type", "task_id"}, r.Keyword))
+	}
+	if r.Type != "" {
+		sc = append(sc, scopes.Eq("type", r.Type))
+	}
+	if r.Status != "" {
+		sc = append(sc, scopes.Eq("status", r.Status))
+	}
+	return sc
 }

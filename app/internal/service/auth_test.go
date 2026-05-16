@@ -36,9 +36,9 @@ func TestToRoleInfosAndIDs(t *testing.T) {
 func TestBuildMenuNodes(t *testing.T) {
 	parentID := "menu-root"
 	perms := []model.Permission{
-		{BaseModel: model.BaseModel{ID: "menu-1"}, Name: "A", Code: "a", Path: "/a", Icon: "i-a", SortOrder: 20, ParentID: &parentID},
-		{BaseModel: model.BaseModel{ID: "menu-2"}, Name: "B", Code: "b", Path: "/b", Icon: "i-b", SortOrder: 10},
-		{BaseModel: model.BaseModel{ID: "menu-1"}, Name: "A-dup", Code: "a-dup", Path: "/a-dup", Icon: "i-a-dup", SortOrder: 99},
+		{BaseModel: model.BaseModel{ID: "menu-1"}, Name: "A", Code: "a", Path: "/a", Icon: "i-a", SortOrder: 20, Type: model.PermTypeMenu, ParentID: &parentID},
+		{BaseModel: model.BaseModel{ID: "menu-2"}, Name: "B", Code: "b", Path: "/b", Icon: "i-b", SortOrder: 10, Type: model.PermTypeMenu},
+		{BaseModel: model.BaseModel{ID: "menu-1"}, Name: "A-dup", Code: "a-dup", Path: "/a-dup", Icon: "i-a-dup", SortOrder: 99, Type: model.PermTypeMenu},
 	}
 
 	nodes := buildMenuNodes(perms)
@@ -94,11 +94,11 @@ func TestBuildMenuTree(t *testing.T) {
 		{
 			name: "sort root and children by sort_order",
 			perms: []model.Permission{
-				{BaseModel: model.BaseModel{ID: "root-b"}, Name: "B", SortOrder: 20},
-				{BaseModel: model.BaseModel{ID: "root-a"}, Name: "A", SortOrder: 10},
-				{BaseModel: model.BaseModel{ID: "child-a2"}, Name: "A2", SortOrder: 20, ParentID: strPtr("root-a")},
-				{BaseModel: model.BaseModel{ID: "child-a1"}, Name: "A1", SortOrder: 10, ParentID: strPtr("root-a")},
-				{BaseModel: model.BaseModel{ID: "orphan"}, Name: "Orphan", SortOrder: 15, ParentID: strPtr("missing")},
+				{BaseModel: model.BaseModel{ID: "root-b"}, Name: "B", SortOrder: 20, Type: model.PermTypeMenu},
+				{BaseModel: model.BaseModel{ID: "root-a"}, Name: "A", SortOrder: 10, Type: model.PermTypeMenu},
+				{BaseModel: model.BaseModel{ID: "child-a2"}, Name: "A2", SortOrder: 20, Type: model.PermTypeMenu, ParentID: strPtr("root-a")},
+				{BaseModel: model.BaseModel{ID: "child-a1"}, Name: "A1", SortOrder: 10, Type: model.PermTypeMenu, ParentID: strPtr("root-a")},
+				{BaseModel: model.BaseModel{ID: "orphan"}, Name: "Orphan", SortOrder: 15, Type: model.PermTypeMenu, ParentID: strPtr("missing")},
 			},
 			expectRootOrder: []string{"root-a", "orphan", "root-b"},
 			expectChildren: map[string][]string{

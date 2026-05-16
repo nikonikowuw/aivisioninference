@@ -131,17 +131,21 @@ export function generateSidebarRoutes(t: (key: string) => string): RoutesType[] 
 /**
  * 从用户菜单生成侧边栏路由
  * @param menus - 后端返回的用户菜单列表
+ * @param t - i18n 翻译函数
  */
 function normalizePath(p: string): string {
   return p.startsWith('/') ? p.slice(1) : p;
 }
 
-export function generateSidebarRoutesFromMenus(menus: Menu[]): RoutesType[] {
+export function generateSidebarRoutesFromMenus(
+  menus: Menu[],
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): RoutesType[] {
   const flattenMenus = (menuList: Menu[]): RoutesType[] => {
     const result: RoutesType[] = [];
     for (const menu of menuList) {
       result.push({
-        name: menu.name,
+        name: t(`menu:${menu.code}`, { defaultValue: menu.name }),
         layout: '/admin',
         path: `/${normalizePath(menu.path)}`,
         icon: getIconComponent(menu.icon),
@@ -198,12 +202,13 @@ export function generateRoutesFromMenus(menus: Menu[]): React.ReactNode[] {
 export function getActiveRouteFromMenus(
   menus: Menu[],
   pathname: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
 ): string {
   const findName = (menuList: Menu[]): string | null => {
     for (const menu of menuList) {
       const path = `/${normalizePath(menu.path)}`;
       if (pathname === path || pathname.startsWith(path + '/')) {
-        return menu.name;
+        return t(`menu:${menu.code}`, { defaultValue: menu.name });
       }
       if (menu.children && menu.children.length > 0) {
         const childName = findName(menu.children);
@@ -212,7 +217,7 @@ export function getActiveRouteFromMenus(
     }
     return null;
   };
-  return findName(menus) || 'Dashboard';
+  return findName(menus) || t('menu:dashboard', { defaultValue: 'Dashboard' });
 }
 
 /**

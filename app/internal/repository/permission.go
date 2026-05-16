@@ -138,14 +138,14 @@ func (r *PermissionRepository) CountAssignedRoles(ctx context.Context, permissio
 	return count, err
 }
 
-// FindMenusByRoleIDs returns menu and button type permissions for given role IDs.
+// FindMenusByRoleIDs returns menu type permissions for given role IDs.
 func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs []string) ([]model.Permission, error) {
 	var items []model.Permission
 	err := r.db.WithContext(ctx).
 		Distinct("permissions.*").
 		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
 		Where("role_permissions.role_id IN ?", roleIDs).
-		Where("permissions.type IN ?", []string{model.PermTypeMenu, model.PermTypeButton}).
+		Where("permissions.type = ?", model.PermTypeMenu).
 		Order("permissions.sort_order ASC, permissions.created_at ASC").
 		Find(&items).Error
 	return items, err

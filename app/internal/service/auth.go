@@ -209,6 +209,9 @@ func buildMenuTree(perms []model.Permission) []dto.Menu {
 func buildMenuNodes(perms []model.Permission) map[string]*menuNode {
 	nodes := make(map[string]*menuNode, len(perms))
 	for _, perm := range perms {
+		if perm.Type != model.PermTypeMenu {
+			continue
+		}
 		if _, exists := nodes[perm.ID]; exists {
 			continue
 		}

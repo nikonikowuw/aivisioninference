@@ -42,10 +42,10 @@ export default function Dashboard(props: { [x: string]: any }) {
   // 从用户菜单生成侧边栏路由
   const sidebarRoutes = useMemo(() => {
     if (menus.length > 0) {
-      return generateSidebarRoutesFromMenus(menus);
+      return generateSidebarRoutesFromMenus(menus, t);
     }
     return [];
-  }, [menusFingerprint]);
+  }, [menusFingerprint, t]);
 
   // 从用户菜单生成路由组件
   const dynamicRoutes = useMemo(() => {
@@ -58,7 +58,7 @@ export default function Dashboard(props: { [x: string]: any }) {
   // 获取当前激活的路由名称
   const brandText = useMemo(() => {
     if (menus.length > 0) {
-      return getActiveRouteFromMenus(menus, location.pathname);
+      return getActiveRouteFromMenus(menus, location.pathname, t);
     }
     return t('sidebar.dashboard');
   }, [menusFingerprint, location.pathname, t]);

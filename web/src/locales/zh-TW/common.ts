@@ -33,6 +33,7 @@ export const common = {
     notFound: '請求的資源不存在',
     serverError: '伺服器錯誤',
     loadFailed: '載入失敗',
+    requiredFields: '請填寫必填欄位',
   },
   user: {
     defaultName: '使用者',

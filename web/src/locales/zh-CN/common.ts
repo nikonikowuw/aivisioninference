@@ -33,6 +33,7 @@ export const common = {
     notFound: '请求的资源不存在',
     serverError: '服务器错误',
     loadFailed: '加载失败',
+    requiredFields: '请填写必填字段',
   },
   user: {
     defaultName: '用户',

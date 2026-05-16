@@ -203,6 +203,15 @@ export const permissionsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  update: (id: string, data: Partial<Permission>) =>
+    request(`/permissions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request(`/permissions/${id}`, {
+      method: 'DELETE',
+    }),
 };
 export const filesApi = {
   ...crud<FileItem>('files'),

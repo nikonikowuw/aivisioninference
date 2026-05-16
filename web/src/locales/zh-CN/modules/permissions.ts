@@ -26,16 +26,24 @@ export const permissions = {
       api: 'API',
     },
     parentId: {
-      label: '父级ID',
-      placeholder: '留空为顶级',
+      label: '父级权限',
+      placeholder: '选择父级权限',
+      none: '无（顶级节点）',
     },
   },
   modal: {
     createTitle: '新增权限',
+    editTitle: '编辑权限',
+    deleteTitle: '删除权限',
   },
   message: {
     createSuccess: '创建成功',
     createFailed: '创建失败',
+    updateSuccess: '更新成功',
+    updateFailed: '更新失败',
+    deleteSuccess: '删除成功',
+    deleteFailed: '删除失败',
+    deleteConfirm: '确定要删除该权限及其所有子权限吗？',
     emptyData: '暂无权限数据',
   },
 } as const;

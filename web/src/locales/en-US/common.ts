@@ -33,6 +33,7 @@ export const common = {
     notFound: 'The requested resource was not found',
     serverError: 'Server error',
     loadFailed: 'Failed to load data',
+    requiredFields: 'Please fill in required fields',
   },
   user: {
     defaultName: 'User',

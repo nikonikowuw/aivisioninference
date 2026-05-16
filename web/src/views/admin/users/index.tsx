@@ -30,10 +30,14 @@ import {
   Center,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { usersApi, rolesApi, type User, type Role } from 'services/api';
+import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 
 export default function Users() {
+  const { t } = useTranslation('modules/users');
+  const { t: tCommon } = useTranslation('common');
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
@@ -44,13 +48,17 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState({ username: '', display_name: '', email: '', password: '', status: 1 });
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadUsers = useCallback(async () => {
     try {
       const data = await usersApi.list({ page: 1, page_size: 100 });
       setUsers(data.list);
-    } catch {}
-  }, []);
+    } catch {
+      toast({ title: t('message.loadFailed'), status: 'error' });
+    }
+  }, [toast, t]);
 
   useEffect(() => {
     Promise.all([loadUsers(), rolesApi.list({ page: 1, page_size: 100 }).then((d) => setAllRoles(d.list))])
@@ -75,26 +83,30 @@ export default function Users() {
         const updateData: Record<string, unknown> = { ...form };
         if (!form.password) delete updateData.password;
         await usersApi.update(editing.id, updateData as Partial<User>);
-        toast({ title: '更新成功', status: 'success' });
+        toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
         await usersApi.create(form as Partial<User>);
-        toast({ title: '创建成功', status: 'success' });
+        toast({ title: t('message.createSuccess'), status: 'success' });
       }
       onClose();
       loadUsers();
     } catch (err) {
-      toast({ title: '操作失败', description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('确定删除该用户？')) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await usersApi.delete(id);
-      toast({ title: '删除成功', status: 'success' });
+      await usersApi.delete(deleteTarget);
+      toast({ title: t('message.deleteSuccess'), status: 'success' });
       loadUsers();
     } catch (err) {
-      toast({ title: '删除失败', description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.deleteFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -105,14 +117,20 @@ export default function Users() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
-        <Text fontSize="2xl" fontWeight="bold" color={textColor}>用户管理</Text>
-        <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>新增用户</Button>
+        <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
+        <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
       </Flex>
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
         <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>ID</Th><Th>用户名</Th><Th>显示名称</Th><Th>邮箱</Th><Th>状态</Th><Th>角色</Th><Th>操作</Th>
+              <Th>{t('table.columns.id')}</Th>
+              <Th>{t('table.columns.username')}</Th>
+              <Th>{t('table.columns.displayName')}</Th>
+              <Th>{t('table.columns.email')}</Th>
+              <Th>{t('table.columns.status')}</Th>
+              <Th>{t('table.columns.roles')}</Th>
+              <Th>{t('table.columns.actions')}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -123,13 +141,13 @@ export default function Users() {
                 <Td>{u.display_name}</Td>
                 <Td>{u.email}</Td>
                 <Td>
-                  <Badge colorScheme={u.status === 1 ? 'green' : 'red'}>{u.status === 1 ? '正常' : '禁用'}</Badge>
+                  <Badge colorScheme={u.status === 1 ? 'green' : 'red'}>{u.status === 1 ? t('table.status.active') : t('table.status.inactive')}</Badge>
                 </Td>
                 <Td>{u.roles?.map((r) => r.name).join(', ') || '-'}</Td>
                 <Td>
                   <HStack spacing={2}>
-                    <IconButton aria-label="编辑" icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(u)} />
-                    <IconButton aria-label="删除" icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => handleDelete(u.id)} />
+                    <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(u)} />
+                    <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(u.id)} />
                   </HStack>
                 </Td>
               </Tr>
@@ -137,40 +155,48 @@ export default function Users() {
           </Tbody>
         </Table>
       </Box>
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title={t('actions.delete')}
+        message={t('message.deleteConfirm')}
+        isLoading={isDeleting}
+      />
 
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>{editing ? '编辑用户' : '新增用户'}</ModalHeader>
+          <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <FormControl mb={4}>
-              <FormLabel>用户名</FormLabel>
-              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <FormLabel>{t('form.username.label')}</FormLabel>
+              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder={t('form.username.placeholder')} />
             </FormControl>
             <FormControl mb={4}>
-              <FormLabel>显示名称</FormLabel>
-              <Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} />
+              <FormLabel>{t('form.displayName.label')}</FormLabel>
+              <Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} placeholder={t('form.displayName.placeholder')} />
             </FormControl>
             <FormControl mb={4}>
-              <FormLabel>邮箱</FormLabel>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <FormLabel>{t('form.email.label')}</FormLabel>
+              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={t('form.email.placeholder')} />
             </FormControl>
             <FormControl mb={4}>
-              <FormLabel>密码{editing && '（留空不修改）'}</FormLabel>
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <FormLabel>{t('form.password.label')}{editing && `（${t('form.password.hint')}）`}</FormLabel>
+              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={t('form.password.placeholder')} />
             </FormControl>
             <FormControl mb={4}>
-              <FormLabel>状态</FormLabel>
+              <FormLabel>{t('form.status.label')}</FormLabel>
               <Select value={form.status} onChange={(e) => setForm({ ...form, status: Number(e.target.value) })}>
-                <option value={1}>正常</option>
-                <option value={0}>禁用</option>
+                <option value={1}>{t('form.status.active')}</option>
+                <option value={0}>{t('form.status.inactive')}</option>
               </Select>
             </FormControl>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>取消</Button>
-            <Button variant="brand" onClick={handleSave}>保存</Button>
+            <Button variant="ghost" mr={3} onClick={onClose}>{tCommon('button.cancel')}</Button>
+            <Button variant="brand" onClick={handleSave}>{tCommon('button.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

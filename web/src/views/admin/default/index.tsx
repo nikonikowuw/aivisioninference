@@ -1,4 +1,5 @@
-import { Box, SimpleGrid, Text, Icon, Flex, useColorModeValue, Spinner, Center } from '@chakra-ui/react';
+import { Box, SimpleGrid, Text, Icon, Flex, useColorModeValue, useToast, Spinner, Center } from '@chakra-ui/react';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { MdPerson, MdSecurity, MdFolder, MdAssignment } from 'react-icons/md';
 import MiniStatistics from 'components/card/MiniStatistics';
@@ -6,18 +7,23 @@ import IconBox from 'components/icons/IconBox';
 import { dashboardApi, type DashboardStats } from 'services/api';
 
 export default function Dashboard() {
+  const { t } = useTranslation('modules/dashboard');
   const brandColor = useColorModeValue('brand.500', 'white');
   const boxBg = useColorModeValue('secondaryGray.300', 'whiteAlpha.100');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const toast = useToast();
+
   useEffect(() => {
     dashboardApi
       .stats()
       .then(setStats)
-      .catch(() => {})
+      .catch(() => {
+        toast({ title: t('message.loadFailed'), status: 'error' });
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast, t]);
 
   if (loading) {
     return (
@@ -30,7 +36,7 @@ export default function Dashboard() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Text fontSize="2xl" fontWeight="bold" mb="20px">
-        仪表盘
+        {t('title')}
       </Text>
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap="20px" mb="20px">
         <MiniStatistics
@@ -44,7 +50,7 @@ export default function Dashboard() {
               }
             />
           }
-          name="用户总数"
+          name={t('stats.totalUsers')}
           value={String(stats?.total_users ?? 0)}
         />
         <MiniStatistics
@@ -58,7 +64,7 @@ export default function Dashboard() {
               }
             />
           }
-          name="角色总数"
+          name={t('stats.totalRoles')}
           value={String(stats?.total_roles ?? 0)}
         />
         <MiniStatistics
@@ -72,7 +78,7 @@ export default function Dashboard() {
               }
             />
           }
-          name="文件总数"
+          name={t('stats.totalFiles')}
           value={String(stats?.total_files ?? 0)}
         />
         <MiniStatistics
@@ -86,7 +92,7 @@ export default function Dashboard() {
               }
             />
           }
-          name="活跃任务"
+          name={t('stats.activeTasks')}
           value={String(stats?.active_tasks ?? 0)}
         />
       </SimpleGrid>

@@ -1,5 +1,6 @@
 import React, { useState, type FormEvent } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Button,
@@ -23,9 +24,9 @@ import { RiEyeCloseLine } from 'react-icons/ri';
 import { useAuth } from 'contexts/AuthContext';
 
 function SignIn() {
+  const { t } = useTranslation('auth');
   const textColor = useColorModeValue('navy.700', 'white');
   const textColorSecondary = 'gray.400';
-  const textColorDetails = useColorModeValue('navy.700', 'secondaryGray.600');
   const textColorBrand = useColorModeValue('brand.500', 'white');
   const brandStars = useColorModeValue('brand.500', 'brand.400');
 
@@ -45,8 +46,8 @@ function SignIn() {
       navigate('/admin/default');
     } catch (err) {
       toast({
-        title: '登录失败',
-        description: err instanceof Error ? err.message : '用户名或密码错误',
+        title: t('message.signInFailed'),
+        description: err instanceof Error ? err.message : t('message.invalidCredentials'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -73,7 +74,7 @@ function SignIn() {
       >
         <Box me="auto">
           <Heading color={textColor} fontSize="36px" mb="10px">
-            Niko Admin
+            {t('signIn.title')}
           </Heading>
           <Text
             mb="36px"
@@ -82,7 +83,7 @@ function SignIn() {
             fontWeight="400"
             fontSize="md"
           >
-            输入用户名和密码登录系统
+            {t('signIn.subtitle')}
           </Text>
         </Box>
         <Flex
@@ -99,7 +100,7 @@ function SignIn() {
           <Flex align="center" mb="25px">
             <HSeparator />
             <Text color="gray.400" mx="14px">
-              账号登录
+              {t('signIn.divider')}
             </Text>
             <HSeparator />
           </Flex>
@@ -112,13 +113,13 @@ function SignIn() {
               color={textColor}
               mb="8px"
             >
-              用户名<Text color={brandStars}>*</Text>
+              {t('signIn.username.label')}<Text color={brandStars}>*</Text>
             </FormLabel>
             <Input
               isRequired
               variant="auth"
               fontSize="sm"
-              placeholder="请输入用户名"
+              placeholder={t('signIn.username.placeholder')}
               mb="24px"
               fontWeight="500"
               size="lg"
@@ -132,13 +133,13 @@ function SignIn() {
               color={textColor}
               display="flex"
             >
-              密码<Text color={brandStars}>*</Text>
+              {t('signIn.password.label')}<Text color={brandStars}>*</Text>
             </FormLabel>
             <InputGroup size="md">
               <Input
                 isRequired
                 fontSize="sm"
-                placeholder="请输入密码"
+                placeholder={t('signIn.password.placeholder')}
                 mb="24px"
                 size="lg"
                 type={show ? 'text' : 'password'}
@@ -165,7 +166,7 @@ function SignIn() {
               mb="24px"
               isLoading={loading}
             >
-              登录
+              {t('signIn.submit')}
             </Button>
           </FormControl>
         </Flex>

@@ -1,0 +1,43 @@
+export const common = {
+  button: {
+    submit: '提交',
+    cancel: '取消',
+    save: '保存',
+    create: '创建',
+    delete: '删除',
+    edit: '编辑',
+    confirm: '确认',
+    close: '关闭',
+    back: '返回',
+    next: '下一步',
+    search: '搜索',
+    refresh: '刷新',
+    export: '导出',
+    import: '导入',
+  },
+  status: {
+    loading: '加载中...',
+    success: '成功',
+    error: '错误',
+    warning: '警告',
+    info: '提示',
+  },
+  message: {
+    confirmDelete: '确定要删除吗？',
+    confirmCancel: '确定要取消吗？',
+    operationSuccess: '操作成功',
+    operationFailed: '操作失败',
+    networkError: '网络错误，请稍后重试',
+    unauthorized: '未授权，请重新登录',
+    forbidden: '无权限执行此操作',
+    notFound: '请求的资源不存在',
+    serverError: '服务器错误',
+  },
+  pagination: {
+    total: '共 {{total}} 条',
+    page: '第 {{page}} 页',
+    pageSize: '每页 {{size}} 条',
+  },
+} as const;
+
+export default common;

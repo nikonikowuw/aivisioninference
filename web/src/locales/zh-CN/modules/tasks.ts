@@ -1,0 +1,31 @@
+export const tasks = {
+  title: '任务管理',
+  table: {
+    columns: {
+      id: 'ID',
+      type: '类型',
+      status: '状态',
+      error: '错误',
+      createdAt: '创建时间',
+      updatedAt: '更新时间',
+      actions: '操作',
+    },
+    status: {
+      pending: '等待中',
+      running: '运行中',
+      completed: '已完成',
+      failed: '失败',
+      cancelled: '已取消',
+    },
+  },
+  message: {
+    cancelled: '已取消',
+    cancelFailed: '取消失败',
+    cancelConfirm: '确定取消该任务？',
+  },
+  actions: {
+    cancel: '取消任务',
+  },
+} as const;
+
+export default tasks;

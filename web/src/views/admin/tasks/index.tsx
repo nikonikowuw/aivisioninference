@@ -17,8 +17,11 @@ import {
   Badge,
 } from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { tasksApi, type Task } from 'services/api';
+import { useDateFormat } from 'hooks/useDateFormat';
+import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 
 const statusColor: Record<string, string> = {
   pending: 'yellow',
@@ -29,32 +32,42 @@ const statusColor: Record<string, string> = {
 };
 
 export default function Tasks() {
+  const { t } = useTranslation('modules/tasks');
+  const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const loadTasks = useCallback(async () => {
     try {
       const data = await tasksApi.list({ page: 1, page_size: 100 });
       setTasks(data.list);
-    } catch {}
-  }, []);
+    } catch {
+      toast({ title: t('message.loadFailed'), status: 'error' });
+    }
+  }, [toast, t]);
 
   useEffect(() => {
     loadTasks().finally(() => setLoading(false));
   }, [loadTasks]);
 
-  const handleCancel = async (id: string) => {
-    if (!confirm('确定取消该任务？')) return;
+  const handleCancel = async () => {
+    if (!cancelTarget) return;
+    setIsCancelling(true);
     try {
-      await tasksApi.cancel(id);
-      toast({ title: '已取消', status: 'success' });
+      await tasksApi.cancel(cancelTarget);
+      toast({ title: t('message.cancelled'), status: 'success' });
       loadTasks();
     } catch (err) {
-      toast({ title: '取消失败', description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.cancelFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsCancelling(false);
+      setCancelTarget(null);
     }
   };
 
@@ -65,34 +78,42 @@ export default function Tasks() {
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
-        <Text fontSize="2xl" fontWeight="bold" color={textColor}>任务管理</Text>
+        <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
       </Flex>
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
         <Table variant="simple">
           <Thead>
-            <Tr><Th>ID</Th><Th>类型</Th><Th>状态</Th><Th>错误</Th><Th>创建时间</Th><Th>更新时间</Th><Th>操作</Th></Tr>
+            <Tr>
+              <Th>{t('table.columns.id')}</Th>
+              <Th>{t('table.columns.type')}</Th>
+              <Th>{t('table.columns.status')}</Th>
+              <Th>{t('table.columns.error')}</Th>
+              <Th>{t('table.columns.createdAt')}</Th>
+              <Th>{t('table.columns.updatedAt')}</Th>
+              <Th>{t('table.columns.actions')}</Th>
+            </Tr>
           </Thead>
           <Tbody>
-            {tasks.map((t) => (
-              <Tr key={t.id}>
-                <Td>{t.id}</Td>
-                <Td fontWeight="600">{t.type}</Td>
+            {tasks.map((task) => (
+              <Tr key={task.id}>
+                <Td>{task.id}</Td>
+                <Td fontWeight="600">{task.type}</Td>
                 <Td>
-                  <Badge colorScheme={statusColor[t.status] || 'gray'}>{t.status}</Badge>
+                  <Badge colorScheme={statusColor[task.status] || 'gray'}>{t(`table.status.${task.status}`)}</Badge>
                 </Td>
-                <Td maxW="200px" isTruncated color="red.400">{t.error || '-'}</Td>
-                <Td whiteSpace="nowrap">{new Date(t.created_at).toLocaleString('zh-CN')}</Td>
-                <Td whiteSpace="nowrap">{new Date(t.updated_at).toLocaleString('zh-CN')}</Td>
+                <Td maxW="200px" isTruncated color="red.400">{task.error || '-'}</Td>
+                <Td whiteSpace="nowrap">{formatDateTime(task.created_at)}</Td>
+                <Td whiteSpace="nowrap">{formatDateTime(task.updated_at)}</Td>
                 <Td>
-                  {(t.status === 'pending' || t.status === 'running') && (
+                  {(task.status === 'pending' || task.status === 'running') && (
                     <HStack spacing={2}>
                       <IconButton
-                        aria-label="取消任务"
+                        aria-label={t('actions.cancel')}
                         icon={<CloseIcon />}
                         size="sm"
                         variant="ghost"
                         colorScheme="red"
-                        onClick={() => handleCancel(t.id)}
+                        onClick={() => setCancelTarget(task.id)}
                       />
                     </HStack>
                   )}
@@ -102,6 +123,15 @@ export default function Tasks() {
           </Tbody>
         </Table>
       </Box>
+      <ConfirmDialog
+        isOpen={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={handleCancel}
+        title={t('actions.cancel')}
+        message={t('message.cancelConfirm')}
+        confirmText={t('message.confirmCancel')}
+        isLoading={isCancelling}
+      />
     </Box>
   );
 }

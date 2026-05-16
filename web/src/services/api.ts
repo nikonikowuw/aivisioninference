@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 const API_BASE = '/api/v1';
 
 interface ApiResponse<T = unknown> {
@@ -20,6 +22,7 @@ async function request<T>(
   const token = localStorage.getItem('access_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept-Language': i18n.language || 'en-US',
     ...(options.headers as Record<string, string>),
   };
   if (token) {
@@ -235,7 +238,10 @@ export const filesApi = {
       formData.append('index', String(i));
       await fetch(`${API_BASE}/files/upload/${uploadId}/chunk`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          'Accept-Language': i18n.language || 'en-US',
+        },
         body: formData,
       });
       onProgress?.(Math.round(((i + 1) / totalChunks) * 100));

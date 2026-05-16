@@ -24,8 +24,8 @@ type BaseModel struct {
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	CreatedBy string         `gorm:"type:uuid" json:"created_by"`
-	UpdatedBy string         `gorm:"type:uuid" json:"updated_by"`
+	CreatedBy *string        `gorm:"type:uuid" json:"created_by"`
+	UpdatedBy *string        `gorm:"type:uuid" json:"updated_by"`
 }
 
 // BeforeCreate is a GORM hook that auto-populates CreatedBy from request context.
@@ -34,7 +34,7 @@ type BaseModel struct {
 func (b *BaseModel) BeforeCreate(tx *gorm.DB) error {
 	if tx.Statement != nil && tx.Statement.Context != nil {
 		if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
-			b.CreatedBy = userID
+			b.CreatedBy = &userID
 			return nil
 		}
 		zap.L().Warn("BaseModel.BeforeCreate: context exists but user_id not found — CreatedBy will be empty")
@@ -50,7 +50,7 @@ func (b *BaseModel) BeforeCreate(tx *gorm.DB) error {
 func (b *BaseModel) BeforeUpdate(tx *gorm.DB) error {
 	if tx.Statement != nil && tx.Statement.Context != nil {
 		if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
-			b.UpdatedBy = userID
+			b.UpdatedBy = &userID
 			return nil
 		}
 		zap.L().Warn("BaseModel.BeforeUpdate: context exists but user_id not found — UpdatedBy will be empty")

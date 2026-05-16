@@ -22,6 +22,10 @@ export const roles = {
       label: 'Description',
       placeholder: 'Enter description',
     },
+    level: {
+      label: 'Level',
+      placeholder: 'Lower number = higher authority',
+    },
   },
   modal: {
     createTitle: 'Add Role',
@@ -41,6 +45,8 @@ export const roles = {
     deleteConfirm: 'Are you sure you want to delete this role?',
     operationFailed: 'Operation failed',
     deleteFailed: 'Delete failed',
+    levelInvalidTitle: 'Invalid level input',
+    levelInvalidDescription: 'Please enter an integer between {{min}} and {{max}}',
   },
   actions: {
     edit: 'Edit',

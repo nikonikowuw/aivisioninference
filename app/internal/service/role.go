@@ -19,12 +19,13 @@ const permCachePrefix = "perm:"
 // RoleService handles business logic for Role operations.
 type RoleService struct {
 	roleRepo *repository.RoleRepository
+	userRepo *repository.UserRepository
 	rdb      *redis.Client
 }
 
 // NewRoleService creates a new RoleService.
-func NewRoleService(roleRepo *repository.RoleRepository, rdb *redis.Client) *RoleService {
-	return &RoleService{roleRepo: roleRepo, rdb: rdb}
+func NewRoleService(roleRepo *repository.RoleRepository, userRepo *repository.UserRepository, rdb *redis.Client) *RoleService {
+	return &RoleService{roleRepo: roleRepo, userRepo: userRepo, rdb: rdb}
 }
 
 // List returns a paginated list of roles with optional filters.
@@ -33,7 +34,14 @@ func (s *RoleService) List(ctx context.Context, req dto.RoleListRequest) ([]mode
 }
 
 // Create creates a new role.
-func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest) (*model.Role, error) {
+func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest, currentUserID string, isRoot bool) (*model.Role, error) {
+	if req.Level < 1 {
+		return nil, apperrors.New(apperrors.ErrBadRequest, "")
+	}
+	if err := checkRoleLevelChange(ctx, s.userRepo, currentUserID, isRoot, req.Level); err != nil {
+		return nil, err
+	}
+
 	count, err := s.roleRepo.CountByName(ctx, req.Name, "")
 	if err != nil {
 		zap.L().Error("check role name uniqueness failed", zap.Error(err))
@@ -48,6 +56,7 @@ func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest) (*m
 		Description: req.Description,
 		SortOrder:   req.SortOrder,
 		Status:      req.Status,
+		Level:       req.Level,
 	}
 
 	if err := s.roleRepo.Create(ctx, &role); err != nil {
@@ -68,10 +77,22 @@ func (s *RoleService) GetByID(ctx context.Context, id string) (*model.Role, erro
 }
 
 // Update updates an existing role.
-func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleRequest) error {
+func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleRequest, currentUserID string, isRoot bool) error {
 	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
+	}
+
+	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
+		return err
+	}
+	if req.Level != nil {
+		if *req.Level < 1 {
+			return apperrors.New(apperrors.ErrBadRequest, "角色层级必须大于0")
+		}
+		if err := checkRoleLevelChange(ctx, s.userRepo, currentUserID, isRoot, *req.Level); err != nil {
+			return err
+		}
 	}
 
 	if req.Name != "" && req.Name != role.Name {
@@ -97,6 +118,9 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 	if req.Status != nil {
 		role.Status = *req.Status
 	}
+	if req.Level != nil {
+		role.Level = *req.Level
+	}
 
 	if err := s.roleRepo.Update(ctx, role); err != nil {
 		zap.L().Error("update role failed", zap.Error(err))
@@ -107,10 +131,14 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 }
 
 // Delete deletes a role after checking it's not assigned to users.
-func (s *RoleService) Delete(ctx context.Context, id string) error {
-	_, err := s.roleRepo.FindByID(ctx, id)
+func (s *RoleService) Delete(ctx context.Context, id string, currentUserID string, isRoot bool) error {
+	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
+	}
+
+	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
+		return err
 	}
 
 	userCount, err := s.roleRepo.CountAssignedUsers(ctx, id)
@@ -148,10 +176,14 @@ func (s *RoleService) GetPermissions(ctx context.Context, id string) ([]model.Pe
 }
 
 // AssignPermissions replaces all permissions of a role.
-func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.AssignPermissionsRequest) error {
-	_, err := s.roleRepo.FindByID(ctx, id)
+func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.AssignPermissionsRequest, currentUserID string, isRoot bool) error {
+	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
+	}
+
+	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
+		return err
 	}
 
 	if err := s.roleRepo.ReplacePermissions(ctx, id, req.PermissionIDs); err != nil {

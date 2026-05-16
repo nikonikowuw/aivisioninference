@@ -77,7 +77,7 @@ tmp/                  # air 临时文件 (gitignored)
 
 分层架构，单向依赖：
 
-```
+```txt
 Handler → Service → Repository → Model (GORM)
    │         │
    ▼         ▼
@@ -97,6 +97,8 @@ Handler → Service → Repository → Model (GORM)
 - 错误处理：一律使用 `internal/pkg/errors` 统一错误码
 - 日志：使用 `zap.L()` 结构化日志，禁止 `fmt.Println`
 - 命名：Go 标准命名（驼峰，导出大写），文件名小写下划线
+- 需要使用i18n支持国际化，默认支持简体中文、繁体中文、英语
+- 所有返回给前端并在前端展示的都要支持i18n进行翻译
 
 ### API Response Format
 

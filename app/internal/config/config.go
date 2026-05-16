@@ -103,10 +103,12 @@ type RateLimitConfig struct {
 
 // SeedConfig holds default seed data settings.
 type SeedConfig struct {
-	Username    string `mapstructure:"username"`
-	Password    string `mapstructure:"password"`
-	Email       string `mapstructure:"email"`
-	DisplayName string `mapstructure:"display_name"`
+	Username     string `mapstructure:"username"`
+	Password     string `mapstructure:"password"`
+	RootPassword string `mapstructure:"root_password"`
+	RootEmail    string `mapstructure:"root_email"`
+	Email        string `mapstructure:"email"`
+	DisplayName  string `mapstructure:"display_name"`
 }
 
 // ProxyConfig holds trusted proxy settings for secure header validation.
@@ -234,11 +236,15 @@ func setDefaults(v *viper.Viper) {
 	// Seed
 	v.SetDefault("seed.username", "admin")
 	v.SetDefault("seed.password", "admin123")
+	v.SetDefault("seed.root_password", "root123456")
+	v.SetDefault("seed.root_email", "root@niko-admin.local")
 	v.SetDefault("seed.email", "admin@example.com")
 	v.SetDefault("seed.display_name", "管理员")
 
 	// Explicit env bindings for important toggles.
 	_ = v.BindEnv("redis.enable", "NIKO_REDIS_ENABLE")
+	_ = v.BindEnv("seed.root_password", "NIKO_SEED_ROOT_PASSWORD")
+	_ = v.BindEnv("seed.root_email", "NIKO_SEED_ROOT_EMAIL")
 
 	// AutomaticEnv + SetEnvPrefix("NIKO") + SetEnvKeyReplacer(".", "_")
 	// 已自动处理所有环境变量映射，例如 NIKO_DB_HOST → db.host

@@ -101,6 +101,7 @@ export interface Role {
   description: string;
   sort_order: number;
   status: number;
+  level: number;
   permissions: Permission[];
   created_at: string;
   updated_at: string;

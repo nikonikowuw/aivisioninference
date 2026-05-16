@@ -73,7 +73,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
 
-	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, roleIDs)
+	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, roleIDs, user.IsRoot)
 	if err != nil {
 		zap.L().Error("generate token pair failed", zap.String("user_id", user.ID), zap.Error(err))
 		return nil, errors.New(errors.ErrInternal, "")
@@ -147,6 +147,7 @@ func toRoleInfosAndIDs(roles []model.Role) (infos []dto.RoleInfo, ids []string) 
 			ID:          role.ID,
 			Name:        role.Name,
 			Description: role.Description,
+			Level:       role.Level,
 		})
 	}
 	return infos, ids

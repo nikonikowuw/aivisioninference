@@ -19,6 +19,7 @@ type User struct {
 	Status        int        `gorm:"type:smallint;default:1" json:"status"`
 	LoginAttempts int        `gorm:"default:0" json:"-"`
 	LockedUntil   *time.Time `json:"-"`
+	IsRoot        bool       `gorm:"default:false" json:"is_root"`
 	Roles         []Role     `gorm:"many2many:user_roles;" json:"roles,omitempty"`
 }
 

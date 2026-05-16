@@ -38,13 +38,13 @@ func NewAuditHandler(svc *service.AuditService) *AuditHandler {
 func (h *AuditHandler) List(c *gin.Context) {
 	var req dto.ListAuditLogRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	result, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 

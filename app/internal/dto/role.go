@@ -8,14 +8,15 @@ type CreateRoleRequest struct {
 	Description string `json:"description"`
 	SortOrder   int    `json:"sort_order"`
 	Status      int    `json:"status"`
+	Level       int    `json:"level" binding:"required,gte=1"`
 }
 
-// UpdateRoleRequest is the request body for updating a role.
 type UpdateRoleRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=1,max=64"`
 	Description string `json:"description" binding:"max=256"`
 	SortOrder   *int   `json:"sort_order"`
 	Status      *int   `json:"status"`
+	Level       *int   `json:"level" binding:"omitempty,gte=1"`
 }
 
 // AssignPermissionsRequest is the request body for assigning permissions to a role.

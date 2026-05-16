@@ -196,7 +196,9 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	actualMD5 := fmt.Sprintf("%x", md5.Sum(mergedData))
 	if actualMD5 != chunk.MD5 {
 		os.RemoveAll(chunkDirPath)
-		s.fileRepo.UpdateChunkStatus(ctx, uploadID, "failed")
+		if err := s.fileRepo.UpdateChunkStatus(ctx, uploadID, "failed"); err != nil {
+			zap.L().Warn("mark chunk upload failed", zap.String("upload_id", uploadID), zap.Error(err))
+		}
 		return nil, apperrors.New(apperrors.ErrBadRequest, "文件校验失败（MD5 不匹配）")
 	}
 
@@ -233,7 +235,9 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	}
 
 	now := time.Now()
-	s.fileRepo.UpdateChunkCompleted(ctx, uploadID, &now)
+	if err := s.fileRepo.UpdateChunkCompleted(ctx, uploadID, &now); err != nil {
+		zap.L().Warn("mark chunk upload completed", zap.String("upload_id", uploadID), zap.Error(err))
+	}
 
 	return &fileRecord, nil
 }
@@ -278,11 +282,11 @@ func (s *FileService) GetByID(ctx context.Context, id string) (*model.File, erro
 
 // DownloadInfo holds data needed by the handler to serve a file download.
 type DownloadInfo struct {
-	File         *model.File
-	FilePath     string
-	FileSize     int64
-	ContentType  string
-	RangeHeader  string
+	File        *model.File
+	FilePath    string
+	FileSize    int64
+	ContentType string
+	RangeHeader string
 }
 
 // GetDownloadInfo prepares file download data including Range support.

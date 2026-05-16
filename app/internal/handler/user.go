@@ -36,13 +36,13 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 func (h *UserHandler) List(c *gin.Context) {
 	var req dto.UserListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -63,13 +63,13 @@ func (h *UserHandler) List(c *gin.Context) {
 func (h *UserHandler) Create(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	user, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h *UserHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	user, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, user)
@@ -112,12 +112,21 @@ func (h *UserHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	if err := h.svc.Update(c.Request.Context(), id, req); err != nil {
-		c.Error(err)
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
+	isRoot, _ := isRootVal.(bool)
+	if id == uid && req.Status != nil && *req.Status == 0 {
+		attachError(c, apperrors.New(apperrors.ErrCannotDisableSelf, ""))
+		return
+	}
+
+	if err := h.svc.Update(c.Request.Context(), id, req, uid, isRoot); err != nil {
+		attachError(c, err)
 		return
 	}
 
@@ -139,9 +148,11 @@ func (h *UserHandler) Delete(c *gin.Context) {
 
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
+	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
+	isRoot, _ := isRootVal.(bool)
 
-	if err := h.svc.Delete(c.Request.Context(), id, uid); err != nil {
-		c.Error(err)
+	if err := h.svc.Delete(c.Request.Context(), id, uid, isRoot); err != nil {
+		attachError(c, err)
 		return
 	}
 

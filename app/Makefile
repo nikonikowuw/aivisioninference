@@ -5,7 +5,7 @@ ENV           ?= dev
 GO_FLAGS      ?= -ldflags="-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(shell date +%Y%m%d%H%M%S)"
 VERSION       ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: serve run dev test deploy build unit-test lint clean help
+.PHONY: serve run dev test deploy build unit-test lint clean help migrate
 
 ## serve: 开发模式 — 启动依赖 + 热重载（需要 Docker）
 serve: docker-up

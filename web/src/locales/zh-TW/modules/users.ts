@@ -40,6 +40,7 @@ export const users = {
       label: '狀態',
       active: '正常',
       inactive: '停用',
+      readOnlyHint: '編輯時請在列表狀態開關中啟用或停用使用者。',
     },
   },
   modal: {
@@ -51,12 +52,16 @@ export const users = {
     updateSuccess: '更新成功',
     deleteSuccess: '刪除成功',
     deleteConfirm: '確定刪除該使用者？',
+    disableConfirm: '確定停用該使用者？',
+    enableConfirm: '確定啟用該使用者？',
     operationFailed: '操作失敗',
     deleteFailed: '刪除失敗',
   },
   actions: {
     edit: '編輯',
     delete: '刪除',
+    enable: '啟用',
+    disable: '停用',
   },
 } as const;
 

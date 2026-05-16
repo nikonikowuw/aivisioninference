@@ -11,6 +11,7 @@ type Role struct {
 	Description string       `gorm:"type:varchar(256)" json:"description"`
 	SortOrder   int          `gorm:"default:0" json:"sort_order"`
 	Status      int          `gorm:"type:smallint;default:1" json:"status"`
+	Level       int          `gorm:"default:100" json:"level"`
 	Permissions []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"`
 }
 

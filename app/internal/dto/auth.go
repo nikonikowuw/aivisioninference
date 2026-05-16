@@ -18,6 +18,7 @@ type RoleInfo struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Level       int    `json:"level"`
 }
 
 // Menu 用户菜单项

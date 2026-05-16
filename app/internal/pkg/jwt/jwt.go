@@ -21,12 +21,15 @@ type Claims struct {
 	jwt.RegisteredClaims
 	UserID  string   `json:"user_id"`
 	RoleIDs []string `json:"role_ids"`
+	IsRoot  bool     `json:"is_root"`
 }
 
 // refreshTokenData is the JSON payload stored in Redis for refresh tokens.
 type refreshTokenData struct {
-	UserID    string `json:"user_id"`
-	ExpiresAt int64  `json:"expires_at"`
+	UserID    string   `json:"user_id"`
+	RoleIDs   []string `json:"role_ids"`
+	ExpiresAt int64    `json:"expires_at"`
+	IsRoot    bool     `json:"is_root"`
 }
 
 // Manager handles JWT token operations.
@@ -53,7 +56,7 @@ func NewManager(secret, issuer, audience string, accessExpireSec, refreshExpireS
 
 // GenerateTokenPair creates an access_token (signed JWT) and a refresh_token
 // (random UUID stored in Redis).
-func (m *Manager) GenerateTokenPair(userID string, roleIDs []string) (accessToken string, refreshToken string, expiresIn int, err error) {
+func (m *Manager) GenerateTokenPair(userID string, roleIDs []string, isRoot bool) (accessToken string, refreshToken string, expiresIn int, err error) {
 	expiresIn = m.accessExpireSec
 	now := time.Now()
 
@@ -61,6 +64,7 @@ func (m *Manager) GenerateTokenPair(userID string, roleIDs []string) (accessToke
 	claims := &Claims{
 		UserID:  userID,
 		RoleIDs: roleIDs,
+		IsRoot:  isRoot,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(expiresIn) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -85,7 +89,9 @@ func (m *Manager) GenerateTokenPair(userID string, roleIDs []string) (accessToke
 	refreshKey := fmt.Sprintf("refresh:%s:%s", userID, refreshToken)
 	data := refreshTokenData{
 		UserID:    userID,
+		RoleIDs:   roleIDs,
 		ExpiresAt: now.Add(time.Duration(m.refreshExpireSec) * time.Second).Unix(),
+		IsRoot:    isRoot,
 	}
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
@@ -223,13 +229,8 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 
 	// old token is already consumed by GETDEL during rotation.
 
-	// Generate new token pair
-	// We need the user's roles to include in the new access token. Since the
-	// refresh token data doesn't store roles (by design — minimal data in Redis),
-	// the caller should provide them. However, for the refresh flow we use a
-	// simplified approach: issue with empty roles and let the caller validate
-	// from DB. In practice, the service layer will re-fetch roles from the DB.
-	accessToken, newRefreshToken, expiresIn, err = m.GenerateTokenPair(userID, nil)
+	// Generate new token pair.
+	accessToken, newRefreshToken, expiresIn, err = m.GenerateTokenPair(userID, data.RoleIDs, data.IsRoot)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to generate new token pair: %w", err)
 	}

@@ -39,8 +39,10 @@ export default function ConfirmDialog({
   return (
     <AlertDialog
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={isLoading ? () => undefined : onClose}
       leastDestructiveRef={cancelRef}
+      closeOnEsc={!isLoading}
+      closeOnOverlayClick={!isLoading}
       isCentered
     >
       <AlertDialogOverlay>
@@ -50,7 +52,7 @@ export default function ConfirmDialog({
           </AlertDialogHeader>
           <AlertDialogBody>{message}</AlertDialogBody>
           <AlertDialogFooter>
-            <Button ref={cancelRef} onClick={onClose}>
+            <Button ref={cancelRef} onClick={onClose} isDisabled={isLoading}>
               {cancelText || tCommon('button.cancel')}
             </Button>
             <Button

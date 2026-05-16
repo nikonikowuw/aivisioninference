@@ -36,16 +36,22 @@ func RBAC(cache cachepkg.Cache, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get(ContextKeyUserID)
 		if !exists {
-			c.Error(apperrors.New(apperrors.ErrUnauthorized, ""))
-			c.Abort()
+			abortWithError(c, apperrors.New(apperrors.ErrUnauthorized, ""))
 			return
 		}
 
 		uid, ok := userID.(string)
 		if !ok || uid == "" {
-			c.Error(apperrors.New(apperrors.ErrUnauthorized, ""))
-			c.Abort()
+			abortWithError(c, apperrors.New(apperrors.ErrUnauthorized, ""))
 			return
+		}
+
+		// Skip RBAC for root user — is_root is set by Auth middleware from JWT claims
+		if isRoot, _ := c.Get(ContextKeyIsRoot); isRoot != nil {
+			if root, ok := isRoot.(bool); ok && root {
+				c.Next()
+				return
+			}
 		}
 
 		reqPath := path.Clean(c.Request.URL.Path)
@@ -59,8 +65,7 @@ func RBAC(cache cachepkg.Cache, db *gorm.DB) gin.HandlerFunc {
 				zap.String("method", method),
 				zap.Error(err),
 			)
-			c.Error(apperrors.New(apperrors.ErrInternal, ""))
-			c.Abort()
+			abortWithError(c, apperrors.New(apperrors.ErrInternal, ""))
 			return
 		}
 
@@ -70,8 +75,7 @@ func RBAC(cache cachepkg.Cache, db *gorm.DB) gin.HandlerFunc {
 				zap.String("req_path", reqPath),
 				zap.String("method", method),
 			)
-			c.Error(apperrors.New(apperrors.ErrForbidden, ""))
-			c.Abort()
+			abortWithError(c, apperrors.New(apperrors.ErrForbidden, ""))
 			return
 		}
 

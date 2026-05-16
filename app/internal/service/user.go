@@ -71,10 +71,14 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*model.User, erro
 }
 
 // Update updates an existing user.
-func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserRequest) error {
+func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserRequest, currentUserID string, isRoot bool) error {
 	user, err := s.userRepo.FindByID(ctx, id)
 	if err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "用户不存在")
+	}
+
+	if err := checkUserHierarchy(ctx, s.userRepo, currentUserID, id, isRoot, true); err != nil {
+		return err
 	}
 
 	if req.Username != "" && req.Username != user.Username {
@@ -113,9 +117,13 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 }
 
 // Delete soft-deletes a user by its ID.
-func (s *UserService) Delete(ctx context.Context, id, currentUserID string) error {
+func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRoot bool) error {
 	if id == currentUserID {
 		return apperrors.New(apperrors.ErrBadRequest, "不能删除当前登录用户")
+	}
+
+	if err := checkUserHierarchy(ctx, s.userRepo, currentUserID, id, isRoot, false); err != nil {
+		return err
 	}
 
 	if err := s.userRepo.Delete(ctx, id); err != nil {

@@ -8,8 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
-	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 )

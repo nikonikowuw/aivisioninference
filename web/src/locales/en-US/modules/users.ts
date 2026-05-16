@@ -40,6 +40,7 @@ export const users = {
       label: 'Status',
       active: 'Active',
       inactive: 'Inactive',
+      readOnlyHint: 'Use the status switch in the list to enable or disable users while editing.',
     },
   },
   modal: {
@@ -51,12 +52,16 @@ export const users = {
     updateSuccess: 'User updated successfully',
     deleteSuccess: 'User deleted successfully',
     deleteConfirm: 'Are you sure you want to delete this user?',
+    disableConfirm: 'Are you sure you want to disable this user?',
+    enableConfirm: 'Are you sure you want to enable this user?',
     operationFailed: 'Operation failed',
     deleteFailed: 'Delete failed',
   },
   actions: {
     edit: 'Edit',
     delete: 'Delete',
+    enable: 'Enable',
+    disable: 'Disable',
   },
 } as const;
 

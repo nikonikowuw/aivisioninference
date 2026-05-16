@@ -29,6 +29,7 @@ import {
   Center,
   Checkbox,
   VStack,
+  Badge,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -72,7 +73,9 @@ export default function Roles() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Role | null>(null);
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({ name: '', description: '', level: 100 });
+  const roleLevelMin = 1;
+  const roleLevelMax = 99999;
   const [permTree, setPermTree] = useState<Permission[]>([]);
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
   const [permRoleId, setPermRoleId] = useState<string>('');
@@ -94,17 +97,26 @@ export default function Roles() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '' });
+    setForm({ name: '', description: '', level: 100 });
     onOpen();
   };
 
   const openEdit = (role: Role) => {
     setEditing(role);
-    setForm({ name: role.name, description: role.description });
+    setForm({ name: role.name, description: role.description, level: role.level ?? 100 });
     onOpen();
   };
 
   const handleSave = async () => {
+    if (!Number.isInteger(form.level) || form.level < roleLevelMin || form.level > roleLevelMax) {
+      toast({
+        title: t('message.levelInvalidTitle'),
+        description: t('message.levelInvalidDescription', { min: roleLevelMin, max: roleLevelMax }),
+        status: 'error',
+      });
+      return;
+    }
+
     try {
       if (editing) {
         await rolesApi.update(editing.id, form);
@@ -215,6 +227,7 @@ export default function Roles() {
               <Th>{t('table.columns.id')}</Th>
               <Th>{t('table.columns.name')}</Th>
               <Th>{t('table.columns.description')}</Th>
+              <Th>{t('form.level.label')}</Th>
               <Th>{t('table.columns.permissionCount')}</Th>
               <Th>{t('table.columns.actions')}</Th>
             </Tr>
@@ -225,6 +238,7 @@ export default function Roles() {
                 <Td>{r.id}</Td>
                 <Td fontWeight="600">{r.name}</Td>
                 <Td>{r.description || '-'}</Td>
+                <Td><Badge colorScheme={r.level <= 1 ? 'red' : r.level <= 50 ? 'orange' : 'gray'}>{r.level ?? 100}</Badge></Td>
                 <Td>{r.permissions?.length ?? 0}</Td>
                 <Td>
                   <HStack spacing={2}>
@@ -261,6 +275,24 @@ export default function Roles() {
             <FormControl mb={4}>
               <FormLabel>{t('form.description.label')}</FormLabel>
               <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t('form.description.placeholder')} />
+            </FormControl>
+            <FormControl mb={4}>
+              <FormLabel>{t('form.level.label')}</FormLabel>
+              <Input
+                type="number"
+                min={roleLevelMin}
+                max={roleLevelMax}
+                value={Number.isFinite(form.level) ? form.level : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '') {
+                    setForm({ ...form, level: Number.NaN });
+                    return;
+                  }
+                  setForm({ ...form, level: Number(value) });
+                }}
+                placeholder={t('form.level.placeholder')}
+              />
             </FormControl>
           </ModalBody>
           <ModalFooter>

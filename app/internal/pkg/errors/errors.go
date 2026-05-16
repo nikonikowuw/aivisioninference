@@ -9,7 +9,10 @@ const (
 	Success = 0
 
 	// Client errors (1xxxx).
-	ErrBadRequest = 10001
+	ErrBadRequest          = 10001
+	ErrCannotDisableSelf   = 10002
+	ErrHierarchyLevelUser  = 10003
+	ErrHierarchyLevelRole  = 10004
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized       = 20001
@@ -30,7 +33,10 @@ const (
 // Standard error messages keyed by code.
 var messages = map[int]string{
 	Success:              "success",
-	ErrBadRequest:        "请求参数错误",
+	ErrBadRequest:          "请求参数错误",
+	ErrCannotDisableSelf:   "不能禁用自己",
+	ErrHierarchyLevelUser:  "没有权限操作同级或更高级别的用户",
+	ErrHierarchyLevelRole:  "没有权限操作同级或更高级别的角色",
 	ErrUnauthorized:      "未登录",
 	ErrTokenExpired:      "Token已过期",
 	ErrTokenInvalid:      "Token无效",

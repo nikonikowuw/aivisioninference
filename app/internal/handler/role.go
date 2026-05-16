@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
+	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -34,13 +35,13 @@ func NewRoleHandler(svc *service.RoleService) *RoleHandler {
 func (h *RoleHandler) List(c *gin.Context) {
 	var req dto.RoleListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -61,13 +62,18 @@ func (h *RoleHandler) List(c *gin.Context) {
 func (h *RoleHandler) Create(c *gin.Context) {
 	var req dto.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	role, err := h.svc.Create(c.Request.Context(), req)
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
+	root, _ := isRoot.(bool)
+
+	role, err := h.svc.Create(c.Request.Context(), req, uid, root)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -88,7 +94,7 @@ func (h *RoleHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	role, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, role)
@@ -110,12 +116,17 @@ func (h *RoleHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	if err := h.svc.Update(c.Request.Context(), id, req); err != nil {
-		c.Error(err)
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
+	root, _ := isRoot.(bool)
+
+	if err := h.svc.Update(c.Request.Context(), id, req, uid, root); err != nil {
+		attachError(c, err)
 		return
 	}
 
@@ -134,8 +145,14 @@ func (h *RoleHandler) Update(c *gin.Context) {
 // @Security     BearerAuth
 func (h *RoleHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		c.Error(err)
+
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
+	root, _ := isRoot.(bool)
+
+	if err := h.svc.Delete(c.Request.Context(), id, uid, root); err != nil {
+		attachError(c, err)
 		return
 	}
 	response.OK(c, nil)
@@ -155,7 +172,7 @@ func (h *RoleHandler) GetPermissions(c *gin.Context) {
 	id := c.Param("id")
 	permissions, err := h.svc.GetPermissions(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, permissions)
@@ -177,12 +194,17 @@ func (h *RoleHandler) AssignPermissions(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.AssignPermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
-	if err := h.svc.AssignPermissions(c.Request.Context(), id, req); err != nil {
-		c.Error(err)
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
+	root, _ := isRoot.(bool)
+
+	if err := h.svc.AssignPermissions(c.Request.Context(), id, req, uid, root); err != nil {
+		attachError(c, err)
 		return
 	}
 

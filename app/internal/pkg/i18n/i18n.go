@@ -15,6 +15,9 @@ var (
 		"en": {
 			0:     "success",
 			10001: "bad request",
+			10002: "cannot disable yourself",
+			10003: "no permission to operate on same or higher level user",
+			10004: "no permission to operate on same or higher level role",
 			20001: "unauthorized",
 			20002: "token expired",
 			20003: "invalid token",
@@ -23,9 +26,12 @@ var (
 			40001: "resource not found",
 			50001: "internal server error",
 		},
-		"zh": {
+	"zh": {
 			0:     "成功",
 			10001: "请求参数错误",
+			10002: "不能禁用自己",
+			10003: "没有权限操作同级或更高级别的用户",
+			10004: "没有权限操作同级或更高级别的角色",
 			20001: "未登录",
 			20002: "Token已过期",
 			20003: "Token无效",
@@ -33,6 +39,20 @@ var (
 			30001: "无权限",
 			40001: "资源不存在",
 			50001: "服务器内部错误",
+		},
+		"zh-tw": {
+			0:     "成功",
+			10001: "請求參數錯誤",
+			10002: "不能停用自己",
+			10003: "沒有權限操作同級或更高級別的使用者",
+			10004: "沒有權限操作同級或更高級別的角色",
+			20001: "未登入",
+			20002: "Token已過期",
+			20003: "Token無效",
+			20403: "Token已被重複使用，所有裝置已強制登出",
+			30001: "無權限",
+			40001: "資源不存在",
+			50001: "伺服器內部錯誤",
 		},
 	}
 )

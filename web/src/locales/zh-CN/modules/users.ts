@@ -40,6 +40,7 @@ export const users = {
       label: '状态',
       active: '正常',
       inactive: '禁用',
+      readOnlyHint: '编辑时请在列表状态开关中启用或禁用用户。',
     },
   },
   modal: {
@@ -51,12 +52,16 @@ export const users = {
     updateSuccess: '更新成功',
     deleteSuccess: '删除成功',
     deleteConfirm: '确定删除该用户？',
+    disableConfirm: '确定禁用该用户？',
+    enableConfirm: '确定启用该用户？',
     operationFailed: '操作失败',
     deleteFailed: '删除失败',
   },
   actions: {
     edit: '编辑',
     delete: '删除',
+    enable: '启用',
+    disable: '禁用',
   },
 } as const;
 

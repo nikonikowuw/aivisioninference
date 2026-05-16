@@ -38,13 +38,13 @@ func NewFileHandler(svc *service.FileService) *FileHandler {
 func (h *FileHandler) InitUpload(c *gin.Context) {
 	var req dto.InitUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	chunk, err := h.svc.InitUpload(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -70,19 +70,19 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	indexStr := c.PostForm("index")
 	index, err := strconv.Atoi(indexStr)
 	if err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, "无效的分片索引"))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, "无效的分片索引"))
 		return
 	}
 
 	file, _, err := c.Request.FormFile("chunk")
 	if err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, "缺少分片文件"))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少分片文件"))
 		return
 	}
 	defer file.Close()
 
 	if err := h.svc.SaveChunk(c.Request.Context(), uploadID, index, file); err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -104,7 +104,7 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 
 	fileRecord, err := h.svc.CompleteUpload(c.Request.Context(), uploadID)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 
 	progress, err := h.svc.GetUploadProgress(c.Request.Context(), uploadID)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -147,13 +147,13 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 func (h *FileHandler) CheckFile(c *gin.Context) {
 	var req dto.CheckFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	result, err := h.svc.CheckFile(c.Request.Context(), req.MD5)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -178,13 +178,13 @@ func (h *FileHandler) CheckFile(c *gin.Context) {
 func (h *FileHandler) List(c *gin.Context) {
 	var req dto.FileListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -205,7 +205,7 @@ func (h *FileHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	file, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, file)
@@ -227,7 +227,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 
 	info, err := h.svc.GetDownloadInfo(c.Request.Context(), id, rangeHeader)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -241,7 +241,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 
 		if err := service.WriteRange(c.Writer, info.FilePath, start, end, info.FileSize, info.ContentType); err != nil {
 			zap.L().Error("write range failed", zap.Error(err))
-			c.Error(apperrors.New(apperrors.ErrInternal, ""))
+			attachError(c, apperrors.New(apperrors.ErrInternal, ""))
 			return
 		}
 		return
@@ -267,7 +267,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 func (h *FileHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, nil)

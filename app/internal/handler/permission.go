@@ -31,7 +31,7 @@ func NewPermissionHandler(svc *service.PermissionService) *PermissionHandler {
 func (h *PermissionHandler) Tree(c *gin.Context) {
 	tree, err := h.svc.Tree(c.Request.Context())
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, tree)
@@ -51,13 +51,13 @@ func (h *PermissionHandler) Tree(c *gin.Context) {
 func (h *PermissionHandler) Create(c *gin.Context) {
 	var req dto.CreatePermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	perm, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -80,12 +80,12 @@ func (h *PermissionHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdatePermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	if err := h.svc.Update(c.Request.Context(), id, req); err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (h *PermissionHandler) Update(c *gin.Context) {
 func (h *PermissionHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 

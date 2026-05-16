@@ -97,7 +97,7 @@ func (r *Router) setupRoutes() {
 	// Create services
 	authSvc := service.NewAuthService(userRepo, permRepo, r.rdb, r.jwtManager)
 	userSvc := service.NewUserService(userRepo)
-	roleSvc := service.NewRoleService(roleRepo, r.rdb)
+	roleSvc := service.NewRoleService(roleRepo, userRepo, r.rdb)
 	var permCache cache.Cache
 	if r.config.PermissionTreeRedisEnable && r.rdb != nil {
 		permCache = cache.NewRedisCache(r.rdb)

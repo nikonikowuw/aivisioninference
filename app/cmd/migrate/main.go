@@ -42,35 +42,91 @@ func main() {
 		log.Fatalf("auto migrate: %v", err)
 	}
 
+	// Partial unique index: only one root user allowed.
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_root ON users (is_root) WHERE is_root = true").Error; err != nil {
+		log.Fatalf("create unique root index: %v", err)
+	}
+	if err := db.Exec(rootUsernameConstraintSQL()).Error; err != nil {
+		log.Fatalf("create root username constraint: %v", err)
+	}
+
 	// Seed default data.
-	seedData(db, cfg.Seed)
+	if err := seedData(db, cfg.Seed); err != nil {
+		log.Fatalf("seed data: %v", err)
+	}
 
 	log.Println("Migration completed successfully")
 }
 
+// rootUsernameConstraintSQL 返回 root 用户名一致性的幂等约束语句。
+func rootUsernameConstraintSQL() string {
+	return `
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1
+		FROM pg_constraint
+		WHERE conname = 'chk_root_username'
+	) THEN
+		ALTER TABLE users ADD CONSTRAINT chk_root_username CHECK (is_root = false OR username = 'root');
+	END IF;
+END
+$$;`
+}
+
 // seedData inserts the default admin user, role, and permissions if they do not exist.
-func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
-	// Check if admin user exists.
+func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
+	// Ensure root user exists.
+	var rootCount int64
+	if err := db.Model(&model.User{}).Where("username = ?", "root").Count(&rootCount).Error; err != nil {
+		return fmt.Errorf("count root user: %w", err)
+	}
+	if rootCount == 0 {
+		var roleCount int64
+		if err := db.Model(&model.Role{}).Where("name = ?", "admin").Count(&roleCount).Error; err != nil {
+			return fmt.Errorf("count admin role: %w", err)
+		}
+
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			rootPwd, err := hash.Hash(seedCfg.RootPassword)
+			if err != nil {
+				return fmt.Errorf("hash root password: %w", err)
+			}
+			root := model.User{Username: "root", Password: rootPwd, Email: seedCfg.RootEmail, DisplayName: "超级管理员", Status: 1, IsRoot: true}
+			if err := tx.Create(&root).Error; err != nil {
+				return fmt.Errorf("create root: %w", err)
+			}
+			if roleCount > 0 {
+				var role model.Role
+				if err := tx.Where("name = ?", "admin").First(&role).Error; err != nil {
+					return fmt.Errorf("query admin role: %w", err)
+				}
+				if err := tx.Model(&root).Association("Roles").Append(&role); err != nil {
+					return fmt.Errorf("assign admin role to root: %w", err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Check if full seed has been done (admin user exists).
 	var count int64
-	db.Model(&model.User{}).Where("username = ?", seedCfg.Username).Count(&count)
+	if err := db.Model(&model.User{}).Where("username = ?", seedCfg.Username).Count(&count).Error; err != nil {
+		return fmt.Errorf("count admin user: %w", err)
+	}
 	if count > 0 {
-		return
+		return nil
 	}
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		// Create admin user.
-		hashedPwd, err := hash.Hash(seedCfg.Password)
+		adminPwd, err := hash.Hash(seedCfg.Password)
 		if err != nil {
 			return fmt.Errorf("hash password: %w", err)
 		}
 
-		admin := model.User{
-			Username:    seedCfg.Username,
-			Password:    hashedPwd,
-			Email:       seedCfg.Email,
-			DisplayName: seedCfg.DisplayName,
-			Status:      1,
-		}
+		admin := model.User{Username: seedCfg.Username, Password: adminPwd, Email: seedCfg.Email, DisplayName: seedCfg.DisplayName, Status: 1}
 		if err := tx.Create(&admin).Error; err != nil {
 			return fmt.Errorf("create admin: %w", err)
 		}
@@ -81,6 +137,7 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 			Description: "系统管理员",
 			SortOrder:   1,
 			Status:      1,
+			Level:       1,
 		}
 		if err := tx.Create(&role).Error; err != nil {
 			return fmt.Errorf("create admin role: %w", err)
@@ -88,7 +145,15 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 
 		// Assign admin role to admin user.
 		if err := tx.Model(&admin).Association("Roles").Append(&role); err != nil {
-			return fmt.Errorf("assign admin role: %w", err)
+			return fmt.Errorf("assign admin role to admin: %w", err)
+		}
+
+		// Also assign admin role to existing root user.
+		var root model.User
+		if err := tx.Where("username = ?", "root").First(&root).Error; err == nil {
+			if err := tx.Model(&root).Association("Roles").Append(&role); err != nil {
+				return fmt.Errorf("assign admin role to existing root: %w", err)
+			}
 		}
 
 		// Create menu permissions and their button children.
@@ -188,9 +253,9 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) {
 		return nil
 	})
 	if err != nil {
-		log.Printf("seed data failed: %v", err)
-		return
+		return fmt.Errorf("seed transaction: %w", err)
 	}
 
 	log.Printf("Default data seeded successfully")
+	return nil
 }

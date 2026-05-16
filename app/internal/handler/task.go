@@ -33,13 +33,13 @@ func NewTaskHandler(svc *service.TaskService) *TaskHandler {
 func (h *TaskHandler) Create(c *gin.Context) {
 	var req dto.CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	task, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -63,13 +63,13 @@ func (h *TaskHandler) Create(c *gin.Context) {
 func (h *TaskHandler) List(c *gin.Context) {
 	var req dto.TaskListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		c.Error(apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	task, err := h.svc.GetByID(c.Request.Context(), id)
 	if err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, task)
@@ -109,7 +109,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 func (h *TaskHandler) Cancel(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.svc.Cancel(c.Request.Context(), id); err != nil {
-		c.Error(err)
+		attachError(c, err)
 		return
 	}
 	response.OK(c, nil)

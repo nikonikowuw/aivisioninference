@@ -15,12 +15,13 @@ const (
 
 // supportedLanguages is the set of languages this application supports.
 var supportedLanguages = map[string]bool{
-	"en": true,
-	"zh": true,
+	"en":    true,
+	"zh":    true,
+	"zh-tw": true,
 }
 
 // I18n returns a Gin middleware that reads the Accept-Language header and
-// sets a "lang" key in the gin.Context. Supported values: "en", "zh".
+// sets a "lang" key in the gin.Context. Supported values: "en", "zh", "zh-tw".
 // Falls back to "en" if the header is missing or contains an unsupported language.
 func I18n() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -36,6 +37,7 @@ func I18n() gin.HandlerFunc {
 // Examples:
 //
 //	"zh-CN,zh;q=0.9,en;q=0.8" → "zh"
+//	"zh-TW,zh-HK;q=0.9,en;q=0.8" → "zh-tw"
 //	"en-US,en;q=0.9"           → "en"
 //	"ja,ko;q=0.9"              → "en" (fallback)
 func parseAcceptLanguage(header string) string {
@@ -48,9 +50,15 @@ func parseAcceptLanguage(header string) string {
 	for _, entry := range langs {
 		// Remove quality factor: "zh-CN;q=0.9" → "zh-CN"
 		lang := strings.TrimSpace(strings.SplitN(entry, ";", 2)[0])
-		// Extract base language: "zh-CN" → "zh"
-		base := strings.ToLower(strings.SplitN(lang, "-", 2)[0])
 
+		// Try matching the full language tag first (e.g. "zh-TW" → "zh-tw")
+		full := strings.ToLower(lang)
+		if supportedLanguages[full] {
+			return full
+		}
+
+		// Fall back to base language: "zh-CN" → "zh"
+		base := strings.ToLower(strings.SplitN(lang, "-", 2)[0])
 		if supportedLanguages[base] {
 			return base
 		}

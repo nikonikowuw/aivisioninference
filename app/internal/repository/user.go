@@ -140,3 +140,16 @@ func (r *UserRepository) FindByIDWithRoles(ctx context.Context, id string) (*mod
 	err := r.db.WithContext(ctx).Preload("Roles").Where("id = ?", id).First(&user).Error
 	return &user, err
 }
+
+// FindMinRoleLevelByUserID returns the minimum (highest authority) level among
+// all roles assigned to a user. Returns nil if the user has no roles.
+func (r *UserRepository) FindMinRoleLevelByUserID(ctx context.Context, userID string) (*int, error) {
+	var level *int
+	err := r.db.WithContext(ctx).
+		Table("user_roles").
+		Select("MIN(roles.level)").
+		Joins("JOIN roles ON roles.id = user_roles.role_id").
+		Where("user_roles.user_id = ?", userID).
+		Scan(&level).Error
+	return level, err
+}

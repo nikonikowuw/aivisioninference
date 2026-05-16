@@ -22,6 +22,10 @@ export const roles = {
       label: '描述',
       placeholder: '请输入描述',
     },
+    level: {
+      label: '等级',
+      placeholder: '等级数值越小权限越高',
+    },
   },
   modal: {
     createTitle: '新增角色',
@@ -41,6 +45,8 @@ export const roles = {
     deleteConfirm: '确定删除该角色？',
     operationFailed: '操作失败',
     deleteFailed: '删除失败',
+    levelInvalidTitle: '等级输入无效',
+    levelInvalidDescription: '请输入 {{min}} 到 {{max}} 之间的整数等级',
   },
   actions: {
     edit: '编辑',

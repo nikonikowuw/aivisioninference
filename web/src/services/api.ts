@@ -106,6 +106,24 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE}/auth/avatar`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Accept-Language': i18n.language || 'en-US',
+      },
+      body: formData,
+    });
+    const json: ApiResponse<{ avatar_url: string }> = await response.json();
+    if (json.code !== 0) {
+      throw new Error(json.message || 'Upload failed');
+    }
+    return json.data;
+  },
 };
 
 // Types
@@ -246,7 +264,43 @@ function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: s
   };
 }
 
-export const usersApi = crud<User, StatusListParams>('users');
+export const usersApi = {
+  list: (params?: StatusListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<User>>(`/users${query}`);
+  },
+  get: (id: string) => request<User>(`/users/${id}`),
+  create: (data: Partial<User>) =>
+    request<User>(`/users`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<User>) =>
+    request<User>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request(`/users/${id}`, { method: 'DELETE' }),
+  uploadAvatar: async (userId: string, file: File): Promise<{ avatar_url: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE}/users/${userId}/avatar`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Accept-Language': i18n.language || 'en-US',
+      },
+      body: formData,
+    });
+    const json: ApiResponse<{ avatar_url: string }> = await response.json();
+    if (json.code !== 0) {
+      throw new Error(json.message || 'Upload failed');
+    }
+    return json.data;
+  },
+};
 export const rolesApi = {
   ...crud<Role, StatusListParams>('roles'),
   getPermissions: (id: string) => request<Permission[]>(`/roles/${id}/permissions`),

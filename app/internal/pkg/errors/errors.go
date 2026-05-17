@@ -18,6 +18,8 @@ const (
 	ErrStartTimeFormat     = 10008
 	ErrEndTimeFormat       = 10009
 	ErrTimeRangeOrder      = 10010
+	ErrFileTooLarge        = 10011
+	ErrFileInvalidType     = 10012
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized      = 20001
@@ -47,6 +49,8 @@ var messages = map[int]string{
 	ErrStartTimeFormat:    "开始时间格式错误",
 	ErrEndTimeFormat:      "结束时间格式错误",
 	ErrTimeRangeOrder:     "开始时间不能晚于结束时间",
+	ErrFileTooLarge:       "文件大小超过限制",
+	ErrFileInvalidType:    "不支持的文件类型",
 	ErrUnauthorized:       "未登录",
 	ErrTokenExpired:       "Token已过期",
 	ErrTokenInvalid:       "Token无效",

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 // Chakra imports
 import { Box, Flex, Icon, Text } from '@chakra-ui/react';
 import PropTypes from 'prop-types';
-import Footer from 'components/footer/FooterAuth';
 import FixedPlugin from 'components/fixedPlugin/FixedPlugin';
 import LanguageSwitcher from 'components/i18n/LanguageSwitcher';
 // Custom components
@@ -51,7 +50,6 @@ function AuthIllustration(props: { children: ReactNode | string; illustrationBac
 						borderBottomLeftRadius={{ lg: '120px', xl: '200px' }}
 					/>
 				</Box>
-				<Footer />
 			</Flex>
 			<Flex position='fixed' top='30px' right='35px' gap='10px' zIndex='99'>
 				<LanguageSwitcher />

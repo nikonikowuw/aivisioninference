@@ -1,6 +1,5 @@
 // Chakra imports
 import { Portal, Box, Text, useDisclosure, useColorModeValue } from '@chakra-ui/react';
-import Footer from 'components/footer/FooterAdmin';
 // Layout components
 import Navbar from 'components/navbar/NavbarAdmin';
 import Sidebar from 'components/sidebar/Sidebar';
@@ -133,9 +132,6 @@ export default function Dashboard(props: { [x: string]: any }) {
               )}
             </Box>
           ) : null}
-          <Box>
-            <Footer />
-          </Box>
         </Box>
       </SidebarContext.Provider>
     </Box>

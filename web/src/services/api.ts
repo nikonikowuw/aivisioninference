@@ -1,4 +1,34 @@
 import i18n from '../i18n';
+import SparkMD5 from 'spark-md5';
+
+function computeMD5(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunkSize = 2 * 1024 * 1024;
+    const chunks = Math.ceil(file.size / chunkSize) || 1;
+    const spark = new SparkMD5.ArrayBuffer();
+    const reader = new FileReader();
+    let current = 0;
+
+    reader.onload = (e) => {
+      if (e.target?.result) spark.append(e.target.result as ArrayBuffer);
+      current++;
+      if (current < chunks) {
+        loadNext();
+      } else {
+        resolve(spark.end());
+      }
+    };
+    reader.onerror = () => reject(reader.error);
+
+    function loadNext() {
+      const start = current * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      reader.readAsArrayBuffer(file.slice(start, end));
+    }
+
+    loadNext();
+  });
+}
 
 const API_BASE = '/api/v1';
 
@@ -247,14 +277,21 @@ export const permissionsApi = {
 export const filesApi = {
   ...crud<FileItem, FileListParams>('files'),
   upload: async (file: File, onProgress?: (pct: number) => void) => {
-    // Init upload
+    const chunkSize = 5 * 1024 * 1024;
+    const totalChunks = Math.ceil(file.size / chunkSize) || 1;
+
+    const md5 = await computeMD5(file);
+
     const initRes = await request<{ upload_id: string }>('/files/upload/init', {
       method: 'POST',
-      body: JSON.stringify({ name: file.name, size: file.size, mime_type: file.type }),
+      body: JSON.stringify({
+        file_name: file.name,
+        file_size: file.size,
+        md5,
+        total_chunks: totalChunks,
+      }),
     });
     const uploadId = initRes.upload_id;
-    const chunkSize = 5 * 1024 * 1024; // 5MB
-    const totalChunks = Math.ceil(file.size / chunkSize);
 
     for (let i = 0; i < totalChunks; i++) {
       const start = i * chunkSize;
@@ -263,7 +300,7 @@ export const filesApi = {
       const formData = new FormData();
       formData.append('chunk', chunk);
       formData.append('index', String(i));
-      await fetch(`${API_BASE}/files/upload/${uploadId}/chunk`, {
+      const res = await fetch(`${API_BASE}/files/upload/${uploadId}/chunk`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('access_token')}`,
@@ -271,6 +308,10 @@ export const filesApi = {
         },
         body: formData,
       });
+      const errBody = await res.json().catch(() => null) as ApiResponse | null;
+      if (!res.ok || (errBody && errBody.code !== 0)) {
+        throw new Error(errBody?.message || `分片上传失败 (chunk ${i}, HTTP ${res.status})`);
+      }
       onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
     }
 

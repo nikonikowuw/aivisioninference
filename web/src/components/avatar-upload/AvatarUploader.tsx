@@ -124,13 +124,16 @@ export default function AvatarUploader({
         >
           <input {...getInputProps()} />
           {value ? (
-            <Avatar
+            <img
               src={value}
-              name={name}
-              size="full"
-              w={size}
-              h={size}
-              opacity={uploading ? 0.5 : 1}
+              alt={name || ''}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                borderRadius: '50%',
+                opacity: uploading ? 0.5 : 1,
+              }}
             />
           ) : (
             <VStack

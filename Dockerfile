@@ -5,7 +5,7 @@ WORKDIR /app/web
 
 # 安装依赖
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # 构建前端
 COPY web/ ./

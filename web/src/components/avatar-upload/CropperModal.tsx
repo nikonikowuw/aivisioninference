@@ -89,7 +89,7 @@ export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete
   }, [imageSrc, onCropComplete, onClose, toast, t]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} size="lg" motionPreset="none">
       <ModalOverlay />
       <ModalContent>
         <ModalHeader>{t('profile.avatarCrop')}</ModalHeader>

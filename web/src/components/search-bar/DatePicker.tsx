@@ -1,11 +1,24 @@
-import React, { forwardRef } from 'react';
-import ReactDatePicker, { registerLocale } from 'react-datepicker';
-import { Input } from '@chakra-ui/react';
+import { useState } from 'react';
+import Calendar from 'react-calendar';
+import {
+  Input,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  useColorModeValue,
+  Box,
+  IconButton,
+  HStack,
+} from '@chakra-ui/react';
+import { ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { zhCN, zhTW, enUS, type Locale } from 'date-fns/locale';
 import type { LanguageCode } from '../../i18n/types';
+import 'react-calendar/dist/Calendar.css';
+import '../../assets/css/MiniCalendar.css';
 
-import 'react-datepicker/dist/react-datepicker.css';
+type Value = Date | null;
 
 const localeMap: Record<LanguageCode, Locale> = {
   'zh-CN': zhCN,
@@ -13,62 +26,92 @@ const localeMap: Record<LanguageCode, Locale> = {
   'en-US': enUS,
 };
 
-registerLocale('zh-CN', zhCN);
-registerLocale('zh-TW', zhTW);
-registerLocale('en-US', enUS);
+const clearLabelMap: Record<LanguageCode, string> = {
+  'zh-CN': '清除',
+  'zh-TW': '清除',
+  'en-US': 'Clear',
+};
 
 interface DatePickerProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  maxW?: string;
 }
 
-const ChakraInput = forwardRef<HTMLInputElement, { value?: string; onClick?: () => void; placeholder?: string }>(
-  ({ value, onClick, placeholder }, ref) => (
-    <Input
-      ref={ref}
-      readOnly
-      value={value || ''}
-      onClick={onClick}
-      placeholder={placeholder}
-      cursor="pointer"
-    />
-  ),
-);
-ChakraInput.displayName = 'ChakraInput';
+function formatDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
-export function DatePicker({ value, onChange, placeholder, maxW }: DatePickerProps) {
-  const { i18n } = useTranslation();
-  const locale = (i18n.language as LanguageCode) || 'zh-CN';
-
+export function DatePicker({ value, onChange, placeholder }: DatePickerProps) {
+  const { i18n, t } = useTranslation();
+  const lang = (i18n.language as LanguageCode) || 'zh-CN';
+  const [isOpen, setIsOpen] = useState(false);
   const selected = value ? new Date(value) : null;
 
-  const handleChange = (date: Date | null) => {
-    if (date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      onChange(`${y}-${m}-${d}`);
+  const popBg = useColorModeValue('white', 'navy.800');
+  const popBorder = useColorModeValue('gray.200', 'whiteAlpha.100');
+  const popShadow = useColorModeValue('lg', '2xl');
+
+  const handleChange = (val: Value | [Value, Value]) => {
+    const d = Array.isArray(val) ? val[0] : val;
+    if (d) {
+      onChange(formatDate(d));
     } else {
       onChange('');
     }
+    setIsOpen(false);
   };
 
-  const displayValue = selected
-    ? `${selected.getFullYear()}-${String(selected.getMonth() + 1).padStart(2, '0')}-${String(selected.getDate()).padStart(2, '0')}`
-    : '';
-
   return (
-    <ReactDatePicker
-      selected={selected}
-      onChange={handleChange}
-      locale={locale}
-      dateFormat="yyyy-MM-dd"
-      customInput={<ChakraInput value={displayValue} placeholder={placeholder} />}
-      isClearable
-      showPopperArrow={false}
-      wrapperClassName="date-picker-wrapper"
-    />
+    <Popover isOpen={isOpen} onClose={() => setIsOpen(false)} placement="bottom-start" isLazy>
+      <PopoverTrigger>
+        <Input
+          variant="main"
+          readOnly
+          value={value || ''}
+          onClick={() => setIsOpen(!isOpen)}
+          placeholder={placeholder || t('searchBar.selectDate', '选择日期')}
+          cursor="pointer"
+        />
+      </PopoverTrigger>
+      <PopoverContent
+        bg={popBg}
+        border="1px solid"
+        borderColor={popBorder}
+        borderRadius="16px"
+        shadow={popShadow}
+        w="auto"
+        _focus={{ boxShadow: 'none' }}
+      >
+        <PopoverBody p={2}>
+          <Calendar
+            onChange={handleChange}
+            value={selected}
+            prevLabel={<IconButton aria-label="prev" icon={<ChevronLeftIcon />} size="sm" variant="ghost" />}
+            nextLabel={<IconButton aria-label="next" icon={<ChevronRightIcon />} size="sm" variant="ghost" />}
+            prev2Label={null}
+            next2Label={null}
+            showNeighboringMonth={false}
+            locale={lang}
+          />
+        </PopoverBody>
+        {selected && (
+          <HStack justify="center" pb={2} px={3}>
+            <Box
+              as="button"
+              fontSize="xs"
+              color="red.400"
+              _hover={{ color: 'red.300' }}
+              onClick={() => { onChange(''); setIsOpen(false); }}
+            >
+              {clearLabelMap[lang]}
+            </Box>
+          </HStack>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

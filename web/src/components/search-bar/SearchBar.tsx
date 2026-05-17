@@ -48,8 +48,8 @@ export function SearchBar({
   showSearchButton = true,
 }: SearchBarProps) {
   const { t } = useTranslation();
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const bgColor = useColorModeValue('white', 'navy.800');
+  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -100,6 +100,7 @@ export function SearchBar({
           <FormControl flex="1" minW="200px">
             <FormLabel fontSize="sm" mb={0}>{t('searchBar.keyword', '关键字')}</FormLabel>
             <Input
+              variant="main"
               aria-label={t('searchBar.keyword', '关键字')}
               placeholder={t('searchBar.keywordPlaceholder', '搜索关键字...')}
               value={filters.keyword || ''}
@@ -114,6 +115,7 @@ export function SearchBar({
             <FormControl>
               <FormLabel fontSize="sm" mb={0}>{select.label}</FormLabel>
               <Select
+                variant="main"
                 placeholder={select.placeholder || t('searchBar.all', 'All')}
                 value={filters[select.name] || ''}
                 onChange={handleSelectChange(select.name)}

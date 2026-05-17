@@ -21,63 +21,71 @@ interface CropperModalProps {
   onCropComplete: (file: File) => void;
 }
 
+async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<File | null> {
+  const image = new Image();
+  image.src = imageSrc;
+  await new Promise<void>((resolve) => { image.onload = () => resolve(); });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height,
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          resolve(null);
+          return;
+        }
+        resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      },
+      'image/jpeg',
+      0.92,
+    );
+  });
+}
+
 export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete }: CropperModalProps) {
   const { t } = useTranslation('common');
   const toast = useToast();
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
-  const cropAreaRef = useRef<Area | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const croppedAreaPixelsRef = useRef<Area>({ x: 0, y: 0, width: 0, height: 0 });
 
-  const handleCropComplete = useCallback((_: unknown, croppedAreaPixels: Area) => {
-    cropAreaRef.current = croppedAreaPixels;
+  const onCropAreaChange = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    croppedAreaPixelsRef.current = croppedAreaPixels;
   }, []);
 
   const handleConfirm = useCallback(async () => {
-    if (!cropAreaRef.current) return;
-
-    const area = cropAreaRef.current;
-    const img = new Image();
-    img.src = imageSrc;
-
-    await new Promise<void>((resolve) => {
-      img.onload = () => resolve();
-    });
-
-    const canvas = document.createElement('canvas');
-    const size = Math.min(area.width, area.height, 256);
-    canvas.width = size;
-    canvas.height = size;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
+    const pixelCrop = croppedAreaPixelsRef.current;
+    if (!pixelCrop || pixelCrop.width === 0 || pixelCrop.height === 0) {
       toast({ title: t('message.operationFailed'), status: 'error' });
       return;
     }
 
-    ctx.drawImage(
-      img,
-      area.x,
-      area.y,
-      area.width,
-      area.height,
-      0,
-      0,
-      size,
-      size,
-    );
+    const file = await getCroppedImg(imageSrc, pixelCrop);
+    if (!file) {
+      toast({ title: t('message.operationFailed'), status: 'error' });
+      return;
+    }
 
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          toast({ title: t('message.operationFailed'), status: 'error' });
-          return;
-        }
-        const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
-        onCropComplete(file);
-        onClose();
-      },
-      'image/jpeg',
-      0.9,
-    );
+    onCropComplete(file);
+    onClose();
   }, [imageSrc, onCropComplete, onClose, toast, t]);
 
   return (
@@ -91,10 +99,12 @@ export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete
             <Cropper
               image={imageSrc}
               crop={crop}
-              onCropChange={setCrop}
-              cropShape="round"
+              zoom={zoom}
               aspect={1}
-              onCropComplete={handleCropComplete}
+              cropShape="round"
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropAreaChange={onCropAreaChange}
             />
           </Box>
         </ModalBody>

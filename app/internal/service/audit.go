@@ -51,7 +51,6 @@ func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*
 			ID:             l.ID,
 			UserID:         l.UserID,
 			Username:       l.Username,
-			Action:         l.Action,
 			ResourceType:   l.ResourceType,
 			ResourceID:     l.ResourceID,
 			RequestPath:    l.RequestPath,
@@ -61,7 +60,6 @@ func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*
 			ResponseStatus: l.ResponseStatus,
 			DurationMs:     l.DurationMs,
 			ResultSummary:  l.ResultSummary,
-			ErrorSummary:   l.ErrorSummary,
 			CreatedAt:      l.CreatedAt,
 		})
 	}

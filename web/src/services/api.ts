@@ -170,7 +170,6 @@ export interface AuditLog {
   id: string;
   user_id: string | null;
   username: string;
-  action: string;
   resource_type: string;
   resource_id: string;
   request_path: string;
@@ -222,7 +221,7 @@ type CrudApi<T, ListParams extends CrudListParams = CrudListParams> = {
 
 type StatusListParams = CrudListParams & { status?: number };
 type FileListParams = CrudListParams & { storage_type?: string; start_time?: string; end_time?: string };
-type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; action?: string; resource_type?: string; start_time?: string; end_time?: string };
+type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; resource_type?: string; result?: string; start_time?: string; end_time?: string };
 type TaskListParams = CrudListParams & { type?: string; status?: string; start_time?: string; end_time?: string };
 
 function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: string): CrudApi<T, ListParams> {

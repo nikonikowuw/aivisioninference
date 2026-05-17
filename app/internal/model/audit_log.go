@@ -6,12 +6,11 @@ package model
 
 import "time"
 
-// AuditLog records user actions for security auditing.
+// AuditLog records request-level audit events for security auditing.
 type AuditLog struct {
 	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID         *string   `gorm:"type:uuid" json:"user_id"`
 	Username       string    `gorm:"type:varchar(64)" json:"username"`
-	Action         string    `gorm:"type:varchar(20);not null" json:"action"`
 	ResourceType   string    `gorm:"type:varchar(64)" json:"resource_type"`
 	ResourceID     string    `gorm:"type:varchar(64)" json:"resource_id"`
 	RequestPath    string    `gorm:"type:varchar(512)" json:"request_path"`
@@ -22,13 +21,12 @@ type AuditLog struct {
 	ResponseStatus int       `json:"response_status"`
 	DurationMs     int64     `json:"duration_ms"`
 	ResultSummary  string    `gorm:"type:varchar(255)" json:"result_summary"`
-	ErrorSummary   string    `gorm:"type:varchar(255)" json:"error_summary"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
 // SortableFields returns the fields allowed for sorting.
 func (AuditLog) SortableFields() []string {
-	return []string{"created_at", "action", "resource_type"}
+	return []string{"created_at", "resource_type"}
 }
 
 // TableName overrides the default table name for AuditLog.

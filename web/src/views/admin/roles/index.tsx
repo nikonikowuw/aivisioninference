@@ -77,7 +77,7 @@ export default function Roles() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPermOpen, onOpen: onPermOpen, onClose: onPermClose } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
 
   const fetchRoles = useCallback((p: number, ps: number) => {
     return rolesApi.list({
@@ -240,7 +240,6 @@ export default function Roles() {
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
-        onSearch={handleSearch}
         onReset={resetFilters}
         selects={[
           {

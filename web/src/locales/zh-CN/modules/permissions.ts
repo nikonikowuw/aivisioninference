@@ -23,7 +23,6 @@ export const permissions = {
       label: '类型',
       menu: '菜单',
       button: '按钮',
-      api: 'API',
     },
     parentId: {
       label: '父级权限',

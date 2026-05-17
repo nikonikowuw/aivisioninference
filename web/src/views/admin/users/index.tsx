@@ -53,7 +53,7 @@ export default function Users() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
 
   const fetchUsers = useCallback((p: number, ps: number) => {
     return usersApi.list({
@@ -169,7 +169,6 @@ export default function Users() {
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
-        onSearch={handleSearch}
         onReset={resetFilters}
         selects={[
           {

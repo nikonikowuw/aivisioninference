@@ -49,7 +49,7 @@ export default function Files() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
 
   const fetchFiles = useCallback((p: number, ps: number) => {
     return filesApi.list({
@@ -123,7 +123,6 @@ export default function Files() {
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
-        onSearch={handleSearch}
         onReset={resetFilters}
         selects={[
           {

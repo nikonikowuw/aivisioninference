@@ -17,7 +17,7 @@ type UpdatePermissionRequest struct {
 	Code      string  `json:"code" binding:"omitempty"`
 	Path      string  `json:"path"`
 	Method    string  `json:"method"`
-	Type      string  `json:"type" binding:"omitempty,oneof=menu button api"`
+	Type      string  `json:"type" binding:"omitempty,oneof=menu button"`
 	Icon      string  `json:"icon"`
 	ParentID  *string `json:"parent_id"`
 	SortOrder *int    `json:"sort_order"`

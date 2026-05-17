@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -45,7 +44,6 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 
 		status := inferAuditResponseStatus(c)
 		auditLog := &model.AuditLog{
-			Action:         c.Request.Method,
 			ResourceType:   inferAuditResourceType(c.Request.URL.Path),
 			RequestPath:    c.FullPath(),
 			RequestMethod:  c.Request.Method,
@@ -54,7 +52,6 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			ResponseStatus: status,
 			DurationMs:     time.Since(start).Milliseconds(),
 			ResultSummary:  truncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
-			ErrorSummary:   truncateAuditSummary(inferAuditErrorSummary(c), maxAuditSummaryLength),
 		}
 		if auditLog.RequestPath == "" {
 			auditLog.RequestPath = c.Request.URL.Path
@@ -146,19 +143,13 @@ func auditHTTPStatusFromCode(code int) int {
 }
 
 // inferAuditResultSummary 根据 HTTP 状态码生成安全结果摘要。
+// 返回 "success"（2xx/3xx）或 "failed"（其他），不带具体错误类型，
+// 避免泄露底层细节。如需按错误类型筛选，可通过 response_status 字段实现。
 func inferAuditResultSummary(status int) string {
 	if status >= 200 && status < 400 {
 		return "success"
 	}
-	return fmt.Sprintf("http_status_%d", status)
-}
-
-// inferAuditErrorSummary 返回固定错误摘要，避免泄露底层错误细节。
-func inferAuditErrorSummary(c *gin.Context) string {
-	if c == nil || len(c.Errors) == 0 {
-		return ""
-	}
-	return "request_failed"
+	return "failed"
 }
 
 // truncateAuditSummary 将审计摘要按字符数截断到数据库字段允许长度。

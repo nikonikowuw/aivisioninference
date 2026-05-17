@@ -52,6 +52,12 @@ func main() {
 	if err := db.Exec(ensureAuditLogSummaryColumnsSQL()).Error; err != nil {
 		log.Fatalf("ensure audit summary columns: %v", err)
 	}
+	if err := db.Exec(dropAuditLogActionColumnSQL()).Error; err != nil {
+		log.Fatalf("drop audit log action column: %v", err)
+	}
+	if err := db.Exec(migrateAuditLogResultSummarySQL()).Error; err != nil {
+		log.Fatalf("migrate audit log result summary: %v", err)
+	}
 
 	// Seed default data.
 	if err := seedData(db, cfg.Seed); err != nil {
@@ -81,8 +87,44 @@ $$;`
 func ensureAuditLogSummaryColumnsSQL() string {
 	return `
 	ALTER TABLE audit_logs
-		ADD COLUMN IF NOT EXISTS result_summary varchar(255),
-		ADD COLUMN IF NOT EXISTS error_summary varchar(255);`
+		ADD COLUMN IF NOT EXISTS result_summary varchar(255);`
+}
+
+// dropAuditLogActionColumnSQL 删除 audit_logs 中冗余的 action 列。
+// 注意：此操作不可逆，执行前需确认无外部系统依赖该列。
+func dropAuditLogActionColumnSQL() string {
+	return `
+	DO $$
+	BEGIN
+		IF EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_name = 'audit_logs' AND column_name = 'action'
+		) THEN
+			ALTER TABLE audit_logs DROP COLUMN action;
+		END IF;
+	END
+	$$;`
+}
+
+// migrateAuditLogResultSummarySQL 将旧格式的 result_summary 统一为 success/failed，
+// 并删除冗余的 error_summary 列。
+func migrateAuditLogResultSummarySQL() string {
+	return `
+	UPDATE audit_logs SET result_summary = 'failed'
+	WHERE result_summary NOT IN ('success', 'failed') AND result_summary IS NOT NULL AND result_summary != '';
+
+	DO $$
+	BEGIN
+		IF EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_name = 'audit_logs' AND column_name = 'error_summary'
+		) THEN
+			ALTER TABLE audit_logs DROP COLUMN error_summary;
+		END IF;
+	END
+	$$;`
 }
 
 func shouldCreateSeedAdmin(adminUsernameExists, adminEmailExists bool) bool {

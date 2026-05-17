@@ -96,12 +96,10 @@ func TestAudit_RecordRequestMetadataAndSanitizedSummaries(t *testing.T) {
 	require.Equal(t, "10.20.30.40", logged.RequestIP)
 	require.Equal(t, http.StatusInternalServerError, logged.ResponseStatus)
 	require.GreaterOrEqual(t, logged.DurationMs, int64(0))
-	require.Equal(t, "POST", logged.Action)
 	require.Equal(t, "users", logged.ResourceType)
-	require.Equal(t, "http_status_500", logged.ResultSummary)
-	require.Equal(t, "request_failed", logged.ErrorSummary)
+	require.Equal(t, "failed", logged.ResultSummary)
 	require.Empty(t, logged.RequestBody)
-	serialized := strings.ToLower(logged.UserAgent + logged.ResultSummary + logged.ErrorSummary + logged.RequestBody)
+	serialized := strings.ToLower(logged.UserAgent + logged.ResultSummary + logged.RequestBody)
 	require.NotContains(t, serialized, "password")
 	require.NotContains(t, serialized, "secret")
 	require.NotContains(t, serialized, "bearer")
@@ -182,8 +180,7 @@ func TestAudit_InfersAppErrorStatusBeforeErrorHandlerWritesResponse(t *testing.T
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Len(t, recorderSvc.logs, 1)
 	require.Equal(t, http.StatusForbidden, recorderSvc.logs[0].ResponseStatus)
-	require.Equal(t, "http_status_403", recorderSvc.logs[0].ResultSummary)
-	require.Equal(t, "request_failed", recorderSvc.logs[0].ErrorSummary)
+	require.Equal(t, "failed", recorderSvc.logs[0].ResultSummary)
 }
 
 func TestAudit_InfersWrappedAppErrorStatusBeforeErrorHandlerWritesResponse(t *testing.T) {
@@ -204,6 +201,5 @@ func TestAudit_InfersWrappedAppErrorStatusBeforeErrorHandlerWritesResponse(t *te
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Len(t, recorderSvc.logs, 1)
 	require.Equal(t, http.StatusForbidden, recorderSvc.logs[0].ResponseStatus)
-	require.Equal(t, "http_status_403", recorderSvc.logs[0].ResultSummary)
-	require.Equal(t, "request_failed", recorderSvc.logs[0].ErrorSummary)
+	require.Equal(t, "failed", recorderSvc.logs[0].ResultSummary)
 }

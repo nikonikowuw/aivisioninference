@@ -86,7 +86,7 @@ export default function Permissions() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { filters, setFilter, resetFilters, handleSearch } = useFilter();
+  const { filters, setFilter, resetFilters } = useFilter();
 
   // 使用 filterTree 过滤树数据
   const filteredTree = useMemo(() => {
@@ -224,7 +224,6 @@ export default function Permissions() {
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
-        onSearch={handleSearch}
         onReset={resetFilters}
         selects={[
           {
@@ -233,7 +232,6 @@ export default function Permissions() {
             options: [
               { value: 'menu', label: t('form.type.menu') },
               { value: 'button', label: t('form.type.button') },
-              { value: 'api', label: t('form.type.api') },
             ],
           },
         ]}
@@ -261,7 +259,6 @@ export default function Permissions() {
               <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                 <option value="menu">{t('form.type.menu')}</option>
                 <option value="button">{t('form.type.button')}</option>
-                <option value="api">{t('form.type.api')}</option>
               </Select>
             </FormControl>
             <FormControl mb={4}>

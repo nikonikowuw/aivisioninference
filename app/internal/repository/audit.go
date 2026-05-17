@@ -31,6 +31,7 @@ func (r *AuditRepository) List(ctx context.Context, req dto.ListAuditLogRequest)
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).Scopes(req.FilterScopes()...)
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

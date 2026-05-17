@@ -1,12 +1,9 @@
 export const auditLogs = {
   title: 'Audit Logs',
   filter: {
-    actions: {
-      login: 'Login',
-      logout: 'Logout',
-      create: 'Create',
-      update: 'Update',
-      delete: 'Delete',
+    results: {
+      success: 'Success',
+      failed: 'Failed',
     },
     resourceTypes: {
       user: 'User',
@@ -19,7 +16,6 @@ export const auditLogs = {
   table: {
     columns: {
       username: 'Operator',
-      action: 'Action',
       resourceType: 'Resource Type',
       method: 'Method',
       path: 'Path',

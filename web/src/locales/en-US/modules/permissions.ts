@@ -23,7 +23,6 @@ export const permissions = {
       label: 'Type',
       menu: 'Menu',
       button: 'Button',
-      api: 'API',
     },
     parentId: {
       label: 'Parent Permission',

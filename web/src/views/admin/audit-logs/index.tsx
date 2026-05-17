@@ -22,6 +22,18 @@ import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
 
+const methodColorMap = {
+  GET: 'green',
+  POST: 'blue',
+  PUT: 'orange',
+  DELETE: 'red',
+  PATCH: 'teal',
+} as const satisfies Record<string, string>;
+
+const methodColor = (method: string) => methodColorMap[method as keyof typeof methodColorMap] ?? 'gray';
+
+const resultColor = (r?: string) => !r ? 'gray' : r === 'success' ? 'green' : 'red';
+
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
   const { formatDateTime } = useDateFormat();
@@ -29,7 +41,7 @@ export default function AuditLogs() {
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
 
-  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
 
   const fetchLogs = useCallback((p: number, ps: number) => {
     return auditLogsApi.list({
@@ -38,8 +50,8 @@ export default function AuditLogs() {
       sort: 'created_at',
       order: 'desc',
       keyword: filters.keyword,
-      action: filters.action,
       resource_type: filters.resource_type,
+      result: filters.result,
       start_time: filters.start_time,
       end_time: filters.end_time,
     });
@@ -63,20 +75,8 @@ export default function AuditLogs() {
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
-        onSearch={handleSearch}
         onReset={resetFilters}
         selects={[
-          {
-            name: 'action',
-            label: t('table.columns.action'),
-            options: [
-              { value: 'login', label: t('filter.actions.login') },
-              { value: 'logout', label: t('filter.actions.logout') },
-              { value: 'create', label: t('filter.actions.create') },
-              { value: 'update', label: t('filter.actions.update') },
-              { value: 'delete', label: t('filter.actions.delete') },
-            ],
-          },
           {
             name: 'resource_type',
             label: t('table.columns.resourceType'),
@@ -88,6 +88,14 @@ export default function AuditLogs() {
               { value: 'task', label: t('filter.resourceTypes.task') },
             ],
           },
+          {
+            name: 'result',
+            label: t('table.columns.result'),
+            options: [
+              { value: 'success', label: t('filter.results.success') },
+              { value: 'failed', label: t('filter.results.failed') },
+            ],
+          },
         ]}
         dateRange
       />
@@ -96,7 +104,6 @@ export default function AuditLogs() {
           <Thead>
             <Tr>
               <Th>{t('table.columns.username')}</Th>
-              <Th>{t('table.columns.action')}</Th>
               <Th>{t('table.columns.method')}</Th>
               <Th>{t('table.columns.path')}</Th>
               <Th>{t('table.columns.ip')}</Th>
@@ -110,13 +117,12 @@ export default function AuditLogs() {
             {logs.map((l) => (
               <Tr key={l.id}>
                 <Td>{l.username || l.user_id || '-'}</Td>
-                <Td><Badge colorScheme="blue">{l.action}</Badge></Td>
-                <Td>{l.request_method}</Td>
+                <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method}</Badge></Td>
                 <Td maxW="240px" isTruncated>{l.request_path}</Td>
                 <Td>{l.request_ip}</Td>
                 <Td><Badge colorScheme={l.response_status >= 400 ? 'red' : 'green'}>{l.response_status}</Badge></Td>
                 <Td>{t('table.durationMs', { value: l.duration_ms ?? 0 })}</Td>
-                <Td maxW="200px" isTruncated>{l.error_summary || l.result_summary}</Td>
+                <Td><Badge colorScheme={resultColor(l.result_summary)}>{l.result_summary || '-'}</Badge></Td>
                 <Td whiteSpace="nowrap">{formatDateTime(l.created_at)}</Td>
               </Tr>
             ))}

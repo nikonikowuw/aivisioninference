@@ -1,12 +1,9 @@
 export const auditLogs = {
   title: '稽核日誌',
   filter: {
-    actions: {
-      login: '登入',
-      logout: '登出',
-      create: '建立',
-      update: '更新',
-      delete: '刪除',
+    results: {
+      success: '成功',
+      failed: '失敗',
     },
     resourceTypes: {
       user: '使用者',
@@ -19,7 +16,6 @@ export const auditLogs = {
   table: {
     columns: {
       username: '操作者',
-      action: '操作',
       resourceType: '資源類型',
       method: '方法',
       path: '路徑',

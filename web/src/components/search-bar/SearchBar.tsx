@@ -30,9 +30,7 @@ export interface SearchBarProps {
   keyword?: boolean;
   selects?: SelectConfig[];
   dateRange?: boolean;
-  showSearchButton?: boolean;
   onFilterChange: (key: string, value: string | undefined) => void;
-  onSearch: () => void;
   onReset: () => void;
   filters: FilterState;
 }
@@ -40,25 +38,14 @@ export interface SearchBarProps {
 export function SearchBar({
   filters,
   onFilterChange,
-  onSearch,
   onReset,
   keyword = true,
   selects,
   dateRange,
-  showSearchButton = true,
 }: SearchBarProps) {
   const { t } = useTranslation();
   const bgColor = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        onSearch();
-      }
-    },
-    [onSearch],
-  );
 
   const handleKeywordChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,11 +68,6 @@ export function SearchBar({
     [onFilterChange],
   );
 
-  const hasContent =
-    filters.keyword ||
-    selects?.some(s => filters[s.name]) ||
-    (dateRange && (filters.start_time || filters.end_time));
-
   return (
     <Box
       bg={bgColor}
@@ -105,7 +87,6 @@ export function SearchBar({
               placeholder={t('searchBar.keywordPlaceholder', '搜索关键字...')}
               value={filters.keyword || ''}
               onChange={handleKeywordChange}
-              onKeyDown={handleKeyDown}
             />
           </FormControl>
         )}
@@ -151,23 +132,9 @@ export function SearchBar({
           </Stack>
         )}
 
-        {showSearchButton && (
-          <Stack direction="row" spacing={2}>
-            <Button colorScheme="blue" onClick={onSearch}>
-              {t('searchBar.search', '搜索')}
-            </Button>
-            {hasContent && (
-              <Button variant="outline" onClick={onReset}>
-                {t('searchBar.reset', '重置')}
-              </Button>
-            )}
-          </Stack>
-        )}
-        {!showSearchButton && hasContent && (
-          <Button variant="outline" onClick={onReset}>
-            {t('searchBar.reset', '重置')}
-          </Button>
-        )}
+        <Button variant="lightBrand" onClick={onReset}>
+          {t('searchBar.reset', '重置')}
+        </Button>
       </Flex>
     </Box>
   );

@@ -45,7 +45,7 @@ export default function Tasks() {
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
-  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
 
   const fetchTasks = useCallback((p: number, ps: number) => {
     return tasksApi.list({
@@ -92,7 +92,6 @@ export default function Tasks() {
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
-        onSearch={handleSearch}
         onReset={resetFilters}
         selects={[
           {

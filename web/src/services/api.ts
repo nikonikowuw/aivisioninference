@@ -118,6 +118,14 @@ export const authApi = {
       },
       body: formData,
     });
+    if (!response.ok) {
+      let msg = `上传失败 (HTTP ${response.status})`;
+      try {
+        const errJson = await response.json();
+        if (errJson.message) msg = errJson.message;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
     const json: ApiResponse<{ avatar_url: string }> = await response.json();
     if (json.code !== 0) {
       throw new Error(json.message || 'Upload failed');
@@ -294,6 +302,14 @@ export const usersApi = {
       },
       body: formData,
     });
+    if (!response.ok) {
+      let msg = `上传失败 (HTTP ${response.status})`;
+      try {
+        const errJson = await response.json();
+        if (errJson.message) msg = errJson.message;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
     const json: ApiResponse<{ avatar_url: string }> = await response.json();
     if (json.code !== 0) {
       throw new Error(json.message || 'Upload failed');

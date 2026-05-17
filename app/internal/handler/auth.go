@@ -214,3 +214,37 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	response.OK(c, nil)
 }
+
+// UploadAvatar handles avatar file upload for the current user.
+//
+// @Summary      上传头像
+// @Description  当前用户上传头像图片，支持 JPG/PNG/GIF/WebP 格式，最大 2MB
+// @Tags         认证管理
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        avatar  formData  file  true  "头像文件"
+// @Success      200     {object}  dto.Response{data=dto.AvatarUploadResponse}
+// @Failure      400     {object}  dto.Response
+// @Failure      401     {object}  dto.Response
+// @Router       /auth/avatar [post]
+// @Security     BearerAuth
+func (h *AuthHandler) UploadAvatar(c *gin.Context) {
+	uid, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少头像文件"))
+		return
+	}
+
+	avatarURL, err := h.svc.UploadAvatar(c.Request.Context(), uid, fileHeader)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+
+	response.OK(c, dto.AvatarUploadResponse{AvatarURL: avatarURL})
+}

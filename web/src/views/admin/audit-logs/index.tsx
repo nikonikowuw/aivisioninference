@@ -1,23 +1,23 @@
 import {
+  Badge,
   Box,
+  Center,
   Flex,
+  Spinner,
   Table,
-  Thead,
   Tbody,
-  Tr,
-  Th,
   Td,
   Text,
+  Th,
+  Thead,
+  Tr,
   useColorModeValue,
   useToast,
-  Spinner,
-  Center,
-  Badge,
 } from '@chakra-ui/react';
-import { useTranslation } from 'react-i18next';
-import { useEffect, useState, useCallback } from 'react';
-import { auditLogsApi, type AuditLog } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { auditLogsApi, type AuditLog } from 'services/api';
 
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
@@ -31,7 +31,7 @@ export default function AuditLogs() {
 
   const loadLogs = useCallback(async () => {
     try {
-      const data = await auditLogsApi.list({ page: 1, page_size: 100 });
+      const data = await auditLogsApi.list({ page: 1, page_size: 100, sort: 'created_at', order: 'desc' });
       setLogs(data.list);
     } catch {
       toast({ title: t('message.loadFailed'), status: 'error' });

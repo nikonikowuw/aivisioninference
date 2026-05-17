@@ -20,6 +20,8 @@ func Paginate(page, pageSize int) Scope {
 	}
 }
 
+// OrderBy returns a Scope that applies ORDER BY with field whitelist validation.
+// If sort is empty or not in allowedFields, no ordering is applied.
 func OrderBy(sort, order string, allowedFields ...string) Scope {
 	return func(db *gorm.DB) *gorm.DB {
 		if sort == "" || !validFieldName.MatchString(sort) {

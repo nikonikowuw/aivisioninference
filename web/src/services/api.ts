@@ -262,6 +262,8 @@ export const auditLogsApi = {
   list: (params?: {
     page?: number;
     page_size?: number;
+    sort?: string;
+    order?: string;
     user_id?: string;
     action?: string;
     resource_type?: string;

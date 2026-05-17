@@ -12,12 +12,13 @@ import (
 
 // UserHandler handles HTTP requests for User CRUD operations.
 type UserHandler struct {
-	svc *service.UserService
+	svc     *service.UserService
+	authSvc *service.AuthService
 }
 
 // NewUserHandler creates a new UserHandler with the given dependencies.
-func NewUserHandler(svc *service.UserService) *UserHandler {
-	return &UserHandler{svc: svc}
+func NewUserHandler(svc *service.UserService, authSvc *service.AuthService) *UserHandler {
+	return &UserHandler{svc: svc, authSvc: authSvc}
 }
 
 // List returns a paginated list of users with optional search filters.
@@ -157,4 +158,36 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	}
 
 	response.OK(c, nil)
+}
+
+// UploadAvatar handles avatar upload for a specific user (admin action).
+//
+// @Summary      管理员上传用户头像
+// @Description  管理员为指定用户上传头像
+// @Tags         用户管理
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        id      path      string  true  "用户 ID"
+// @Param        avatar  formData  file    true  "头像文件"
+// @Success      200     {object}  dto.Response{data=dto.AvatarUploadResponse}
+// @Failure      400     {object}  dto.Response
+// @Failure      403     {object}  dto.Response
+// @Router       /users/{id}/avatar [post]
+// @Security     BearerAuth
+func (h *UserHandler) UploadAvatar(c *gin.Context) {
+	id := c.Param("id")
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少头像文件"))
+		return
+	}
+
+	avatarURL, err := h.authSvc.UploadAvatar(c.Request.Context(), id, fileHeader)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+
+	response.OK(c, dto.AvatarUploadResponse{AvatarURL: avatarURL})
 }

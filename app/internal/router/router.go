@@ -22,6 +22,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
 	"github.com/niko-admin/niko-admin/internal/task"
+	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
 // Router holds all dependencies for route registration.
@@ -95,7 +96,11 @@ func (r *Router) setupRoutes() {
 	dashRepo := repository.NewDashboardRepository(r.db)
 
 	// Create services
-	authSvc := service.NewAuthService(userRepo, permRepo, r.rdb, r.jwtManager)
+	avatarStorage, err := storage.NewLocalStorage("uploads", "/uploads")
+	if err != nil {
+		zap.L().Fatal("create avatar storage failed", zap.Error(err))
+	}
+	authSvc := service.NewAuthService(userRepo, permRepo, r.rdb, r.jwtManager, avatarStorage)
 	userSvc := service.NewUserService(userRepo)
 	roleSvc := service.NewRoleService(roleRepo, userRepo, r.rdb)
 	var permCache cache.Cache
@@ -122,6 +127,7 @@ func (r *Router) setupRoutes() {
 	v1.GET("/auth/me", middleware.Auth(r.jwtManager), authHandler.Me)
 	v1.PUT("/auth/password", middleware.Auth(r.jwtManager), authHandler.ChangePassword)
 	v1.PUT("/auth/profile", middleware.Auth(r.jwtManager), authHandler.UpdateProfile)
+	v1.POST("/auth/avatar", middleware.Auth(r.jwtManager), authHandler.UploadAvatar)
 
 	// WebSocket
 	wsHandler := handler.NewWSHandler(r.hub, r.jwtManager)
@@ -133,7 +139,7 @@ func (r *Router) setupRoutes() {
 	authorized.Use(middleware.Audit(auditSvc))
 
 	// Users
-	userHandler := handler.NewUserHandler(userSvc)
+	userHandler := handler.NewUserHandler(userSvc, authSvc)
 	users := authorized.Group("/users")
 	{
 		users.GET("", userHandler.List)
@@ -141,6 +147,7 @@ func (r *Router) setupRoutes() {
 		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
 		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
 		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
+		users.POST("/:id/avatar", middleware.RBAC(rbacCache, r.db), userHandler.UploadAvatar)
 	}
 
 	// Roles

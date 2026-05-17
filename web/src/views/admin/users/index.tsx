@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { usersApi, rolesApi, type User, type Role } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
+import AvatarUploader from 'components/avatar-upload/AvatarUploader';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useAuth } from 'contexts/AuthContext';
@@ -69,6 +70,7 @@ export default function Users() {
   const [allRoles, setAllRoles] = useState<Role[]>([]);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState({ username: '', display_name: '', email: '', password: '', status: 1 });
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<User | null>(null);
@@ -89,12 +91,14 @@ export default function Users() {
   const openCreate = () => {
     setEditing(null);
     setForm({ username: '', display_name: '', email: '', password: '', status: 1 });
+    setAvatarUrl('');
     onOpen();
   };
 
   const openEdit = (user: User) => {
     setEditing(user);
     setForm({ username: user.username, display_name: user.display_name, email: user.email, password: '', status: user.status });
+    setAvatarUrl(user.avatar_url || '');
     onOpen();
   };
 
@@ -256,6 +260,15 @@ export default function Users() {
           <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
+            <Box textAlign="center" mb={4}>
+              <AvatarUploader
+                value={avatarUrl}
+                onChange={(url) => setAvatarUrl(url)}
+                userId={editing?.id}
+                name={form.display_name || form.username}
+                size={80}
+              />
+            </Box>
             <FormControl mb={4}>
               <FormLabel>{t('form.username.label')}</FormLabel>
               <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder={t('form.username.placeholder')} />

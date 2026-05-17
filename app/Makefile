@@ -91,7 +91,7 @@ docker-prod-logs:
 
 ## docker-migrate: 在容器中运行数据库迁移
 docker-migrate:
-	cd .. && docker-compose exec server ./niko-admin migrate
+	cd .. && docker-compose exec server ./niko-admin-migrate
 
 ## clean: 清理构建产物
 clean:

@@ -29,7 +29,7 @@ init:
 		sleep 1; \
 	done
 	@echo "Running migrations..."
-	docker-compose exec server ./niko-admin migrate
+	docker-compose exec server ./niko-admin-migrate
 	@echo ""
 	@echo "✓ 初始化完成！访问 http://localhost:8080"
 	@echo ""
@@ -65,8 +65,8 @@ docker-prod-down:
 
 ## docker-migrate: 运行数据库迁移
 docker-migrate:
-	docker-compose exec server ./niko-admin migrate
+	docker-compose exec server ./niko-admin-migrate
 
 ## docker-prod-migrate: 运行生产环境数据库迁移
 docker-prod-migrate:
-	docker-compose -f docker-compose.prod.yml exec server ./niko-admin migrate
+	docker-compose -f docker-compose.prod.yml exec server ./niko-admin-migrate

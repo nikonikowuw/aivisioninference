@@ -23,7 +23,8 @@ RUN go mod download
 
 COPY app/ ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o niko-admin ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o niko-admin ./cmd/server && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o niko-admin-migrate ./cmd/migrate
 
 # ==================== Stage 3: Runtime ====================
 FROM alpine:3.20
@@ -34,6 +35,7 @@ WORKDIR /app
 
 # 复制后端二进制
 COPY --from=backend-builder /app/niko-admin .
+COPY --from=backend-builder /app/niko-admin-migrate .
 COPY --from=backend-builder /app/configs ./configs
 
 # 复制前端静态文件

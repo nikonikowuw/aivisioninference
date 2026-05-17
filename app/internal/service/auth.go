@@ -5,10 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
@@ -18,6 +24,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/hash"
 	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/repository"
+	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
 const menuTreeCacheTTL = 10 * time.Minute
@@ -36,14 +43,16 @@ type AuthService struct {
 	permRepo   *repository.PermissionRepository
 	rdb        *redis.Client
 	jwtManager *jwtutil.Manager
+	storage    storage.Storage
 }
 
-func NewAuthService(userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, rdb *redis.Client, jwtManager *jwtutil.Manager) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, rdb *redis.Client, jwtManager *jwtutil.Manager, stor storage.Storage) *AuthService {
 	return &AuthService{
 		userRepo:   userRepo,
 		permRepo:   permRepo,
 		rdb:        rdb,
 		jwtManager: jwtManager,
+		storage:    stor,
 	}
 }
 
@@ -409,4 +418,99 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, n
 	}
 
 	return nil
+}
+
+const (
+	maxAvatarSize    = 2 * 1024 * 1024
+	avatarPathPrefix = "avatars"
+)
+
+var allowedAvatarTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/gif":  true,
+	"image/webp": true,
+}
+
+func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeader *multipart.FileHeader) (string, error) {
+	if fileHeader.Size > maxAvatarSize {
+		return "", errors.New(errors.ErrFileTooLarge, "")
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		zap.L().Error("open uploaded avatar file failed", zap.Error(err))
+		return "", errors.New(errors.ErrInternal, "")
+	}
+	defer file.Close()
+
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		zap.L().Error("read avatar file header for type detection failed", zap.Error(err))
+		return "", errors.New(errors.ErrInternal, "")
+	}
+	mimeType := http.DetectContentType(buf[:n])
+	if !allowedAvatarTypes[mimeType] {
+		return "", errors.New(errors.ErrFileInvalidType, "")
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		zap.L().Error("seek avatar file to start failed", zap.Error(err))
+		return "", errors.New(errors.ErrInternal, "")
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if ext == "" || ext == ".jpeg" {
+		switch mimeType {
+		case "image/jpeg":
+			ext = ".jpg"
+		case "image/png":
+			ext = ".png"
+		case "image/gif":
+			ext = ".gif"
+		case "image/webp":
+			ext = ".webp"
+		default:
+			exts, _ := mime.ExtensionsByType(mimeType)
+			if len(exts) > 0 {
+				ext = exts[0]
+			}
+		}
+	}
+	if ext == ".jpeg" {
+		ext = ".jpg"
+	}
+
+	storageName := uuid.New().String() + ext
+	storagePath := avatarPathPrefix + "/" + storageName
+
+	storedPath, err := s.storage.Save(file, storagePath)
+	if err != nil {
+		zap.L().Error("save avatar file failed", zap.Error(err))
+		return "", errors.New(errors.ErrInternal, "")
+	}
+
+	avatarURL := s.storage.GetURL(storedPath)
+
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return "", errors.New(errors.ErrNotFound, "")
+	}
+
+	oldAvatarURL := user.AvatarURL
+	user.AvatarURL = avatarURL
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		zap.L().Error("update user avatar_url failed", zap.String("user_id", userID), zap.Error(err))
+		return "", errors.New(errors.ErrInternal, "")
+	}
+
+	if oldAvatarURL != "" && strings.HasPrefix(oldAvatarURL, s.storage.GetURL("")) {
+		oldPath := strings.TrimPrefix(oldAvatarURL, s.storage.GetURL("")+"/")
+		if err := s.storage.Delete(oldPath); err != nil {
+			zap.L().Warn("delete old avatar file failed", zap.String("path", oldPath), zap.Error(err))
+		}
+	}
+
+	return avatarURL, nil
 }

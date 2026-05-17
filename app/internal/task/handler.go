@@ -3,9 +3,9 @@ package task
 import (
 	"context"
 	"encoding/json"
-	"log"
 
 	"github.com/hibiken/asynq"
+	"go.uber.org/zap"
 )
 
 // Task type constants.
@@ -29,7 +29,10 @@ func handleEmailDelivery(ctx context.Context, t *asynq.Task) error {
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return err
 	}
-	log.Printf("Sending email to %s: %s", payload.To, payload.Subject)
+	zap.L().Info("sending email",
+		zap.String("to", payload.To),
+		zap.String("subject", payload.Subject),
+	)
 	// TODO: implement actual email sending
 	return nil
 }
@@ -42,7 +45,10 @@ func handleDataExport(ctx context.Context, t *asynq.Task) error {
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 		return err
 	}
-	log.Printf("Exporting data for user %s in %s format", payload.UserID, payload.Format)
+	zap.L().Info("exporting data",
+		zap.String("user_id", payload.UserID),
+		zap.String("format", payload.Format),
+	)
 	// TODO: implement actual data export
 	return nil
 }

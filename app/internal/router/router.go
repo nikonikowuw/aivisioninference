@@ -27,12 +27,13 @@ import (
 
 // Router holds all dependencies for route registration.
 type Router struct {
-	engine     *gin.Engine
-	db         *gorm.DB
-	rdb        *redis.Client
-	jwtManager *jwt.Manager
-	hub        *ws.Hub
-	config     *Config
+	engine       *gin.Engine
+	db           *gorm.DB
+	rdb          *redis.Client
+	jwtManager   *jwt.Manager
+	hub          *ws.Hub
+	config       *Config
+	accessLogger *zap.Logger
 }
 
 // Config holds router-level configuration.
@@ -45,18 +46,19 @@ type Config struct {
 }
 
 // New creates a new Router with all dependencies wired.
-func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config) *Router {
+func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger) *Router {
 	engine := gin.New()
 
 	httpx.TrustedProxies = cfg.TrustedProxies
 
 	r := &Router{
-		engine:     engine,
-		db:         db,
-		rdb:        rdb,
-		jwtManager: jwtManager,
-		hub:        hub,
-		config:     cfg,
+		engine:       engine,
+		db:           db,
+		rdb:          rdb,
+		jwtManager:   jwtManager,
+		hub:          hub,
+		config:       cfg,
+		accessLogger: accessLogger,
 	}
 
 	r.setupMiddleware()
@@ -73,7 +75,7 @@ func (r *Router) Engine() *gin.Engine {
 func (r *Router) setupMiddleware() {
 	// Global middleware
 	r.engine.Use(middleware.Recovery())
-	r.engine.Use(middleware.Logger())
+	r.engine.Use(middleware.Logger(r.accessLogger))
 	r.engine.Use(middleware.I18n())
 	r.engine.Use(middleware.CORS(r.config.AllowOrigins))
 	if r.config.RequestsPerMinute > 0 {

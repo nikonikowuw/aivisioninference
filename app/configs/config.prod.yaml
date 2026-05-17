@@ -1,13 +1,13 @@
 app:
   name: niko-admin
   port: 8080
-  env: dev
+  env: production
 
 db:
   host: localhost
   port: 5432
   user: postgres
-  password: postgres
+  password: ""
   name: niko_admin
   max_open_conns: 25
   max_idle_conns: 10
@@ -21,7 +21,7 @@ redis:
 
 jwt:
   secret: ""  # Set via NIKO_JWT_SECRET env var
-  access_expire: 7200    # 2 hours
+  access_expire: 3600    # 1 hour
   refresh_expire: 604800 # 7 days
 
 storage:
@@ -29,39 +29,37 @@ storage:
   chunk_size: 5  # MB
   local:
     upload_dir: ./uploads
-    public_url: http://localhost:8080/uploads
+    public_url: /uploads
 
 log:
-  level: debug
-  format: console
+  level: info
+  format: json
   output: both
   access:
     enabled: true
     path: logs/access.log
-    max_size: 100
-    max_backups: 3
+    max_size: 200
+    max_backups: 7
     max_age: 7
-    compress: false
+    compress: true
   app:
     enabled: true
     path: logs/app.log
     max_size: 100
-    max_backups: 3
+    max_backups: 7
     max_age: 7
-    compress: false
+    compress: true
   error:
     enabled: true
     path: logs/error.log
     max_size: 50
-    max_backups: 5
+    max_backups: 30
     max_age: 30
     compress: true
 
 cors:
   allow_origins:
     - http://localhost:3000
-    - http://localhost:5173
-    - http://localhost:8000
   allow_methods:
     - GET
     - POST
@@ -75,12 +73,10 @@ cors:
     - Authorization
 
 proxy:
-  trusted_proxies: []
-  # 生产环境请显式配置受信任代理网段，例如：
-  # - 10.0.0.0/8
-  # - 172.16.0.0/12
-  # - 192.168.0.0/16
+  trusted_proxies:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
 
 rate_limit:
-  requests_per_minute: 100
-
+  requests_per_minute: 60

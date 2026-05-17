@@ -7,9 +7,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// Logger returns a Gin middleware that logs each request using zap.L()
-// structured logging with method, path, status, latency, and client IP.
-func Logger() gin.HandlerFunc {
+// Logger returns a Gin middleware that logs each request using the provided
+// access logger with structured fields for method, path, status, latency, and client IP.
+func Logger(accessLogger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
@@ -38,11 +38,11 @@ func Logger() gin.HandlerFunc {
 
 		switch {
 		case statusCode >= 500:
-			zap.L().Error("server error", fields...)
+			accessLogger.Error("server error", fields...)
 		case statusCode >= 400:
-			zap.L().Warn("client error", fields...)
+			accessLogger.Warn("client error", fields...)
 		default:
-			zap.L().Info("request", fields...)
+			accessLogger.Info("request", fields...)
 		}
 	}
 }

@@ -85,8 +85,22 @@ type OSSConfig struct {
 
 // LogConfig holds logging settings.
 type LogConfig struct {
-	Level  string `mapstructure:"level"`
-	Format string `mapstructure:"format"` // console | json
+	Level  string          `mapstructure:"level"`
+	Format string          `mapstructure:"format"` // console | json
+	Output string          `mapstructure:"output"` // stdout | file | both
+	Access LogFileConfig   `mapstructure:"access"`
+	App    LogFileConfig   `mapstructure:"app"`
+	Error  LogFileConfig   `mapstructure:"error"`
+}
+
+// LogFileConfig holds per-file log rotation settings.
+type LogFileConfig struct {
+	Enabled     bool   `mapstructure:"enabled"`
+	Path        string `mapstructure:"path"`
+	MaxSize     int    `mapstructure:"max_size"`     // MB
+	MaxBackups  int    `mapstructure:"max_backups"`  // file count
+	MaxAge      int    `mapstructure:"max_age"`      // days
+	Compress    bool   `mapstructure:"compress"`
 }
 
 // CORSConfig holds CORS settings.
@@ -224,6 +238,31 @@ func setDefaults(v *viper.Viper) {
 	// Log
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.format", "console")
+	v.SetDefault("log.output", "both")
+
+	// Log - Access
+	v.SetDefault("log.access.enabled", true)
+	v.SetDefault("log.access.path", "logs/access.log")
+	v.SetDefault("log.access.max_size", 200)
+	v.SetDefault("log.access.max_backups", 7)
+	v.SetDefault("log.access.max_age", 7)
+	v.SetDefault("log.access.compress", true)
+
+	// Log - App
+	v.SetDefault("log.app.enabled", true)
+	v.SetDefault("log.app.path", "logs/app.log")
+	v.SetDefault("log.app.max_size", 100)
+	v.SetDefault("log.app.max_backups", 7)
+	v.SetDefault("log.app.max_age", 7)
+	v.SetDefault("log.app.compress", true)
+
+	// Log - Error
+	v.SetDefault("log.error.enabled", true)
+	v.SetDefault("log.error.path", "logs/error.log")
+	v.SetDefault("log.error.max_size", 50)
+	v.SetDefault("log.error.max_backups", 30)
+	v.SetDefault("log.error.max_age", 30)
+	v.SetDefault("log.error.compress", true)
 
 	// CORS
 	v.SetDefault("cors.allow_origins", []string{"http://localhost:3000"})

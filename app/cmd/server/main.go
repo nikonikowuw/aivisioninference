@@ -27,6 +27,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/database"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
+	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/router"
 )
@@ -44,7 +45,8 @@ func main() {
 	}
 
 	// Initialize logger
-	initLogger(cfg.Log)
+	l := applog.Init(cfg.Log)
+	defer l.Sync()
 
 	zap.L().Info("starting niko-admin",
 		zap.String("version", Version),
@@ -98,7 +100,7 @@ func main() {
 		TrustedProxies:            cfg.Proxy.TrustedProxies,
 		PermissionTreeRedisEnable: cfg.Redis.Enable,
 	}
-	r := router.New(db, rdb, jwtManager, hub, routerCfg)
+	r := router.New(db, rdb, jwtManager, hub, routerCfg, l.Access)
 
 	// Start HTTP server
 	srv := &http.Server{
@@ -143,25 +145,4 @@ func main() {
 	asynqServer.Shutdown()
 
 	zap.L().Info("server exited")
-}
-
-func initLogger(cfg config.LogConfig) {
-	level := zap.InfoLevel
-	if cfg.Level == "debug" {
-		level = zap.DebugLevel
-	}
-
-	var zapCfg zap.Config
-	if cfg.Format == "json" {
-		zapCfg = zap.NewProductionConfig()
-	} else {
-		zapCfg = zap.NewDevelopmentConfig()
-	}
-	zapCfg.Level = zap.NewAtomicLevelAt(level)
-
-	logger, err := zapCfg.Build()
-	if err != nil {
-		log.Fatalf("failed to init logger: %v", err)
-	}
-	zap.ReplaceGlobals(logger)
 }

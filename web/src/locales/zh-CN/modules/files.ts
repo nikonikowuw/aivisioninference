@@ -3,12 +3,20 @@ export const files = {
   button: {
     upload: '上传文件',
   },
+  filter: {
+    storageTypes: {
+      local: '本地',
+      oss: 'OSS',
+      pg: 'PostgreSQL',
+    },
+  },
   table: {
     columns: {
       id: 'ID',
       name: '文件名',
       type: '类型',
       size: '大小',
+      storageType: '存储类型',
       uploadTime: '上传时间',
       actions: '操作',
     },

@@ -6,3 +6,72 @@ body {
 option {
   color: black;
 }
+
+/* react-datepicker — wrapper sizing */
+.date-picker-wrapper {
+  display: inline-block;
+  width: 100%;
+}
+
+/* react-datepicker — Chakra UI dark mode compatibility */
+.react-datepicker-popper {
+  z-index: 1300;
+}
+
+.react-datepicker {
+  font-family: "DM Sans", sans-serif;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 0.5rem;
+}
+
+.chakra-ui-dark .react-datepicker,
+[data-theme="dark"] .react-datepicker {
+  background: #2d3748;
+  border-color: #4a5568;
+  color: #e2e8f0;
+}
+
+.react-datepicker__header {
+  background: transparent;
+  border-bottom: none;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name,
+.react-datepicker__day {
+  color: inherit;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background: #3182ce;
+  color: white;
+  border-radius: 0.375rem;
+}
+
+.react-datepicker__day:hover {
+  border-radius: 0.375rem;
+  background: #edf2f7;
+}
+
+.chakra-ui-dark .react-datepicker__day:hover,
+[data-theme="dark"] .react-datepicker__day:hover {
+  background: #4a5568;
+}
+
+.react-datepicker__day--disabled {
+  opacity: 0.4;
+}
+
+.react-datepicker__navigation {
+  top: 0.625rem;
+}
+
+.react-datepicker__close-icon::after {
+  background-color: transparent;
+  font-size: 1.1rem;
+}

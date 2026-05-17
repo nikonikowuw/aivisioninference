@@ -1,5 +1,13 @@
 export const tasks = {
   title: '任務管理',
+  filter: {
+    taskTypes: {
+      email: '郵件',
+      export: '匯出',
+      import: '匯入',
+      backup: '備份',
+    },
+  },
   table: {
     columns: {
       id: 'ID',

@@ -3,12 +3,20 @@ export const files = {
   button: {
     upload: 'Upload File',
   },
+  filter: {
+    storageTypes: {
+      local: 'Local',
+      oss: 'OSS',
+      pg: 'PostgreSQL',
+    },
+  },
   table: {
     columns: {
       id: 'ID',
       name: 'Filename',
       type: 'Type',
       size: 'Size',
+      storageType: 'Storage Type',
       uploadTime: 'Upload Time',
       actions: 'Actions',
     },

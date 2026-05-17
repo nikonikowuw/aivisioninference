@@ -33,6 +33,9 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useMemo } from 'react';
 import { permissionsApi, type Permission } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
+import { SearchBar } from 'components/search-bar/SearchBar';
+import { useFilter } from 'hooks/useFilter';
+import { filterTree, type FilteredNode } from 'utils/treeFilter';
 
 function flattenTree(nodes: Permission[], depth = 0): (Permission & { _depth: number })[] {
   const result: (Permission & { _depth: number })[] = [];
@@ -82,6 +85,13 @@ export default function Permissions() {
   const [form, setForm] = useState({ name: '', code: '', type: 'menu', parent_id: '' });
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const { filters, setFilter, resetFilters, handleSearch } = useFilter();
+
+  // 使用 filterTree 过滤树数据
+  const filteredTree = useMemo(() => {
+    return filterTree(tree, filters.keyword, filters.type);
+  }, [tree, filters.keyword, filters.type]);
 
   const handleClose = () => {
     setEditing(null);
@@ -160,7 +170,7 @@ export default function Permissions() {
 
   const leafBg = useColorModeValue('gray.50', 'whiteAlpha.50');
 
-  const renderTree = (nodes: Permission[], depth = 0) =>
+  const renderTree = (nodes: FilteredNode[], depth = 0) =>
     nodes.map((p) => (
       <Box key={p.id} ml={depth * 4} mb={2}>
         <Flex align="center" justify="space-between">
@@ -171,7 +181,7 @@ export default function Permissions() {
                   <AccordionButton px={2} py={2}>
                     <Box flex="1" textAlign="left">
                       <HStack>
-                        <Text fontWeight="600">{p.name}</Text>
+                        <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{p.name}</Text>
                         <Badge colorScheme="blue">{p.code}</Badge>
                         <Badge colorScheme="gray">{p.type}</Badge>
                       </HStack>
@@ -179,14 +189,14 @@ export default function Permissions() {
                     <AccordionIcon />
                   </AccordionButton>
                   <AccordionPanel pb={0} pl={4}>
-                    {renderTree(p.children, depth + 1)}
+                    {renderTree(p.children as FilteredNode[], depth + 1)}
                   </AccordionPanel>
                 </AccordionItem>
               </Accordion>
             ) : (
               <Box py={2} px={4} borderRadius="8px" bg={leafBg}>
                 <HStack>
-                  <Text fontWeight="500">{p.name}</Text>
+                  <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{p.name}</Text>
                   <Badge colorScheme="blue">{p.code}</Badge>
                   <Badge colorScheme="gray">{p.type}</Badge>
                 </HStack>
@@ -211,8 +221,25 @@ export default function Permissions() {
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
         <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
       </Flex>
+      <SearchBar
+        filters={filters}
+        onFilterChange={setFilter}
+        onSearch={handleSearch}
+        onReset={resetFilters}
+        selects={[
+          {
+            name: 'type',
+            label: t('form.type.label'),
+            options: [
+              { value: 'menu', label: t('form.type.menu') },
+              { value: 'button', label: t('form.type.button') },
+              { value: 'api', label: t('form.type.api') },
+            ],
+          },
+        ]}
+      />
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} p={6}>
-        {tree.length > 0 ? renderTree(tree) : <Text color="gray.500">{t('message.emptyData')}</Text>}
+        {filteredTree.length > 0 ? renderTree(filteredTree) : <Text color="gray.500">{t('message.emptyData')}</Text>}
       </Box>
 
       <Modal isOpen={isOpen} onClose={handleClose}>

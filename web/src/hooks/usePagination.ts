@@ -58,11 +58,13 @@ export function usePagination<T>(
     }
   }, [toast, t]);
 
-  const changePage = useCallback((p: number) => setPage(p), []);
+  const changePage = useCallback((p: number) => {
+    load({ page: p });
+  }, [load]);
+
   const changePageSize = useCallback((s: number) => {
-    setPageSize(s);
-    setPage(1);
-  }, []);
+    load({ page: 1, pageSize: s });
+  }, [load]);
 
   return {
     list,

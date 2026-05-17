@@ -29,6 +29,7 @@
       "types/*": ["src/types/*"],
       "services/*": ["src/services/*"],
       "hooks/*": ["src/hooks/*"],
+      "utils/*": ["src/utils/*"],
       "router": ["src/router/index.tsx"],
       "router/*": ["src/router/*"]
     }

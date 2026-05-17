@@ -61,6 +61,34 @@ export const common = {
     next: '下一页',
     goToPage: '跳转到第 {{page}} 页',
   },
+  searchBar: {
+    keyword: '关键字',
+    keywordPlaceholder: '搜索关键字...',
+    search: '搜索',
+    reset: '重置',
+    startDate: '开始日期',
+    endDate: '结束日期',
+    all: '全部',
+  },
+  date: {
+    format: {
+      date: 'yyyy年M月d日',
+      datetime: 'yyyy年M月d日 HH:mm',
+      time: 'HH:mm',
+    },
+    today: '今天',
+    yesterday: '昨天',
+    justNow: '刚刚',
+    minutesAgo: '{{count}} 分钟前',
+    hoursAgo: '{{count}} 小时前',
+    daysAgo: '{{count}} 天前',
+    weeksAgo: '{{count}} 周前',
+    monthsAgo: '{{count}} 个月前',
+    yearsAgo: '{{count}} 年前',
+    inMinutes: '{{count}} 分钟后',
+    inHours: '{{count}} 小时后',
+    inDays: '{{count}} 天后',
+  },
 } as const;
 
 export default common;

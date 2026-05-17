@@ -33,12 +33,15 @@ import {
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { usersApi, rolesApi, type User, type Role } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
+import { SearchBar } from 'components/search-bar/SearchBar';
 import { useAuth } from 'contexts/AuthContext';
 import { usePagination } from 'hooks/usePagination';
+import { useFilter } from 'hooks/useFilter';
+import { parseOptionalNumber } from 'utils/convert';
 
 export default function Users() {
   const { user: currentUser } = useAuth();
@@ -50,9 +53,18 @@ export default function Users() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const { list: users, total, page, pageSize, initialLoading, pageLoading, load: loadUsers, changePage, changePageSize } = usePagination<User>(
-    (p, ps) => usersApi.list({ page: p, page_size: ps }),
-  );
+  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+
+  const fetchUsers = useCallback((p: number, ps: number) => {
+    return usersApi.list({
+      page: p,
+      page_size: ps,
+      keyword: filters.keyword,
+      status: parseOptionalNumber(filters.status),
+    });
+  }, [filters]);
+
+  const { list: users, total, page, pageSize, initialLoading, pageLoading, load: loadUsers, changePage, changePageSize } = usePagination<User>(fetchUsers);
 
   const [allRoles, setAllRoles] = useState<Role[]>([]);
   const [editing, setEditing] = useState<User | null>(null);
@@ -63,13 +75,16 @@ export default function Users() {
   const [isToggling, setIsToggling] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      loadUsers(),
-      rolesApi.list({ page: 1, page_size: 100 }).then((d) => setAllRoles(d.list)).catch(() => {
-        toast({ title: tCommon('message.loadFailed'), status: 'error' });
-      }),
-    ]);
-  }, [loadUsers]);
+    loadUsers({ page: 1 }).catch(() => {
+      toast({ title: tCommon('message.loadFailed'), status: 'error' });
+    });
+  }, [searchTrigger, loadUsers]);
+
+  useEffect(() => {
+    rolesApi.list({ page: 1, page_size: 100 }).then((d) => setAllRoles(d.list)).catch(() => {
+      toast({ title: tCommon('message.loadFailed'), status: 'error' });
+    });
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -151,6 +166,22 @@ export default function Users() {
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
         <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
       </Flex>
+      <SearchBar
+        filters={filters}
+        onFilterChange={setFilter}
+        onSearch={handleSearch}
+        onReset={resetFilters}
+        selects={[
+          {
+            name: 'status',
+            label: t('table.columns.status'),
+            options: [
+              { value: '1', label: t('table.status.active') },
+              { value: '0', label: t('table.status.inactive') },
+            ],
+          },
+        ]}
+      />
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
         <Table variant="simple">
           <Thead>

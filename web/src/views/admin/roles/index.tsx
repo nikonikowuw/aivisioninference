@@ -34,11 +34,14 @@ import {
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { rolesApi, permissionsApi, type Role, type Permission } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
+import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
+import { useFilter } from 'hooks/useFilter';
+import { parseOptionalNumber } from 'utils/convert';
 
 function getDescendantIds(nodes: Permission[], id: string): string[] {
   const ids: string[] = [];
@@ -74,9 +77,18 @@ export default function Roles() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPermOpen, onOpen: onPermOpen, onClose: onPermClose } = useDisclosure();
 
-  const { list: roles, total, page, pageSize, initialLoading, pageLoading, load: loadRoles, changePage, changePageSize } = usePagination<Role>(
-    (p, ps) => rolesApi.list({ page: p, page_size: ps }),
-  );
+  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+
+  const fetchRoles = useCallback((p: number, ps: number) => {
+    return rolesApi.list({
+      page: p,
+      page_size: ps,
+      keyword: filters.keyword,
+      status: parseOptionalNumber(filters.status),
+    });
+  }, [filters]);
+
+  const { list: roles, total, page, pageSize, initialLoading, pageLoading, load: loadRoles, changePage, changePageSize } = usePagination<Role>(fetchRoles);
 
   const [editing, setEditing] = useState<Role | null>(null);
   const [form, setForm] = useState({ name: '', description: '', level: 100 });
@@ -91,8 +103,8 @@ export default function Roles() {
   const [isAssigningPerms, setIsAssigningPerms] = useState(false);
 
   useEffect(() => {
-    loadRoles();
-  }, [loadRoles]);
+    loadRoles({ page: 1 });
+  }, [searchTrigger, loadRoles]);
 
   const openCreate = () => {
     setEditing(null);
@@ -225,6 +237,22 @@ export default function Roles() {
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
         <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
       </Flex>
+      <SearchBar
+        filters={filters}
+        onFilterChange={setFilter}
+        onSearch={handleSearch}
+        onReset={resetFilters}
+        selects={[
+          {
+            name: 'status',
+            label: t('table.columns.status'),
+            options: [
+              { value: '1', label: t('table.status.active') },
+              { value: '0', label: t('table.status.inactive') },
+            ],
+          },
+        ]}
+      />
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
         <Table variant="simple">
           <Thead>

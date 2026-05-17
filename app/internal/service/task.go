@@ -10,6 +10,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -42,7 +43,19 @@ func (s *TaskService) Create(ctx context.Context, req dto.CreateTaskRequest) (*m
 }
 
 // List returns a paginated list of tasks with optional filters.
+//
+// 【核心功能】查询任务列表，支持关键字、类型、状态、时间范围等筛选条件。
+// 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
 func (s *TaskService) List(ctx context.Context, req dto.TaskListRequest) ([]model.Task, int64, error) {
+	// 解析时间范围参数
+	if req.StartTime != "" || req.EndTime != "" {
+		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
+		if err != nil {
+			return nil, 0, mapTimeRangeError(err)
+		}
+		req.FromTime = from
+		req.ToTime = to
+	}
 	return s.taskRepo.List(ctx, req)
 }
 

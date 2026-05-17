@@ -18,12 +18,14 @@ import {
 } from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { tasksApi, type Task } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
+import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
+import { useFilter } from 'hooks/useFilter';
 
 const statusColor: Record<string, string> = {
   pending: 'yellow',
@@ -43,13 +45,25 @@ export default function Tasks() {
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
-  const { list: tasks, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<Task>(
-    (p, ps) => tasksApi.list({ page: p, page_size: ps }),
-  );
+  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+
+  const fetchTasks = useCallback((p: number, ps: number) => {
+    return tasksApi.list({
+      page: p,
+      page_size: ps,
+      keyword: filters.keyword,
+      type: filters.type,
+      status: filters.status,
+      start_time: filters.start_time,
+      end_time: filters.end_time,
+    });
+  }, [filters]);
+
+  const { list: tasks, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<Task>(fetchTasks);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load({ page: 1 });
+  }, [searchTrigger, load]);
 
   const handleCancel = async () => {
     if (!cancelTarget) return;
@@ -75,6 +89,36 @@ export default function Tasks() {
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
       </Flex>
+      <SearchBar
+        filters={filters}
+        onFilterChange={setFilter}
+        onSearch={handleSearch}
+        onReset={resetFilters}
+        selects={[
+          {
+            name: 'type',
+            label: t('table.columns.type'),
+            options: [
+              { value: 'email', label: t('filter.taskTypes.email') },
+              { value: 'export', label: t('filter.taskTypes.export') },
+              { value: 'import', label: t('filter.taskTypes.import') },
+              { value: 'backup', label: t('filter.taskTypes.backup') },
+            ],
+          },
+          {
+            name: 'status',
+            label: t('table.columns.status'),
+            options: [
+              { value: 'pending', label: t('table.status.pending') },
+              { value: 'running', label: t('table.status.running') },
+              { value: 'completed', label: t('table.status.completed') },
+              { value: 'failed', label: t('table.status.failed') },
+              { value: 'cancelled', label: t('table.status.cancelled') },
+            ],
+          },
+        ]}
+        dateRange
+      />
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
         <Table variant="simple">
           <Thead>

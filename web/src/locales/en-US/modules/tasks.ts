@@ -1,5 +1,13 @@
 export const tasks = {
   title: 'Task Management',
+  filter: {
+    taskTypes: {
+      email: 'Email',
+      export: 'Export',
+      import: 'Import',
+      backup: 'Backup',
+    },
+  },
   table: {
     columns: {
       id: 'ID',

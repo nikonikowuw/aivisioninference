@@ -35,8 +35,8 @@ type ListAuditLogRequest struct {
 	ResourceType string     `form:"resource_type"`
 	StartTime    string     `form:"start_time"`
 	EndTime      string     `form:"end_time"`
-	FromTime     *time.Time `form:"-"` // parsed by service, used by FilterScopes
-	ToTime       *time.Time `form:"-"` // parsed by service, used by FilterScopes
+	FromTime     *time.Time `form:"-" json:"-"` // parsed by service, used by FilterScopes
+	ToTime       *time.Time `form:"-" json:"-"` // parsed by service, used by FilterScopes
 }
 
 func (r *ListAuditLogRequest) FilterScopes() []scopes.Scope {

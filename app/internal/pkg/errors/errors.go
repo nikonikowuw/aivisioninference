@@ -15,6 +15,9 @@ const (
 	ErrHierarchyLevelRole = 10004
 	ErrEmailTaken         = 10005
 	ErrOldPasswordWrong   = 10006
+	ErrStartTimeFormat     = 10008
+	ErrEndTimeFormat       = 10009
+	ErrTimeRangeOrder      = 10010
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized      = 20001
@@ -41,6 +44,9 @@ var messages = map[int]string{
 	ErrHierarchyLevelRole: "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
 	ErrEmailTaken:         "邮箱已被使用",
 	ErrOldPasswordWrong:   "旧密码错误",
+	ErrStartTimeFormat:    "开始时间格式错误",
+	ErrEndTimeFormat:      "结束时间格式错误",
+	ErrTimeRangeOrder:     "开始时间不能晚于结束时间",
 	ErrUnauthorized:       "未登录",
 	ErrTokenExpired:       "Token已过期",
 	ErrTokenInvalid:       "Token无效",

@@ -20,6 +20,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -267,7 +268,19 @@ func (s *FileService) CheckFile(ctx context.Context, md5Hash string) (*dto.Check
 }
 
 // List returns a paginated list of files with optional filters.
+//
+// 【核心功能】查询文件列表，支持关键字、存储类型、时间范围等筛选条件。
+// 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
 func (s *FileService) List(ctx context.Context, req dto.FileListRequest) ([]model.File, int64, error) {
+	// 解析时间范围参数
+	if req.StartTime != "" || req.EndTime != "" {
+		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
+		if err != nil {
+			return nil, 0, mapTimeRangeError(err)
+		}
+		req.FromTime = from
+		req.ToTime = to
+	}
 	return s.fileRepo.List(ctx, req)
 }
 

@@ -2,12 +2,10 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
-	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -28,20 +26,18 @@ type ListResult struct {
 }
 
 // List returns a paginated list of audit logs with optional filters.
+//
+// 【核心功能】查询审计日志列表，支持关键字、操作类型、资源类型、时间范围等筛选条件。
+// 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
 func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*ListResult, error) {
-	if req.StartTime != "" {
-		t, err := time.Parse(dto.DateTimeFormat, req.StartTime)
+	// 解析时间范围参数
+	if req.StartTime != "" || req.EndTime != "" {
+		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("start_time format invalid, expected %s", dto.DateTimeFormat))
+			return nil, mapTimeRangeError(err)
 		}
-		req.FromTime = &t
-	}
-	if req.EndTime != "" {
-		t, err := time.Parse(dto.DateTimeFormat, req.EndTime)
-		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("end_time format invalid, expected %s", dto.DateTimeFormat))
-		}
-		req.ToTime = &t
+		req.FromTime = from
+		req.ToTime = to
 	}
 
 	logs, total, err := s.auditRepo.List(ctx, req)

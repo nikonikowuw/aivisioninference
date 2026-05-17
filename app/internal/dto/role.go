@@ -28,12 +28,16 @@ type AssignPermissionsRequest struct {
 type RoleListRequest struct {
 	PageRequest
 	Keyword string `form:"keyword"`
+	Status  *int   `form:"status"`
 }
 
 func (r *RoleListRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {
 		sc = append(sc, scopes.MultiLike([]string{"name", "description"}, r.Keyword))
+	}
+	if r.Status != nil {
+		sc = append(sc, scopes.Eq("status", *r.Status))
 	}
 	return sc
 }

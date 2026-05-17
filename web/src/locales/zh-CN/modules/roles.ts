@@ -10,7 +10,12 @@ export const roles = {
       name: '角色名',
       description: '描述',
       permissionCount: '权限数',
+      status: '状态',
       actions: '操作',
+    },
+    status: {
+      active: '启用',
+      inactive: '禁用',
     },
   },
   form: {

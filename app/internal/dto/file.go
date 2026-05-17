@@ -1,6 +1,10 @@
 package dto
 
-import "github.com/niko-admin/niko-admin/internal/pkg/scopes"
+import (
+	"time"
+
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+)
 
 // InitUploadRequest is the request body for initializing a chunked upload.
 type InitUploadRequest struct {
@@ -32,11 +36,15 @@ type UploadProgressResponse struct {
 // FileListRequest is the request for listing files with filters.
 type FileListRequest struct {
 	PageRequest
-	Keyword    string `form:"keyword"`
-	MimeType   string `form:"mime_type"`
+	Keyword     string `form:"keyword"`
+	MimeType    string `form:"mime_type"`
 	StorageType string `form:"storage_type"`
 	// UploaderID filters by upload creator. Maps to created_by via BaseModel.
 	UploaderID string `form:"uploader_id"`
+	StartTime  string     `form:"start_time"`
+	EndTime    string     `form:"end_time"`
+	FromTime   *time.Time `form:"-" json:"-"`
+	ToTime     *time.Time `form:"-" json:"-"`
 }
 
 func (r *FileListRequest) FilterScopes() []scopes.Scope {
@@ -52,6 +60,9 @@ func (r *FileListRequest) FilterScopes() []scopes.Scope {
 	}
 	if r.UploaderID != "" {
 		sc = append(sc, scopes.Eq("created_by", r.UploaderID))
+	}
+	if r.FromTime != nil || r.ToTime != nil {
+		sc = append(sc, scopes.TimeRange("created_at", r.FromTime, r.ToTime))
 	}
 	return sc
 }

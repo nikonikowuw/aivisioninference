@@ -61,6 +61,34 @@ export const common = {
     next: 'Next',
     goToPage: 'Go to page {{page}}',
   },
+  searchBar: {
+    keyword: 'Keyword',
+    keywordPlaceholder: 'Search keywords...',
+    search: 'Search',
+    reset: 'Reset',
+    startDate: 'Start date',
+    endDate: 'End date',
+    all: 'All',
+  },
+  date: {
+    format: {
+      date: 'MMM d, yyyy',
+      datetime: 'MMM d, yyyy HH:mm',
+      time: 'HH:mm',
+    },
+    today: 'Today',
+    yesterday: 'Yesterday',
+    justNow: 'Just now',
+    minutesAgo: '{{count}} minute(s) ago',
+    hoursAgo: '{{count}} hour(s) ago',
+    daysAgo: '{{count}} day(s) ago',
+    weeksAgo: '{{count}} week(s) ago',
+    monthsAgo: '{{count}} month(s) ago',
+    yearsAgo: '{{count}} year(s) ago',
+    inMinutes: 'In {{count}} minute(s)',
+    inHours: 'In {{count}} hour(s)',
+    inDays: 'In {{count}} day(s)',
+  },
 } as const;
 
 export default common;

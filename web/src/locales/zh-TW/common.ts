@@ -61,6 +61,34 @@ export const common = {
     next: '下一頁',
     goToPage: '跳轉到第 {{page}} 頁',
   },
+  searchBar: {
+    keyword: '關鍵字',
+    keywordPlaceholder: '搜尋關鍵字...',
+    search: '搜尋',
+    reset: '重設',
+    startDate: '開始日期',
+    endDate: '結束日期',
+    all: '全部',
+  },
+  date: {
+    format: {
+      date: 'yyyy年M月d日',
+      datetime: 'yyyy年M月d日 HH:mm',
+      time: 'HH:mm',
+    },
+    today: '今天',
+    yesterday: '昨天',
+    justNow: '剛剛',
+    minutesAgo: '{{count}} 分鐘前',
+    hoursAgo: '{{count}} 小時前',
+    daysAgo: '{{count}} 天前',
+    weeksAgo: '{{count}} 週前',
+    monthsAgo: '{{count}} 個月前',
+    yearsAgo: '{{count}} 年前',
+    inMinutes: '{{count}} 分鐘後',
+    inHours: '{{count}} 小時後',
+    inDays: '{{count}} 天後',
+  },
 } as const;
 
 export default common;

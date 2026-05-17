@@ -172,16 +172,32 @@ export interface DashboardStats {
   active_tasks: number;
 }
 
+interface CrudListParams {
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  sort_order?: string;
+  keyword?: string;
+  [key: string]: string | number | undefined;
+}
+
 // Generic CRUD
-function crud<T>(resource: string) {
+type CrudApi<T, ListParams extends CrudListParams = CrudListParams> = {
+  list: (params?: ListParams) => Promise<PaginatedData<T>>;
+  get: (id: string) => Promise<T>;
+  create: (data: Partial<T>) => Promise<T>;
+  update: (id: string, data: Partial<T>) => Promise<T>;
+  delete: (id: string) => Promise<void>;
+};
+
+type StatusListParams = CrudListParams & { status?: number };
+type FileListParams = CrudListParams & { storage_type?: string; start_time?: string; end_time?: string };
+type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; action?: string; resource_type?: string; start_time?: string; end_time?: string };
+type TaskListParams = CrudListParams & { type?: string; status?: string; start_time?: string; end_time?: string };
+
+function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: string): CrudApi<T, ListParams> {
   return {
-    list: (params?: {
-      page?: number;
-      page_size?: number;
-      sort_by?: string;
-      sort_order?: string;
-      [key: string]: string | number | undefined;
-    }) => {
+    list: (params?: ListParams) => {
       const query = buildQuery(params || {});
       return request<PaginatedData<T>>(`/${resource}${query}`);
     },
@@ -201,9 +217,9 @@ function crud<T>(resource: string) {
   };
 }
 
-export const usersApi = crud<User>('users');
+export const usersApi = crud<User, StatusListParams>('users');
 export const rolesApi = {
-  ...crud<Role>('roles'),
+  ...crud<Role, StatusListParams>('roles'),
   getPermissions: (id: string) => request<Permission[]>(`/roles/${id}/permissions`),
   assignPermissions: (id: string, permissionIds: string[]) =>
     request(`/roles/${id}/permissions`, {
@@ -229,7 +245,7 @@ export const permissionsApi = {
     }),
 };
 export const filesApi = {
-  ...crud<FileItem>('files'),
+  ...crud<FileItem, FileListParams>('files'),
   upload: async (file: File, onProgress?: (pct: number) => void) => {
     // Init upload
     const initRes = await request<{ upload_id: string }>('/files/upload/init', {
@@ -264,21 +280,13 @@ export const filesApi = {
   },
 };
 export const auditLogsApi = {
-  list: (params?: {
-    page?: number;
-    page_size?: number;
-    sort?: string;
-    order?: string;
-    user_id?: string;
-    action?: string;
-    resource_type?: string;
-  }) => {
+  list: (params?: AuditLogListParams) => {
     const query = buildQuery(params || {});
     return request<PaginatedData<AuditLog>>(`/audit-logs${query}`);
   },
 };
 export const tasksApi = {
-  ...crud<Task>('tasks'),
+  ...crud<Task, TaskListParams>('tasks'),
   cancel: (id: string) => request<Task>(`/tasks/${id}/cancel`, { method: 'POST' }),
 };
 

@@ -10,7 +10,12 @@ export const roles = {
       name: 'Role Name',
       description: 'Description',
       permissionCount: 'Permissions',
+      status: 'Status',
       actions: 'Actions',
+    },
+    status: {
+      active: 'Active',
+      inactive: 'Inactive',
     },
   },
   form: {

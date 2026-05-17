@@ -25,7 +25,9 @@ import { filesApi, type FileItem } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
+import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
+import { useFilter } from 'hooks/useFilter';
 
 function formatSize(bytes: number, t: (key: string) => string): string {
   if (bytes < 1024) return `${bytes} ${t('size.bytes')}`;
@@ -47,13 +49,24 @@ export default function Files() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { list: files, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<FileItem>(
-    (p, ps) => filesApi.list({ page: p, page_size: ps }),
-  );
+  const { filters, setFilter, resetFilters, searchTrigger, handleSearch } = useFilter();
+
+  const fetchFiles = useCallback((p: number, ps: number) => {
+    return filesApi.list({
+      page: p,
+      page_size: ps,
+      keyword: filters.keyword,
+      storage_type: filters.storage_type,
+      start_time: filters.start_time,
+      end_time: filters.end_time,
+    });
+  }, [filters]);
+
+  const { list: files, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<FileItem>(fetchFiles);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load({ page: 1 });
+  }, [searchTrigger, load]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,6 +120,24 @@ export default function Files() {
           <Progress value={progress} colorScheme="brand" borderRadius="full" />
         </Box>
       )}
+      <SearchBar
+        filters={filters}
+        onFilterChange={setFilter}
+        onSearch={handleSearch}
+        onReset={resetFilters}
+        selects={[
+          {
+            name: 'storage_type',
+            label: t('table.columns.storageType'),
+            options: [
+              { value: 'local', label: t('filter.storageTypes.local') },
+              { value: 'oss', label: t('filter.storageTypes.oss') },
+              { value: 'pg', label: t('filter.storageTypes.pg') },
+            ],
+          },
+        ]}
+        dateRange
+      />
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
         <Table variant="simple">
           <Thead>

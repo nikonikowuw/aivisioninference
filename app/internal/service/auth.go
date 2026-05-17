@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -444,20 +445,23 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 	}
 	defer file.Close()
 
-	buf := make([]byte, 512)
-	n, err := file.Read(buf)
-	if err != nil && err != io.EOF {
-		zap.L().Error("read avatar file header for type detection failed", zap.Error(err))
+	allBytes, err := io.ReadAll(file)
+	if err != nil {
+		zap.L().Error("read uploaded avatar file failed", zap.Error(err))
 		return "", errors.New(errors.ErrInternal, "")
-	}
-	mimeType := http.DetectContentType(buf[:n])
-	if !allowedAvatarTypes[mimeType] {
-		return "", errors.New(errors.ErrFileInvalidType, "")
 	}
 
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		zap.L().Error("seek avatar file to start failed", zap.Error(err))
-		return "", errors.New(errors.ErrInternal, "")
+	if len(allBytes) > maxAvatarSize {
+		return "", errors.New(errors.ErrFileTooLarge, "")
+	}
+
+	if len(allBytes) < 512 {
+		return "", errors.New(errors.ErrBadRequest, "文件内容不完整")
+	}
+
+	mimeType := http.DetectContentType(allBytes[:512])
+	if !allowedAvatarTypes[mimeType] {
+		return "", errors.New(errors.ErrFileInvalidType, "")
 	}
 
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
@@ -485,11 +489,12 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 	storageName := uuid.New().String() + ext
 	storagePath := avatarPathPrefix + "/" + storageName
 
-	storedPath, err := s.storage.Save(file, storagePath)
+	storedPath, err := s.storage.Save(bytes.NewReader(allBytes), storagePath)
 	if err != nil {
 		zap.L().Error("save avatar file failed", zap.Error(err))
 		return "", errors.New(errors.ErrInternal, "")
 	}
+	zap.L().Info("avatar saved", zap.String("path", storedPath), zap.String("storagePath", storagePath))
 
 	avatarURL := s.storage.GetURL(storedPath)
 

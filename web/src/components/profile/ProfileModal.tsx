@@ -21,6 +21,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { authApi, type User } from 'services/api';
 import { useAuth } from 'contexts/AuthContext';
+import AvatarUploader from 'components/avatar-upload/AvatarUploader';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -61,7 +62,7 @@ export default function ProfileModal({ isOpen, onClose, user }: ProfileModalProp
       const data: Record<string, string> = {};
       if (displayName !== (user.display_name || '')) data.display_name = displayName;
       if (email !== (user.email || '')) data.email = email;
-      if (avatarUrl !== (user.avatar_url || '')) data.avatar_url = avatarUrl;
+      
       if (Object.keys(data).length === 0) {
         onClose();
         return;
@@ -157,14 +158,16 @@ export default function ProfileModal({ isOpen, onClose, user }: ProfileModalProp
               />
             </FormControl>
 
-            <FormControl>
-              <FormLabel>{t('common:profile.avatarUrl')}</FormLabel>
-              <Input
+            <Box textAlign="center">
+              <AvatarUploader
                 value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://..."
+                onChange={async (url) => {
+                  setAvatarUrl(url);
+                  await refreshUser();
+                }}
+                name={user.display_name || user.username}
               />
-            </FormControl>
+            </Box>
 
             <HStack justify="flex-end">
               <Button

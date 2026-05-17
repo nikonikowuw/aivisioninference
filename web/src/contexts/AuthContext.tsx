@@ -30,9 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const me = await authApi.me();
       setUser(me);
-    } catch {
-      setUser(null);
-      localStorage.removeItem('access_token');
+    } catch (err) {
+      // 仅在认证明确失败（401）时清除 token，
+      // 网络瞬断或服务端 500 等情况保留 token 避免误登出。
+      const isAuthError =
+        err instanceof Error && err.message.includes('认证过期');
+      if (isAuthError) {
+        setUser(null);
+        localStorage.removeItem('access_token');
+      }
     }
   }, []);
 
@@ -43,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string) => {
     const data = await authApi.login(username, password);
     localStorage.setItem('access_token', data.access_token);
-    await refreshUser();
+    setUser(data.user);
   };
 
   const logout = async () => {

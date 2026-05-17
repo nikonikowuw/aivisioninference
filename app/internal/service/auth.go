@@ -72,6 +72,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 	}
 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
+	menus := s.getMenuTree(ctx, roleIDs)
 
 	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, user.Username, roleIDs, user.IsRoot)
 	if err != nil {
@@ -91,6 +92,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 			Email:       user.Email,
 			Status:      user.Status,
 			Roles:       roleInfos,
+			Menus:       menus,
 			CreatedAt:   user.CreatedAt.Format(dto.DateTimeFormat),
 			UpdatedAt:   user.UpdatedAt.Format(dto.DateTimeFormat),
 		},

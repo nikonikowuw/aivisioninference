@@ -36,13 +36,12 @@ async function request<T>(
 
   const json: ApiResponse<T> = await response.json();
 
-  if (response.status === 401) {
-    localStorage.removeItem('access_token');
-    window.location.href = '/auth/sign-in';
-    throw new Error('认证过期');
-  }
-
   if (json.code !== 0) {
+    // 非登录页面收到 401：token 失效，清除凭证并跳转登录页
+    if (response.status === 401 && !window.location.pathname.startsWith('/auth/')) {
+      localStorage.removeItem('access_token');
+      window.location.href = '/auth/sign-in';
+    }
     throw new Error(json.message || '请求失败');
   }
 
@@ -59,7 +58,7 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 // Auth
 export const authApi = {
   login: (username: string, password: string) =>
-    request<{ access_token: string }>('/auth/login', {
+    request<{ access_token: string; user: User }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),

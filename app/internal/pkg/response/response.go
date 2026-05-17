@@ -36,12 +36,17 @@ func OK(c *gin.Context, data interface{}) {
 }
 
 // Err sends an error response based on the AppError code.
+// It uses the AppError's own Message if present, otherwise falls back to i18n translation.
 func Err(c *gin.Context, err error) {
 	if appErr, ok := err.(*apperrors.AppError); ok {
 		httpStatus := codeToHTTPStatus(appErr.Code)
+		msg := appErr.Message
+		if msg == "" {
+			msg = i18n.Translate(c.GetString("lang"), appErr.Code)
+		}
 		c.JSON(httpStatus, Response{
 			Code:    appErr.Code,
-			Message: i18n.Translate(c.GetString("lang"), appErr.Code),
+			Message: msg,
 		})
 		return
 	}

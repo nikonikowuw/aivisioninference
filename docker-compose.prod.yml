@@ -3,33 +3,36 @@ services:
     image: postgres:16-alpine
     container_name: niko-admin-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: niko_admin
+      POSTGRES_USER: ${NIKO_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${NIKO_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${NIKO_DB_NAME:-niko_admin}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${NIKO_DB_USER:-postgres}"]
+      interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - niko-network
 
   redis:
     image: redis:7-alpine
     container_name: niko-admin-redis
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - niko-network
 
@@ -40,34 +43,33 @@ services:
       dockerfile: Dockerfile
     container_name: niko-admin-server
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      - NIKO_APP_ENV=dev
+      - NIKO_APP_ENV=production
       - NIKO_APP_PORT=8080
       - NIKO_DB_HOST=postgres
       - NIKO_DB_PORT=5432
-      - NIKO_DB_USER=postgres
-      - NIKO_DB_PASSWORD=postgres
-      - NIKO_DB_NAME=niko_admin
+      - NIKO_DB_USER=${NIKO_DB_USER:-postgres}
+      - NIKO_DB_PASSWORD=${NIKO_DB_PASSWORD:-postgres}
+      - NIKO_DB_NAME=${NIKO_DB_NAME:-niko_admin}
       - NIKO_REDIS_ENABLE=true
       - NIKO_REDIS_HOST=redis
       - NIKO_REDIS_PORT=6379
-      - NIKO_REDIS_PASSWORD=
-      # 开发环境默认密钥，生产环境务必通过 .env 注入
-      - NIKO_JWT_SECRET=${NIKO_JWT_SECRET:-dev-secret-change-me}
+      - NIKO_REDIS_PASSWORD=${NIKO_REDIS_PASSWORD:-}
+      - NIKO_JWT_SECRET=${NIKO_JWT_SECRET}
       - NIKO_JWT_ISSUER=niko-admin
       - NIKO_JWT_AUDIENCE=niko-admin
-      - NIKO_JWT_ACCESS_EXPIRE=7200
+      - NIKO_JWT_ACCESS_EXPIRE=3600
       - NIKO_JWT_REFRESH_EXPIRE=604800
-      - NIKO_LOG_LEVEL=debug
-      - NIKO_LOG_FORMAT=console
+      - NIKO_LOG_LEVEL=info
+      - NIKO_LOG_FORMAT=json
       - NIKO_LOG_OUTPUT=both
       - NIKO_STORAGE_DRIVER=local
       - NIKO_STORAGE_LOCAL_UPLOAD_DIR=./uploads
-      - NIKO_STORAGE_LOCAL_PUBLIC_URL=http://localhost:8080/uploads
+      - NIKO_STORAGE_LOCAL_PUBLIC_URL=${NIKO_PUBLIC_URL:-http://localhost:8080}/uploads
     volumes:
-      - ./app/logs:/app/logs
-      - ./app/uploads:/app/uploads
+      - server-logs:/app/logs
+      - server-uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,6 +88,8 @@ services:
 volumes:
   pgdata:
   redisdata:
+  server-logs:
+  server-uploads:
 
 networks:
   niko-network:

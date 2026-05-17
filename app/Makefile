@@ -8,7 +8,7 @@ VERSION       ?= $(shell git describe --tags --always --dirty 2>/dev/null || ech
 .PHONY: serve run dev test deploy build unit-test lint clean help migrate
 
 ## serve: 开发模式 — 启动依赖 + 热重载（需要 Docker）
-serve: docker-up
+serve: docker-up-deps
 	@echo "Starting development server with air..."
 	air
 
@@ -61,13 +61,37 @@ migrate:
 docker-build:
 	docker build -t $(APP_NAME):$(VERSION) .
 
-## docker-up: 启动 Docker 服务
+## docker-up: 启动开发环境（含后端服务）
 docker-up:
-	cd .. && docker-compose up -d postgres redis
+	cd .. && docker-compose up -d
 
-## docker-down: 停止 Docker 服务
+## docker-down: 停止所有服务
 docker-down:
 	cd .. && docker-compose down
+
+## docker-up-deps: 仅启动依赖服务（postgres + redis）
+docker-up-deps:
+	cd .. && docker-compose up -d postgres redis
+
+## docker-logs: 查看服务日志
+docker-logs:
+	cd .. && docker-compose logs -f server
+
+## docker-prod: 启动生产环境
+docker-prod:
+	cd .. && docker-compose -f docker-compose.prod.yml up -d --build
+
+## docker-prod-down: 停止生产环境
+docker-prod-down:
+	cd .. && docker-compose -f docker-compose.prod.yml down
+
+## docker-prod-logs: 查看生产环境日志
+docker-prod-logs:
+	cd .. && docker-compose -f docker-compose.prod.yml logs -f server
+
+## docker-migrate: 在容器中运行数据库迁移
+docker-migrate:
+	cd .. && docker-compose exec server ./niko-admin migrate
 
 ## clean: 清理构建产物
 clean:
@@ -78,7 +102,9 @@ init:
 	cp -n .env.example .env 2>/dev/null || true
 	cd .. && docker-compose up -d postgres redis
 	@echo "Waiting for database..."
-	@sleep 3
+	@until docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do \
+		sleep 1; \
+	done
 	go mod tidy
 	go run cmd/migrate/main.go
 	@echo "--- Init complete! Run 'make serve' to start ---"

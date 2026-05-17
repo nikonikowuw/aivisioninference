@@ -3,6 +3,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,8 +17,10 @@ import (
 	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
+	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -220,6 +223,17 @@ func (r *Router) setupRoutes() {
 
 	// Static file serving for uploaded files
 	r.engine.Static("/uploads", "uploads")
+
+	// Frontend static files (SPA)
+	r.engine.Static("/assets", "./web/dist/assets")
+	r.engine.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
+	r.engine.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api") {
+			response.Err(c, apperrors.New(apperrors.ErrNotFound, "资源不存在"))
+			return
+		}
+		c.File("./web/dist/index.html")
+	})
 }
 
 // NewAsynqServer creates an Asynq server for task processing.

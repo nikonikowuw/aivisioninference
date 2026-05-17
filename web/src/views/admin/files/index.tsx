@@ -13,8 +13,8 @@ import {
   IconButton,
   useToast,
   HStack,
-  Spinner,
   Center,
+  Spinner,
   Progress,
   Badge,
 } from '@chakra-ui/react';
@@ -24,6 +24,8 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { filesApi, type FileItem } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
+import Pagination from 'components/pagination/Pagination';
+import { usePagination } from 'hooks/usePagination';
 
 function formatSize(bytes: number, t: (key: string) => string): string {
   if (bytes < 1024) return `${bytes} ${t('size.bytes')}`;
@@ -39,26 +41,19 @@ export default function Files() {
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const loadFiles = useCallback(async () => {
-    try {
-      const data = await filesApi.list({ page: 1, page_size: 100 });
-      setFiles(data.list);
-    } catch {
-      toast({ title: t('message.loadFailed'), status: 'error' });
-    }
-  }, [toast, t]);
+  const { list: files, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<FileItem>(
+    (p, ps) => filesApi.list({ page: p, page_size: ps }),
+  );
 
   useEffect(() => {
-    loadFiles().finally(() => setLoading(false));
-  }, [loadFiles]);
+    load();
+  }, [load]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,7 +63,7 @@ export default function Files() {
     try {
       await filesApi.upload(file, setProgress);
       toast({ title: t('message.uploadSuccess'), status: 'success' });
-      loadFiles();
+      load();
     } catch (err) {
       toast({ title: t('message.uploadFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
     } finally {
@@ -84,7 +79,7 @@ export default function Files() {
     try {
       await filesApi.delete(deleteTarget);
       toast({ title: t('message.deleteSuccess'), status: 'success' });
-      loadFiles();
+      load();
     } catch (err) {
       toast({ title: t('message.deleteFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
     } finally {
@@ -93,7 +88,7 @@ export default function Files() {
     }
   };
 
-  if (loading) {
+  if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
 
@@ -141,6 +136,14 @@ export default function Files() {
             ))}
           </Tbody>
         </Table>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onChange={changePage}
+          onPageSizeChange={changePageSize}
+          isLoading={pageLoading}
+        />
       </Box>
       <ConfirmDialog
         isOpen={deleteTarget !== null}

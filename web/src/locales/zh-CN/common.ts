@@ -54,9 +54,12 @@ export const common = {
     passwordUpdateSuccess: '密码修改成功',
   },
   pagination: {
-    total: '共 {{total}} 条',
-    page: '第 {{page}} 页',
+    pageOf: '第 {{page}} / {{totalPages}} 页',
     pageSize: '每页 {{size}} 条',
+    showing: '显示 {{from}}-{{to}}，共 {{total}} 条',
+    previous: '上一页',
+    next: '下一页',
+    goToPage: '跳转到第 {{page}} 页',
   },
 } as const;
 

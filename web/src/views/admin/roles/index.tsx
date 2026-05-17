@@ -34,9 +34,11 @@ import {
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { rolesApi, permissionsApi, type Role, type Permission } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
+import Pagination from 'components/pagination/Pagination';
+import { usePagination } from 'hooks/usePagination';
 
 function getDescendantIds(nodes: Permission[], id: string): string[] {
   const ids: string[] = [];
@@ -71,8 +73,11 @@ export default function Roles() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPermOpen, onOpen: onPermOpen, onClose: onPermClose } = useDisclosure();
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const { list: roles, total, page, pageSize, initialLoading, pageLoading, load: loadRoles, changePage, changePageSize } = usePagination<Role>(
+    (p, ps) => rolesApi.list({ page: p, page_size: ps }),
+  );
+
   const [editing, setEditing] = useState<Role | null>(null);
   const [form, setForm] = useState({ name: '', description: '', level: 100 });
   const [isSaving, setIsSaving] = useState(false);
@@ -85,17 +90,8 @@ export default function Roles() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAssigningPerms, setIsAssigningPerms] = useState(false);
 
-  const loadRoles = useCallback(async () => {
-    try {
-      const data = await rolesApi.list({ page: 1, page_size: 100 });
-      setRoles(data.list);
-    } catch {
-      toast({ title: t('message.loadFailed'), status: 'error' });
-    }
-  }, [toast, t]);
-
   useEffect(() => {
-    loadRoles().finally(() => setLoading(false));
+    loadRoles();
   }, [loadRoles]);
 
   const openCreate = () => {
@@ -219,7 +215,7 @@ export default function Roles() {
       );
     });
 
-  if (loading) {
+  if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
 
@@ -260,6 +256,14 @@ export default function Roles() {
             ))}
           </Tbody>
         </Table>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onChange={changePage}
+          onPageSizeChange={changePageSize}
+          isLoading={pageLoading}
+        />
       </Box>
       <ConfirmDialog
         isOpen={deleteTarget !== null}

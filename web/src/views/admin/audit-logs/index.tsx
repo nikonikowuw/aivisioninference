@@ -12,12 +12,13 @@ import {
   Thead,
   Tr,
   useColorModeValue,
-  useToast,
 } from '@chakra-ui/react';
 import { useDateFormat } from 'hooks/useDateFormat';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { auditLogsApi, type AuditLog } from 'services/api';
+import Pagination from 'components/pagination/Pagination';
+import { usePagination } from 'hooks/usePagination';
 
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
@@ -25,24 +26,16 @@ export default function AuditLogs() {
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const toast = useToast();
 
-  const loadLogs = useCallback(async () => {
-    try {
-      const data = await auditLogsApi.list({ page: 1, page_size: 100, sort: 'created_at', order: 'desc' });
-      setLogs(data.list);
-    } catch {
-      toast({ title: t('message.loadFailed'), status: 'error' });
-    }
-  }, [toast, t]);
+  const { list: logs, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<AuditLog>(
+    (p, ps) => auditLogsApi.list({ page: p, page_size: ps, sort: 'created_at', order: 'desc' }),
+  );
 
   useEffect(() => {
-    loadLogs().finally(() => setLoading(false));
-  }, [loadLogs]);
+    load();
+  }, [load]);
 
-  if (loading) {
+  if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
 
@@ -82,6 +75,14 @@ export default function AuditLogs() {
             ))}
           </Tbody>
         </Table>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onChange={changePage}
+          onPageSizeChange={changePageSize}
+          isLoading={pageLoading}
+        />
       </Box>
     </Box>
   );

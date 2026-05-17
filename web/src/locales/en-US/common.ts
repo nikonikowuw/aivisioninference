@@ -54,9 +54,12 @@ export const common = {
     passwordUpdateSuccess: 'Password updated successfully',
   },
   pagination: {
-    total: '{{total}} total',
-    page: 'Page {{page}}',
+    pageOf: 'Page {{page}} / {{totalPages}}',
     pageSize: '{{size}} per page',
+    showing: 'Showing {{from}}-{{to}} of {{total}}',
+    previous: 'Previous',
+    next: 'Next',
+    goToPage: 'Go to page {{page}}',
   },
 } as const;
 

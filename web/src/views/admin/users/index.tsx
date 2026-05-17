@@ -33,10 +33,12 @@ import {
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { usersApi, rolesApi, type User, type Role } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
+import Pagination from 'components/pagination/Pagination';
 import { useAuth } from 'contexts/AuthContext';
+import { usePagination } from 'hooks/usePagination';
 
 export default function Users() {
   const { user: currentUser } = useAuth();
@@ -47,9 +49,12 @@ export default function Users() {
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [users, setUsers] = useState<User[]>([]);
+
+  const { list: users, total, page, pageSize, initialLoading, pageLoading, load: loadUsers, changePage, changePageSize } = usePagination<User>(
+    (p, ps) => usersApi.list({ page: p, page_size: ps }),
+  );
+
   const [allRoles, setAllRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState({ username: '', display_name: '', email: '', password: '', status: 1 });
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -57,18 +62,13 @@ export default function Users() {
   const [toggleTarget, setToggleTarget] = useState<User | null>(null);
   const [isToggling, setIsToggling] = useState(false);
 
-  const loadUsers = useCallback(async () => {
-    try {
-      const data = await usersApi.list({ page: 1, page_size: 100 });
-      setUsers(data.list);
-    } catch {
-      toast({ title: t('message.loadFailed'), status: 'error' });
-    }
-  }, [toast, t]);
-
   useEffect(() => {
-    Promise.all([loadUsers(), rolesApi.list({ page: 1, page_size: 100 }).then((d) => setAllRoles(d.list))])
-      .finally(() => setLoading(false));
+    Promise.all([
+      loadUsers(),
+      rolesApi.list({ page: 1, page_size: 100 }).then((d) => setAllRoles(d.list)).catch(() => {
+        toast({ title: tCommon('message.loadFailed'), status: 'error' });
+      }),
+    ]);
   }, [loadUsers]);
 
   const openCreate = () => {
@@ -141,7 +141,7 @@ export default function Users() {
     setToggleTarget(user);
   };
 
-  if (loading) {
+  if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
 
@@ -194,6 +194,14 @@ export default function Users() {
             ))}
           </Tbody>
         </Table>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onChange={changePage}
+          onPageSizeChange={changePageSize}
+          isLoading={pageLoading}
+        />
       </Box>
       <ConfirmDialog
         isOpen={deleteTarget !== null}

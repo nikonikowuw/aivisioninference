@@ -71,6 +71,11 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     }),
+  updateProfile: (data: { display_name?: string; email?: string; avatar_url?: string }) =>
+    request<User>('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Types

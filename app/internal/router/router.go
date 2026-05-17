@@ -121,6 +121,7 @@ func (r *Router) setupRoutes() {
 	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), authHandler.Logout)
 	v1.GET("/auth/me", middleware.Auth(r.jwtManager), authHandler.Me)
 	v1.PUT("/auth/password", middleware.Auth(r.jwtManager), authHandler.ChangePassword)
+	v1.PUT("/auth/profile", middleware.Auth(r.jwtManager), authHandler.UpdateProfile)
 
 	// WebSocket
 	wsHandler := handler.NewWSHandler(r.hub, r.jwtManager)

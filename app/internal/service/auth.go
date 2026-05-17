@@ -38,7 +38,6 @@ type AuthService struct {
 	jwtManager *jwtutil.Manager
 }
 
-// NewAuthService creates a new AuthService.
 func NewAuthService(userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, rdb *redis.Client, jwtManager *jwtutil.Manager) *AuthService {
 	return &AuthService{
 		userRepo:   userRepo,
@@ -316,15 +315,79 @@ func buildMenuRoots(nodes map[string]*menuNode, childrenByParent map[string][]st
 	return roots
 }
 
+// UpdateProfile 更新当前用户的个人资料（display_name、email、avatar_url）。
+//
+// 核心功能：安全地更新用户个人信息，包含邮箱唯一性校验。
+// 算法设计：
+//  1. 通过 FindByID 获取用户当前信息，作为校验基准。
+//  2. 邮箱变更时执行唯一性查询，排除当前用户自身，防止冲突。
+//  3. 仅更新请求中非 nil 的字段，实现部分更新语义。
+//  4. 更新完成后通过 GetMe 返回最新的完整用户信息（含角色和菜单）。
+//
+// 参数:
+//
+//	ctx - 上下文，用于链路追踪与超时控制
+//	userID - 当前登录用户的 ID
+//	req - 包含可选更新字段的请求 DTO
+//
+// 返回值:
+//
+//	*dto.UserInfo - 更新后的用户完整信息
+//	error - 业务异常返回 AppError，系统异常记录日志后返回 ErrInternal
+func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto.UpdateProfileRequest) (*dto.UserInfo, error) {
+	var user *model.User
+
+	if err := s.userRepo.Transaction(ctx, func(txRepo *repository.UserRepository) error {
+		var err error
+		user, err = txRepo.FindByIDForUpdate(ctx, userID)
+		if err != nil {
+			return errors.New(errors.ErrNotFound, "")
+		}
+
+		if req.Email != nil && *req.Email != user.Email {
+			count, err := txRepo.CountByEmail(ctx, *req.Email, userID)
+			if err != nil {
+				zap.L().Error("count by email failed", zap.Error(err))
+				return errors.New(errors.ErrInternal, "")
+			}
+			if count > 0 {
+				return errors.New(errors.ErrEmailTaken, "")
+			}
+			user.Email = *req.Email
+		}
+
+		if req.DisplayName != nil {
+			user.DisplayName = *req.DisplayName
+		}
+		if req.AvatarURL != nil {
+			user.AvatarURL = *req.AvatarURL
+		}
+
+		if err := txRepo.Update(ctx, user); err != nil {
+			zap.L().Error("update user profile failed", zap.String("user_id", userID), zap.Error(err))
+			return errors.New(errors.ErrInternal, "")
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	info, err := s.GetMe(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
+
 // ChangePassword verifies old password and updates to new one.
 func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, "用户不存在")
+		return errors.New(errors.ErrNotFound, "")
 	}
 
 	if !hash.Check(oldPassword, user.Password) {
-		return errors.New(errors.ErrBadRequest, "旧密码错误")
+		return errors.New(errors.ErrOldPasswordWrong, "")
 	}
 
 	hashedPassword, err := hash.Hash(newPassword)

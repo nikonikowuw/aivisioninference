@@ -9,7 +9,8 @@ import {
 	MenuList,
 	Text,
 	useColorModeValue,
-	useColorMode
+	useColorMode,
+	useDisclosure,
 } from '@chakra-ui/react';
 import { SearchBar } from 'components/navbar/searchBar/SearchBar';
 import { SidebarResponsive } from 'components/sidebar/Sidebar';
@@ -19,6 +20,7 @@ import { IoMdMoon, IoMdSunny } from 'react-icons/io';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { useSidebar } from 'contexts/SidebarContext';
+import ProfileModal from 'components/profile/ProfileModal';
 
 export default function HeaderLinks(props: { secondary: boolean; [key: string]: any }) {
 	const { secondary } = props;
@@ -27,6 +29,7 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 	const navigate = useNavigate();
 	const { t } = useTranslation();
 	const { sidebarRoutes: routes } = useSidebar();
+	const { isOpen: isProfileOpen, onOpen: onProfileOpen, onClose: onProfileClose } = useDisclosure();
 
 	const navbarIcon = useColorModeValue('gray.400', 'white');
 	const menuBg = useColorModeValue('white', 'navy.800');
@@ -106,6 +109,15 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 						<MenuItem
 							_hover={{ bg: 'none' }}
 							_focus={{ bg: 'none' }}
+							borderRadius='8px'
+							px='14px'
+							onClick={onProfileOpen}
+						>
+							<Text fontSize='sm'>{t('common:profile.title')}</Text>
+						</MenuItem>
+						<MenuItem
+							_hover={{ bg: 'none' }}
+							_focus={{ bg: 'none' }}
 							color='red.400'
 							borderRadius='8px'
 							px='14px'
@@ -116,6 +128,13 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 					</Flex>
 				</MenuList>
 			</Menu>
+			{user && (
+				<ProfileModal
+					isOpen={isProfileOpen}
+					onClose={onProfileClose}
+					user={user}
+				/>
+			)}
 		</Flex>
 	);
 }

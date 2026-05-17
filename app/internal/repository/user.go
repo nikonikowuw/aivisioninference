@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -24,10 +25,31 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+// WithTx returns a new UserRepository scoped to the given transaction.
+func (r *UserRepository) WithTx(tx *gorm.DB) *UserRepository {
+	return &UserRepository{db: tx}
+}
+
+// Transaction executes fn within a database transaction, providing the fn
+// with a UserRepository scoped to the transaction.
+func (r *UserRepository) Transaction(ctx context.Context, fn func(txRepo *UserRepository) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(r.WithTx(tx))
+	})
+}
+
 // FindByID finds a user by its ID.
 func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
 	var item model.User
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
+	return &item, err
+}
+
+// FindByIDForUpdate finds a user by ID and acquires a row-level lock (SELECT ... FOR UPDATE).
+// Must be called within a transaction.
+func (r *UserRepository) FindByIDForUpdate(ctx context.Context, id string) (*model.User, error) {
+	var item model.User
+	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
@@ -99,6 +121,30 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 func (r *UserRepository) CountByUsername(ctx context.Context, username string, excludeID string) (int64, error) {
 	var count int64
 	query := r.db.WithContext(ctx).Model(&model.User{}).Where("username = ?", username)
+	if excludeID != "" {
+		query = query.Where("id != ?", excludeID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// CountByEmail 统计指定邮箱的用户数量，可排除指定 ID。
+// 参数:
+//
+//	ctx - 上下文，用于链路追踪与超时控制
+//	email - 目标邮箱地址
+//	excludeID - 需要排除的用户 ID（用于更新时排除自身）
+//
+// 返回值:
+//
+//	int64 - 匹配的用户数量
+//	error - 数据库异常时返回
+func (r *UserRepository) CountByEmail(ctx context.Context, email string, excludeID string) (int64, error) {
+	if email == "" {
+		return 0, nil
+	}
+	var count int64
+	query := r.db.WithContext(ctx).Model(&model.User{}).Where("LOWER(email) = LOWER(?)", email)
 	if excludeID != "" {
 		query = query.Where("id != ?", excludeID)
 	}

@@ -44,7 +44,7 @@ func NewWSHandler(hub *ws.Hub, jwt *jwtutil.Manager) *WSHandler {
 // @Produce      json
 // @Param        token  query  string  true  "JWT access token"
 // @Success      101    {object}  string
-// @Failure      200    {object}  dto.Response
+// @Failure      401    {object}  dto.Response
 // @Router       /ws [get]
 func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	// Extract JWT from query parameter

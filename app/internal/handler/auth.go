@@ -31,7 +31,7 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 // @Produce      json
 // @Param        body  body  dto.LoginRequest  true  "登录信息"
 // @Success      200   {object}  dto.Response{data=dto.LoginResponse}
-// @Failure      200   {object}  dto.Response
+// @Failure      401   {object}  dto.Response
 // @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
@@ -62,7 +62,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Tags         认证管理
 // @Produce      json
 // @Success      200  {object}  dto.Response{data=dto.RefreshResponse}
-// @Failure      200  {object}  dto.Response
+// @Failure      401  {object}  dto.Response
 // @Router       /auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
@@ -130,23 +130,50 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Tags         认证管理
 // @Produce      json
 // @Success      200  {object}  dto.Response{data=dto.UserInfo}
-// @Failure      200  {object}  dto.Response
+// @Failure      401  {object}  dto.Response
 // @Router       /auth/me [get]
 // @Security     BearerAuth
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, exists := c.Get(middleware.ContextKeyUserID)
-	if !exists {
-		attachError(c, apperrors.New(apperrors.ErrUnauthorized, ""))
-		return
-	}
-
-	uid, ok := userID.(string)
-	if !ok || uid == "" {
-		attachError(c, apperrors.New(apperrors.ErrUnauthorized, ""))
+	uid, ok := getUserID(c)
+	if !ok {
 		return
 	}
 
 	info, err := h.svc.GetMe(c.Request.Context(), uid)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+
+	response.OK(c, info)
+}
+
+// UpdateProfile 更新当前登录用户的个人资料
+//
+// @Summary      更新个人资料
+// @Description  允许当前用户更新自己的 display_name、email、avatar_url
+// @Tags         认证管理
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.UpdateProfileRequest  true  "个人资料信息"
+// @Success      200   {object}  dto.Response{data=dto.UserInfo}
+// @Failure      400   {object}  dto.Response
+// @Failure      401   {object}  dto.Response
+// @Router       /auth/profile [put]
+// @Security     BearerAuth
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	var req dto.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		return
+	}
+
+	uid, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	info, err := h.svc.UpdateProfile(c.Request.Context(), uid, &req)
 	if err != nil {
 		attachError(c, err)
 		return
@@ -164,7 +191,8 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // @Produce      json
 // @Param        body  body  dto.ChangePasswordRequest  true  "密码信息"
 // @Success      200   {object}  dto.Response
-// @Failure      200   {object}  dto.Response
+// @Failure      400   {object}  dto.Response
+// @Failure      401   {object}  dto.Response
 // @Router       /auth/change-password [post]
 // @Security     BearerAuth
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
@@ -174,15 +202,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get(middleware.ContextKeyUserID)
-	if !exists {
-		attachError(c, apperrors.New(apperrors.ErrUnauthorized, ""))
-		return
-	}
-
-	uid, ok := userID.(string)
-	if !ok || uid == "" {
-		attachError(c, apperrors.New(apperrors.ErrUnauthorized, ""))
+	uid, ok := getUserID(c)
+	if !ok {
 		return
 	}
 

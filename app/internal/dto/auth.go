@@ -57,3 +57,10 @@ type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=6"`
 }
+
+// UpdateProfileRequest 用户自助更新个人资料请求
+type UpdateProfileRequest struct {
+	DisplayName *string `json:"display_name"`
+	Email       *string `json:"email" binding:"omitempty,email"`
+	AvatarURL   *string `json:"avatar_url" binding:"omitempty,url"`
+}

@@ -13,6 +13,8 @@ const (
 	ErrCannotDisableSelf  = 10002
 	ErrHierarchyLevelUser = 10003
 	ErrHierarchyLevelRole = 10004
+	ErrEmailTaken         = 10005
+	ErrOldPasswordWrong   = 10006
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized      = 20001
@@ -37,6 +39,8 @@ var messages = map[int]string{
 	ErrCannotDisableSelf:  "不能禁用自己",
 	ErrHierarchyLevelUser: "没有权限操作同级或更高级别的用户",
 	ErrHierarchyLevelRole: "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
+	ErrEmailTaken:         "邮箱已被使用",
+	ErrOldPasswordWrong:   "旧密码错误",
 	ErrUnauthorized:       "未登录",
 	ErrTokenExpired:       "Token已过期",
 	ErrTokenInvalid:       "Token无效",

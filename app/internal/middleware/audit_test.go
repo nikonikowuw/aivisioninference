@@ -134,7 +134,7 @@ func TestAudit_RecordsAuthenticatedUserIdentity(t *testing.T) {
 }
 
 func TestTruncateAuditSummary_PreservesUTF8(t *testing.T) {
-	truncated := truncateAuditSummary("你好世界", 3)
+	truncated := TruncateAuditSummary("你好世界", 3)
 
 	require.True(t, utf8.ValidString(truncated))
 	require.Equal(t, "你好世", truncated)

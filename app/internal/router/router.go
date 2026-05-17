@@ -100,6 +100,7 @@ func (r *Router) setupRoutes() {
 	if err != nil {
 		zap.L().Fatal("create avatar storage failed", zap.Error(err))
 	}
+	auditSvc := service.NewAuditService(auditRepo)
 	authSvc := service.NewAuthService(userRepo, permRepo, r.rdb, r.jwtManager, avatarStorage)
 	userSvc := service.NewUserService(userRepo)
 	roleSvc := service.NewRoleService(roleRepo, userRepo, r.rdb)
@@ -115,15 +116,14 @@ func (r *Router) setupRoutes() {
 	permSvc := service.NewPermissionService(permRepo, permCache)
 	rbacCache := permCache
 	fileSvc := service.NewFileService(fileRepo)
-	auditSvc := service.NewAuditService(auditRepo)
 	taskSvc := service.NewTaskService(taskRepo)
 	dashSvc := service.NewDashboardService(dashRepo)
 
 	// Auth (no auth required)
-	authHandler := handler.NewAuthHandler(authSvc)
+	authHandler := handler.NewAuthHandler(authSvc, auditSvc)
 	v1.POST("/auth/login", authHandler.Login)
 	v1.POST("/auth/refresh", authHandler.Refresh)
-	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), authHandler.Logout)
+	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), middleware.Audit(auditSvc), authHandler.Logout)
 	v1.GET("/auth/me", middleware.Auth(r.jwtManager), authHandler.Me)
 	v1.PUT("/auth/password", middleware.Auth(r.jwtManager), authHandler.ChangePassword)
 	v1.PUT("/auth/profile", middleware.Auth(r.jwtManager), authHandler.UpdateProfile)

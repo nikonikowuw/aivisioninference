@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/middleware"
+	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
@@ -14,12 +18,13 @@ import (
 
 // AuthHandler handles authentication-related HTTP requests.
 type AuthHandler struct {
-	svc *service.AuthService
+	svc         *service.AuthService
+	auditLogger middleware.AuditLogger
 }
 
 // NewAuthHandler creates a new AuthHandler with the given dependencies.
-func NewAuthHandler(svc *service.AuthService) *AuthHandler {
-	return &AuthHandler{svc: svc}
+func NewAuthHandler(svc *service.AuthService, auditLogger middleware.AuditLogger) *AuthHandler {
+	return &AuthHandler{svc: svc, auditLogger: auditLogger}
 }
 
 // Login authenticates a user and returns a token pair.
@@ -34,17 +39,28 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 // @Failure      401   {object}  dto.Response
 // @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
+	start := time.Now()
+
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		h.writeLoginAuditLog(c, req.Username, start, http.StatusBadRequest)
 		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
 		return
 	}
 
 	result, err := h.svc.Login(c.Request.Context(), req)
 	if err != nil {
+		// 根据错误类型推断 HTTP 状态码
+		status := http.StatusUnauthorized
+		if appErr, ok := err.(*apperrors.AppError); ok {
+			status = middleware.AuditHTTPStatusFromCode(appErr.Code)
+		}
+		h.writeLoginAuditLog(c, req.Username, start, status)
 		attachError(c, err)
 		return
 	}
+
+	h.writeLoginAuditLog(c, req.Username, start, http.StatusOK)
 
 	c.SetCookie("refresh_token", result.RefreshToken, 7*24*3600, "/", "", httpx.IsSecureRequest(c), true)
 
@@ -53,6 +69,37 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		ExpiresIn:   result.ExpiresIn,
 		User:        result.User,
 	})
+}
+
+// writeLoginAuditLog 写入登录审计日志。
+func (h *AuthHandler) writeLoginAuditLog(c *gin.Context, username string, start time.Time, httpStatus int) {
+	if h.auditLogger == nil {
+		return
+	}
+
+	resultSummary := "success"
+	if httpStatus >= 400 {
+		resultSummary = "failed"
+	}
+
+	auditLog := &model.AuditLog{
+		ResourceType:   "auth",
+		RequestPath:    c.FullPath(),
+		RequestMethod:  http.MethodPost,
+		RequestIP:      c.ClientIP(),
+		UserAgent:      middleware.TruncateAuditSummary(c.Request.UserAgent(), 512),
+		Username:       username,
+		ResultSummary:  resultSummary,
+		ResponseStatus: httpStatus,
+		DurationMs:     time.Since(start).Milliseconds(),
+	}
+
+	if err := h.auditLogger.Create(c.Request.Context(), auditLog); err != nil {
+		zap.L().Warn("write login audit log failed",
+			zap.String("username", username),
+			zap.Error(err),
+		)
+	}
 }
 
 // Refresh rotates the refresh token and returns a new access token.

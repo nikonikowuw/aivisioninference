@@ -48,10 +48,10 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			RequestPath:    c.FullPath(),
 			RequestMethod:  c.Request.Method,
 			RequestIP:      c.ClientIP(),
-			UserAgent:      truncateAuditSummary(c.Request.UserAgent(), 512),
+			UserAgent:      TruncateAuditSummary(c.Request.UserAgent(), 512),
 			ResponseStatus: status,
 			DurationMs:     time.Since(start).Milliseconds(),
-			ResultSummary:  truncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
+			ResultSummary:  TruncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
 		}
 		if auditLog.RequestPath == "" {
 			auditLog.RequestPath = c.Request.URL.Path
@@ -119,13 +119,13 @@ func inferAuditResponseStatus(c *gin.Context) int {
 	}
 	var appErr *apperrors.AppError
 	if errors.As(lastErr.Err, &appErr) {
-		return auditHTTPStatusFromCode(appErr.Code)
+		return AuditHTTPStatusFromCode(appErr.Code)
 	}
 	return http.StatusInternalServerError
 }
 
-// auditHTTPStatusFromCode 按项目错误码区间映射 HTTP 状态码。
-func auditHTTPStatusFromCode(code int) int {
+// AuditHTTPStatusFromCode 按项目错误码区间映射 HTTP 状态码。
+func AuditHTTPStatusFromCode(code int) int {
 	switch {
 	case code >= 10000 && code < 20000:
 		return http.StatusBadRequest
@@ -152,8 +152,8 @@ func inferAuditResultSummary(status int) string {
 	return "failed"
 }
 
-// truncateAuditSummary 将审计摘要按字符数截断到数据库字段允许长度。
-func truncateAuditSummary(s string, maxLen int) string {
+// TruncateAuditSummary 将审计摘要按字符数截断到数据库字段允许长度。
+func TruncateAuditSummary(s string, maxLen int) string {
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s

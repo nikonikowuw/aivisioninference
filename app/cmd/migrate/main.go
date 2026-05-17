@@ -49,6 +49,9 @@ func main() {
 	if err := db.Exec(rootUsernameConstraintSQL()).Error; err != nil {
 		log.Fatalf("create root username constraint: %v", err)
 	}
+	if err := db.Exec(ensureAuditLogSummaryColumnsSQL()).Error; err != nil {
+		log.Fatalf("ensure audit summary columns: %v", err)
+	}
 
 	// Seed default data.
 	if err := seedData(db, cfg.Seed); err != nil {
@@ -72,6 +75,18 @@ BEGIN
 	END IF;
 END
 $$;`
+}
+
+// ensureAuditLogSummaryColumnsSQL 返回审计摘要字段的幂等迁移语句。
+func ensureAuditLogSummaryColumnsSQL() string {
+	return `
+	ALTER TABLE audit_logs
+		ADD COLUMN IF NOT EXISTS result_summary varchar(255),
+		ADD COLUMN IF NOT EXISTS error_summary varchar(255);`
+}
+
+func shouldCreateSeedAdmin(adminUsernameExists, adminEmailExists bool) bool {
+	return !adminUsernameExists && !adminEmailExists
 }
 
 // seedData inserts the default admin user, role, and permissions if they do not exist.
@@ -112,11 +127,15 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
 	}
 
 	// Check if full seed has been done (admin user exists).
-	var count int64
-	if err := db.Model(&model.User{}).Where("username = ?", seedCfg.Username).Count(&count).Error; err != nil {
+	var usernameCount int64
+	if err := db.Model(&model.User{}).Where("username = ?", seedCfg.Username).Count(&usernameCount).Error; err != nil {
 		return fmt.Errorf("count admin user: %w", err)
 	}
-	if count > 0 {
+	var emailCount int64
+	if err := db.Model(&model.User{}).Where("email = ?", seedCfg.Email).Count(&emailCount).Error; err != nil {
+		return fmt.Errorf("count admin email: %w", err)
+	}
+	if !shouldCreateSeedAdmin(usernameCount > 0, emailCount > 0) {
 		return nil
 	}
 

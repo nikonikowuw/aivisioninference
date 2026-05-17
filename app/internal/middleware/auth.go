@@ -16,6 +16,8 @@ const (
 	// ContextKeyUserID is used only for gin.Context.Set/Get in HTTP handlers/middleware.
 	// Do not use it with context.WithValue; for request context use model.ContextKeyUserID.
 	ContextKeyUserID = "user_id"
+	// ContextKeyUsername is the gin context key for the authenticated username.
+	ContextKeyUsername = "username"
 	// ContextKeyRoleIDs is the gin context key for the user's role IDs.
 	ContextKeyRoleIDs = "role_ids"
 	// ContextKeyIsRoot is the gin context key for whether the user is a root/superadmin.
@@ -52,6 +54,7 @@ func Auth(jwtManager *jwtutil.Manager) gin.HandlerFunc {
 
 		// Set user info in gin context
 		c.Set(ContextKeyUserID, claims.UserID)
+		c.Set(ContextKeyUsername, claims.Username)
 		c.Set(ContextKeyRoleIDs, claims.RoleIDs)
 		c.Set(ContextKeyIsRoot, claims.IsRoot)
 

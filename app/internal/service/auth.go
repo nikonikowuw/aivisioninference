@@ -41,10 +41,10 @@ type AuthService struct {
 // NewAuthService creates a new AuthService.
 func NewAuthService(userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, rdb *redis.Client, jwtManager *jwtutil.Manager) *AuthService {
 	return &AuthService{
-		userRepo:       userRepo,
-		permRepo:       permRepo,
-		rdb:            rdb,
-		jwtManager:     jwtManager,
+		userRepo:   userRepo,
+		permRepo:   permRepo,
+		rdb:        rdb,
+		jwtManager: jwtManager,
 	}
 }
 
@@ -73,7 +73,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
 
-	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, roleIDs, user.IsRoot)
+	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, user.Username, roleIDs, user.IsRoot)
 	if err != nil {
 		zap.L().Error("generate token pair failed", zap.String("user_id", user.ID), zap.Error(err))
 		return nil, errors.New(errors.ErrInternal, "")

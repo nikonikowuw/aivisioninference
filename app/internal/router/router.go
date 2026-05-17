@@ -129,6 +129,7 @@ func (r *Router) setupRoutes() {
 	// Protected routes
 	authorized := v1.Group("")
 	authorized.Use(middleware.Auth(r.jwtManager))
+	authorized.Use(middleware.Audit(auditSvc))
 
 	// Users
 	userHandler := handler.NewUserHandler(userSvc)

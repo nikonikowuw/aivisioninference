@@ -32,14 +32,14 @@ func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*
 	if req.StartTime != "" {
 		t, err := time.Parse(dto.DateTimeFormat, req.StartTime)
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("start_time 格式错误，应为 %s", dto.DateTimeFormat))
+			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("start_time format invalid, expected %s", dto.DateTimeFormat))
 		}
 		req.FromTime = &t
 	}
 	if req.EndTime != "" {
 		t, err := time.Parse(dto.DateTimeFormat, req.EndTime)
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("end_time 格式错误，应为 %s", dto.DateTimeFormat))
+			return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("end_time format invalid, expected %s", dto.DateTimeFormat))
 		}
 		req.ToTime = &t
 	}
@@ -61,8 +61,11 @@ func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*
 			RequestPath:    l.RequestPath,
 			RequestMethod:  l.RequestMethod,
 			RequestIP:      l.RequestIP,
+			UserAgent:      l.UserAgent,
 			ResponseStatus: l.ResponseStatus,
 			DurationMs:     l.DurationMs,
+			ResultSummary:  l.ResultSummary,
+			ErrorSummary:   l.ErrorSummary,
 			CreatedAt:      l.CreatedAt,
 		})
 	}

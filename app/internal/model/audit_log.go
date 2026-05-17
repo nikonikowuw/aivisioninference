@@ -21,6 +21,8 @@ type AuditLog struct {
 	RequestBody    string    `gorm:"type:text" json:"request_body"`
 	ResponseStatus int       `json:"response_status"`
 	DurationMs     int64     `json:"duration_ms"`
+	ResultSummary  string    `gorm:"type:varchar(255)" json:"result_summary"`
+	ErrorSummary   string    `gorm:"type:varchar(255)" json:"error_summary"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 

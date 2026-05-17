@@ -19,14 +19,16 @@ import (
 // Claims extends jwt.RegisteredClaims with application-specific fields.
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID  string   `json:"user_id"`
-	RoleIDs []string `json:"role_ids"`
-	IsRoot  bool     `json:"is_root"`
+	UserID   string   `json:"user_id"`
+	Username string   `json:"username"`
+	RoleIDs  []string `json:"role_ids"`
+	IsRoot   bool     `json:"is_root"`
 }
 
 // refreshTokenData is the JSON payload stored in Redis for refresh tokens.
 type refreshTokenData struct {
 	UserID    string   `json:"user_id"`
+	Username  string   `json:"username"`
 	RoleIDs   []string `json:"role_ids"`
 	ExpiresAt int64    `json:"expires_at"`
 	IsRoot    bool     `json:"is_root"`
@@ -56,15 +58,16 @@ func NewManager(secret, issuer, audience string, accessExpireSec, refreshExpireS
 
 // GenerateTokenPair creates an access_token (signed JWT) and a refresh_token
 // (random UUID stored in Redis).
-func (m *Manager) GenerateTokenPair(userID string, roleIDs []string, isRoot bool) (accessToken string, refreshToken string, expiresIn int, err error) {
+func (m *Manager) GenerateTokenPair(userID string, username string, roleIDs []string, isRoot bool) (accessToken string, refreshToken string, expiresIn int, err error) {
 	expiresIn = m.accessExpireSec
 	now := time.Now()
 
 	// Build access token claims
 	claims := &Claims{
-		UserID:  userID,
-		RoleIDs: roleIDs,
-		IsRoot:  isRoot,
+		UserID:   userID,
+		Username: username,
+		RoleIDs:  roleIDs,
+		IsRoot:   isRoot,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(expiresIn) * time.Second)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -89,6 +92,7 @@ func (m *Manager) GenerateTokenPair(userID string, roleIDs []string, isRoot bool
 	refreshKey := fmt.Sprintf("refresh:%s:%s", userID, refreshToken)
 	data := refreshTokenData{
 		UserID:    userID,
+		Username:  username,
 		RoleIDs:   roleIDs,
 		ExpiresAt: now.Add(time.Duration(m.refreshExpireSec) * time.Second).Unix(),
 		IsRoot:    isRoot,
@@ -185,7 +189,7 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 	}
 
 	var (
-		oldKey   string
+		oldKey    string
 		dataBytes []byte
 	)
 	for _, key := range keys {
@@ -227,10 +231,16 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 		return "", "", 0, fmt.Errorf("failed to set refresh token reuse marker: %w", err)
 	}
 
-	// old token is already consumed by GETDEL during rotation.
+	// 旧版 refresh token 不包含 Username 字段，轮换时降级为空值，
+	// 下次登录后自动补全。审计日志会以 user_id 兜底展示。
+	if data.Username == "" {
+		zap.L().Warn("refresh token missing username, will be empty until next login",
+			zap.String("user_id", userID),
+		)
+	}
 
 	// Generate new token pair.
-	accessToken, newRefreshToken, expiresIn, err = m.GenerateTokenPair(userID, data.RoleIDs, data.IsRoot)
+	accessToken, newRefreshToken, expiresIn, err = m.GenerateTokenPair(userID, data.Username, data.RoleIDs, data.IsRoot)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to generate new token pair: %w", err)
 	}
@@ -343,8 +353,8 @@ func (m *Manager) RevokeRefreshToken(userID, tokenID string) error {
 
 // Sentinel errors for the jwt package.
 var (
-	appErrTokenInvalid         = fmt.Errorf("令牌无效")
-	appErrTokenRevoked         = fmt.Errorf("令牌已被撤销")
-	appErrRefreshTokenExpired  = fmt.Errorf("刷新令牌已过期")
-	appErrRefreshTokenReuse    = fmt.Errorf("刷新令牌疑似重用")
+	appErrTokenInvalid        = fmt.Errorf("令牌无效")
+	appErrTokenRevoked        = fmt.Errorf("令牌已被撤销")
+	appErrRefreshTokenExpired = fmt.Errorf("刷新令牌已过期")
+	appErrRefreshTokenReuse   = fmt.Errorf("刷新令牌疑似重用")
 )

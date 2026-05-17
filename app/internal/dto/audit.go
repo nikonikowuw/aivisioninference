@@ -19,8 +19,11 @@ type AuditLogResponse struct {
 	RequestPath    string    `json:"request_path"`
 	RequestMethod  string    `json:"request_method"`
 	RequestIP      string    `json:"request_ip"`
+	UserAgent      string    `json:"user_agent"`
 	ResponseStatus int       `json:"response_status"`
 	DurationMs     int64     `json:"duration_ms"`
+	ResultSummary  string    `json:"result_summary"`
+	ErrorSummary   string    `json:"error_summary"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 

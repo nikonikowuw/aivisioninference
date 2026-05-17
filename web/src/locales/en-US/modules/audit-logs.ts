@@ -2,15 +2,17 @@ export const auditLogs = {
   title: 'Audit Logs',
   table: {
     columns: {
-      id: 'ID',
-      userId: 'User ID',
+      username: 'Operator',
       action: 'Action',
-      resourceType: 'Resource Type',
-      resourceId: 'Resource ID',
+      method: 'Method',
+      path: 'Path',
       ip: 'IP',
-      detail: 'Detail',
+      status: 'Status',
+      duration: 'Duration',
+      result: 'Result',
       time: 'Time',
     },
+    durationMs: '{{value}} ms',
   },
 } as const;
 

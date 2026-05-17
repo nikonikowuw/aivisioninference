@@ -134,12 +134,19 @@ export interface FileItem {
 
 export interface AuditLog {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  username: string;
   action: string;
   resource_type: string;
   resource_id: string;
-  detail: string;
-  ip: string;
+  request_path: string;
+  request_method: string;
+  request_ip: string;
+  user_agent: string;
+  response_status: number;
+  duration_ms: number;
+  result_summary: string;
+  error_summary: string;
   created_at: string;
 }
 

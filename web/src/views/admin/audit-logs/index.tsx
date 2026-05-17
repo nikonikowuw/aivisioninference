@@ -55,26 +55,28 @@ export default function AuditLogs() {
         <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>{t('table.columns.id')}</Th>
-              <Th>{t('table.columns.userId')}</Th>
+              <Th>{t('table.columns.username')}</Th>
               <Th>{t('table.columns.action')}</Th>
-              <Th>{t('table.columns.resourceType')}</Th>
-              <Th>{t('table.columns.resourceId')}</Th>
+              <Th>{t('table.columns.method')}</Th>
+              <Th>{t('table.columns.path')}</Th>
               <Th>{t('table.columns.ip')}</Th>
-              <Th>{t('table.columns.detail')}</Th>
+              <Th>{t('table.columns.status')}</Th>
+              <Th>{t('table.columns.duration')}</Th>
+              <Th>{t('table.columns.result')}</Th>
               <Th>{t('table.columns.time')}</Th>
             </Tr>
           </Thead>
           <Tbody>
             {logs.map((l) => (
               <Tr key={l.id}>
-                <Td>{l.id}</Td>
-                <Td>{l.user_id}</Td>
+                <Td>{l.username || l.user_id || '-'}</Td>
                 <Td><Badge colorScheme="blue">{l.action}</Badge></Td>
-                <Td>{l.resource_type}</Td>
-                <Td>{l.resource_id}</Td>
-                <Td>{l.ip}</Td>
-                <Td maxW="200px" isTruncated>{l.detail}</Td>
+                <Td>{l.request_method}</Td>
+                <Td maxW="240px" isTruncated>{l.request_path}</Td>
+                <Td>{l.request_ip}</Td>
+                <Td><Badge colorScheme={l.response_status >= 400 ? 'red' : 'green'}>{l.response_status}</Badge></Td>
+                <Td>{t('table.durationMs', { value: l.duration_ms ?? 0 })}</Td>
+                <Td maxW="200px" isTruncated>{l.error_summary || l.result_summary}</Td>
                 <Td whiteSpace="nowrap">{formatDateTime(l.created_at)}</Td>
               </Tr>
             ))}

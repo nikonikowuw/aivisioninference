@@ -2,15 +2,17 @@ export const auditLogs = {
   title: '稽核日誌',
   table: {
     columns: {
-      id: 'ID',
-      userId: '使用者ID',
+      username: '操作者',
       action: '操作',
-      resourceType: '資源類型',
-      resourceId: '資源ID',
+      method: '方法',
+      path: '路徑',
       ip: 'IP',
-      detail: '詳情',
+      status: '狀態碼',
+      duration: '耗時',
+      result: '結果',
       time: '時間',
     },
+    durationMs: '{{value}} ms',
   },
 } as const;
 

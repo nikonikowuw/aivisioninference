@@ -215,6 +215,9 @@ func (r *Router) setupRoutes() {
 	r.engine.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	// Static file serving for uploaded files
+	r.engine.Static("/uploads", "uploads")
 }
 
 // NewAsynqServer creates an Asynq server for task processing.

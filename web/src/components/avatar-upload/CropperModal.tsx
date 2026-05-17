@@ -53,15 +53,12 @@ export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete
       return;
     }
 
-    const scaleX = img.naturalWidth / img.width;
-    const scaleY = img.naturalHeight / img.height;
-
     ctx.drawImage(
       img,
-      area.x * scaleX,
-      area.y * scaleY,
-      area.width * scaleX,
-      area.height * scaleY,
+      area.x,
+      area.y,
+      area.width,
+      area.height,
       0,
       0,
       size,

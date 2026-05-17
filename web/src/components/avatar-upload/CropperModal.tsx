@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -11,7 +11,7 @@ import {
   Box,
   useToast,
 } from '@chakra-ui/react';
-import Cropper, { type Area } from 'react-easy-crop';
+import Cropper, { type Area, type Point } from 'react-easy-crop';
 import { useTranslation } from 'react-i18next';
 
 interface CropperModalProps {
@@ -24,10 +24,11 @@ interface CropperModalProps {
 export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete }: CropperModalProps) {
   const { t } = useTranslation('common');
   const toast = useToast();
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const cropAreaRef = useRef<Area | null>(null);
 
-  const onCropChange = useCallback((_: unknown, croppedArea: Area) => {
-    cropAreaRef.current = croppedArea;
+  const handleCropComplete = useCallback((_: unknown, croppedAreaPixels: Area) => {
+    cropAreaRef.current = croppedAreaPixels;
   }, []);
 
   const handleConfirm = useCallback(async () => {
@@ -92,9 +93,11 @@ export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete
           <Box position="relative" w="100%" h="300px">
             <Cropper
               image={imageSrc}
+              crop={crop}
+              onCropChange={setCrop}
               cropShape="round"
               aspect={1}
-              onCropComplete={onCropChange}
+              onCropComplete={handleCropComplete}
             />
           </Box>
         </ModalBody>

@@ -187,6 +187,7 @@ export interface Permission {
 export interface FileItem {
   id: string;
   name: string;
+  original_name: string;
   mime_type: string;
   size: number;
   created_at: string;
@@ -196,6 +197,7 @@ export interface AuditLog {
   id: string;
   user_id: string | null;
   username: string;
+  action_type: string;
   resource_type: string;
   resource_id: string;
   request_path: string;

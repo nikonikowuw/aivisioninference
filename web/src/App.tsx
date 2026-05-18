@@ -20,7 +20,7 @@ export default function Main() {
               <AdminLayout theme={currentTheme} setTheme={setCurrentTheme} />
             }
           />
-          <Route path="/" element={<Navigate to="/admin/default" replace />} />
+          <Route path="/" element={<Navigate to="/auth/sign-in" replace />} />
         </Routes>
       </AuthProvider>
     </ChakraProvider>

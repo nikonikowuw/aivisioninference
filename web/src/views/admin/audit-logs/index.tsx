@@ -99,8 +99,8 @@ export default function AuditLogs() {
         ]}
         dateRange
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
-        <Table variant="simple">
+      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
+        <Table variant="simple" size="sm" minW="900px">
           <Thead>
             <Tr>
               <Th>{t('table.columns.username')}</Th>

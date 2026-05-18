@@ -74,6 +74,8 @@ function getDescendantIds(nodes: Permission[], id: string): Set<string> {
 export default function Permissions() {
   const { t } = useTranslation('modules/permissions');
   const { t: tCommon } = useTranslation('common');
+  const { t: tMenu } = useTranslation('menu');
+  const { t: tPerm } = useTranslation('permission');
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
@@ -170,6 +172,14 @@ export default function Permissions() {
 
   const leafBg = useColorModeValue('gray.50', 'whiteAlpha.50');
 
+  const getPermissionName = (p: Permission) => {
+    if (p.type === 'menu') {
+      return tMenu(p.code, { defaultValue: p.name });
+    }
+    const key = p.code.replace(':', '.');
+    return tPerm(key, { defaultValue: p.name });
+  };
+
   const renderTree = (nodes: FilteredNode[], depth = 0) =>
     nodes.map((p) => (
       <Box key={p.id} ml={depth * 4} mb={2}>
@@ -181,7 +191,7 @@ export default function Permissions() {
                   <AccordionButton px={2} py={2}>
                     <Box flex="1" textAlign="left">
                       <HStack>
-                        <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{p.name}</Text>
+                        <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{getPermissionName(p)}</Text>
                         <Badge colorScheme="blue">{p.code}</Badge>
                         <Badge colorScheme="gray">{p.type}</Badge>
                       </HStack>
@@ -196,7 +206,7 @@ export default function Permissions() {
             ) : (
               <Box py={2} px={4} borderRadius="8px" bg={leafBg}>
                 <HStack>
-                  <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{p.name}</Text>
+                  <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{getPermissionName(p)}</Text>
                   <Badge colorScheme="blue">{p.code}</Badge>
                   <Badge colorScheme="gray">{p.type}</Badge>
                 </HStack>
@@ -267,7 +277,7 @@ export default function Permissions() {
                 <option value="">{t('form.parentId.none')}</option>
                 {flatMenuOptions.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {'　'.repeat(p._depth)}{p.name} ({p.code})
+                    {'　'.repeat(p._depth)}{getPermissionName(p)} ({p.code})
                   </option>
                 ))}
               </Select>

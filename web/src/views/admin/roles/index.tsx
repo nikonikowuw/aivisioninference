@@ -70,6 +70,17 @@ function getDescendantIds(nodes: Permission[], id: string): string[] {
 export default function Roles() {
   const { t } = useTranslation('modules/roles');
   const { t: tCommon } = useTranslation('common');
+  const { t: tMenu } = useTranslation('menu');
+  const { t: tPerm } = useTranslation('permission');
+
+  const getPermissionName = (p: Permission) => {
+    if (p.type === 'menu') {
+      return tMenu(p.code, { defaultValue: p.name });
+    }
+    const key = p.code.replace(':', '.');
+    return tPerm(key, { defaultValue: p.name });
+  };
+
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
@@ -220,7 +231,7 @@ export default function Roles() {
             onChange={() => togglePerm(p.id)}
             mb={1}
           >
-            {p.name} ({p.code})
+            {getPermissionName(p)} ({p.code})
           </Checkbox>
           {p.children && renderPermTree(p.children, depth + 1)}
         </Box>

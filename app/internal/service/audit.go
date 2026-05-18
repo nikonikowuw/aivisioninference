@@ -51,6 +51,7 @@ func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*
 			ID:             l.ID,
 			UserID:         l.UserID,
 			Username:       l.Username,
+			ActionType:     l.ActionType,
 			ResourceType:   l.ResourceType,
 			ResourceID:     l.ResourceID,
 			RequestPath:    l.RequestPath,

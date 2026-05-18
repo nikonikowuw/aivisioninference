@@ -58,6 +58,9 @@ func main() {
 	if err := db.Exec(migrateAuditLogResultSummarySQL()).Error; err != nil {
 		log.Fatalf("migrate audit log result summary: %v", err)
 	}
+	if err := db.Exec(addAuditLogActionTypeColumnSQL()).Error; err != nil {
+		log.Fatalf("add audit log action type column: %v", err)
+	}
 
 	// Seed default data.
 	if err := seedData(db, cfg.Seed); err != nil {
@@ -125,6 +128,13 @@ func migrateAuditLogResultSummarySQL() string {
 		END IF;
 	END
 	$$;`
+}
+
+// addAuditLogActionTypeColumnSQL 添加操作类型字段到审计日志表。
+func addAuditLogActionTypeColumnSQL() string {
+	return `
+	ALTER TABLE audit_logs
+		ADD COLUMN IF NOT EXISTS action_type varchar(128);`
 }
 
 func shouldCreateSeedAdmin(adminUsernameExists, adminEmailExists bool) bool {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 )
 
 const maxAuditSummaryLength = 255
@@ -43,6 +44,8 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 		c.Next()
 
 		status := inferAuditResponseStatus(c)
+		lang := c.GetString(ContextKeyLang)
+		actionKey := inferAuditActionType(c.Request.Method, inferAuditResourceType(c.Request.URL.Path))
 		auditLog := &model.AuditLog{
 			ResourceType:   inferAuditResourceType(c.Request.URL.Path),
 			RequestPath:    c.FullPath(),
@@ -52,6 +55,7 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			ResponseStatus: status,
 			DurationMs:     time.Since(start).Milliseconds(),
 			ResultSummary:  TruncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
+			ActionType:     i18n.TranslateAction(lang, actionKey),
 		}
 		if auditLog.RequestPath == "" {
 			auditLog.RequestPath = c.Request.URL.Path
@@ -103,6 +107,35 @@ func inferAuditResourceType(path string) string {
 		return parts[2]
 	}
 	return parts[0]
+}
+
+// methodActions 定义 HTTP 方法对应的 i18n action key。
+var methodActions = map[string]string{
+	"GET":    "view",
+	"POST":   "create",
+	"PUT":    "update",
+	"PATCH":  "update",
+	"DELETE": "delete",
+}
+
+// inferAuditActionType 根据 HTTP 方法和资源类型生成 i18n key。
+// 格式: action.{method}.{resource}
+// 示例: action.create.users, action.view.roles
+func inferAuditActionType(method, resourceType string) string {
+	action, ok := methodActions[method]
+	if !ok {
+		action = "operate"
+	}
+
+	// 特殊路径处理
+	if resourceType == "auth" {
+		if method == "POST" {
+			return i18n.ActionLogin
+		}
+		return i18n.ActionAuth
+	}
+
+	return "action." + action + "." + resourceType
 }
 
 // inferAuditResponseStatus 推断审计应记录的最终响应状态码。

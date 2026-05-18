@@ -11,6 +11,7 @@ type AuditLog struct {
 	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID         *string   `gorm:"type:uuid" json:"user_id"`
 	Username       string    `gorm:"type:varchar(64)" json:"username"`
+	ActionType     string    `gorm:"type:varchar(128)" json:"action_type"`
 	ResourceType   string    `gorm:"type:varchar(64)" json:"resource_type"`
 	ResourceID     string    `gorm:"type:varchar(64)" json:"resource_id"`
 	RequestPath    string    `gorm:"type:varchar(512)" json:"request_path"`

@@ -75,7 +75,6 @@ export default function Permissions() {
   const { t } = useTranslation('modules/permissions');
   const { t: tCommon } = useTranslation('common');
   const { t: tMenu } = useTranslation('menu');
-  const { t: tPerm } = useTranslation('permission');
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
@@ -176,8 +175,7 @@ export default function Permissions() {
     if (p.type === 'menu') {
       return tMenu(p.code, { defaultValue: p.name });
     }
-    const key = p.code.replace(':', '.');
-    return tPerm(key, { defaultValue: p.name });
+    return p.name;
   };
 
   const renderTree = (nodes: FilteredNode[], depth = 0) =>

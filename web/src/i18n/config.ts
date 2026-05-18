@@ -32,6 +32,7 @@ export const NAMESPACES = [
   'layout',
   'auth',
   'menu',
+  'permission',
   'modules/dashboard',
   'modules/users',
   'modules/roles',

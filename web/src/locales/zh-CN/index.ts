@@ -2,6 +2,7 @@ import { common } from './common';
 import { layout } from './layout';
 import { auth } from './auth';
 import { menu } from './menu';
+import { permission } from './permission';
 import { dashboard } from './modules/dashboard';
 import { users } from './modules/users';
 import { roles } from './modules/roles';
@@ -15,6 +16,7 @@ export default {
   layout,
   auth,
   menu,
+  permission,
   'modules/dashboard': dashboard,
   'modules/users': users,
   'modules/roles': roles,

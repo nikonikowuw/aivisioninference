@@ -104,6 +104,7 @@ export default function AuditLogs() {
           <Thead>
             <Tr>
               <Th>{t('table.columns.username')}</Th>
+              <Th>{t('table.columns.actionType')}</Th>
               <Th>{t('table.columns.method')}</Th>
               <Th>{t('table.columns.path')}</Th>
               <Th>{t('table.columns.ip')}</Th>
@@ -117,6 +118,7 @@ export default function AuditLogs() {
             {logs.map((l) => (
               <Tr key={l.id}>
                 <Td>{l.username || l.user_id || '-'}</Td>
+                <Td>{t(`actionTypes.${l.action_type}`, { defaultValue: l.action_type || '-' })}</Td>
                 <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method}</Badge></Td>
                 <Td maxW="240px" isTruncated>{l.request_path}</Td>
                 <Td>{l.request_ip}</Td>

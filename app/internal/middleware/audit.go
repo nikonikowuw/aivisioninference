@@ -44,8 +44,6 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 		c.Next()
 
 		status := inferAuditResponseStatus(c)
-		lang := c.GetString(ContextKeyLang)
-		actionKey := inferAuditActionType(c.Request.Method, inferAuditResourceType(c.Request.URL.Path))
 		auditLog := &model.AuditLog{
 			ResourceType:   inferAuditResourceType(c.Request.URL.Path),
 			RequestPath:    c.FullPath(),
@@ -55,7 +53,7 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			ResponseStatus: status,
 			DurationMs:     time.Since(start).Milliseconds(),
 			ResultSummary:  TruncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
-			ActionType:     i18n.TranslateAction(lang, actionKey),
+			ActionType:     inferAuditActionType(c.Request.Method, inferAuditResourceType(c.Request.URL.Path)),
 		}
 		if auditLog.RequestPath == "" {
 			auditLog.RequestPath = c.Request.URL.Path

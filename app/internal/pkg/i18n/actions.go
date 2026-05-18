@@ -23,6 +23,7 @@ const (
 	ActionCreateTasks     = "action.create.tasks"
 	ActionUpdateTasks     = "action.update.tasks"
 	ActionDeleteTasks     = "action.delete.tasks"
+	ActionViewDashboard   = "action.view.dashboard"
 	ActionLogin           = "action.login"
 	ActionAuth            = "action.auth"
 )
@@ -51,6 +52,7 @@ var actionStorage = map[string]map[string]string{
 		"action.create.tasks":     "Create task",
 		"action.update.tasks":     "Update task",
 		"action.delete.tasks":     "Delete task",
+		"action.view.dashboard":   "View dashboard",
 		"action.login":            "User login",
 		"action.auth":             "Auth operation",
 	},
@@ -76,6 +78,7 @@ var actionStorage = map[string]map[string]string{
 		"action.create.tasks":     "创建任务",
 		"action.update.tasks":     "更新任务",
 		"action.delete.tasks":     "删除任务",
+		"action.view.dashboard":   "查看仪表盘",
 		"action.login":            "用户登录",
 		"action.auth":             "认证操作",
 	},
@@ -101,6 +104,7 @@ var actionStorage = map[string]map[string]string{
 		"action.create.tasks":     "建立任務",
 		"action.update.tasks":     "更新任務",
 		"action.delete.tasks":     "刪除任務",
+		"action.view.dashboard":   "檢視儀表板",
 		"action.login":            "使用者登入",
 		"action.auth":             "認證操作",
 	},

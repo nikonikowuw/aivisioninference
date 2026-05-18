@@ -3,7 +3,6 @@ module github.com/niko-admin/niko-admin
 go 1.26.0
 
 require (
-	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/golang-jwt/jwt/v5 v5.3.1

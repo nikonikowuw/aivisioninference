@@ -72,7 +72,7 @@ export default function Dashboard(props: { [x: string]: any }) {
 
   const { onOpen } = useDisclosure();
 
-  const sidebarWidth = collapsed ? '80px' : '290px';
+  const sidebarWidth = collapsed ? '80px' : '260px';
 
   return (
     <Box>

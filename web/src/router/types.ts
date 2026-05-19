@@ -18,11 +18,13 @@ export interface RouteConfig {
 }
 
 // 侧边栏路由项（用于 Sidebar Links）
-// 注意：这个类型必须与全局 RoutesType 兼容
+// 预期最大嵌套深度：2 层（父菜单 → 子菜单），UI 对更深层级不做保证
 export interface SidebarRouteType {
+  key: string;
   name: string;
   layout: string;
   path: string;
   icon?: ReactNode;
   secondary?: boolean;
+  items?: SidebarRouteType[];
 }

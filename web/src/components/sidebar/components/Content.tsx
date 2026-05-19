@@ -3,8 +3,9 @@ import { Box, Flex, Stack } from '@chakra-ui/react';
 //   Custom components
 import Brand from 'components/sidebar/components/Brand';
 import Links from 'components/sidebar/components/Links';
+import type { SidebarRouteType } from '../../../router/types';
 
-function SidebarContent(props: { routes: RoutesType[]; collapsed: boolean }) {
+function SidebarContent(props: { routes: SidebarRouteType[]; collapsed: boolean }) {
 	const { routes, collapsed } = props;
 
 	return (

@@ -8,7 +8,7 @@ import { Route, RouteProps } from 'react-router-dom';
 import { Icon } from '@chakra-ui/react';
 import * as Icons from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
-import { RouteConfig } from './types';
+import { RouteConfig, SidebarRouteType } from './types';
 import type { Menu } from '../services/api';
 
 // 菜单 code 到组件的映射
@@ -117,15 +117,31 @@ export function generateAuthRoutes(): React.ReactNode[] {
  * 生成侧边栏路由（兼容旧版 Links.tsx）
  * @param t - 翻译函数
  */
-export function generateSidebarRoutes(t: (key: string) => string): RoutesType[] {
-  return adminRoutes.map((route) => ({
-    name: t(route.i18nKey),
-    layout: route.layout,
-    path: route.path,
-    icon: getIconComponent(route.icon),
-    secondary: route.secondary || false,
-    component: null, // Sidebar 不需要 component
-  }));
+export function generateSidebarRoutes(t: (key: string) => string): SidebarRouteType[] {
+  const mapRoutes = (routes: RouteConfig[], depth = 0): SidebarRouteType[] => {
+    const result: SidebarRouteType[] = [];
+    for (const route of routes) {
+      if (route.hidden) {
+        // 隐藏父路由但不隐藏其子路由
+        if (route.children && route.children.length > 0) {
+          result.push(...mapRoutes(route.children, depth));
+        }
+        continue;
+      }
+      const fullPath = route.layout + route.path;
+      result.push({
+        key: route.id || fullPath,
+        name: t(route.i18nKey),
+        layout: route.layout,
+        path: route.path,
+        icon: getIconComponent(route.icon),
+        secondary: route.secondary || false,
+        items: depth < 1 && route.children ? mapRoutes(route.children, depth + 1) : undefined,
+      });
+    }
+    return result;
+  };
+  return mapRoutes(adminRoutes);
 }
 
 /**
@@ -140,25 +156,32 @@ function normalizePath(p: string): string {
 export function generateSidebarRoutesFromMenus(
   menus: Menu[],
   t: (key: string, options?: { defaultValue?: string }) => string,
-): RoutesType[] {
-  const flattenMenus = (menuList: Menu[]): RoutesType[] => {
-    const result: RoutesType[] = [];
+): SidebarRouteType[] {
+  const mapMenus = (menuList: Menu[], depth = 0): SidebarRouteType[] => {
+    const result: SidebarRouteType[] = [];
     for (const menu of menuList) {
+      if (menu.hidden) {
+        if (menu.children && menu.children.length > 0) {
+          result.push(...mapMenus(menu.children, depth));
+        }
+        continue;
+      }
       result.push({
+        // 兼容旧客户端或后端可能返回数字 ID 的情况，强制转换为 string
+        key: String(menu.id || menu.code),
         name: t(`menu:${menu.code}`, { defaultValue: menu.name }),
         layout: '/admin',
         path: `/${normalizePath(menu.path)}`,
         icon: getIconComponent(menu.icon),
         secondary: false,
-        component: null,
+        items: depth < 1 && menu.children && menu.children.length > 0
+          ? mapMenus(menu.children, depth + 1)
+          : undefined,
       });
-      if (menu.children && menu.children.length > 0) {
-        result.push(...flattenMenus(menu.children));
-      }
     }
     return result;
   };
-  return flattenMenus(menus);
+  return mapMenus(menus);
 }
 
 /**
@@ -221,31 +244,49 @@ export function getActiveRouteFromMenus(
 }
 
 /**
- * 获取激活的路由名称
+ * 获取激活的路由名称（递归遍历嵌套子路由）
  */
 export function getActiveRoute(
   routes: RouteConfig[],
   pathname: string,
   t: (key: string) => string
 ): string {
-  for (const route of routes) {
-    if (pathname.includes(route.path)) {
-      return t(route.i18nKey);
+  const find = (items: RouteConfig[]): string | null => {
+    for (const route of items) {
+      const fullPath = route.layout + route.path;
+      // 优先检查子路由以获得更高的匹配精确度
+      if (route.children) {
+        const child = find(route.children);
+        if (child) return child;
+      }
+      if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
+        return t(route.i18nKey);
+      }
     }
-  }
-  return t('layout.sidebar.dashboard');
+    return null;
+  };
+  return find(routes) || t('layout.sidebar.dashboard');
 }
 
 /**
- * 获取激活的导航栏配置
+ * 获取激活的导航栏配置（递归遍历嵌套子路由）
  */
 export function getActiveNavbar(routes: RouteConfig[], pathname: string): boolean {
-  for (const route of routes) {
-    if (pathname.includes(route.path)) {
-      return route.secondary || false;
+  const find = (items: RouteConfig[]): boolean | null => {
+    for (const route of items) {
+      const fullPath = route.layout + route.path;
+      // 优先检查子路由
+      if (route.children) {
+        const child = find(route.children);
+        if (child !== null) return child;
+      }
+      if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
+        return route.secondary || false;
+      }
     }
-  }
-  return false;
+    return null;
+  };
+  return find(routes) ?? false;
 }
 
 // 导出所有路由配置

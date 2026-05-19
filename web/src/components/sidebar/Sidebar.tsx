@@ -16,6 +16,7 @@ import {
 } from '@chakra-ui/react';
 import Content from 'components/sidebar/components/Content';
 import { renderThumb, renderTrack, renderView } from 'components/scrollbar/Scrollbar';
+import type { SidebarRouteType } from '../../router/types';
 import { Scrollbars } from 'react-custom-scrollbars-2';
 import { useSidebar } from 'contexts/SidebarContext';
 
@@ -25,7 +26,7 @@ import { IoMenuOutline } from 'react-icons/io5';
 const SIDEBAR_W = '260px';
 const SIDEBAR_COLLAPSED_W = '80px';
 
-function Sidebar(props: { routes: RoutesType[]; [x: string]: any }) {
+function Sidebar(props: { routes: SidebarRouteType[]; [x: string]: any }) {
 	const { routes } = props;
 	const { collapsed } = useSidebar();
 
@@ -58,7 +59,7 @@ function Sidebar(props: { routes: RoutesType[]; [x: string]: any }) {
 	);
 }
 
-export function SidebarResponsive(props: { routes: RoutesType[] }) {
+export function SidebarResponsive(props: { routes: SidebarRouteType[] }) {
 	let sidebarBackgroundColor = useColorModeValue('white', 'navy.800');
 	let menuColor = useColorModeValue('gray.400', 'white');
 	const { isOpen, onOpen, onClose } = useDisclosure();

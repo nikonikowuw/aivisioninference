@@ -45,7 +45,7 @@ import { useFilter } from 'hooks/useFilter';
 import { parseOptionalNumber } from 'utils/convert';
 
 export default function Users() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
   const { t } = useTranslation('modules/users');
   const { t: tCommon } = useTranslation('common');
   const textColor = useColorModeValue('navy.700', 'white');
@@ -266,15 +266,23 @@ export default function Users() {
           <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <Box textAlign="center" mb={4}>
-              <AvatarUploader
-                value={avatarUrl}
-                onChange={(url) => setAvatarUrl(url)}
-                userId={editing?.id}
-                name={form.display_name || form.username}
-                size={80}
-              />
-            </Box>
+            {editing && (
+              <Box textAlign="center" mb={4}>
+                <AvatarUploader
+                  value={avatarUrl}
+                  onChange={async (url) => {
+                    setAvatarUrl(url);
+                    // 编辑的是当前用户时，同步 auth context 使侧边栏头像立即更新
+                    if (editing.id === currentUser?.id) {
+                      await refreshUser();
+                    }
+                  }}
+                  userId={editing.id}
+                  name={form.display_name || form.username}
+                  size={80}
+                />
+              </Box>
+            )}
             <FormControl mb={4}>
               <FormLabel>{t('form.username.label')}</FormLabel>
               <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder={t('form.username.placeholder')} />

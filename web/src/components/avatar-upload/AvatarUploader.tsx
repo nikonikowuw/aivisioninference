@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Avatar,
   Box,
@@ -41,6 +41,12 @@ export default function AvatarUploader({
   const [uploading, setUploading] = useState(false);
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const hoverBg = useColorModeValue('gray.50', 'gray.700');
+
+  // 使用 ref 保存最新的 userId，避免 useCallback 闭包捕获过期值
+  const userIdRef = useRef(userId);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: unknown[]) => {
@@ -88,8 +94,9 @@ export default function AvatarUploader({
       setUploading(true);
       try {
         let result: { avatar_url: string };
-        if (userId) {
-          result = await usersApi.uploadAvatar(userId, file);
+        const currentUserId = userIdRef.current;
+        if (currentUserId) {
+          result = await usersApi.uploadAvatar(currentUserId, file);
         } else {
           result = await authApi.uploadAvatar(file);
         }
@@ -103,7 +110,7 @@ export default function AvatarUploader({
         setUploading(false);
       }
     },
-    [userId, onChange, toast, t],
+    [onChange, toast, t],
   );
 
   return (

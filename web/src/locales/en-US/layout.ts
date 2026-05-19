@@ -2,11 +2,13 @@ export const layout = {
   sidebar: {
     dashboard: 'Dashboard',
     userManagement: 'User Management',
-    roleManagement: 'Role Management',
-    permissionManagement: 'Permission Management',
-    fileManagement: 'File Management',
+    users: 'Users',
+    roles: 'Roles',
+    permissions: 'Permissions',
+    systemManagement: 'System Management',
+    files: 'Files',
     auditLogs: 'Audit Logs',
-    taskManagement: 'Task Management',
+    tasks: 'Tasks',
     noAccess: 'No access',
   },
   navbar: {

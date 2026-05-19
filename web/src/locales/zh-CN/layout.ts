@@ -2,11 +2,13 @@ export const layout = {
   sidebar: {
     dashboard: '仪表盘',
     userManagement: '用户管理',
-    roleManagement: '角色管理',
-    permissionManagement: '权限管理',
-    fileManagement: '文件管理',
+    users: '用户',
+    roles: '角色',
+    permissions: '权限',
+    systemManagement: '系统管理',
+    files: '文件',
     auditLogs: '审计日志',
-    taskManagement: '任务管理',
+    tasks: '任务',
     noAccess: '暂无访问权限',
   },
   navbar: {

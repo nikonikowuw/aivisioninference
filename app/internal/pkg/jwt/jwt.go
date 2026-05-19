@@ -124,12 +124,12 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 		return m.secret, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", appErrTokenInvalid, err)
+		return nil, fmt.Errorf("%w: %v", ErrTokenInvalid, err)
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
-		return nil, appErrTokenInvalid
+		return nil, ErrTokenInvalid
 	}
 
 	// Check blacklist
@@ -142,7 +142,7 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("failed to check token blacklist: %w", err)
 	}
 	if exists > 0 {
-		return nil, appErrTokenRevoked
+		return nil, ErrTokenRevoked
 	}
 
 	return claims, nil
@@ -180,12 +180,12 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 			if revokeErr := m.RevokeAllRefreshTokens(ctx, reusedBy); revokeErr != nil {
 				return "", "", 0, fmt.Errorf("failed to revoke reused refresh tokens: %w", revokeErr)
 			}
-			return "", "", 0, appErrRefreshTokenReuse
+			return "", "", 0, ErrRefreshTokenReuse
 		}
 		if getErr != nil && getErr != redis.Nil {
 			return "", "", 0, fmt.Errorf("failed to check refresh token reuse marker: %w", getErr)
 		}
-		return "", "", 0, appErrRefreshTokenExpired
+		return "", "", 0, ErrRefreshTokenExpired
 	}
 
 	var (
@@ -213,12 +213,12 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 			if revokeErr := m.RevokeAllRefreshTokens(ctx, reusedBy); revokeErr != nil {
 				return "", "", 0, fmt.Errorf("failed to revoke reused refresh tokens: %w", revokeErr)
 			}
-			return "", "", 0, appErrRefreshTokenReuse
+			return "", "", 0, ErrRefreshTokenReuse
 		}
 		if getErr != nil && getErr != redis.Nil {
 			return "", "", 0, fmt.Errorf("failed to check refresh token reuse marker: %w", getErr)
 		}
-		return "", "", 0, appErrRefreshTokenExpired
+		return "", "", 0, ErrRefreshTokenExpired
 	}
 
 	var data refreshTokenData
@@ -266,7 +266,7 @@ func (m *Manager) RevokeAccessToken(ctx context.Context, tokenString string) err
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		return appErrTokenInvalid
+		return ErrTokenInvalid
 	}
 
 	// Calculate remaining TTL
@@ -353,8 +353,8 @@ func (m *Manager) RevokeRefreshToken(userID, tokenID string) error {
 
 // Sentinel errors for the jwt package.
 var (
-	appErrTokenInvalid        = fmt.Errorf("令牌无效")
-	appErrTokenRevoked        = fmt.Errorf("令牌已被撤销")
-	appErrRefreshTokenExpired = fmt.Errorf("刷新令牌已过期")
-	appErrRefreshTokenReuse   = fmt.Errorf("刷新令牌疑似重用")
+	ErrTokenInvalid        = fmt.Errorf("令牌无效")
+	ErrTokenRevoked        = fmt.Errorf("令牌已被撤销")
+	ErrRefreshTokenExpired = fmt.Errorf("刷新令牌已过期")
+	ErrRefreshTokenReuse   = fmt.Errorf("刷新令牌疑似重用")
 )

@@ -15,20 +15,21 @@ const (
 	ErrHierarchyLevelRole = 10004
 	ErrEmailTaken         = 10005
 	ErrOldPasswordWrong   = 10006
-	ErrStartTimeFormat     = 10008
-	ErrEndTimeFormat       = 10009
-	ErrTimeRangeOrder      = 10010
-	ErrFileTooLarge        = 10011
-	ErrFileInvalidType     = 10012
+	ErrStartTimeFormat    = 10008
+	ErrEndTimeFormat      = 10009
+	ErrTimeRangeOrder     = 10010
+	ErrFileTooLarge       = 10011
+	ErrFileInvalidType    = 10012
 
 	// Auth errors (2xxxx).
-	ErrUnauthorized      = 20001
-	ErrTokenExpired      = 20002
-	ErrTokenInvalid      = 20003
-	ErrRefreshTokenReuse = 20403
+	ErrUnauthorized            = 20001
+	ErrTokenExpired            = 20002
+	ErrTokenInvalid            = 20003
+	ErrRefreshTokenReuse       = 20004
 
-	// Forbidden (3xxxx).
-	ErrForbidden = 30001
+	// Forbidden / CORS (3xxxx).
+	ErrForbidden        = 30001
+	ErrOriginNotAllowed = 30002
 
 	// Not found (4xxxx).
 	ErrNotFound = 40001
@@ -39,25 +40,26 @@ const (
 
 // Standard error messages keyed by code.
 var messages = map[int]string{
-	Success:               "success",
-	ErrBadRequest:         "请求参数错误",
-	ErrCannotDisableSelf:  "不能禁用自己",
-	ErrHierarchyLevelUser: "没有权限操作同级或更高级别的用户",
-	ErrHierarchyLevelRole: "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
-	ErrEmailTaken:         "邮箱已被使用",
-	ErrOldPasswordWrong:   "旧密码错误",
-	ErrStartTimeFormat:    "开始时间格式错误",
-	ErrEndTimeFormat:      "结束时间格式错误",
-	ErrTimeRangeOrder:     "开始时间不能晚于结束时间",
-	ErrFileTooLarge:       "文件大小超过限制",
-	ErrFileInvalidType:    "不支持的文件类型",
-	ErrUnauthorized:       "未登录",
-	ErrTokenExpired:       "Token已过期",
-	ErrTokenInvalid:       "Token无效",
-	ErrRefreshTokenReuse:  "Token已被复用",
-	ErrForbidden:          "无权限",
-	ErrNotFound:           "资源不存在",
-	ErrInternal:           "服务器内部错误",
+	Success:                    "success",
+	ErrBadRequest:              "请求参数错误",
+	ErrCannotDisableSelf:       "不能禁用自己",
+	ErrHierarchyLevelUser:      "没有权限操作同级或更高级别的用户",
+	ErrHierarchyLevelRole:      "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
+	ErrEmailTaken:              "邮箱已被使用",
+	ErrOldPasswordWrong:        "旧密码错误",
+	ErrStartTimeFormat:         "开始时间格式错误",
+	ErrEndTimeFormat:           "结束时间格式错误",
+	ErrTimeRangeOrder:          "开始时间不能晚于结束时间",
+	ErrFileTooLarge:            "文件大小超过限制",
+	ErrFileInvalidType:         "不支持的文件类型",
+	ErrUnauthorized:            "未登录",
+	ErrTokenExpired:            "Token已过期",
+	ErrTokenInvalid:            "Token无效",
+	ErrRefreshTokenReuse:       "Token已被复用",
+	ErrForbidden:               "无权限",
+	ErrOriginNotAllowed:        "请求来源不被允许",
+	ErrNotFound:                "资源不存在",
+	ErrInternal:                "服务器内部错误",
 }
 
 // AppError represents a business-level error with a code and message.
@@ -87,4 +89,13 @@ func New(code int, msg string) *AppError {
 // Newf creates a new AppError with a formatted message.
 func Newf(code int, format string, args ...interface{}) *AppError {
 	return New(code, fmt.Sprintf(format, args...))
+}
+
+// DefaultMessage returns the default message for a business error code.
+// Falls back to "未知错误" if the code is not registered.
+func DefaultMessage(code int) string {
+	if m, ok := messages[code]; ok {
+		return m
+	}
+	return "未知错误"
 }

@@ -4,6 +4,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/response"
 )
 
 // CORS returns a Gin middleware that configures Cross-Origin Resource Sharing
@@ -34,10 +38,16 @@ func CORS(allowOrigins []string) gin.HandlerFunc {
 
 		// 检查 Origin 是否允许
 		if !allowAll && !originSet[origin] {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    30001,
-				"message": "请求来源不被允许",
-			})
+			zap.L().Warn("cors origin rejected",
+				zap.String("origin", origin),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+				zap.String("client_ip", c.ClientIP()),
+				zap.String("user_agent", c.Request.UserAgent()),
+				zap.String("request_id", c.GetHeader("X-Request-ID")),
+			)
+			c.Abort()
+			response.Err(c, apperrors.New(apperrors.ErrOriginNotAllowed, ""))
 			return
 		}
 

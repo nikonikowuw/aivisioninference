@@ -1,6 +1,30 @@
 import i18n from '../i18n';
 import SparkMD5 from 'spark-md5';
 
+/**
+ * 根据错误码获取翻译后的错误消息
+ * 后端只返回错误码，前端根据当前语言翻译
+ * 前置条件：调用方已确保 code !== 0（成功码不应调用此函数）
+ */
+export function getErrorMessage(code: number): string {
+  if (code === 0) return '';
+  const key = `common:message.error.${code}`;
+  const msg = i18n.t(key);
+  return msg === key ? i18n.t('common:message.serverError') : msg;
+}
+
+export class ApiError extends Error {
+  code: number;
+  status: number;
+
+  constructor(code: number, message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
 function computeMD5(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunkSize = 2 * 1024 * 1024;
@@ -72,7 +96,8 @@ async function request<T>(
       localStorage.removeItem('access_token');
       window.location.href = '/auth/sign-in';
     }
-    throw new Error(json.message || '请求失败');
+    // 使用前端翻译的错误消息
+    throw new ApiError(json.code, getErrorMessage(json.code), response.status);
   }
 
   return json.data;
@@ -119,16 +144,22 @@ export const authApi = {
       body: formData,
     });
     if (!response.ok) {
-      let msg = `上传失败 (HTTP ${response.status})`;
+      let msg = `Upload failed (HTTP ${response.status})`;
+      let code = 50001; // Internal server error as default
       try {
         const errJson = await response.json();
-        if (errJson.message) msg = errJson.message;
+        if (errJson.code !== undefined && errJson.code !== 0) {
+          code = errJson.code;
+          msg = getErrorMessage(errJson.code);
+        } else if (errJson.message) {
+          msg = errJson.message;
+        }
       } catch { /* ignore */ }
-      throw new Error(msg);
+      throw new ApiError(code, msg, response.status);
     }
     const json: ApiResponse<{ avatar_url: string }> = await response.json();
     if (json.code !== 0) {
-      throw new Error(json.message || 'Upload failed');
+      throw new ApiError(json.code, getErrorMessage(json.code), response.status);
     }
     return json.data;
   },
@@ -142,6 +173,7 @@ export interface Menu {
   path: string;
   icon: string;
   sort_order: number;
+  hidden?: boolean;
   children?: Menu[];
 }
 
@@ -305,16 +337,22 @@ export const usersApi = {
       body: formData,
     });
     if (!response.ok) {
-      let msg = `上传失败 (HTTP ${response.status})`;
+      let msg = `Upload failed (HTTP ${response.status})`;
+      let code = 50001; // Internal server error as default
       try {
         const errJson = await response.json();
-        if (errJson.message) msg = errJson.message;
+        if (errJson.code !== undefined && errJson.code !== 0) {
+          code = errJson.code;
+          msg = getErrorMessage(errJson.code);
+        } else if (errJson.message) {
+          msg = errJson.message;
+        }
       } catch { /* ignore */ }
-      throw new Error(msg);
+      throw new ApiError(code, msg, response.status);
     }
     const json: ApiResponse<{ avatar_url: string }> = await response.json();
     if (json.code !== 0) {
-      throw new Error(json.message || 'Upload failed');
+      throw new ApiError(json.code, getErrorMessage(json.code), response.status);
     }
     return json.data;
   },
@@ -381,7 +419,9 @@ export const filesApi = {
       });
       const errBody = await res.json().catch(() => null) as ApiResponse | null;
       if (!res.ok || (errBody && errBody.code !== 0)) {
-        throw new Error(errBody?.message || `分片上传失败 (chunk ${i}, HTTP ${res.status})`);
+        const code = errBody?.code || 50001;
+        const msg = errBody?.code ? getErrorMessage(errBody.code) : `Chunk upload failed (chunk ${i}, HTTP ${res.status})`;
+        throw new ApiError(code, msg, res.status);
       }
       onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
     }

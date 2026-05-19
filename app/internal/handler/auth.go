@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
+	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -121,7 +123,14 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	accessToken, newRefreshToken, expiresIn, err := h.svc.RefreshTokens(c.Request.Context(), refreshToken)
 	if err != nil {
 		zap.L().Warn("refresh token failed", zap.Error(err))
-		attachError(c, apperrors.New(apperrors.ErrTokenInvalid, "刷新令牌无效或已过期"))
+		switch {
+		case errors.Is(err, jwtutil.ErrRefreshTokenReuse):
+			attachError(c, apperrors.New(apperrors.ErrRefreshTokenReuse, "刷新令牌已被复用，所有设备已强制登出"))
+		case errors.Is(err, jwtutil.ErrRefreshTokenExpired):
+			attachError(c, apperrors.New(apperrors.ErrTokenExpired, "刷新令牌已过期"))
+		default:
+			attachError(c, apperrors.New(apperrors.ErrTokenInvalid, "刷新令牌无效或已过期"))
+		}
 		return
 	}
 

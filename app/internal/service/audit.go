@@ -5,6 +5,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
@@ -29,7 +30,7 @@ type ListResult struct {
 //
 // 【核心功能】查询审计日志列表，支持关键字、操作类型、资源类型、时间范围等筛选条件。
 // 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
-func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*ListResult, error) {
+func (s *AuditService) List(ctx context.Context, lang string, req dto.ListAuditLogRequest) (*ListResult, error) {
 	// 解析时间范围参数
 	if req.StartTime != "" || req.EndTime != "" {
 		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
@@ -51,7 +52,7 @@ func (s *AuditService) List(ctx context.Context, req dto.ListAuditLogRequest) (*
 			ID:             l.ID,
 			UserID:         l.UserID,
 			Username:       l.Username,
-			ActionType:     l.ActionType,
+			ActionType:     i18n.TranslateAction(lang, l.ActionType),
 			ResourceType:   l.ResourceType,
 			ResourceID:     l.ResourceID,
 			RequestPath:    l.RequestPath,

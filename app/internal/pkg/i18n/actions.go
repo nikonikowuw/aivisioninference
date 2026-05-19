@@ -25,6 +25,7 @@ const (
 	ActionDeleteTasks     = "action.delete.tasks"
 	ActionViewDashboard   = "action.view.dashboard"
 	ActionLogin           = "action.login"
+	ActionLogout          = "action.logout"
 	ActionAuth            = "action.auth"
 )
 
@@ -54,6 +55,7 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.tasks":     "Delete task",
 		"action.view.dashboard":   "View dashboard",
 		"action.login":            "User login",
+		"action.logout":           "User logout",
 		"action.auth":             "Auth operation",
 	},
 	"zh": {
@@ -80,6 +82,7 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.tasks":     "删除任务",
 		"action.view.dashboard":   "查看仪表盘",
 		"action.login":            "用户登录",
+		"action.logout":           "用户登出",
 		"action.auth":             "认证操作",
 	},
 	"zh-tw": {
@@ -106,6 +109,7 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.tasks":     "刪除任務",
 		"action.view.dashboard":   "檢視儀表板",
 		"action.login":            "使用者登入",
+		"action.logout":           "使用者登出",
 		"action.auth":             "認證操作",
 	},
 }

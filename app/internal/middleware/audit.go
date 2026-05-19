@@ -53,7 +53,7 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			ResponseStatus: status,
 			DurationMs:     time.Since(start).Milliseconds(),
 			ResultSummary:  TruncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
-			ActionType:     inferAuditActionType(c.Request.Method, inferAuditResourceType(c.Request.URL.Path)),
+			ActionType:     inferAuditActionType(c.Request.Method, inferAuditResourceType(c.Request.URL.Path), c.Request.URL.Path),
 		}
 		if auditLog.RequestPath == "" {
 			auditLog.RequestPath = c.Request.URL.Path
@@ -119,7 +119,7 @@ var methodActions = map[string]string{
 // inferAuditActionType 根据 HTTP 方法和资源类型生成 i18n key。
 // 格式: action.{method}.{resource}
 // 示例: action.create.users, action.view.roles
-func inferAuditActionType(method, resourceType string) string {
+func inferAuditActionType(method, resourceType, path string) string {
 	action, ok := methodActions[method]
 	if !ok {
 		action = "operate"
@@ -128,6 +128,10 @@ func inferAuditActionType(method, resourceType string) string {
 	// 特殊路径处理
 	if resourceType == "auth" {
 		if method == "POST" {
+			// 区分登录和登出
+			if strings.Contains(path, "/logout") {
+				return i18n.ActionLogout
+			}
 			return i18n.ActionLogin
 		}
 		return i18n.ActionAuth

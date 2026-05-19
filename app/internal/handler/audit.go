@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
+	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -42,7 +43,10 @@ func (h *AuditHandler) List(c *gin.Context) {
 		return
 	}
 
-	result, err := h.svc.List(c.Request.Context(), req)
+	lang, _ := c.Get(middleware.ContextKeyLang)
+	langStr, _ := lang.(string)
+
+	result, err := h.svc.List(c.Request.Context(), langStr, req)
 	if err != nil {
 		attachError(c, err)
 		return

@@ -13,6 +13,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 	jwtutil "github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -94,6 +95,7 @@ func (h *AuthHandler) writeLoginAuditLog(c *gin.Context, username string, start 
 		ResultSummary:  resultSummary,
 		ResponseStatus: httpStatus,
 		DurationMs:     time.Since(start).Milliseconds(),
+		ActionType:     i18n.ActionLogin,
 	}
 
 	if err := h.auditLogger.Create(c.Request.Context(), auditLog); err != nil {

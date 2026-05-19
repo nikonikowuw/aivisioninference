@@ -54,7 +54,7 @@ export default function Users() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchUsers = useCallback((p: number, ps: number) => {
     return usersApi.list({
@@ -174,6 +174,7 @@ export default function Users() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'status',

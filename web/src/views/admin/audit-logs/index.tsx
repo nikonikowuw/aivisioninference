@@ -41,7 +41,7 @@ export default function AuditLogs() {
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchLogs = useCallback((p: number, ps: number) => {
     return auditLogsApi.list({
@@ -76,6 +76,7 @@ export default function AuditLogs() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'resource_type',

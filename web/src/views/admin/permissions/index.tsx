@@ -87,7 +87,7 @@ export default function Permissions() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { filters, setFilter, resetFilters } = useFilter();
+  const { filters, setFilter, resetFilters, refresh } = useFilter();
 
   // 使用 filterTree 过滤树数据
   const filteredTree = useMemo(() => {
@@ -233,6 +233,7 @@ export default function Permissions() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'type',

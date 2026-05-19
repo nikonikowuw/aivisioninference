@@ -86,7 +86,7 @@ export default function Roles() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPermOpen, onOpen: onPermOpen, onClose: onPermClose } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchRoles = useCallback((p: number, ps: number) => {
     return rolesApi.list({
@@ -250,6 +250,7 @@ export default function Roles() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'status',

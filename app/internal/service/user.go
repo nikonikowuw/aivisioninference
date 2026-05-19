@@ -132,3 +132,37 @@ func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRo
 	}
 	return nil
 }
+
+// ResetPassword allows admin to reset a user's password without old password.
+func (s *UserService) ResetPassword(ctx context.Context, targetUserID, password, currentUserID string, isRoot bool) error {
+	// 不能通过此接口重置自己的密码
+	if targetUserID == currentUserID {
+		return apperrors.New(apperrors.ErrBadRequest, "不能重置自己的密码，请使用修改密码功能")
+	}
+
+	// 检查目标用户存在
+	_, err := s.userRepo.FindByID(ctx, targetUserID)
+	if err != nil {
+		return apperrors.New(apperrors.ErrNotFound, "用户不存在")
+	}
+
+	// 层级权限校验
+	if err := checkUserHierarchy(ctx, s.userRepo, currentUserID, targetUserID, isRoot, true); err != nil {
+		return err
+	}
+
+	// 哈希密码
+	hashedPassword, err := hash.Hash(password)
+	if err != nil {
+		zap.L().Error("hash password failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
+
+	// 更新密码
+	if err := s.userRepo.UpdatePassword(ctx, targetUserID, hashedPassword); err != nil {
+		zap.L().Error("reset password failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
+
+	return nil
+}

@@ -340,6 +340,11 @@ export const usersApi = {
     }),
   delete: (id: string) =>
     request(`/users/${id}`, { method: 'DELETE' }),
+  resetPassword: (id: string, password: string) =>
+    request(`/users/${id}/password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password }),
+    }),
   uploadAvatar: async (userId: string, file: File): Promise<{ avatar_url: string }> => {
     const formData = new FormData();
     formData.append('avatar', file);

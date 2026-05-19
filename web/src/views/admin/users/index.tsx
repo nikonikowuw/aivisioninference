@@ -105,14 +105,19 @@ export default function Users() {
   const handleSave = async () => {
     try {
       if (editing) {
-        const updateData: Partial<User> & { password?: string } = {
+        // 更新基本信息
+        const updateData: Partial<User> = {
           username: form.username,
           display_name: form.display_name,
           email: form.email,
-          password: form.password,
         };
-        if (!form.password) delete updateData.password;
         await usersApi.update(editing.id, updateData);
+
+        // 如果填写了密码，单独调用重置密码接口
+        if (form.password) {
+          await usersApi.resetPassword(editing.id, form.password);
+        }
+
         toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
         await usersApi.create(form as Partial<User>);

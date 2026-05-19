@@ -55,7 +55,7 @@ type RefreshResponse struct {
 // ChangePasswordRequest is the password change request body.
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=6"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=72"`
 }
 
 // UpdateProfileRequest 用户自助更新个人资料请求

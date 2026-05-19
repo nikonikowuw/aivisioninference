@@ -40,3 +40,8 @@ func (r *UserListRequest) FilterScopes() []scopes.Scope {
 	}
 	return sc
 }
+
+// ResetPasswordRequest is the request body for admin password reset.
+type ResetPasswordRequest struct {
+	Password string `json:"password" binding:"required,min=6,max=72"`
+}

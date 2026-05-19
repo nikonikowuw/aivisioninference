@@ -160,6 +160,42 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// ResetPassword allows admin to reset a user's password.
+//
+// @Summary      重置用户密码
+// @Description  管理员重置指定用户的密码（不需要旧密码）
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string                    true  "用户 ID"
+// @Param        body  body   dto.ResetPasswordRequest  true  "新密码"
+// @Success      200   {object}  dto.Response
+// @Failure      400   {object}  dto.Response
+// @Failure      403   {object}  dto.Response
+// @Failure      404   {object}  dto.Response
+// @Router       /users/{id}/password [put]
+// @Security     BearerAuth
+func (h *UserHandler) ResetPassword(c *gin.Context) {
+	id := c.Param("id")
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
+	isRoot, _ := isRootVal.(bool)
+
+	if err := h.svc.ResetPassword(c.Request.Context(), id, req.Password, uid, isRoot); err != nil {
+		attachError(c, err)
+		return
+	}
+
+	response.OK(c, nil)
+}
+
 // UploadAvatar handles avatar upload for a specific user (admin action).
 //
 // @Summary      管理员上传用户头像

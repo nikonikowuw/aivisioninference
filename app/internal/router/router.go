@@ -152,6 +152,7 @@ func (r *Router) setupRoutes() {
 		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
 		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
 		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
+		users.PUT("/:id/password", middleware.RBAC(rbacCache, r.db), userHandler.ResetPassword)
 		users.POST("/:id/avatar", middleware.RBAC(rbacCache, r.db), userHandler.UploadAvatar)
 	}
 

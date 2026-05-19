@@ -6,21 +6,24 @@ package model
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // User represents a system user with authentication and role associations.
 type User struct {
 	BaseModel
-	Username      string     `gorm:"type:varchar(64);uniqueIndex;not null" json:"username"`
-	Password      string     `gorm:"type:varchar(256);not null" json:"-"`
-	Email         string     `gorm:"type:varchar(128);uniqueIndex" json:"email"`
-	DisplayName   string     `gorm:"type:varchar(128)" json:"display_name"`
-	AvatarURL     string     `gorm:"type:varchar(512)" json:"avatar_url"`
-	Status        int        `gorm:"type:smallint;default:1" json:"status"`
-	LoginAttempts int        `gorm:"default:0" json:"-"`
-	LockedUntil   *time.Time `json:"-"`
-	IsRoot        bool       `gorm:"default:false" json:"is_root"`
-	Roles         []Role     `gorm:"many2many:user_roles;" json:"roles,omitempty"`
+	Username      string         `gorm:"type:varchar(64);uniqueIndex:idx_user_username;not null" json:"username"`
+	Password      string         `gorm:"type:varchar(256);not null" json:"-"`
+	Email         string         `gorm:"type:varchar(128);uniqueIndex:idx_user_email" json:"email"`
+	DisplayName   string         `gorm:"type:varchar(128)" json:"display_name"`
+	AvatarURL     string         `gorm:"type:varchar(512)" json:"avatar_url"`
+	Status        int            `gorm:"type:smallint;default:1" json:"status"`
+	LoginAttempts int            `gorm:"default:0" json:"-"`
+	LockedUntil   *time.Time     `json:"-"`
+	IsRoot        bool           `gorm:"default:false" json:"is_root"`
+	Roles         []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`
+	DeletedAt     gorm.DeletedAt `gorm:"uniqueIndex:idx_user_username;uniqueIndex:idx_user_email" json:"-"`
 }
 
 // SortableFields returns the fields allowed for sorting.

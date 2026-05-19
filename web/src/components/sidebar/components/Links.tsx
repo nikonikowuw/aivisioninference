@@ -65,8 +65,11 @@ export function SidebarLinks(props: {
 		return routes.map((route: SidebarRouteType, index: number) => {
 			if (route.layout === '/admin' || route.layout === '/auth' || route.layout === '/rtl') {
 				const fullPath = route.layout + route.path;
-				const isActive = activeRoute(fullPath);
 				const hasItems = route.items && route.items.length > 0;
+				// 父菜单 active = 任意子项 active
+				const isActive = hasItems
+					? route.items!.some((item) => activeRoute(item.layout + item.path))
+					: activeRoute(fullPath);
 				const isOpen = openMenus[route.key];
 
 				const linkContent = hasItems ? (

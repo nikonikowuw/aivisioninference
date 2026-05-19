@@ -10,7 +10,7 @@ export interface RouteConfig {
   path: string;
   i18nKey: string; // 用于侧边栏菜单的翻译键
   icon: string; // 图标名称，用于动态导入
-  component: () => Promise<{ default: ComponentType<any> }>;
+  component?: () => Promise<{ default: ComponentType<any> }>; // 父菜单（分组）可不提供
   layout: '/admin' | '/auth' | '/rtl';
   secondary?: boolean;
   hidden?: boolean; // 是否在侧边栏隐藏

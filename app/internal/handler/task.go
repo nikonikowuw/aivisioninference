@@ -4,7 +4,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -33,7 +32,7 @@ func NewTaskHandler(svc *service.TaskService) *TaskHandler {
 func (h *TaskHandler) Create(c *gin.Context) {
 	var req dto.CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
@@ -63,7 +62,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 func (h *TaskHandler) List(c *gin.Context) {
 	var req dto.TaskListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 

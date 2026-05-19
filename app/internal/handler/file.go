@@ -38,7 +38,7 @@ func NewFileHandler(svc *service.FileService) *FileHandler {
 func (h *FileHandler) InitUpload(c *gin.Context) {
 	var req dto.InitUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
@@ -147,7 +147,7 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 func (h *FileHandler) CheckFile(c *gin.Context) {
 	var req dto.CheckFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
@@ -178,7 +178,7 @@ func (h *FileHandler) CheckFile(c *gin.Context) {
 func (h *FileHandler) List(c *gin.Context) {
 	var req dto.FileListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 

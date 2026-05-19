@@ -13,6 +13,14 @@ export function getErrorMessage(code: number): string {
   return msg === key ? i18n.t('common:message.serverError') : msg;
 }
 
+function resolveApiErrorMessage(code: number, backendMessage?: string): string {
+  // 参数校验错误优先展示后端具体提示，避免前端只显示“请求参数错误”。
+  if (code === 10001 && backendMessage && backendMessage.trim() !== '') {
+    return backendMessage;
+  }
+  return getErrorMessage(code);
+}
+
 export class ApiError extends Error {
   code: number;
   status: number;
@@ -97,7 +105,11 @@ async function request<T>(
       window.location.href = '/auth/sign-in';
     }
     // 使用前端翻译的错误消息
-    throw new ApiError(json.code, getErrorMessage(json.code), response.status);
+    throw new ApiError(
+      json.code,
+      resolveApiErrorMessage(json.code, json.message),
+      response.status,
+    );
   }
 
   return json.data;
@@ -150,7 +162,7 @@ export const authApi = {
         const errJson = await response.json();
         if (errJson.code !== undefined && errJson.code !== 0) {
           code = errJson.code;
-          msg = getErrorMessage(errJson.code);
+          msg = resolveApiErrorMessage(errJson.code, errJson.message);
         } else if (errJson.message) {
           msg = errJson.message;
         }
@@ -159,7 +171,11 @@ export const authApi = {
     }
     const json: ApiResponse<{ avatar_url: string }> = await response.json();
     if (json.code !== 0) {
-      throw new ApiError(json.code, getErrorMessage(json.code), response.status);
+      throw new ApiError(
+        json.code,
+        resolveApiErrorMessage(json.code, json.message),
+        response.status,
+      );
     }
     return json.data;
   },
@@ -343,7 +359,7 @@ export const usersApi = {
         const errJson = await response.json();
         if (errJson.code !== undefined && errJson.code !== 0) {
           code = errJson.code;
-          msg = getErrorMessage(errJson.code);
+          msg = resolveApiErrorMessage(errJson.code, errJson.message);
         } else if (errJson.message) {
           msg = errJson.message;
         }
@@ -352,7 +368,11 @@ export const usersApi = {
     }
     const json: ApiResponse<{ avatar_url: string }> = await response.json();
     if (json.code !== 0) {
-      throw new ApiError(json.code, getErrorMessage(json.code), response.status);
+      throw new ApiError(
+        json.code,
+        resolveApiErrorMessage(json.code, json.message),
+        response.status,
+      );
     }
     return json.data;
   },
@@ -420,7 +440,9 @@ export const filesApi = {
       const errBody = await res.json().catch(() => null) as ApiResponse | null;
       if (!res.ok || (errBody && errBody.code !== 0)) {
         const code = errBody?.code || 50001;
-        const msg = errBody?.code ? getErrorMessage(errBody.code) : `Chunk upload failed (chunk ${i}, HTTP ${res.status})`;
+        const msg = errBody?.code
+          ? resolveApiErrorMessage(errBody.code, errBody.message)
+          : `Chunk upload failed (chunk ${i}, HTTP ${res.status})`;
         throw new ApiError(code, msg, res.status);
       }
       onProgress?.(Math.round(((i + 1) / totalChunks) * 100));

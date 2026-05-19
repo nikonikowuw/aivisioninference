@@ -6,6 +6,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
 )
 
 // attachError 将错误挂载到 Gin Context，供全局错误中间件统一响应。
@@ -13,6 +14,14 @@ func attachError(c *gin.Context, err error) {
 	if attachErr := c.Error(err); attachErr != nil {
 		zap.L().Warn("attach gin error failed", zap.Error(attachErr))
 	}
+}
+
+// badRequestError wraps request binding/validation errors into a localized AppError.
+func badRequestError(c *gin.Context, err error) error {
+	// lang key is injected by i18n middleware; if missing, validator layer defaults to English.
+	lang, _ := c.Get(middleware.ContextKeyLang)
+	langStr, _ := lang.(string)
+	return apperrors.New(apperrors.ErrBadRequest, validatorx.TranslateValidationError(err, langStr))
 }
 
 // getUserID extracts the authenticated user ID from the Gin context.

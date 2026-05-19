@@ -86,17 +86,27 @@ export function generateRoutes(routes: RouteConfig[]): React.ReactNode[] {
   const activeKeys = routes.map((route) => `route:${route.id || route.path}`);
   pruneLazyCache(activeKeys);
 
-  return routes.map((route, index) => {
+  const result: React.ReactNode[] = [];
+  for (let index = 0; index < routes.length; index++) {
+    const route = routes[index];
+    // 父菜单（无 component）递归处理子路由
+    if (!route.component) {
+      if (route.children && route.children.length > 0) {
+        result.push(...generateRoutes(route.children));
+      }
+      continue;
+    }
     const cacheKey = `route:${route.id || route.path}`;
     const LazyComponent = createLazyComponent(cacheKey, route.component);
-    return (
+    result.push(
       <Route
         key={route.id || index}
         path={route.path}
         element={<LazyComponent />}
       />
     );
-  });
+  }
+  return result;
 }
 
 /**
@@ -129,6 +139,7 @@ export function generateSidebarRoutes(t: (key: string) => string): SidebarRouteT
         continue;
       }
       const fullPath = route.layout + route.path;
+      const hasChildren = route.children && route.children.length > 0;
       result.push({
         key: route.id || fullPath,
         name: t(route.i18nKey),
@@ -136,7 +147,7 @@ export function generateSidebarRoutes(t: (key: string) => string): SidebarRouteT
         path: route.path,
         icon: getIconComponent(route.icon),
         secondary: route.secondary || false,
-        items: depth < 1 && route.children ? mapRoutes(route.children, depth + 1) : undefined,
+        items: depth < 1 && hasChildren ? mapRoutes(route.children!, depth + 1) : undefined,
       });
     }
     return result;

@@ -1,5 +1,4 @@
-import { Flex, Text, useColorModeValue, Icon, Box } from '@chakra-ui/react';
-import { RiCommandFill } from 'react-icons/ri';
+import { Flex, Text, useColorModeValue, Image } from '@chakra-ui/react';
 
 // Custom components
 import { HSeparator } from 'components/separator/Separator';
@@ -14,22 +13,11 @@ export function SidebarBrand(props: { collapsed?: boolean }) {
 				alignItems='center'
 				justifyContent='flex-start'
 				w='100%'
-				ps={collapsed ? '22px' : '28px'}
+				ps={collapsed ? '24px' : '28px'}
 				py='36px'
 				gap='12px'
 				transition='all 0.3s cubic-bezier(0.685, 0.0473, 0.346, 1)'>
-				<Box
-					display='flex'
-					alignItems='center'
-					justifyContent='center'
-					w='36px'
-					h='36px'
-					minW='36px'
-					borderRadius='10px'
-					bgGradient='linear(to-br, brand.400, brand.600)'
-					boxShadow='0px 4px 10px rgba(67, 24, 255, 0.25)'>
-					<Icon as={RiCommandFill} w='20px' h='20px' color='white' />
-				</Box>
+				<Image src='/favicon.ico' w='32px' h='32px' minW='32px' />
 				{!collapsed && (
 					<Text
 						display='flex'

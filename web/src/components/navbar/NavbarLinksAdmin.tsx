@@ -11,12 +11,14 @@ import {
 	useColorModeValue,
 	useColorMode,
 	useDisclosure,
+	HStack,
 } from '@chakra-ui/react';
 import { SearchBar } from 'components/navbar/searchBar/SearchBar';
 import { SidebarResponsive } from 'components/sidebar/Sidebar';
 import { useAuth } from 'contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { IoMdMoon, IoMdSunny } from 'react-icons/io';
+import { FiUser, FiLogOut, FiLock } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../i18n/LanguageSwitcher';
 import { useSidebar } from 'contexts/SidebarContext';
@@ -113,7 +115,10 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 							px='14px'
 							onClick={onProfileOpen}
 						>
-							<Text fontSize='sm'>{t('common:profile.title')}</Text>
+							<HStack spacing="10px">
+								<Icon as={FiUser} boxSize={4} />
+								<Text fontSize='sm'>{t('common:profile.title')}</Text>
+							</HStack>
 						</MenuItem>
 						<MenuItem
 							_hover={{ bg: 'none' }}
@@ -123,7 +128,10 @@ export default function HeaderLinks(props: { secondary: boolean; [key: string]: 
 							px='14px'
 							onClick={handleLogout}
 						>
-							<Text fontSize='sm'>{t('common:user.logout')}</Text>
+							<HStack spacing="10px">
+								<Icon as={FiLogOut} boxSize={4} />
+								<Text fontSize='sm'>{t('common:user.logout')}</Text>
+							</HStack>
 						</MenuItem>
 					</Flex>
 				</MenuList>

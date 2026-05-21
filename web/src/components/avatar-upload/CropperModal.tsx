@@ -10,6 +10,8 @@ import {
   Button,
   Box,
   useToast,
+  Text,
+  VStack,
 } from '@chakra-ui/react';
 import Cropper, { type Area, type Point } from 'react-easy-crop';
 import { useTranslation } from 'react-i18next';
@@ -89,30 +91,44 @@ export default function CropperModal({ isOpen, onClose, imageSrc, onCropComplete
   }, [imageSrc, onCropComplete, onClose, toast, t]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg" motionPreset="none">
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>{t('profile.avatarCrop')}</ModalHeader>
+    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered motionPreset="slideInBottom">
+      <ModalOverlay backdropFilter="blur(8px)" />
+      <ModalContent borderRadius="2xl">
+        <ModalHeader borderBottomWidth="1px" fontSize="lg" fontWeight="bold">
+          {t('profile.avatarCrop')}
+        </ModalHeader>
         <ModalCloseButton />
-        <ModalBody>
-          <Box position="relative" w="100%" h="300px">
-            <Cropper
-              image={imageSrc}
-              crop={crop}
-              zoom={zoom}
-              aspect={1}
-              cropShape="round"
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropAreaChange={onCropAreaChange}
-            />
-          </Box>
+        <ModalBody py={6}>
+          <VStack spacing={4}>
+            <Box
+              position="relative"
+              w="100%"
+              h="350px"
+              borderRadius="xl"
+              overflow="hidden"
+              borderWidth="1px"
+            >
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropAreaChange={onCropAreaChange}
+              />
+            </Box>
+            <Text fontSize="sm" color="gray.500">
+              {t('profile.avatarCropHint')}
+            </Text>
+          </VStack>
         </ModalBody>
-        <ModalFooter>
-          <Button variant="ghost" mr={3} onClick={onClose}>
+        <ModalFooter borderTopWidth="1px" gap={3}>
+          <Button variant="ghost" onClick={onClose} borderRadius="lg">
             {t('button.cancel')}
           </Button>
-          <Button colorScheme="blue" onClick={handleConfirm}>
+          <Button colorScheme="brand" onClick={handleConfirm} borderRadius="lg" px={8}>
             {t('button.confirm')}
           </Button>
         </ModalFooter>

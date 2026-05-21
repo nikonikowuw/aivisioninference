@@ -2,6 +2,7 @@
 // Model: internal/model/user.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import (
@@ -10,12 +11,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// User represents a system user with authentication and role associations.
+// User 表示系统用户，包含认证和角色关联信息
 type User struct {
 	BaseModel
 	Username      string         `gorm:"type:varchar(64);uniqueIndex:idx_user_username;not null" json:"username"`
 	Password      string         `gorm:"type:varchar(256);not null" json:"-"`
 	Email         string         `gorm:"type:varchar(128);uniqueIndex:idx_user_email" json:"email"`
+	EmailVerified bool           `gorm:"default:false" json:"email_verified"`
 	DisplayName   string         `gorm:"type:varchar(128)" json:"display_name"`
 	AvatarURL     string         `gorm:"type:varchar(512)" json:"avatar_url"`
 	Status        int            `gorm:"type:smallint;default:1" json:"status"`
@@ -26,12 +28,12 @@ type User struct {
 	DeletedAt     gorm.DeletedAt `gorm:"uniqueIndex:idx_user_username;uniqueIndex:idx_user_email" json:"-"`
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (User) SortableFields() []string {
 	return []string{"created_at", "username", "status"}
 }
 
-// UserRole is the join table for User <-> Role many-to-many relationship.
+// UserRole 是用户与角色多对多关系的关联表
 type UserRole struct {
 	UserID string `gorm:"type:uuid;primaryKey"`
 	RoleID string `gorm:"type:uuid;primaryKey"`

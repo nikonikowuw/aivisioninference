@@ -2,15 +2,16 @@
 // Model: internal/model/permission.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
-// Permission type constants.
+// Permission 类型常量
 const (
 	PermTypeMenu   = "menu"
 	PermTypeButton = "button"
 )
 
-// Permission represents a menu item or API permission for RBAC.
+// Permission 表示菜单项或API权限，用于RBAC
 type Permission struct {
 	BaseModel
 	Name      string       `gorm:"type:varchar(64);not null" json:"name"`
@@ -24,7 +25,7 @@ type Permission struct {
 	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (Permission) SortableFields() []string {
 	return []string{"created_at", "name", "sort_order", "code"}
 }

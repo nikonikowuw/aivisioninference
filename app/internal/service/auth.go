@@ -38,7 +38,7 @@ func menuTreeCacheKey(roleIDs []string) string {
 	return fmt.Sprintf("perm:menu_tree:%x", h[:8])
 }
 
-// AuthService handles authentication business logic.
+// AuthService 处理认证业务逻辑
 type AuthService struct {
 	userRepo   *repository.UserRepository
 	permRepo   *repository.PermissionRepository
@@ -57,7 +57,7 @@ func NewAuthService(userRepo *repository.UserRepository, permRepo *repository.Pe
 	}
 }
 
-// LoginResult holds the data needed by the handler to complete a login response.
+// LoginResult 包含处理器完成登录响应所需的数据
 type LoginResult struct {
 	AccessToken  string
 	RefreshToken string
@@ -65,8 +65,9 @@ type LoginResult struct {
 	User         dto.UserInfo
 }
 
-// Login authenticates a user and returns tokens.
+// Login 验证用户身份并返回令牌
 func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginResult, error) {
+	// 防止用户名枚举攻击：用户不存在和密码错误返回相同错误信息。
 	user, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err != nil {
 		return nil, errors.New(errors.ErrUnauthorized, "用户名或密码错误")
@@ -76,11 +77,13 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 		return nil, errors.New(errors.ErrUnauthorized, "用户名或密码错误")
 	}
 
+	// 密码验证通过后再检查用户状态，避免攻击者通过响应速度判断用户名是否存在。
 	if user.Status != 1 {
 		return nil, errors.New(errors.ErrForbidden, "用户已被禁用")
 	}
 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
+	// 登录时构建完整菜单树，后续通过 Redis 缓存减少数据库查询。
 	menus := s.getMenuTree(ctx, roleIDs)
 
 	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, user.Username, roleIDs, user.IsRoot)
@@ -94,36 +97,37 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 		RefreshToken: refreshToken,
 		ExpiresIn:    expiresIn,
 		User: dto.UserInfo{
-			ID:          user.ID,
-			Username:    user.Username,
-			DisplayName: user.DisplayName,
-			AvatarURL:   user.AvatarURL,
-			Email:       user.Email,
-			Status:      user.Status,
-			Roles:       roleInfos,
-			Menus:       menus,
-			CreatedAt:   user.CreatedAt.Format(dto.DateTimeFormat),
-			UpdatedAt:   user.UpdatedAt.Format(dto.DateTimeFormat),
+			ID:            user.ID,
+			Username:      user.Username,
+			DisplayName:   user.DisplayName,
+			AvatarURL:     user.AvatarURL,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerified,
+			Status:        user.Status,
+			Roles:         roleInfos,
+			Menus:         menus,
+			CreatedAt:     user.CreatedAt.Format(dto.DateTimeFormat),
+			UpdatedAt:     user.UpdatedAt.Format(dto.DateTimeFormat),
 		},
 	}, nil
 }
 
-// RefreshTokens rotates refresh tokens and returns a new access token.
+// RefreshTokens 轮换刷新令牌并返回新的访问令牌
 func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (accessToken, newRefreshToken string, expiresIn int, err error) {
 	return s.jwtManager.RefreshTokens(ctx, refreshToken)
 }
 
-// RevokeAccessToken revokes a single access token.
+// RevokeAccessToken 吊销单个访问令牌
 func (s *AuthService) RevokeAccessToken(ctx context.Context, tokenString string) error {
 	return s.jwtManager.RevokeAccessToken(ctx, tokenString)
 }
 
-// RevokeAllRefreshTokens revokes all refresh tokens for a user.
+// RevokeAllRefreshTokens 吊销用户的所有刷新令牌
 func (s *AuthService) RevokeAllRefreshTokens(ctx context.Context, userID string) error {
 	return s.jwtManager.RevokeAllRefreshTokens(ctx, userID)
 }
 
-// GetMe returns user info by ID.
+// GetMe 根据用户ID返回用户信息
 func (s *AuthService) GetMe(ctx context.Context, userID string) (*dto.UserInfo, error) {
 	user, err := s.userRepo.FindByIDWithRoles(ctx, userID)
 	if err != nil {
@@ -135,20 +139,21 @@ func (s *AuthService) GetMe(ctx context.Context, userID string) (*dto.UserInfo, 
 	menus := s.getMenuTree(ctx, roleIDs)
 
 	return &dto.UserInfo{
-		ID:          user.ID,
-		Username:    user.Username,
-		DisplayName: user.DisplayName,
-		AvatarURL:   user.AvatarURL,
-		Email:       user.Email,
-		Status:      user.Status,
-		Roles:       roleInfos,
-		Menus:       menus,
-		CreatedAt:   user.CreatedAt.Format(dto.DateTimeFormat),
-		UpdatedAt:   user.UpdatedAt.Format(dto.DateTimeFormat),
+		ID:            user.ID,
+		Username:      user.Username,
+		DisplayName:   user.DisplayName,
+		AvatarURL:     user.AvatarURL,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
+		Status:        user.Status,
+		Roles:         roleInfos,
+		Menus:         menus,
+		CreatedAt:     user.CreatedAt.Format(dto.DateTimeFormat),
+		UpdatedAt:     user.UpdatedAt.Format(dto.DateTimeFormat),
 	}, nil
 }
 
-// toRoleInfosAndIDs converts model roles to DTO RoleInfo slice and collects role IDs.
+// toRoleInfosAndIDs 将模型角色转换为DTO RoleInfo切片并收集角色ID
 func toRoleInfosAndIDs(roles []model.Role) (infos []dto.RoleInfo, ids []string) {
 	infos = make([]dto.RoleInfo, 0, len(roles))
 	ids = make([]string, 0, len(roles))
@@ -164,7 +169,7 @@ func toRoleInfosAndIDs(roles []model.Role) (infos []dto.RoleInfo, ids []string) 
 	return infos, ids
 }
 
-// getMenuTree returns the menu tree for the given role IDs, using Redis cache.
+// getMenuTree 返回给定角色ID的菜单树，使用Redis缓存
 func (s *AuthService) getMenuTree(ctx context.Context, roleIDs []string) []dto.Menu {
 	if len(roleIDs) == 0 {
 		return nil
@@ -245,6 +250,8 @@ func buildMenuNodes(perms []model.Permission) map[string]*menuNode {
 	return nodes
 }
 
+// buildMenuRelations 构建父子关系映射，将没有父节点或父节点不存在的节点提升为根节点。
+// 父节点不存在（数据不一致或从其他系统导入）时，容错地将其作为根节点处理，避免菜单丢失。
 func buildMenuRelations(nodes map[string]*menuNode) (map[string][]string, []string) {
 	childrenByParent := make(map[string][]string, len(nodes))
 	rootIDs := make([]string, 0, len(nodes))
@@ -275,6 +282,9 @@ func sortMenuRelations(nodes map[string]*menuNode, childrenByParent map[string][
 	}
 }
 
+// buildMenuRoots 通过三色 DFS（白/灰/黑）遍历树结构，检测并处理循环引用。
+// visiting(灰) 表示正在遍历→检测到环路；visited(黑) 表示已完成→直接返回缓存结果。
+// 环路中多余的节点会被静默丢弃，避免无限递归和前端渲染崩溃。
 func buildMenuRoots(nodes map[string]*menuNode, childrenByParent map[string][]string, rootIDs []string) []dto.Menu {
 	const (
 		visiting = 1
@@ -349,6 +359,8 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 
 	if err := s.userRepo.Transaction(ctx, func(txRepo *repository.UserRepository) error {
 		var err error
+		// 使用 SELECT ... FOR UPDATE 行级锁防止并发争抢：
+		// 在事务中锁住用户行，确保邮箱唯一性检查和更新之间的原子性。
 		user, err = txRepo.FindByIDForUpdate(ctx, userID)
 		if err != nil {
 			return errors.New(errors.ErrNotFound, "")
@@ -364,6 +376,7 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 				return errors.New(errors.ErrEmailTaken, "")
 			}
 			user.Email = *req.Email
+			user.EmailVerified = false
 		}
 
 		if req.DisplayName != nil {
@@ -389,7 +402,7 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 	return info, nil
 }
 
-// ChangePassword verifies old password and updates to new one.
+// ChangePassword 验证旧密码并更新为新密码
 func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
@@ -451,19 +464,25 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 		return "", errors.New(errors.ErrInternal, "")
 	}
 
+	// 双重校验：Header 中声明的 size 和实际读取的 bytes 长度，
+	// 防止客户端声明小文件但实际发送大文件的绕过攻击。
 	if len(allBytes) > maxAvatarSize {
 		return "", errors.New(errors.ErrFileTooLarge, "")
 	}
 
+	// http.DetectContentType 需要至少 512 字节才能可靠检测 MIME 类型。
 	if len(allBytes) < 512 {
 		return "", errors.New(errors.ErrBadRequest, "文件内容不完整")
 	}
 
+	// 基于文件内容检测真实 MIME 类型，而非信任客户端声明的 Content-Type，
+	// 防止通过修改扩展名上传恶意文件。
 	mimeType := http.DetectContentType(allBytes[:512])
 	if !allowedAvatarTypes[mimeType] {
 		return "", errors.New(errors.ErrFileInvalidType, "")
 	}
 
+	// 统一扩展名格式：.jpeg → .jpg；无扩展名时根据 MIME 类型推断。
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 	if ext == "" || ext == ".jpeg" {
 		switch mimeType {
@@ -486,6 +505,7 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 		ext = ".jpg"
 	}
 
+	// 使用 UUID 命名存储文件，避免路径冲突和原文件名信息泄露。
 	storageName := uuid.New().String() + ext
 	storagePath := avatarPathPrefix + "/" + storageName
 
@@ -503,6 +523,7 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 		return "", errors.New(errors.ErrNotFound, "")
 	}
 
+	// 更新用户头像 URL 后，清理旧头像文件以减少存储占用。
 	oldAvatarURL := user.AvatarURL
 	user.AvatarURL = avatarURL
 	if err := s.userRepo.Update(ctx, user); err != nil {
@@ -510,6 +531,7 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 		return "", errors.New(errors.ErrInternal, "")
 	}
 
+	// 只清理由同一存储后端托管的旧头像，避免误删外链头像。
 	if oldAvatarURL != "" && strings.HasPrefix(oldAvatarURL, s.storage.GetURL("")) {
 		oldPath := strings.TrimPrefix(oldAvatarURL, s.storage.GetURL("")+"/")
 		if err := s.storage.Delete(oldPath); err != nil {

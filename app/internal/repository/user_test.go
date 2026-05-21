@@ -30,6 +30,7 @@ func setupUserRepositoryTestDB(t *testing.T) *gorm.DB {
 			username TEXT NOT NULL UNIQUE,
 			password TEXT NOT NULL,
 			email TEXT UNIQUE,
+			email_verified INTEGER DEFAULT 0,
 			display_name TEXT,
 			avatar_url TEXT,
 			status INTEGER DEFAULT 1,

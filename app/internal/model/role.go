@@ -2,9 +2,10 @@
 // Model: internal/model/role.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
-// Role represents a role that groups permissions for RBAC.
+// Role 表示角色，用于RBAC权限分组
 type Role struct {
 	BaseModel
 	Name        string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"`
@@ -15,12 +16,12 @@ type Role struct {
 	Permissions []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"`
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (Role) SortableFields() []string {
 	return []string{"created_at", "name", "sort_order"}
 }
 
-// RolePermission is the join table for Role <-> Permission many-to-many relationship.
+// RolePermission 是角色与权限多对多关系的关联表
 type RolePermission struct {
 	RoleID       string `gorm:"type:uuid;primaryKey"`
 	PermissionID string `gorm:"type:uuid;primaryKey"`

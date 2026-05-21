@@ -2,11 +2,12 @@
 // Model: internal/model/audit_log.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import "time"
 
-// AuditLog records request-level audit events for security auditing.
+// AuditLog 记录请求级别的审计事件，用于安全审计
 type AuditLog struct {
 	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID         *string   `gorm:"type:uuid" json:"user_id"`
@@ -25,12 +26,12 @@ type AuditLog struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (AuditLog) SortableFields() []string {
 	return []string{"created_at", "resource_type"}
 }
 
-// TableName overrides the default table name for AuditLog.
+// TableName 覆盖 AuditLog 的默认表名
 func (AuditLog) TableName() string {
 	return "audit_logs"
 }

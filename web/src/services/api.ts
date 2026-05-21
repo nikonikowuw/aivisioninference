@@ -198,6 +198,7 @@ export interface User {
   username: string;
   display_name: string;
   email: string;
+  email_verified: boolean;
   avatar_url: string;
   status: number;
   roles: Role[];
@@ -270,6 +271,44 @@ export interface Task {
   updated_at: string;
 }
 
+export interface MailConfig {
+  id: string;
+  enabled: boolean;
+  from_name: string;
+  from_address: string;
+  reply_to: string;
+  smtp_enabled: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_password_configured: boolean;
+  smtp_encryption: string;
+  smtp_timeout_sec: number;
+  imap_enabled: boolean;
+  imap_host: string;
+  imap_port: number;
+  imap_username: string;
+  imap_password_configured: boolean;
+  imap_encryption: string;
+  imap_mailbox: string;
+  imap_sync_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Feedback {
+  id: string;
+  source: string;
+  category: string;
+  title: string;
+  content: string;
+  email: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  handled_at?: string | null;
+}
+
 export interface DashboardStats {
   total_users: number;
   total_roles: number;
@@ -299,6 +338,7 @@ type StatusListParams = CrudListParams & { status?: number };
 type FileListParams = CrudListParams & { storage_type?: string; start_time?: string; end_time?: string };
 type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; resource_type?: string; result?: string; start_time?: string; end_time?: string };
 type TaskListParams = CrudListParams & { type?: string; status?: string; start_time?: string; end_time?: string };
+type FeedbackListParams = CrudListParams & { source?: string; status?: string; start_time?: string; end_time?: string };
 
 function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: string): CrudApi<T, ListParams> {
   return {
@@ -467,6 +507,39 @@ export const auditLogsApi = {
 export const tasksApi = {
   ...crud<Task, TaskListParams>('tasks'),
   cancel: (id: string) => request<Task>(`/tasks/${id}/cancel`, { method: 'POST' }),
+};
+
+export const mailConfigApi = {
+  get: () => request<MailConfig>('/system/mail-config'),
+  save: (data: Partial<MailConfig> & { smtp_password?: string; imap_password?: string }) =>
+    request<MailConfig>('/system/mail-config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  testSMTP: (to: string) =>
+    request('/system/mail-config/test-smtp', {
+      method: 'POST',
+      body: JSON.stringify({ to }),
+    }),
+  testIMAP: () => request('/system/mail-config/test-imap', { method: 'POST' }),
+  syncIMAP: () => request<{ synced: number }>('/system/mail-config/sync-imap', { method: 'POST' }),
+};
+
+export const feedbackApi = {
+  list: (params?: FeedbackListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<Feedback>>(`/feedback${query}`);
+  },
+  create: (data: { category?: string; title: string; content: string }) =>
+    request<Feedback>('/feedback', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateStatus: (id: string, status: string) =>
+    request<Feedback>(`/feedback/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
 };
 
 export const dashboardApi = {

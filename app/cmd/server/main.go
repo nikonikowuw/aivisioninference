@@ -118,7 +118,7 @@ func main() {
 
 	// Start Asynq server in background
 	asynqServer := router.NewAsynqServer(rdb)
-	asynqMux := router.NewAsynqMux()
+	asynqMux := router.NewAsynqMux(db)
 	go func() {
 		zap.L().Info("starting asynq server")
 		if err := asynqServer.Run(asynqMux); err != nil {

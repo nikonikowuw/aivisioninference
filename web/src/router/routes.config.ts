@@ -82,6 +82,22 @@ export const adminRoutes: RouteConfig[] = [
         component: () => import('../views/admin/tasks'),
         layout: '/admin',
       },
+      {
+        id: 'mail-config',
+        path: '/mail-config',
+        i18nKey: 'layout.sidebar.mailConfig',
+        icon: 'MdEmail',
+        component: () => import('../views/admin/mail-config'),
+        layout: '/admin',
+      },
+      {
+        id: 'feedback',
+        path: '/feedback',
+        i18nKey: 'layout.sidebar.feedback',
+        icon: 'MdFeedback',
+        component: () => import('../views/admin/feedback'),
+        layout: '/admin',
+      },
     ],
   },
 ];

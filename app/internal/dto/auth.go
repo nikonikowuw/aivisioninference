@@ -34,16 +34,17 @@ type Menu struct {
 
 // UserInfo contains basic user information returned after auth.
 type UserInfo struct {
-	ID          string     `json:"id"`
-	Username    string     `json:"username"`
-	DisplayName string     `json:"display_name"`
-	AvatarURL   string     `json:"avatar_url"`
-	Email       string     `json:"email"`
-	Status      int        `json:"status"`
-	Roles       []RoleInfo `json:"roles"`
-	Menus       []Menu     `json:"menus"`
-	CreatedAt   string     `json:"created_at"`
-	UpdatedAt   string     `json:"updated_at"`
+	ID            string     `json:"id"`
+	Username      string     `json:"username"`
+	DisplayName   string     `json:"display_name"`
+	AvatarURL     string     `json:"avatar_url"`
+	Email         string     `json:"email"`
+	EmailVerified bool       `json:"email_verified"`
+	Status        int        `json:"status"`
+	Roles         []RoleInfo `json:"roles"`
+	Menus         []Menu     `json:"menus"`
+	CreatedAt     string     `json:"created_at"`
+	UpdatedAt     string     `json:"updated_at"`
 }
 
 // RefreshResponse is the token refresh response.
@@ -55,6 +56,17 @@ type RefreshResponse struct {
 // ChangePasswordRequest is the password change request body.
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=72"`
+}
+
+// RequestPasswordResetRequest requests a password reset email.
+type RequestPasswordResetRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// ConfirmPasswordResetRequest resets password with a one-time token.
+type ConfirmPasswordResetRequest struct {
+	Token       string `json:"token" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=6,max=72"`
 }
 

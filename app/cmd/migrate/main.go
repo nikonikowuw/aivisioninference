@@ -37,6 +37,10 @@ func main() {
 		&model.File{},
 		&model.FileChunk{},
 		&model.Task{},
+		&model.MailConfig{},
+		&model.EmailToken{},
+		&model.InboundEmail{},
+		&model.Feedback{},
 		&model.UserRole{},
 		&model.RolePermission{},
 	); err != nil {
@@ -376,6 +380,17 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "task:create", Name: "创建任务", Path: "/api/v1/tasks", Method: "POST"},
 					{Code: "task:cancel", Name: "取消任务", Path: "/api/v1/tasks/*/cancel", Method: "POST"},
 					{Code: "task:view", Name: "查看任务", Path: "/api/v1/tasks/*", Method: "GET"},
+				}},
+				{Name: "邮件配置", Code: "mail-config", Path: "/mail-config", Icon: "MdEmail", Buttons: []buttonInfo{
+					{Code: "mail-config:view", Name: "查看邮件配置", Path: "/api/v1/system/mail-config", Method: "GET"},
+					{Code: "mail-config:edit", Name: "编辑邮件配置", Path: "/api/v1/system/mail-config", Method: "PUT"},
+					{Code: "mail-config:test-smtp", Name: "测试SMTP", Path: "/api/v1/system/mail-config/test-smtp", Method: "POST"},
+					{Code: "mail-config:test-imap", Name: "测试IMAP", Path: "/api/v1/system/mail-config/test-imap", Method: "POST"},
+					{Code: "mail-config:sync-imap", Name: "同步反馈邮件", Path: "/api/v1/system/mail-config/sync-imap", Method: "POST"},
+				}},
+				{Name: "用户反馈", Code: "feedback", Path: "/feedback", Icon: "MdFeedback", Buttons: []buttonInfo{
+					{Code: "feedback:view", Name: "查看反馈", Path: "/api/v1/feedback", Method: "GET"},
+					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
 				}},
 			},
 		},

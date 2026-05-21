@@ -12,22 +12,22 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
-// UserService handles business logic for User operations.
+// UserService 处理用户操作的业务逻辑
 type UserService struct {
 	userRepo *repository.UserRepository
 }
 
-// NewUserService creates a new UserService.
+// NewUserService 创建新的 UserService
 func NewUserService(userRepo *repository.UserRepository) *UserService {
 	return &UserService{userRepo: userRepo}
 }
 
-// List returns a paginated list of users with optional filters.
+// List 返回分页的用户列表，支持可选过滤条件
 func (s *UserService) List(ctx context.Context, req dto.UserListRequest) ([]model.User, int64, error) {
 	return s.userRepo.List(ctx, req)
 }
 
-// Create creates a new user with password hashing and optional role association.
+// Create 创建新用户，包含密码哈希和可选的角色关联
 func (s *UserService) Create(ctx context.Context, req dto.CreateUserRequest) (*model.User, error) {
 	count, err := s.userRepo.CountByUsername(ctx, req.Username, "")
 	if err != nil {
@@ -53,15 +53,17 @@ func (s *UserService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 		Status:      req.Status,
 	}
 
+	// 在事务中创建用户和角色关联，确保一致性。
 	if err := s.userRepo.CreateWithRoles(ctx, &user, req.RoleIDs); err != nil {
 		zap.L().Error("create user failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 重新查询以返回完整的用户数据（含角色关联），而非直接返回创建后的 user 对象。
 	return s.userRepo.FindByIDWithRoles(ctx, user.ID)
 }
 
-// GetByID returns a user by its ID.
+// GetByID 根据用户ID返回用户
 func (s *UserService) GetByID(ctx context.Context, id string) (*model.User, error) {
 	user, err := s.userRepo.FindByIDWithRoles(ctx, id)
 	if err != nil {
@@ -70,17 +72,19 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*model.User, erro
 	return user, nil
 }
 
-// Update updates an existing user.
+// Update 更新现有用户
 func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserRequest, currentUserID string, isRoot bool) error {
 	user, err := s.userRepo.FindByID(ctx, id)
 	if err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "用户不存在")
 	}
 
+	// write=true 表示当前操作需要写入能力，检查层级确保当前用户有足够权限修改目标用户。
 	if err := checkUserHierarchy(ctx, s.userRepo, currentUserID, id, isRoot, true); err != nil {
 		return err
 	}
 
+	// 用户名变更时检查唯一性，排除自身以避免与当前用户名冲突。
 	if req.Username != "" && req.Username != user.Username {
 		count, err := s.userRepo.CountByUsername(ctx, req.Username, id)
 		if err != nil {
@@ -92,6 +96,7 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 		}
 	}
 
+	// 仅更新请求中非空的字段，实现 PUT 的部分更新语义（类比 PATCH）。
 	if req.Username != "" {
 		user.Username = req.Username
 	}
@@ -104,6 +109,7 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 	if req.AvatarURL != "" {
 		user.AvatarURL = req.AvatarURL
 	}
+	// Status 使用指针类型以便区分「不更新」和「更新为 0」两种状态。
 	if req.Status != nil {
 		user.Status = *req.Status
 	}
@@ -116,7 +122,7 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 	return nil
 }
 
-// Delete soft-deletes a user by its ID.
+// Delete 根据用户ID软删除用户
 func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRoot bool) error {
 	if id == currentUserID {
 		return apperrors.New(apperrors.ErrBadRequest, "不能删除当前登录用户")
@@ -135,7 +141,8 @@ func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRo
 
 // ResetPassword allows admin to reset a user's password without old password.
 func (s *UserService) ResetPassword(ctx context.Context, targetUserID, password, currentUserID string, isRoot bool) error {
-	// 不能通过此接口重置自己的密码
+	// 禁止管理员通过此接口重置自己的密码，防止误操作导致自己无法登录。
+	// 自己改密码应走 ChangePassword 流程（需验证旧密码）。
 	if targetUserID == currentUserID {
 		return apperrors.New(apperrors.ErrBadRequest, "不能重置自己的密码，请使用修改密码功能")
 	}
@@ -146,7 +153,7 @@ func (s *UserService) ResetPassword(ctx context.Context, targetUserID, password,
 		return apperrors.New(apperrors.ErrNotFound, "用户不存在")
 	}
 
-	// 层级权限校验
+	// 层级权限校验：上级才能重置下级的密码，防止越权操作。
 	if err := checkUserHierarchy(ctx, s.userRepo, currentUserID, targetUserID, isRoot, true); err != nil {
 		return err
 	}

@@ -7,18 +7,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// Context key type for request-scoped values (avoids string key collisions).
+// contextKey 是请求作用域值的上下文键类型（避免字符串键冲突）
 type contextKey string
 
 const (
-	// ContextKeyUserID is used only with context.Context (context.WithValue / Value).
-	// Do not mix it with middleware.ContextKeyUserID, which is for gin.Context.Set/Get.
+	// ContextKeyUserID 仅用于 context.Context（context.WithValue / Value）
+	// 不要与 middleware.ContextKeyUserID 混淆，后者用于 gin.Context.Set/Get
 	ContextKeyUserID contextKey = "user_id"
 )
 
-// BaseModel contains common fields for all models.
-// Embed this struct in your models to get standard audit fields.
-// CreatedBy and UpdatedBy are auto-populated by GORM hooks from request context.
+// BaseModel 包含所有模型的公共字段
+// 在模型中嵌入此结构体以获取标准审计字段
+// CreatedBy 和 UpdatedBy 由 GORM 钩子从请求上下文中自动填充
 type BaseModel struct {
 	ID        string         `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -28,9 +28,9 @@ type BaseModel struct {
 	UpdatedBy *string        `gorm:"type:uuid" json:"updated_by"`
 }
 
-// BeforeCreate is a GORM hook that auto-populates CreatedBy from request context.
-// A missing user_id in context is allowed only in non-request contexts (seeds, migrations, background jobs).
-// If the context exists but has no user_id, a warning is logged to alert the caller.
+// BeforeCreate 是 GORM 钩子，从请求上下文中自动填充 CreatedBy
+// 仅在非请求上下文（种子数据、迁移、后台任务）中允许缺少 user_id
+// 如果上下文存在但没有 user_id，会记录警告日志以提醒调用者
 func (b *BaseModel) BeforeCreate(tx *gorm.DB) error {
 	if tx.Statement != nil && tx.Statement.Context != nil {
 		if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
@@ -40,13 +40,13 @@ func (b *BaseModel) BeforeCreate(tx *gorm.DB) error {
 		zap.L().Warn("BaseModel.BeforeCreate: context exists but user_id not found — CreatedBy will be empty")
 		return nil
 	}
-	// nil context is expected outside request scope (e.g. seeds, migrations, background jobs)
+	// 在请求作用域外（如种子数据、迁移、后台任务）期望 nil 上下文
 	return nil
 }
 
-// BeforeUpdate is a GORM hook that auto-populates UpdatedBy from request context.
-// A missing user_id in context is allowed only in non-request contexts (seeds, migrations, background jobs).
-// If the context exists but has no user_id, a warning is logged to alert the caller.
+// BeforeUpdate 是 GORM 钩子，从请求上下文中自动填充 UpdatedBy
+// 仅在非请求上下文（种子数据、迁移、后台任务）中允许缺少 user_id
+// 如果上下文存在但没有 user_id，会记录警告日志以提醒调用者
 func (b *BaseModel) BeforeUpdate(tx *gorm.DB) error {
 	if tx.Statement != nil && tx.Statement.Context != nil {
 		if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
@@ -56,6 +56,6 @@ func (b *BaseModel) BeforeUpdate(tx *gorm.DB) error {
 		zap.L().Warn("BaseModel.BeforeUpdate: context exists but user_id not found — UpdatedBy will be empty")
 		return nil
 	}
-	// nil context is expected outside request scope (e.g. seeds, migrations, background jobs)
+	// 在请求作用域外（如种子数据、迁移、后台任务）期望 nil 上下文
 	return nil
 }

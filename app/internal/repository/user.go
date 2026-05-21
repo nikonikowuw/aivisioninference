@@ -2,6 +2,7 @@
 // Model: internal/model/user.go
 // Generate at: 2026-05-15 22:05:18
 
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (
@@ -117,6 +118,13 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	return &user, err
 }
 
+// FindByEmail finds a user by email.
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", email).First(&user).Error
+	return &user, err
+}
+
 // CountByUsername counts users with the given username, optionally excluding an ID.
 func (r *UserRepository) CountByUsername(ctx context.Context, username string, excludeID string) (int64, error) {
 	var count int64
@@ -173,6 +181,13 @@ func (r *UserRepository) CreateWithRoles(ctx context.Context, user *model.User, 
 // UpdatePassword updates only the password field for a user.
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("password", hashedPassword).Error
+}
+
+// MarkEmailVerified marks a user's email as verified when the email still matches.
+func (r *UserRepository) MarkEmailVerified(ctx context.Context, userID, email string) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).
+		Where("id = ? AND LOWER(email) = LOWER(?)", userID, email).
+		Update("email_verified", true).Error
 }
 
 // UpdateLoginAttempts updates the login attempts counter.

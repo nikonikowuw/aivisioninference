@@ -9,6 +9,8 @@ export const layout = {
     files: '檔案',
     auditLogs: '稽核日誌',
     tasks: '任務',
+    mailConfig: '郵件設定',
+    feedback: '使用者回饋',
     noAccess: '暫無存取權限',
   },
   navbar: {

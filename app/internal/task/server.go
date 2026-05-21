@@ -6,6 +6,8 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 // NewServer creates a new Asynq server for processing tasks.
@@ -24,8 +26,8 @@ func NewServer(rdb *redis.Client) *asynq.Server {
 }
 
 // NewMux creates a new ServeMux and registers all task handlers.
-func NewMux() *asynq.ServeMux {
+func NewMux(mailSvc *service.MailService) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
-	RegisterHandlers(mux)
+	NewHandler(mailSvc).RegisterHandlers(mux)
 	return mux
 }

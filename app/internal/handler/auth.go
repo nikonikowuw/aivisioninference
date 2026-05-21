@@ -22,12 +22,18 @@ import (
 // AuthHandler handles authentication-related HTTP requests.
 type AuthHandler struct {
 	svc         *service.AuthService
+	emailSvc    *service.EmailVerificationService
 	auditLogger middleware.AuditLogger
 }
 
 // NewAuthHandler creates a new AuthHandler with the given dependencies.
 func NewAuthHandler(svc *service.AuthService, auditLogger middleware.AuditLogger) *AuthHandler {
 	return &AuthHandler{svc: svc, auditLogger: auditLogger}
+}
+
+// NewAuthHandlerWithEmail creates a new AuthHandler with email verification support.
+func NewAuthHandlerWithEmail(svc *service.AuthService, emailSvc *service.EmailVerificationService, auditLogger middleware.AuditLogger) *AuthHandler {
+	return &AuthHandler{svc: svc, emailSvc: emailSvc, auditLogger: auditLogger}
 }
 
 // Login authenticates a user and returns a token pair.
@@ -74,7 +80,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
-// writeLoginAuditLog 写入登录审计日志。
+// writeLoginAuditLog 手动写入登录审计日志。
+// 登录发生在 JWT 认证之前，中间件的 Audit 无法捕获用户身份，因此由 Handler 主动记录。
 func (h *AuthHandler) writeLoginAuditLog(c *gin.Context, username string, start time.Time, httpStatus int) {
 	if h.auditLogger == nil {
 		return
@@ -125,6 +132,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	accessToken, newRefreshToken, expiresIn, err := h.svc.RefreshTokens(c.Request.Context(), refreshToken)
 	if err != nil {
 		zap.L().Warn("refresh token failed", zap.Error(err))
+		// 区分三种令牌异常原因，返回不同的用户提示，帮助定位问题。
 		switch {
 		case errors.Is(err, jwtutil.ErrRefreshTokenReuse):
 			attachError(c, apperrors.New(apperrors.ErrRefreshTokenReuse, "刷新令牌已被复用，所有设备已强制登出"))
@@ -136,6 +144,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
+	// HttpOnly + Secure 的 refresh_token cookie，前端 JS 不可读写，防止 XSS 窃取。
 	c.SetCookie("refresh_token", newRefreshToken, 7*24*3600, "/", "", httpx.IsSecureRequest(c), true)
 
 	response.OK(c, dto.RefreshResponse{
@@ -154,6 +163,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 // @Router       /auth/logout [post]
 // @Security     BearerAuth
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// 从 Authorization header 提取 Bearer token，去掉 "Bearer " 前缀（固定 7 字符）。
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" && len(authHeader) > 7 {
 		tokenString := authHeader[7:]
@@ -162,6 +172,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 	}
 
+	// 吊销该用户的所有 refresh token，实现「在所有设备上登出」的安全语义。
 	refreshToken, _ := c.Cookie("refresh_token")
 	if refreshToken != "" {
 		userID, exists := c.Get(middleware.ContextKeyUserID)
@@ -177,6 +188,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 	}
 
+	// 清除客户端的 refresh_token cookie（MaxAge=-1 表示立即删除）。
 	c.SetCookie("refresh_token", "", -1, "/", "", httpx.IsSecureRequest(c), true)
 	response.OK(c, nil)
 }
@@ -270,6 +282,58 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	response.OK(c, nil)
+}
+
+// RequestPasswordReset sends a password reset email if the address belongs to a user.
+//
+// @Summary      请求找回密码
+// @Description  发送密码重置邮件；响应不泄露邮箱是否已注册
+// @Tags         认证管理
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.RequestPasswordResetRequest  true  "邮箱"
+// @Success      200   {object}  dto.Response
+// @Router       /auth/password-reset/request [post]
+func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
+	var req dto.RequestPasswordResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	if h.emailSvc != nil {
+		if err := h.emailSvc.SendPasswordReset(c.Request.Context(), req.Email, c.ClientIP()); err != nil {
+			attachError(c, err)
+			return
+		}
+	}
+	response.OK(c, nil)
+}
+
+// ResetPassword resets password with a one-time token.
+//
+// @Summary      重置密码
+// @Description  使用邮件令牌设置新密码
+// @Tags         认证管理
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.ConfirmPasswordResetRequest  true  "重置信息"
+// @Success      200   {object}  dto.Response
+// @Router       /auth/password-reset/confirm [post]
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req dto.ConfirmPasswordResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	if h.emailSvc == nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, "邮件服务未启用"))
+		return
+	}
+	if err := h.emailSvc.ResetPassword(c.Request.Context(), req.Token, req.NewPassword); err != nil {
+		attachError(c, err)
+		return
+	}
 	response.OK(c, nil)
 }
 

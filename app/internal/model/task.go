@@ -2,11 +2,12 @@
 // Model: internal/model/task.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import "time"
 
-// Task represents an asynchronous background task.
+// Task 表示异步后台任务
 type Task struct {
 	BaseModel
 	TaskID       string     `gorm:"type:varchar(128);uniqueIndex" json:"task_id"`
@@ -20,7 +21,7 @@ type Task struct {
 	FinishedAt   *time.Time `json:"finished_at"`
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (Task) SortableFields() []string {
 	return []string{"created_at", "type", "status"}
 }

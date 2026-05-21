@@ -153,9 +153,8 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 // all refresh tokens for that user as a security measure.
 func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (accessToken string, newRefreshToken string, expiresIn int, err error) {
 
-	// Find the refresh token in Redis by scanning for the token value
-	// We need to look up the token across all users. The key format is
-	// refresh:{user_id}:{token_id}, so we scan.
+	// 使用 SCAN（而非 KEYS）遍历所有用户的 refresh token，避免在大量 key 时阻塞 Redis。
+	// key 格式为 refresh:{user_id}:{token_id}，因此通过 refresh:*:{token} 模式匹配。
 	pattern := fmt.Sprintf("refresh:*:%s", refreshToken)
 	var keys []string
 	var cursor uint64
@@ -175,6 +174,8 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 	}
 
 	if len(keys) == 0 {
+		// SCAN 未命中 → 检查是否属于 reuse 攻击：如果 refresh:used 标记存在，
+		// 说明该 token 已被消耗（之前成功轮换过），当前请求是重放攻击。
 		reusedBy, getErr := m.redis.Get(ctx, fmt.Sprintf("refresh:used:%s", refreshToken)).Result()
 		if getErr == nil && reusedBy != "" {
 			if revokeErr := m.RevokeAllRefreshTokens(ctx, reusedBy); revokeErr != nil {
@@ -192,6 +193,8 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 		oldKey    string
 		dataBytes []byte
 	)
+	// 用 GetDel 原子地消费 token：如果并发请求同时命中同一个 key，只有一个能获取到值，
+	// 其他会拿到 redis.Nil 从而进入后续的 reuse 检测流程。
 	for _, key := range keys {
 		b, getErr := m.redis.GetDel(ctx, key).Bytes()
 		if getErr == redis.Nil {
@@ -208,6 +211,8 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 		break
 	}
 	if oldKey == "" {
+		// GetDel 全部为 Nil → 另一个并发请求已经消费了该 token。
+		// 此时判断为 reuse，吊销该用户的所有 session。
 		reusedBy, getErr := m.redis.Get(ctx, fmt.Sprintf("refresh:used:%s", refreshToken)).Result()
 		if getErr == nil && reusedBy != "" {
 			if revokeErr := m.RevokeAllRefreshTokens(ctx, reusedBy); revokeErr != nil {
@@ -227,6 +232,7 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 	}
 
 	userID := data.UserID
+	// 设置 refresh:used 标记，保存 userID 以便后续检测到此 token 被重用时吊销该用户所有令牌。
 	if err := m.redis.Set(ctx, fmt.Sprintf("refresh:used:%s", refreshToken), userID, time.Duration(m.refreshExpireSec)*time.Second).Err(); err != nil {
 		return "", "", 0, fmt.Errorf("failed to set refresh token reuse marker: %w", err)
 	}
@@ -239,7 +245,7 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 		)
 	}
 
-	// Generate new token pair.
+	// 生成新的令牌对，旧的已被删除 + 标记为 used，无法再次使用。
 	accessToken, newRefreshToken, expiresIn, err = m.GenerateTokenPair(userID, data.Username, data.RoleIDs, data.IsRoot)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to generate new token pair: %w", err)
@@ -256,7 +262,8 @@ func (m *Manager) RefreshTokens(ctx context.Context, refreshToken string) (acces
 // RevokeAccessToken adds the token to the Redis blacklist with a TTL equal
 // to the remaining token expiry time.
 func (m *Manager) RevokeAccessToken(ctx context.Context, tokenString string) error {
-	// Parse without validation to extract expiry
+	// 使用 WithoutClaimsValidation 即使 token 已过期也能解析出 claims，
+	// 确保登出时能正确设置黑名单 TTL（避免 token 已过期但未到黑名单删除时间的场景）。
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return m.secret, nil
 	}, jwt.WithoutClaimsValidation())
@@ -299,6 +306,8 @@ func (m *Manager) RevokeAccessToken(ctx context.Context, tokenString string) err
 // RevokeAllRefreshTokens deletes all refresh tokens for a user.
 // Used for security: when a refresh token reuse is detected, invalidate everything.
 func (m *Manager) RevokeAllRefreshTokens(ctx context.Context, userID string) error {
+	// 使用 SCAN 游标遍历该用户的所有 refresh token，分页删除避免阻塞 Redis。
+	// 相比 KEYS，SCAN 在大量 key 时不会阻塞单线程。
 	pattern := fmt.Sprintf("refresh:%s:*", userID)
 
 	var keys []string
@@ -322,6 +331,7 @@ func (m *Manager) RevokeAllRefreshTokens(ctx context.Context, userID string) err
 		return nil
 	}
 
+	// 批量删除所有扫描到的 key，而非逐个删除，减少网络往返。
 	if err := m.redis.Del(ctx, keys...).Err(); err != nil {
 		return fmt.Errorf("failed to delete refresh tokens: %w", err)
 	}

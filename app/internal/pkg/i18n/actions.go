@@ -24,6 +24,11 @@ const (
 	ActionUpdateTasks       = "action.update.tasks"
 	ActionDeleteTasks       = "action.delete.tasks"
 	ActionViewDashboard     = "action.view.dashboard"
+	ActionViewMailConfig    = "action.view.mail-config"
+	ActionUpdateMailConfig  = "action.update.mail-config"
+	ActionCreateMailConfig  = "action.create.mail-config"
+	ActionViewFeedback      = "action.view.feedback"
+	ActionUpdateFeedback    = "action.update.feedback"
 	ActionLogin             = "action.login"
 	ActionLogout            = "action.logout"
 	ActionAuth              = "action.auth"
@@ -54,6 +59,11 @@ var actionStorage = map[string]map[string]string{
 		"action.update.tasks":       "Update task",
 		"action.delete.tasks":       "Delete task",
 		"action.view.dashboard":     "View dashboard",
+		"action.view.mail-config":   "View mail config",
+		"action.update.mail-config": "Update mail config",
+		"action.create.mail-config": "Operate mail config",
+		"action.view.feedback":      "View feedback",
+		"action.update.feedback":    "Update feedback",
 		"action.login":              "User login",
 		"action.logout":             "User logout",
 		"action.auth":               "Auth operation",
@@ -81,6 +91,11 @@ var actionStorage = map[string]map[string]string{
 		"action.update.tasks":       "更新任务",
 		"action.delete.tasks":       "删除任务",
 		"action.view.dashboard":     "查看仪表盘",
+		"action.view.mail-config":   "查看邮件配置",
+		"action.update.mail-config": "更新邮件配置",
+		"action.create.mail-config": "邮件配置操作",
+		"action.view.feedback":      "查看反馈",
+		"action.update.feedback":    "更新反馈状态",
 		"action.login":              "用户登录",
 		"action.logout":             "用户登出",
 		"action.auth":               "认证操作",
@@ -108,6 +123,11 @@ var actionStorage = map[string]map[string]string{
 		"action.update.tasks":       "更新任務",
 		"action.delete.tasks":       "刪除任務",
 		"action.view.dashboard":     "檢視儀表板",
+		"action.view.mail-config":   "檢視郵件設定",
+		"action.update.mail-config": "更新郵件設定",
+		"action.create.mail-config": "郵件設定操作",
+		"action.view.feedback":      "檢視回饋",
+		"action.update.feedback":    "更新回饋狀態",
 		"action.login":              "使用者登入",
 		"action.logout":             "使用者登出",
 		"action.auth":               "認證操作",
@@ -135,6 +155,11 @@ var actionStorage = map[string]map[string]string{
 		"action.update.tasks":       "Perbarui tugas",
 		"action.delete.tasks":       "Hapus tugas",
 		"action.view.dashboard":     "Lihat dasbor",
+		"action.view.mail-config":   "Lihat konfigurasi email",
+		"action.update.mail-config": "Perbarui konfigurasi email",
+		"action.create.mail-config": "Operasi konfigurasi email",
+		"action.view.feedback":      "Lihat umpan balik",
+		"action.update.feedback":    "Perbarui status umpan balik",
 		"action.login":              "Login pengguna",
 		"action.logout":             "Logout pengguna",
 		"action.auth":               "Operasi autentikasi",
@@ -162,6 +187,11 @@ var actionStorage = map[string]map[string]string{
 		"action.update.tasks":       "タスク更新",
 		"action.delete.tasks":       "タスク削除",
 		"action.view.dashboard":     "ダッシュボード表示",
+		"action.view.mail-config":   "メール設定表示",
+		"action.update.mail-config": "メール設定更新",
+		"action.create.mail-config": "メール設定操作",
+		"action.view.feedback":      "フィードバック一覧表示",
+		"action.update.feedback":    "フィードバックステータス更新",
 		"action.login":              "ユーザーログイン",
 		"action.logout":             "ユーザーログアウト",
 		"action.auth":               "認証操作",
@@ -189,6 +219,11 @@ var actionStorage = map[string]map[string]string{
 		"action.update.tasks":       "작업 수정",
 		"action.delete.tasks":       "작업 삭제",
 		"action.view.dashboard":     "대시보드 보기",
+		"action.view.mail-config":   "메일 설정 보기",
+		"action.update.mail-config": "메일 설정 수정",
+		"action.create.mail-config": "메일 설정 작업",
+		"action.view.feedback":      "피드백 보기",
+		"action.update.feedback":    "피드백 상태 수정",
 		"action.login":              "사용자 로그인",
 		"action.logout":             "사용자 로그아웃",
 		"action.auth":               "인증 작업",

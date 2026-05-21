@@ -80,6 +80,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		return apperrors.New(apperrors.ErrBadRequest, "无效的分片索引")
 	}
 
+	// 将分片写入临时目录，文件名为 chunk_{index}，与后续 merge 逻辑匹配。
 	chunkPath := filepath.Join(chunkDir, uploadID, fmt.Sprintf("chunk_%d", index))
 	dst, err := os.Create(chunkPath)
 	if err != nil {
@@ -93,6 +94,8 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 更新已上传的分片索引列表，支持幂等上传：网络抖动导致客户端重试同一分片时，
+	// 已存在的 index 不会重复记录，避免 CompleteUpload 误判分片完整性。
 	var uploaded []int
 	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
 		uploaded = []int{}
@@ -126,6 +129,10 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在或已过期")
 	}
 
+	// 使用 canceled 标记做两阶段清理：仅在上下文取消时删除临时分片数据，
+	// 正常流程不应清理（文件已经合并完毕移动到正式目录）。
+	// cleanup 使用 context.WithoutCancel 剥离原始 ctx 的取消信号，
+	// 确保 deferred 清理操作不受父上下文取消影响（父 ctx 取消时清理也必须执行）。
 	canceled := false
 	defer func() {
 		if canceled {
@@ -138,6 +145,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		}
 	}()
 
+	// 验证所有分片是否已上传，JSON 格式的已上传索引列表应与总分片数一致。
 	var uploaded []int
 	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
 		return nil, apperrors.New(apperrors.ErrBadRequest, "分片状态异常")
@@ -149,6 +157,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	chunkDirPath := filepath.Join(chunkDir, uploadID)
 	mergedPath := filepath.Join(chunkDirPath, "merged")
 
+	// 在各关键步骤间检查上下文是否已取消，实现优雅中断。
 	if err := ctx.Err(); err != nil {
 		canceled = true
 		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
@@ -161,6 +170,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	}
 	defer mergedFile.Close()
 
+	// 按索引顺序拼接所有分片，保证合并后文件内容与原始文件一致。
 	for i := 0; i < chunk.TotalChunks; i++ {
 		if err := ctx.Err(); err != nil {
 			canceled = true
@@ -189,6 +199,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
 	}
 
+	// 对整个合并后的文件做 MD5 校验，确保所有分片还原正确。
 	mergedData, err := os.ReadFile(mergedPath)
 	if err != nil {
 		zap.L().Error("read merged file for md5 failed", zap.Error(err))
@@ -203,6 +214,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrBadRequest, "文件校验失败（MD5 不匹配）")
 	}
 
+	// 按日期分目录存储，避免单个目录中文件过多影响性能。
 	dateDir := time.Now().Format("2006/01/02")
 	ext := filepath.Ext(chunk.FileName)
 	storageName := fmt.Sprintf("%s%s", uuid.New().String(), ext)
@@ -214,11 +226,13 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	finalPath := filepath.Join("uploads", storagePath)
+	// os.Rename 要求源和目标在同一文件系统分区，临时目录和 uploads 目录在设计上位于同一分区。
 	if err := os.Rename(mergedPath, finalPath); err != nil {
 		zap.L().Error("move merged file failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 合并成功后删除临时分片目录，释放磁盘空间。
 	os.RemoveAll(chunkDirPath)
 
 	fileRecord := model.File{
@@ -235,6 +249,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 标记分片上传会话为已完成。
 	now := time.Now()
 	if err := s.fileRepo.UpdateChunkCompleted(ctx, uploadID, &now); err != nil {
 		zap.L().Warn("mark chunk upload completed", zap.String("upload_id", uploadID), zap.Error(err))
@@ -341,6 +356,7 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// Best-effort 清理物理文件：数据库记录已删除，物理文件清理失败不应阻塞业务响应。
 	if file.Path != "" {
 		if err := os.Remove(file.Path); err != nil && !os.IsNotExist(err) {
 			zap.L().Warn("remove physical file failed", zap.String("id", id), zap.String("path", file.Path), zap.Error(err))
@@ -351,6 +367,7 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 }
 
 // ParseRange parses the Range header value and returns (start, end, ok).
+// 实现 RFC 7233 §2.1 定义的三种 Range 格式，用于断点续传支持。
 func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
 		return 0, 0, false
@@ -365,6 +382,7 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 	var err error
 
 	if splits[0] == "" {
+		// 后缀范围: bytes=-500 表示文件最后 500 个字节
 		end = fileSize - 1
 		suffixLen, err := strconv.ParseInt(splits[1], 10, 64)
 		if err != nil || suffixLen <= 0 {
@@ -375,12 +393,14 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 			start = 0
 		}
 	} else if splits[1] == "" {
+		// 前缀范围: bytes=0- 表示从字节 0 到文件末尾
 		start, err = strconv.ParseInt(splits[0], 10, 64)
 		if err != nil || start < 0 || start >= fileSize {
 			return 0, 0, false
 		}
 		end = fileSize - 1
 	} else {
+		// 完整范围: bytes=0-499 表示第 0 到 499 字节
 		start, err = strconv.ParseInt(splits[0], 10, 64)
 		if err != nil || start < 0 {
 			return 0, 0, false

@@ -2,11 +2,12 @@
 // Model: internal/model/file.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import "time"
 
-// File represents an uploaded file record.
+// File 表示上传的文件记录
 type File struct {
 	BaseModel
 	Name         string  `gorm:"type:varchar(256);not null" json:"name"`
@@ -18,12 +19,12 @@ type File struct {
 	StorageType  string  `gorm:"type:varchar(20);not null" json:"storage_type"`
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (File) SortableFields() []string {
 	return []string{"created_at", "name", "size"}
 }
 
-// FileChunk tracks the progress of a resumable chunked upload.
+// FileChunk 跟踪可恢复分块上传的进度
 type FileChunk struct {
 	BaseModel
 	UploadID       string     `gorm:"type:varchar(64);uniqueIndex;not null" json:"upload_id"`

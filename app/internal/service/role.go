@@ -38,6 +38,7 @@ func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest, cur
 	if req.Level < 1 {
 		return nil, apperrors.New(apperrors.ErrBadRequest, "")
 	}
+	// 校验当前用户是否有权限创建指定层级的角色（不能创建高于自身层级的角色）。
 	if err := checkRoleLevelChange(ctx, s.userRepo, currentUserID, isRoot, req.Level); err != nil {
 		return nil, err
 	}
@@ -83,12 +84,16 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
 	}
 
+	// 三级权限校验：
+	// 1. checkRoleRootGuard — 非 Root 不能修改 Root 级别的角色
 	if err := checkRoleRootGuard(role.Level, isRoot); err != nil {
 		return err
 	}
+	// 2. checkRoleHierarchy — 当前用户的角色层级必须 >= 目标角色的层级
 	if err := checkRoleHierarchy(ctx, s.userRepo, currentUserID, isRoot, role.Level); err != nil {
 		return err
 	}
+	// 3. checkRoleLevelChange — 如果要修改角色层级，新的层级必须在当前用户的权限范围内
 	if req.Level != nil {
 		if *req.Level < 1 {
 			return apperrors.New(apperrors.ErrBadRequest, "角色层级必须大于0")
@@ -98,6 +103,7 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 		}
 	}
 
+	// 角色名唯一性校验，排除自身。
 	if req.Name != "" && req.Name != role.Name {
 		count, err := s.roleRepo.CountByName(ctx, req.Name, id)
 		if err != nil {
@@ -109,6 +115,7 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 		}
 	}
 
+	// 部分更新：仅覆盖请求中提供的字段。
 	if req.Name != "" {
 		role.Name = req.Name
 	}
@@ -140,6 +147,7 @@ func (s *RoleService) Delete(ctx context.Context, id string, currentUserID strin
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
 	}
 
+	// 硬性约束：有用户绑定的角色不可删除，防止孤立的角色引用。
 	if err := checkRoleRootGuard(role.Level, isRoot); err != nil {
 		return err
 	}
@@ -161,6 +169,7 @@ func (s *RoleService) Delete(ctx context.Context, id string, currentUserID strin
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 删除后清理角色相关的权限缓存，保证下游用户下次请求时重新加载。
 	s.invalidatePermCache(ctx)
 	return nil
 }
@@ -188,6 +197,7 @@ func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.
 		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
 	}
 
+	// 必须校验层级：防止低层级用户通过修改高角色权限实现越权。
 	if err := checkRoleRootGuard(role.Level, isRoot); err != nil {
 		return err
 	}
@@ -195,16 +205,20 @@ func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.
 		return err
 	}
 
+	// 全量替换角色的权限：先删除旧关联再插入新关联，而非逐条 diff。
 	if err := s.roleRepo.ReplacePermissions(ctx, id, req.PermissionIDs); err != nil {
 		zap.L().Error("assign permissions failed", zap.String("role_id", id), zap.Error(err))
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 权限变更后立即清除缓存，所有用户下次请求时重新加载。
 	s.invalidatePermCache(ctx)
 	return nil
 }
 
 // invalidatePermCache removes all cached permission entries from Redis.
+// 使用 SCAN 游标遍历所有 perm:* 前缀的 key 进行批量删除。
+// 相比 FLUSH 或 KEYS，SCAN 不会阻塞 Redis 且支持生产环境大规模 key 的场景。
 func (s *RoleService) invalidatePermCache(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -218,6 +232,7 @@ func (s *RoleService) invalidatePermCache(ctx context.Context) {
 			return
 		}
 		if len(keys) > 0 {
+			// 批量删除一次 scan 结果，减少网络往返次数。
 			if err := s.rdb.Del(ctx, keys...).Err(); err != nil {
 				zap.L().Warn("delete perm cache keys failed", zap.Error(err))
 			}

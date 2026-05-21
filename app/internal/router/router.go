@@ -99,6 +99,10 @@ func (r *Router) setupRoutes() {
 	fileRepo := repository.NewFileRepository(r.db)
 	taskRepo := repository.NewTaskRepository(r.db)
 	dashRepo := repository.NewDashboardRepository(r.db)
+	mailConfigRepo := repository.NewMailConfigRepository(r.db)
+	emailTokenRepo := repository.NewEmailTokenRepository(r.db)
+	inboundEmailRepo := repository.NewInboundEmailRepository(r.db)
+	feedbackRepo := repository.NewFeedbackRepository(r.db)
 
 	// Create services
 	avatarStorage, err := storage.NewLocalStorage("uploads", "/uploads")
@@ -123,10 +127,15 @@ func (r *Router) setupRoutes() {
 	fileSvc := service.NewFileService(fileRepo)
 	taskSvc := service.NewTaskService(taskRepo)
 	dashSvc := service.NewDashboardService(dashRepo)
+	mailSvc := service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
+	emailVerificationSvc := service.NewEmailVerificationService(emailTokenRepo, userRepo, mailSvc)
+	feedbackSvc := service.NewFeedbackService(feedbackRepo, mailSvc)
 
 	// Auth (no auth required)
-	authHandler := handler.NewAuthHandler(authSvc, auditSvc)
+	authHandler := handler.NewAuthHandlerWithEmail(authSvc, emailVerificationSvc, auditSvc)
 	v1.POST("/auth/login", authHandler.Login)
+	v1.POST("/auth/password-reset/request", authHandler.RequestPasswordReset)
+	v1.POST("/auth/password-reset/confirm", authHandler.ResetPassword)
 	v1.POST("/auth/refresh", authHandler.Refresh)
 	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), middleware.Audit(auditSvc), authHandler.Logout)
 	v1.GET("/auth/me", middleware.Auth(r.jwtManager), authHandler.Me)
@@ -152,6 +161,7 @@ func (r *Router) setupRoutes() {
 		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
 		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
 		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
+		users.PUT("/:id/password", middleware.RBAC(rbacCache, r.db), userHandler.ResetPassword)
 		users.POST("/:id/avatar", middleware.RBAC(rbacCache, r.db), userHandler.UploadAvatar)
 	}
 
@@ -207,6 +217,26 @@ func (r *Router) setupRoutes() {
 		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
 	}
 
+	// System mail configuration
+	mailHandler := handler.NewMailHandler(mailSvc)
+	mailConfig := authorized.Group("/system/mail-config")
+	{
+		mailConfig.GET("", middleware.RBAC(rbacCache, r.db), mailHandler.GetConfig)
+		mailConfig.PUT("", middleware.RBAC(rbacCache, r.db), mailHandler.SaveConfig)
+		mailConfig.POST("/test-smtp", middleware.RBAC(rbacCache, r.db), mailHandler.TestSMTP)
+		mailConfig.POST("/test-imap", middleware.RBAC(rbacCache, r.db), mailHandler.TestIMAP)
+		mailConfig.POST("/sync-imap", middleware.RBAC(rbacCache, r.db), mailHandler.SyncIMAP)
+	}
+
+	// Feedback
+	feedbackHandler := handler.NewFeedbackHandler(feedbackSvc)
+	feedback := authorized.Group("/feedback")
+	{
+		feedback.POST("", feedbackHandler.Create)
+		feedback.GET("", middleware.RBAC(rbacCache, r.db), feedbackHandler.List)
+		feedback.PUT("/:id/status", middleware.RBAC(rbacCache, r.db), feedbackHandler.UpdateStatus)
+	}
+
 	// Dashboard
 	dashboardHandler := handler.NewDashboardHandler(dashSvc)
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
@@ -242,6 +272,10 @@ func NewAsynqServer(rdb *redis.Client) *asynq.Server {
 }
 
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
-func NewAsynqMux() *asynq.ServeMux {
-	return task.NewMux()
+func NewAsynqMux(db *gorm.DB) *asynq.ServeMux {
+	mailConfigRepo := repository.NewMailConfigRepository(db)
+	inboundEmailRepo := repository.NewInboundEmailRepository(db)
+	feedbackRepo := repository.NewFeedbackRepository(db)
+	mailSvc := service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
+	return task.NewMux(mailSvc)
 }

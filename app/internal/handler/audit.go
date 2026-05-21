@@ -4,22 +4,22 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// AuditHandler handles audit log HTTP requests.
+// AuditHandler 处理审计日志相关的 HTTP 请求。
 type AuditHandler struct {
 	svc *service.AuditService
 }
 
-// NewAuditHandler creates a new AuditHandler with the given dependencies.
+// NewAuditHandler 创建一个新的 AuditHandler 实例，注入相关的服务依赖。
 func NewAuditHandler(svc *service.AuditService) *AuditHandler {
 	return &AuditHandler{svc: svc}
 }
 
-// List returns a paginated list of audit logs with optional filters.
+// List 返回分页的审计日志列表，支持可选的过滤条件。
 //
 // @Summary      审计日志列表
 // @Description  分页查询审计日志，支持按关键词、操作、资源类型筛选
@@ -37,16 +37,23 @@ func NewAuditHandler(svc *service.AuditService) *AuditHandler {
 // @Security     BearerAuth
 func (h *AuditHandler) List(c *gin.Context) {
 	var req dto.ListAuditLogRequest
+	// 绑定查询参数，如果失败则返回请求参数错误
 	if err := c.ShouldBindQuery(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
-	result, err := h.svc.List(c.Request.Context(), req)
+	// 从中间件中获取当前请求的语言设置（用于国际化支持）
+	lang, _ := c.Get(middleware.ContextKeyLang)
+	langStr, _ := lang.(string)
+
+	// 调用服务层获取审计日志分页列表
+	result, err := h.svc.List(c.Request.Context(), langStr, req)
 	if err != nil {
 		attachError(c, err)
 		return
 	}
 
+	// 统一返回分页数据格式
 	response.Page(c, result.List, result.Total, req.GetPage(), req.GetPageSize())
 }

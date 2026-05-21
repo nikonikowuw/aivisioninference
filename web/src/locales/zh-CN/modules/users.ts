@@ -51,6 +51,7 @@ export const users = {
     createSuccess: '创建成功',
     updateSuccess: '更新成功',
     deleteSuccess: '删除成功',
+    resetPasswordSuccess: '密码重置成功',
     deleteConfirm: '确定删除该用户？',
     disableConfirm: '确定禁用该用户？',
     enableConfirm: '确定启用该用户？',

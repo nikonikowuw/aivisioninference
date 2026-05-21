@@ -12,6 +12,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 )
 
 const maxAuditSummaryLength = 255
@@ -39,9 +40,11 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			return
 		}
 
+		// 在 c.Next() 之前记录开始时间，之后获取 DurationMs，精确测量请求处理耗时。
 		start := time.Now()
 		c.Next()
 
+		// 通过四个独立的推断函数组合审计日志，每个函数只负责一个维度的数据，职责单一。
 		status := inferAuditResponseStatus(c)
 		auditLog := &model.AuditLog{
 			ResourceType:   inferAuditResourceType(c.Request.URL.Path),
@@ -52,11 +55,15 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			ResponseStatus: status,
 			DurationMs:     time.Since(start).Milliseconds(),
 			ResultSummary:  TruncateAuditSummary(inferAuditResultSummary(status), maxAuditSummaryLength),
+			ActionType:     inferAuditActionType(c.Request.Method, inferAuditResourceType(c.Request.URL.Path), c.Request.URL.Path),
 		}
+		// FullPath 返回注册的路由（如 /api/v1/users/:id），比原始 URL 路径更适合审计归类。
+		// 如果路由未匹配到，Fallback 到原始 URL 路径。
 		if auditLog.RequestPath == "" {
 			auditLog.RequestPath = c.Request.URL.Path
 		}
 
+		// 从 Auth 中间件设置的 Gin Context 中获取用户信息，关联审计记录到具体用户。
 		if userID, ok := c.Get(ContextKeyUserID); ok {
 			if uid, ok := userID.(string); ok && uid != "" {
 				auditLog.UserID = &uid
@@ -68,6 +75,7 @@ func Audit(svc AuditLogger) gin.HandlerFunc {
 			}
 		}
 
+		// 审计写入失败仅记录警告日志，不阻塞业务响应。
 		if err := svc.Create(c.Request.Context(), auditLog); err != nil {
 			zap.L().Warn("write audit log failed",
 				zap.String("path", c.Request.URL.Path),
@@ -93,6 +101,8 @@ func shouldSkipAudit(method, path string) bool {
 }
 
 // inferAuditResourceType 从请求路径提取资源类型，用于审计归类。
+// 默认路由格式为 /api/v1/{resource}/...，从中提取第3段作为资源类型。
+// 非标准路径则取第一个 path segment。
 func inferAuditResourceType(path string) string {
 	trimmed := strings.Trim(path, "/")
 	if trimmed == "" {
@@ -105,7 +115,41 @@ func inferAuditResourceType(path string) string {
 	return parts[0]
 }
 
+// methodActions 定义 HTTP 方法对应的 i18n action key。
+var methodActions = map[string]string{
+	"GET":    "view",
+	"POST":   "create",
+	"PUT":    "update",
+	"PATCH":  "update",
+	"DELETE": "delete",
+}
+
+// inferAuditActionType 根据 HTTP 方法和资源类型生成 i18n key。
+// 格式: action.{method}.{resource}
+// 示例: action.create.users, action.view.roles
+func inferAuditActionType(method, resourceType, path string) string {
+	action, ok := methodActions[method]
+	if !ok {
+		action = "operate"
+	}
+
+	// 特殊路径处理
+	if resourceType == "auth" {
+		if method == "POST" {
+			// 区分登录和登出
+			if strings.Contains(path, "/logout") {
+				return i18n.ActionLogout
+			}
+			return i18n.ActionLogin
+		}
+		return i18n.ActionAuth
+	}
+
+	return "action." + action + "." + resourceType
+}
+
 // inferAuditResponseStatus 推断审计应记录的最终响应状态码。
+// 优先从 Gin 错误链中提取业务错误码映射 HTTP 状态码，否则使用实际响应的状态码。
 func inferAuditResponseStatus(c *gin.Context) int {
 	if c == nil {
 		return http.StatusOK
@@ -117,6 +161,7 @@ func inferAuditResponseStatus(c *gin.Context) int {
 	if lastErr == nil || lastErr.Err == nil {
 		return c.Writer.Status()
 	}
+	// 使用 errors.As 而非类型断言，因为错误可能被多层包装（如 fmt.Errorf("...: %w", err)）。
 	var appErr *apperrors.AppError
 	if errors.As(lastErr.Err, &appErr) {
 		return AuditHTTPStatusFromCode(appErr.Code)
@@ -125,6 +170,7 @@ func inferAuditResponseStatus(c *gin.Context) int {
 }
 
 // AuditHTTPStatusFromCode 按项目错误码区间映射 HTTP 状态码。
+// 错误码区间规则：1xxxx=参数错误, 2xxxx=认证失败, 3xxxx=权限不足, 4xxxx=资源未找到, 5xxxx=系统异常。
 func AuditHTTPStatusFromCode(code int) int {
 	switch {
 	case code >= 10000 && code < 20000:

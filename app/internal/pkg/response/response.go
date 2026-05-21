@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
-	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 )
 
 // Response is the standard API response wrapper.
@@ -27,22 +26,24 @@ type PageData struct {
 }
 
 // OK sends a success response with code=0.
+// message 固定为 "success"，前端优先翻译；后端 message 仅作 fallback。
 func OK(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		Code:    apperrors.Success,
-		Message: i18n.Translate(c.GetString("lang"), apperrors.Success),
+		Message: "success",
 		Data:    data,
 	})
 }
 
 // Err sends an error response based on the AppError code.
-// It uses the AppError's own Message if present, otherwise falls back to i18n translation.
+// If AppError.Message is empty, falls back to DefaultMessage for the code.
 func Err(c *gin.Context, err error) {
 	if appErr, ok := err.(*apperrors.AppError); ok {
 		httpStatus := codeToHTTPStatus(appErr.Code)
+		// message 为空时回退到错误码默认消息，防止前端收到空字符串
 		msg := appErr.Message
 		if msg == "" {
-			msg = i18n.Translate(c.GetString("lang"), appErr.Code)
+			msg = apperrors.DefaultMessage(appErr.Code)
 		}
 		c.JSON(httpStatus, Response{
 			Code:    appErr.Code,
@@ -50,17 +51,19 @@ func Err(c *gin.Context, err error) {
 		})
 		return
 	}
+	// 非 AppError 类型，返回通用错误码让前端优先翻译，后端 message 作为 fallback
 	c.JSON(http.StatusInternalServerError, Response{
 		Code:    apperrors.ErrInternal,
-		Message: i18n.Translate(c.GetString("lang"), apperrors.ErrInternal),
+		Message: apperrors.DefaultMessage(apperrors.ErrInternal),
 	})
 }
 
 // Page sends a paginated success response.
+// message 固定为 "success"，前端优先翻译；后端 message 仅作 fallback。
 func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 	c.JSON(http.StatusOK, Response{
 		Code:    apperrors.Success,
-		Message: i18n.Translate(c.GetString("lang"), apperrors.Success),
+		Message: "success",
 		Data: PageData{
 			List:     list,
 			Total:    total,

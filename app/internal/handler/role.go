@@ -5,22 +5,21 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/middleware"
-	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// RoleHandler handles HTTP requests for Role CRUD and permission assignment.
+// RoleHandler 处理角色管理相关的 HTTP 请求（增删改查及权限分配）。
 type RoleHandler struct {
 	svc *service.RoleService
 }
 
-// NewRoleHandler creates a new RoleHandler with the given dependencies.
+// NewRoleHandler 创建一个新的 RoleHandler 实例。
 func NewRoleHandler(svc *service.RoleService) *RoleHandler {
 	return &RoleHandler{svc: svc}
 }
 
-// List returns a paginated list of roles with optional search filters.
+// List 返回分页的角色列表，支持关键词（名称/描述）搜索。
 //
 // @Summary      角色列表
 // @Description  分页查询角色列表，支持关键词搜索
@@ -35,10 +34,11 @@ func NewRoleHandler(svc *service.RoleService) *RoleHandler {
 func (h *RoleHandler) List(c *gin.Context) {
 	var req dto.RoleListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
+	// 查找符合过滤条件的角色列表
 	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
 		attachError(c, err)
@@ -48,7 +48,7 @@ func (h *RoleHandler) List(c *gin.Context) {
 	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
 }
 
-// Create creates a new role.
+// Create 创建一个新的角色，验证创建者的层级关系以防越权。
 //
 // @Summary      创建角色
 // @Description  创建新角色
@@ -62,15 +62,17 @@ func (h *RoleHandler) List(c *gin.Context) {
 func (h *RoleHandler) Create(c *gin.Context) {
 	var req dto.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
+	// 获取当前操作人的用户 ID 及其超级管理员标识 (Root) 用于层级权限判定
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
 	root, _ := isRoot.(bool)
 
+	// 创建角色
 	role, err := h.svc.Create(c.Request.Context(), req, uid, root)
 	if err != nil {
 		attachError(c, err)
@@ -80,7 +82,7 @@ func (h *RoleHandler) Create(c *gin.Context) {
 	response.OK(c, role)
 }
 
-// GetByID returns a role by its ID.
+// GetByID 根据角色 ID 获取角色的元数据。
 //
 // @Summary      获取角色详情
 // @Description  根据 ID 查询角色信息
@@ -100,7 +102,7 @@ func (h *RoleHandler) GetByID(c *gin.Context) {
 	response.OK(c, role)
 }
 
-// Update updates an existing role by its ID.
+// Update 更新已存在的某个角色的属性信息，并校验层级操作权限。
 //
 // @Summary      更新角色
 // @Description  更新角色信息
@@ -116,15 +118,17 @@ func (h *RoleHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
+	// 获取操作人信息用于防越权校验
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
 	root, _ := isRoot.(bool)
 
+	// 执行更新
 	if err := h.svc.Update(c.Request.Context(), id, req, uid, root); err != nil {
 		attachError(c, err)
 		return
@@ -133,7 +137,7 @@ func (h *RoleHandler) Update(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// Delete soft-deletes a role by its ID.
+// Delete 软删除角色，并校验层级操作权限。
 //
 // @Summary      删除角色
 // @Description  删除角色
@@ -146,11 +150,13 @@ func (h *RoleHandler) Update(c *gin.Context) {
 func (h *RoleHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
+	// 获取操作人信息用于防越权校验
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
 	root, _ := isRoot.(bool)
 
+	// 执行软删除
 	if err := h.svc.Delete(c.Request.Context(), id, uid, root); err != nil {
 		attachError(c, err)
 		return
@@ -158,7 +164,7 @@ func (h *RoleHandler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// GetPermissions returns the permissions assigned to a role.
+// GetPermissions 获取指定角色已绑定的所有权限列表。
 //
 // @Summary      获取角色权限
 // @Description  根据角色 ID 查询已分配的权限列表
@@ -178,7 +184,7 @@ func (h *RoleHandler) GetPermissions(c *gin.Context) {
 	response.OK(c, permissions)
 }
 
-// AssignPermissions replaces all permissions of a role with the given set.
+// AssignPermissions 全量覆盖更新指定角色的权限绑定关系，执行层级防越权校验。
 //
 // @Summary      分配权限
 // @Description  替换角色的全部权限（全量覆盖）
@@ -194,15 +200,17 @@ func (h *RoleHandler) AssignPermissions(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.AssignPermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
+	// 获取操作人信息用于越权检测
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
 	root, _ := isRoot.(bool)
 
+	// 进行角色授权
 	if err := h.svc.AssignPermissions(c.Request.Context(), id, req, uid, root); err != nil {
 		attachError(c, err)
 		return

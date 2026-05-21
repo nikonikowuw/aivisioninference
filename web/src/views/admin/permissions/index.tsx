@@ -19,16 +19,16 @@ import {
   useDisclosure,
   Spinner,
   Center,
-  Accordion,
-  AccordionItem,
-  AccordionButton,
-  AccordionPanel,
-  AccordionIcon,
   Badge,
   HStack,
   IconButton,
+  Icon,
+  Collapse,
+  Tooltip,
+  VStack,
 } from '@chakra-ui/react';
-import { AddIcon, EditIcon, DeleteIcon } from '@chakra-ui/icons';
+import { AddIcon, EditIcon, DeleteIcon, ChevronDownIcon, ChevronRightIcon } from '@chakra-ui/icons';
+import { MdMenu, MdRadioButtonChecked } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useMemo } from 'react';
 import { permissionsApi, type Permission } from 'services/api';
@@ -36,6 +36,7 @@ import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { filterTree, type FilteredNode } from 'utils/treeFilter';
+import Card from 'components/card/Card';
 
 function flattenTree(nodes: Permission[], depth = 0): (Permission & { _depth: number })[] {
   const result: (Permission & { _depth: number })[] = [];
@@ -71,9 +72,141 @@ function getDescendantIds(nodes: Permission[], id: string): Set<string> {
   return ids;
 }
 
+const PermissionRow = ({ 
+  node, 
+  depth, 
+  onEdit, 
+  onDelete, 
+  expandedIds, 
+  onToggleExpand 
+}: { 
+  node: FilteredNode; 
+  depth: number; 
+  onEdit: (p: Permission) => void; 
+  onDelete: (id: string) => void;
+  expandedIds: Set<string>;
+  onToggleExpand: (id: string) => void;
+}) => {
+  const { t: tMenu } = useTranslation('menu');
+  const isExpanded = expandedIds.has(node.id);
+  const hasChildren = node.children && node.children.length > 0;
+  
+  const bgHover = useColorModeValue('gray.50', 'whiteAlpha.50');
+  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
+  const lineConnectorColor = useColorModeValue('gray.200', 'gray.600');
+  const menuIconColor = useColorModeValue('brand.500', 'brand.300');
+  const buttonIconColor = useColorModeValue('orange.500', 'orange.300');
+  const textColor = useColorModeValue('navy.700', 'white');
+
+  const getDisplayName = (p: Permission) => {
+    if (p.type === 'menu') {
+      return tMenu(p.code, { defaultValue: p.name });
+    }
+    return p.name;
+  };
+
+  return (
+    <Box w="100%">
+      <Flex 
+        align="center" 
+        py={2} 
+        px={3} 
+        borderRadius="lg" 
+        _hover={{ bg: bgHover }}
+        transition="all 0.2s"
+        cursor="pointer"
+        onClick={() => hasChildren && onToggleExpand(node.id)}
+      >
+        <HStack spacing={3} flex="1">
+          {hasChildren ? (
+            <Icon 
+              as={isExpanded ? ChevronDownIcon : ChevronRightIcon} 
+              w="18px" 
+              h="18px" 
+              color="gray.400" 
+            />
+          ) : (
+            <Box w="18px" />
+          )}
+          
+          <Icon
+            as={node.type === 'menu' ? MdMenu : MdRadioButtonChecked}
+            color={node.type === 'menu' ? menuIconColor : buttonIconColor}
+            w="16px"
+            h="16px"
+          />
+          
+          <HStack spacing={2}>
+            <Text 
+              fontSize="sm" 
+              fontWeight={depth === 0 ? 'bold' : 'medium'} 
+              color={textColor}
+              opacity={node.isAncestor ? 0.6 : 1}
+            >
+              {getDisplayName(node as Permission)}
+            </Text>
+            <Badge variant="subtle" colorScheme="blue" fontSize="2xs" px={2} borderRadius="full">
+              {node.code}
+            </Badge>
+            {node.type === 'button' && (
+              <Badge variant="subtle" colorScheme="orange" fontSize="2xs" px={2} borderRadius="full">
+                {node.type}
+              </Badge>
+            )}
+          </HStack>
+        </HStack>
+        
+        <HStack spacing={1}>
+          <IconButton 
+            aria-label="Edit" 
+            icon={<EditIcon />} 
+            size="xs" 
+            variant="ghost" 
+            colorScheme="brand"
+            onClick={(e) => { e.stopPropagation(); onEdit(node as Permission); }}
+          />
+          <IconButton 
+            aria-label="Delete" 
+            icon={<DeleteIcon />} 
+            size="xs" 
+            variant="ghost" 
+            colorScheme="red"
+            onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
+          />
+        </HStack>
+      </Flex>
+
+      {hasChildren && (
+        <Collapse in={isExpanded} animateOpacity>
+          <Box 
+            position="relative" 
+            ml={4} 
+            pl={4} 
+            borderLeft="1px solid"
+            borderColor={lineConnectorColor}
+          >
+            {node.children?.map((child) => (
+              <PermissionRow 
+                key={child.id} 
+                node={child as FilteredNode} 
+                depth={depth + 1} 
+                onEdit={onEdit} 
+                onDelete={onDelete}
+                expandedIds={expandedIds}
+                onToggleExpand={onToggleExpand}
+              />
+            ))}
+          </Box>
+        </Collapse>
+      )}
+    </Box>
+  );
+};
+
 export default function Permissions() {
   const { t } = useTranslation('modules/permissions');
   const { t: tCommon } = useTranslation('common');
+  const { t: tMenu } = useTranslation('menu');
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
@@ -85,13 +218,40 @@ export default function Permissions() {
   const [form, setForm] = useState({ name: '', code: '', type: 'menu', parent_id: '' });
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const { filters, setFilter, resetFilters } = useFilter();
+  const { filters, setFilter, resetFilters, refresh } = useFilter();
 
-  // 使用 filterTree 过滤树数据
   const filteredTree = useMemo(() => {
     return filterTree(tree, filters.keyword, filters.type);
   }, [tree, filters.keyword, filters.type]);
+
+  // 默认展开所有（或者根据需要逻辑控制）
+  useEffect(() => {
+    if (tree.length > 0 && expandedIds.size === 0) {
+      const allIds = new Set<string>();
+      const walk = (nodes: Permission[]) => {
+        nodes.forEach(n => {
+          if (n.children && n.children.length > 0) {
+            allIds.add(n.id);
+            walk(n.children);
+          }
+        });
+      };
+      walk(tree);
+      setExpandedIds(allIds);
+    }
+  }, [tree]);
+
+  const handleToggleExpand = (id: string) => {
+    const newExpanded = new Set(expandedIds);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedIds(newExpanded);
+  };
 
   const handleClose = () => {
     setEditing(null);
@@ -168,48 +328,12 @@ export default function Permissions() {
     }
   };
 
-  const leafBg = useColorModeValue('gray.50', 'whiteAlpha.50');
-
-  const renderTree = (nodes: FilteredNode[], depth = 0) =>
-    nodes.map((p) => (
-      <Box key={p.id} ml={depth * 4} mb={2}>
-        <Flex align="center" justify="space-between">
-          <Box flex="1">
-            {p.children && p.children.length > 0 ? (
-              <Accordion allowToggle>
-                <AccordionItem border="none">
-                  <AccordionButton px={2} py={2}>
-                    <Box flex="1" textAlign="left">
-                      <HStack>
-                        <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{p.name}</Text>
-                        <Badge colorScheme="blue">{p.code}</Badge>
-                        <Badge colorScheme="gray">{p.type}</Badge>
-                      </HStack>
-                    </Box>
-                    <AccordionIcon />
-                  </AccordionButton>
-                  <AccordionPanel pb={0} pl={4}>
-                    {renderTree(p.children as FilteredNode[], depth + 1)}
-                  </AccordionPanel>
-                </AccordionItem>
-              </Accordion>
-            ) : (
-              <Box py={2} px={4} borderRadius="8px" bg={leafBg}>
-                <HStack>
-                  <Text fontWeight={p.isAncestor ? '400' : '600'} opacity={p.isAncestor ? 0.5 : 1}>{p.name}</Text>
-                  <Badge colorScheme="blue">{p.code}</Badge>
-                  <Badge colorScheme="gray">{p.type}</Badge>
-                </HStack>
-              </Box>
-            )}
-          </Box>
-          <HStack spacing={1}>
-            <IconButton aria-label={tCommon('button.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(p)} />
-            <IconButton aria-label={tCommon('button.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(p.id)} />
-          </HStack>
-        </Flex>
-      </Box>
-    ));
+  const getPermissionName = (p: Permission) => {
+    if (p.type === 'menu') {
+      return tMenu(p.code, { defaultValue: p.name });
+    }
+    return p.name;
+  };
 
   if (loading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
@@ -219,12 +343,22 @@ export default function Permissions() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
-        <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
+        <Button 
+          leftIcon={<AddIcon />} 
+          variant="brand" 
+          onClick={openCreate}
+          borderRadius="xl"
+          boxShadow="0px 4px 12px rgba(0, 0, 0, 0.1)"
+        >
+          {t('button.create')}
+        </Button>
       </Flex>
+      
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'type',
@@ -236,46 +370,97 @@ export default function Permissions() {
           },
         ]}
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} p={6}>
-        {filteredTree.length > 0 ? renderTree(filteredTree) : <Text color="gray.500">{t('message.emptyData')}</Text>}
-      </Box>
 
-      <Modal isOpen={isOpen} onClose={handleClose}>
-        <ModalOverlay />
-        <ModalContent>
+      <Card variant="outline" p={0} overflow="hidden">
+        <Box px={6} py={4} bg={useColorModeValue('gray.50', 'whiteAlpha.50')} borderBottom="1px solid" borderColor={borderColor}>
+          <HStack justify="space-between">
+            <Text fontWeight="bold" color={textColor}>{t('title')}</Text>
+            <Badge colorScheme="brand" borderRadius="full" px={3}>{filteredTree.length} Items</Badge>
+          </HStack>
+        </Box>
+        <Box p={4}>
+          {filteredTree.length > 0 ? (
+            <VStack align="stretch" spacing={0}>
+              {filteredTree.map((p) => (
+                <PermissionRow 
+                  key={p.id} 
+                  node={p} 
+                  depth={0} 
+                  onEdit={openEdit} 
+                  onDelete={setDeleteTarget} 
+                  expandedIds={expandedIds}
+                  onToggleExpand={handleToggleExpand}
+                />
+              ))}
+            </VStack>
+          ) : (
+            <Center py={10}>
+              <VStack spacing={2}>
+                <Text color="gray.500">{t('message.emptyData')}</Text>
+                <Button variant="ghost" size="sm" onClick={resetFilters}>{tCommon('button.reset')}</Button>
+              </VStack>
+            </Center>
+          )}
+        </Box>
+      </Card>
+
+      <Modal isOpen={isOpen} onClose={handleClose} isCentered size="lg">
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent borderRadius="2xl">
           <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.name.label')}</FormLabel>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.name.placeholder')} />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.code.label')}</FormLabel>
-              <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder={t('form.code.placeholder')} />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.type.label')}</FormLabel>
-              <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                <option value="menu">{t('form.type.menu')}</option>
-                <option value="button">{t('form.type.button')}</option>
-              </Select>
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.parentId.label')}</FormLabel>
-              <Select value={form.parent_id} onChange={(e) => setForm({ ...form, parent_id: e.target.value })} placeholder={t('form.parentId.placeholder')}>
-                <option value="">{t('form.parentId.none')}</option>
-                {flatMenuOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {'　'.repeat(p._depth)}{p.name} ({p.code})
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
+          <ModalBody pb={6}>
+            <VStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>{t('form.name.label')}</FormLabel>
+                <Input 
+                  borderRadius="xl"
+                  value={form.name} 
+                  onChange={(e) => setForm({ ...form, name: e.target.value })} 
+                  placeholder={t('form.name.placeholder')} 
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t('form.code.label')}</FormLabel>
+                <Input 
+                  borderRadius="xl"
+                  value={form.code} 
+                  onChange={(e) => setForm({ ...form, code: e.target.value })} 
+                  placeholder={t('form.code.placeholder')} 
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t('form.type.label')}</FormLabel>
+                <Select 
+                  borderRadius="xl"
+                  value={form.type} 
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                >
+                  <option value="menu">{t('form.type.menu')}</option>
+                  <option value="button">{t('form.type.button')}</option>
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>{t('form.parentId.label')}</FormLabel>
+                <Select 
+                  borderRadius="xl"
+                  value={form.parent_id} 
+                  onChange={(e) => setForm({ ...form, parent_id: e.target.value })} 
+                  placeholder={t('form.parentId.placeholder')}
+                >
+                  <option value="">{t('form.parentId.none')}</option>
+                  {flatMenuOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {'　'.repeat(p._depth)}{getPermissionName(p)} ({p.code})
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            </VStack>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={handleClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleSave}>{editing ? tCommon('button.save') : tCommon('button.create')}</Button>
+            <Button variant="ghost" mr={3} onClick={handleClose} borderRadius="xl">{tCommon('button.cancel')}</Button>
+            <Button variant="brand" onClick={handleSave} borderRadius="xl">{editing ? tCommon('button.save') : tCommon('button.create')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
@@ -291,3 +476,4 @@ export default function Permissions() {
     </Box>
   );
 }
+

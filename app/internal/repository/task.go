@@ -2,6 +2,7 @@
 // Model: internal/model/task.go
 // Generate at: 2026-05-15 22:05:18
 
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (
@@ -15,39 +16,39 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
-// TaskRepository handles database operations for Task model.
+// TaskRepository 处理 Task 异步后台任务模型的数据库读写操作
 type TaskRepository struct {
-	db *gorm.DB
+	db *gorm.DB // GORM 数据库连接实例
 }
 
-// NewTaskRepository creates a new TaskRepository.
+// NewTaskRepository 创建并返回一个新的 TaskRepository 实例
 func NewTaskRepository(db *gorm.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
-// FindByID finds a task by its ID.
+// FindByID 根据主键 ID 查询单个任务详情
 func (r *TaskRepository) FindByID(ctx context.Context, id string) (*model.Task, error) {
 	var item model.Task
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
-// Create inserts a new task record.
+// Create 插入一条新的后台任务记录
 func (r *TaskRepository) Create(ctx context.Context, item *model.Task) error {
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// Update saves changes to a task record.
+// Update 更新任务的记录字段 (如重试次数、错误日志、执行结果等)
 func (r *TaskRepository) Update(ctx context.Context, item *model.Task) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// Delete removes a task by its ID.
+// Delete 根据 ID 删除任务记录
 func (r *TaskRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Task{}).Error
 }
 
-// List returns a paginated list of tasks with optional filters.
+// List 分页查询并返回满足筛选条件的异步任务列表
 func (r *TaskRepository) List(ctx context.Context, req dto.TaskListRequest) ([]model.Task, int64, error) {
 	var items []model.Task
 	var total int64
@@ -64,10 +65,11 @@ func (r *TaskRepository) List(ctx context.Context, req dto.TaskListRequest) ([]m
 	return items, total, err
 }
 
-// UpdateStatus updates the status and optionally the finished_at timestamp of a task.
+// UpdateStatus 快捷更新任务的状态以及可选的完成时间戳 (FinishedAt)
 func (r *TaskRepository) UpdateStatus(ctx context.Context, taskID, status string, finishedAt *time.Time) error {
 	return r.db.WithContext(ctx).Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]interface{}{
 		"status":      status,
 		"finished_at": finishedAt,
 	}).Error
 }
+

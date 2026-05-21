@@ -17,26 +17,24 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// Allow all origins in development; tighten in production.
+	// 开发环境允许所有跨域请求；生产环境需进行严格域名限制。
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
 
-// WSHandler handles WebSocket connection HTTP requests.
+// WSHandler 处理 WebSocket 连接升级的 HTTP 请求。
 type WSHandler struct {
 	hub *ws.Hub
 	jwt *jwtutil.Manager
 }
 
-// NewWSHandler creates a new WSHandler with the given hub and JWT manager.
+// NewWSHandler 创建一个新的 WSHandler 实例。
 func NewWSHandler(hub *ws.Hub, jwt *jwtutil.Manager) *WSHandler {
 	return &WSHandler{hub: hub, jwt: jwt}
 }
 
-// HandleWebSocket upgrades an HTTP connection to WebSocket, authenticates
-// the client via a JWT query parameter, and registers the connection with
-// the Hub for real-time messaging.
+// HandleWebSocket 将 HTTP 连接升级为 WebSocket 协议，通过 token 查询参数进行 JWT 身份验证，并将连接注册到 Hub 中心以实现实时消息推送。
 //
 // @Summary      WebSocket 连接
 // @Description  升级 HTTP 连接为 WebSocket，通过 token query 参数认证
@@ -47,11 +45,11 @@ func NewWSHandler(hub *ws.Hub, jwt *jwtutil.Manager) *WSHandler {
 // @Failure      401    {object}  dto.Response
 // @Router       /ws [get]
 func (h *WSHandler) HandleWebSocket(c *gin.Context) {
-	// Extract JWT from query parameter
+	// 从查询参数或 Authorization 请求头中提取 JWT 访问令牌
 	tokenString := c.Query("token")
 	if tokenString == "" {
-		// Also try the "token" query param via the "authorization" header pattern
-		// (some WebSocket clients cannot set custom headers)
+		// 如果 query 中没有 token，尝试从 Authorization 头中解析 Bearer token
+		//（部分 WebSocket 客户端不支持在建立握手时直接设置自定义 Header，通常会写在 URL 传参中）
 		authHeader := c.GetHeader("Authorization")
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 			tokenString = authHeader[7:]
@@ -64,7 +62,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Validate JWT
+	// 验证 JWT 访问令牌的有效性
 	claims, err := h.jwt.ValidateAccessToken(tokenString)
 	if err != nil {
 		zap.L().Debug("ws auth failed", zap.Error(err))
@@ -73,7 +71,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Upgrade to WebSocket
+	// 升级当前的 HTTP 协议连接为 WebSocket 协议
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		zap.L().Error("websocket upgrade failed",
@@ -88,9 +86,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		zap.String("remote_addr", conn.RemoteAddr().String()),
 	)
 
-	// Register the connection with the Hub.
-	// The Hub manages read/write pumps and client lifecycle.
-	// Hub.HandleConnection creates a Client, registers it, and starts
-	// the read/write goroutines.
+	// 将该 WebSocket 连接注册到全局 Hub。Hub 将管理消息的读/写通道及客户端生命周期。
+	// Hub.HandleConnection 将会创建一个 Client 结构体并对其进行异步监听读写事件。
 	h.hub.HandleConnection(conn, claims.UserID)
 }

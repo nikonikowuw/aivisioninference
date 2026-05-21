@@ -51,6 +51,7 @@ export const users = {
     createSuccess: 'User created successfully',
     updateSuccess: 'User updated successfully',
     deleteSuccess: 'User deleted successfully',
+    resetPasswordSuccess: 'Password reset successfully',
     deleteConfirm: 'Are you sure you want to delete this user?',
     disableConfirm: 'Are you sure you want to disable this user?',
     enableConfirm: 'Are you sure you want to enable this user?',

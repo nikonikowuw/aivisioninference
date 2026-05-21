@@ -18,10 +18,13 @@ var supportedLanguages = map[string]bool{
 	"en":    true,
 	"zh":    true,
 	"zh-tw": true,
+	"id":    true,
+	"ja":    true,
+	"ko":    true,
 }
 
 // I18n returns a Gin middleware that reads the Accept-Language header and
-// sets a "lang" key in the gin.Context. Supported values: "en", "zh", "zh-tw".
+// sets a "lang" key in the gin.Context. Supported values: "en", "zh", "zh-tw", "id", "ja", "ko".
 // Falls back to "en" if the header is missing or contains an unsupported language.
 func I18n() gin.HandlerFunc {
 	return func(c *gin.Context) {

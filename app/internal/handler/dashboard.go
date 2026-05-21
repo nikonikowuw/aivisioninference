@@ -7,17 +7,17 @@ import (
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// DashboardHandler handles dashboard statistics HTTP requests.
+// DashboardHandler 处理仪表盘统计相关的 HTTP 请求。
 type DashboardHandler struct {
 	svc *service.DashboardService
 }
 
-// NewDashboardHandler creates a new DashboardHandler with the given dependencies.
+// NewDashboardHandler 创建一个新的 DashboardHandler 实例。
 func NewDashboardHandler(svc *service.DashboardService) *DashboardHandler {
 	return &DashboardHandler{svc: svc}
 }
 
-// Stats returns dashboard statistics (total users, roles, files, tasks).
+// Stats 返回系统概览统计数据（用户总数、角色数、文件数和任务数等）。
 //
 // @Summary      仪表盘统计
 // @Description  返回系统概览统计数据
@@ -27,6 +27,7 @@ func NewDashboardHandler(svc *service.DashboardService) *DashboardHandler {
 // @Router       /dashboard/stats [get]
 // @Security     BearerAuth
 func (h *DashboardHandler) Stats(c *gin.Context) {
+	// 调用服务层获取统计数据
 	stats, err := h.svc.Stats(c.Request.Context())
 	if err != nil {
 		attachError(c, err)

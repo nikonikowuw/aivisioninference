@@ -1,3 +1,4 @@
+// Package gen provides CRUD code generation for niko-admin models.
 package gen
 
 import (

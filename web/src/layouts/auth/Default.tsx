@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 // Chakra imports
 import { Box, Flex, Icon, Text } from '@chakra-ui/react';
-import PropTypes from 'prop-types';
 import FixedPlugin from 'components/fixedPlugin/FixedPlugin';
 import LanguageSwitcher from 'components/i18n/LanguageSwitcher';
 // Custom components
@@ -58,11 +57,5 @@ function AuthIllustration(props: { children: ReactNode | string; illustrationBac
 		</Flex>
 	);
 }
-// PROPS
-
-AuthIllustration.propTypes = {
-	illustrationBackground: PropTypes.string,
-	image: PropTypes.any
-};
 
 export default AuthIllustration;

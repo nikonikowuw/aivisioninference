@@ -10,35 +10,39 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
-// AuditRepository handles database operations for AuditLog model.
+// AuditRepository 处理 AuditLog 审计日志模型的数据持久化操作
 type AuditRepository struct {
-	db *gorm.DB
+	db *gorm.DB // GORM 数据库连接实例
 }
 
-// NewAuditRepository creates a new AuditRepository.
+// NewAuditRepository 创建并返回一个新的 AuditRepository 实例
 func NewAuditRepository(db *gorm.DB) *AuditRepository {
 	return &AuditRepository{db: db}
 }
 
-// Create inserts a new audit log record.
+// Create 往数据库中插入一条新的审计日志记录
 func (r *AuditRepository) Create(ctx context.Context, log *model.AuditLog) error {
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
-// List returns a paginated list of audit logs with optional filters.
+// List 分页查询并返回满足筛选条件的审计日志列表及总条数
 func (r *AuditRepository) List(ctx context.Context, req dto.ListAuditLogRequest) ([]model.AuditLog, int64, error) {
 	var logs []model.AuditLog
 	var total int64
 
+	// 应用请求中指定的各种查询范围 scopes (过滤条件)
 	query := r.db.WithContext(ctx).Model(&model.AuditLog{}).Scopes(req.FilterScopes()...)
 
+	// 统计符合过滤条件的总条数
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// 排序和分页查询数据
 	err := query.Scopes(
 		scopes.Paginate(req.GetPage(), req.GetPageSize()),
 		scopes.OrderBy(req.Sort, req.Order, model.AuditLog{}.SortableFields()...),
 	).Find(&logs).Error
 	return logs, total, err
 }
+

@@ -4,22 +4,21 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// TaskHandler handles HTTP requests for background task management.
+// TaskHandler 处理后台任务管理相关的 HTTP 请求。
 type TaskHandler struct {
 	svc *service.TaskService
 }
 
-// NewTaskHandler creates a new TaskHandler with the given dependencies.
+// NewTaskHandler 创建一个新的 TaskHandler 实例。
 func NewTaskHandler(svc *service.TaskService) *TaskHandler {
 	return &TaskHandler{svc: svc}
 }
 
-// Create creates a new background task record.
+// Create 创建一个新的后台任务（例如导出、清理等异步操作）。
 //
 // @Summary      创建任务
 // @Description  创建新的后台任务
@@ -33,7 +32,7 @@ func NewTaskHandler(svc *service.TaskService) *TaskHandler {
 func (h *TaskHandler) Create(c *gin.Context) {
 	var req dto.CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
@@ -46,7 +45,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 	response.OK(c, task)
 }
 
-// List returns a paginated list of tasks with optional filters.
+// List 返回分页的任务列表，支持关键词、任务类型以及任务状态过滤。
 //
 // @Summary      任务列表
 // @Description  分页查询任务列表，支持按关键词、类型、状态筛选
@@ -63,7 +62,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 func (h *TaskHandler) List(c *gin.Context) {
 	var req dto.TaskListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
@@ -76,7 +75,7 @@ func (h *TaskHandler) List(c *gin.Context) {
 	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
 }
 
-// GetByID returns a task by its ID.
+// GetByID 根据任务 ID 获取任务详情（包含错误信息或结果）。
 //
 // @Summary      获取任务详情
 // @Description  根据 ID 查询任务信息
@@ -96,7 +95,7 @@ func (h *TaskHandler) GetByID(c *gin.Context) {
 	response.OK(c, task)
 }
 
-// Cancel cancels a pending or running task.
+// Cancel 取消一个排队中或运行中的任务。
 //
 // @Summary      取消任务
 // @Description  取消尚未完成的任务

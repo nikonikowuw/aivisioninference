@@ -2,25 +2,27 @@
 // Model: internal/model/task.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import "time"
 
-// Task represents an asynchronous background task.
+// Task 表示异步后台任务记录，跟踪异步执行状态
 type Task struct {
 	BaseModel
-	TaskID       string     `gorm:"type:varchar(128);uniqueIndex" json:"task_id"`
-	Type         string     `gorm:"type:varchar(64);not null" json:"type"`
-	Payload      string     `gorm:"type:text" json:"payload"`
-	Status       string     `gorm:"type:varchar(20);not null" json:"status"` // pending|running|completed|failed
-	RetryCount   int        `json:"retry_count"`
-	MaxRetries   int        `json:"max_retries"`
-	Result       string     `gorm:"type:text" json:"result"`
-	ErrorMessage string     `gorm:"type:text" json:"error_message"`
-	FinishedAt   *time.Time `json:"finished_at"`
+	TaskID       string     `gorm:"type:varchar(128);uniqueIndex" json:"task_id"` // Asynq 任务队列的唯一任务 ID
+	Type         string     `gorm:"type:varchar(64);not null" json:"type"`        // 任务类型 (如: "email:delivery", "data:export")
+	Payload      string     `gorm:"type:text" json:"payload"`                     // 任务载荷 (JSON 序列化后的参数信息)
+	Status       string     `gorm:"type:varchar(20);not null" json:"status"`      // 任务状态 (pending=等待中, running=进行中, completed=已完成, failed=失败)
+	RetryCount   int        `json:"retry_count"`                                  // 任务已重试次数
+	MaxRetries   int        `json:"max_retries"`                                  // 任务最大可重试次数
+	Result       string     `gorm:"type:text" json:"result"`                      // 任务执行结果输出 (成功时的元数据)
+	ErrorMessage string     `gorm:"type:text" json:"error_message"`               // 任务执行失败时的错误提示信息
+	FinishedAt   *time.Time `json:"finished_at"`                                  // 任务执行完毕时间 (无论成功或失败)
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (Task) SortableFields() []string {
 	return []string{"created_at", "type", "status"}
 }
+

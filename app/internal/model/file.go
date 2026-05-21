@@ -2,38 +2,40 @@
 // Model: internal/model/file.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import "time"
 
-// File represents an uploaded file record.
+// File 表示上传的文件记录
 type File struct {
 	BaseModel
-	Name         string  `gorm:"type:varchar(256);not null" json:"name"`
-	OriginalName string  `gorm:"type:varchar(256);not null" json:"original_name"`
-	Path         string  `gorm:"type:varchar(512)" json:"path"`
-	Loid         *uint32 `json:"loid"` // PG Large Object OID
-	MimeType     string  `gorm:"type:varchar(128)" json:"mime_type"`
-	Size         int64   `json:"size"`
-	StorageType  string  `gorm:"type:varchar(20);not null" json:"storage_type"`
+	Name         string  `gorm:"type:varchar(256);not null" json:"name"`        // 系统内部唯一的文件名 (通常为 UUID/Hash 后缀)
+	OriginalName string  `gorm:"type:varchar(256);not null" json:"original_name"` // 原始上传文件名
+	Path         string  `gorm:"type:varchar(512)" json:"path"`                 // 文件在存储介质中的路径
+	Loid         *uint32 `json:"loid"`                                          // PostgreSQL 特有的大对象 OID (Large Object OID)
+	MimeType     string  `gorm:"type:varchar(128)" json:"mime_type"`             // 文件的 MIME 类型 (如 image/png)
+	Size         int64   `json:"size"`                                          // 文件大小 (字节)
+	StorageType  string  `gorm:"type:varchar(20);not null" json:"storage_type"`  // 存储方式 (local/pg/oss 等)
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (File) SortableFields() []string {
 	return []string{"created_at", "name", "size"}
 }
 
-// FileChunk tracks the progress of a resumable chunked upload.
+// FileChunk 跟踪分块上传 (断点续传) 的进度
 type FileChunk struct {
 	BaseModel
-	UploadID       string     `gorm:"type:varchar(64);uniqueIndex;not null" json:"upload_id"`
-	FileName       string     `gorm:"type:varchar(256);not null" json:"file_name"`
-	FileSize       int64      `json:"file_size"`
-	MD5            string     `gorm:"type:varchar(64);not null" json:"md5"`
-	TotalChunks    int        `json:"total_chunks"`
-	Status         string     `gorm:"type:varchar(20);not null" json:"status"` // uploading|completed|expired
-	StorageType    string     `gorm:"type:varchar(20);not null" json:"storage_type"`
-	UploadedChunks string     `gorm:"type:text" json:"uploaded_chunks"` // JSON array of uploaded chunk indices
-	ExpiresAt      time.Time  `json:"expires_at"`
-	CompletedAt    *time.Time `json:"completed_at"`
+	UploadID       string     `gorm:"type:varchar(64);uniqueIndex;not null" json:"upload_id"` // 分块上传唯一标识 ID
+	FileName       string     `gorm:"type:varchar(256);not null" json:"file_name"`            // 文件名
+	FileSize       int64      `json:"file_size"`                                              // 文件总大小 (字节)
+	MD5            string     `gorm:"type:varchar(64);not null" json:"md5"`                   // 文件整体的 MD5 校验和，用以秒传判断
+	TotalChunks    int        `json:"total_chunks"`                                           // 分块总数
+	Status         string     `gorm:"type:varchar(20);not null" json:"status"`                // 状态 (uploading=上传中, completed=合并完成, expired=已过期)
+	StorageType    string     `gorm:"type:varchar(20);not null" json:"storage_type"`          // 存储方式 (local/pg/oss)
+	UploadedChunks string     `gorm:"type:text" json:"uploaded_chunks"`                       // 已上传分块索引的 JSON 数组 (例如 "[0, 1, 3]")
+	ExpiresAt      time.Time  `json:"expires_at"`                                             // 任务过期清理时间
+	CompletedAt    *time.Time `json:"completed_at"`                                           // 完成合并的时间
 }
+

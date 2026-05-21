@@ -9,6 +9,8 @@ import { permissions } from './modules/permissions';
 import { files } from './modules/files';
 import { auditLogs } from './modules/audit-logs';
 import { tasks } from './modules/tasks';
+import { mailConfig } from './modules/mail-config';
+import { feedback } from './modules/feedback';
 
 export default {
   common,
@@ -22,4 +24,6 @@ export default {
   'modules/files': files,
   'modules/audit-logs': auditLogs,
   'modules/tasks': tasks,
+  'modules/mail-config': mailConfig,
+  'modules/feedback': feedback,
 };

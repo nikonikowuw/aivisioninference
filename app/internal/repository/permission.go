@@ -2,6 +2,7 @@
 // Model: internal/model/permission.go
 // Generate at: 2026-05-15 22:05:18
 
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (
@@ -12,34 +13,34 @@ import (
 	"github.com/niko-admin/niko-admin/internal/model"
 )
 
-// PermissionRepository handles database operations for Permission model.
+// PermissionRepository 处理 Permission 权限/菜单模型的数据库读写操作
 type PermissionRepository struct {
-	db *gorm.DB
+	db *gorm.DB // GORM 数据库连接实例
 }
 
-// NewPermissionRepository creates a new PermissionRepository.
+// NewPermissionRepository 创建并返回一个新的 PermissionRepository 实例
 func NewPermissionRepository(db *gorm.DB) *PermissionRepository {
 	return &PermissionRepository{db: db}
 }
 
-// FindByID finds a permission by its ID.
+// FindByID 根据主键 ID 查询单个权限/菜单记录
 func (r *PermissionRepository) FindByID(ctx context.Context, id string) (*model.Permission, error) {
 	var item model.Permission
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
-// Create inserts a new permission record.
+// Create 插入一条新的权限/菜单记录
 func (r *PermissionRepository) Create(ctx context.Context, item *model.Permission) error {
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// Update saves changes to a permission record.
+// Update 更新权限/菜单的数据字段
 func (r *PermissionRepository) Update(ctx context.Context, item *model.Permission) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// queryDescendantIDs runs a recursive CTE to find all descendants of the given ID.
+// queryDescendantIDs 执行 PostgreSQL 递归 CTE 联合查询，找出指定节点的所有后代子节点 ID
 func (r *PermissionRepository) queryDescendantIDs(db *gorm.DB, id string) ([]string, error) {
 	var ids []string
 	err := db.Raw(`
@@ -53,13 +54,12 @@ func (r *PermissionRepository) queryDescendantIDs(db *gorm.DB, id string) ([]str
 	return ids, err
 }
 
-// FindDescendantIDs returns all descendant permission IDs for the given permission
-// using a single PostgreSQL recursive CTE query.
+// FindDescendantIDs 获取指定权限节点的所有子孙权限 ID 列表 (使用单次 PostgreSQL 递归查询)
 func (r *PermissionRepository) FindDescendantIDs(ctx context.Context, id string) ([]string, error) {
 	return r.queryDescendantIDs(r.db.WithContext(ctx), id)
 }
 
-// Delete removes a permission by its ID, its descendants, and cleans up join tables.
+// Delete 删除指定权限及其所有子孙权限，并级联清理角色权限关系表 (在事务中执行以保证原子性)
 func (r *PermissionRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		descendants, err := r.queryDescendantIDs(tx, id)
@@ -68,12 +68,15 @@ func (r *PermissionRepository) Delete(ctx context.Context, id string) error {
 		}
 		allIDs := append([]string{id}, descendants...)
 
+		// 1. 清理多对多角色权限关系表
 		if err := tx.Where("permission_id IN ?", allIDs).Delete(&model.RolePermission{}).Error; err != nil {
 			return err
 		}
+		// 2. 删除所有子孙权限记录
 		if err := tx.Where("id IN ?", descendants).Delete(&model.Permission{}).Error; err != nil {
 			return err
 		}
+		// 3. 删除当前节点权限记录
 		if err := tx.Where("id = ?", id).Delete(&model.Permission{}).Error; err != nil {
 			return err
 		}
@@ -81,7 +84,7 @@ func (r *PermissionRepository) Delete(ctx context.Context, id string) error {
 	})
 }
 
-// List returns a paginated list of permissions.
+// List 分页查询权限记录列表
 func (r *PermissionRepository) List(ctx context.Context, page, pageSize int) ([]model.Permission, int64, error) {
 	var items []model.Permission
 	var total int64
@@ -96,49 +99,49 @@ func (r *PermissionRepository) List(ctx context.Context, page, pageSize int) ([]
 	return items, total, err
 }
 
-// FindAllOrdered returns all permissions ordered by sort_order and created_at.
+// FindAllOrdered 获取所有权限记录，并按 sort_order 升序及创建时间升序进行排序 (用于构建权限/菜单树)
 func (r *PermissionRepository) FindAllOrdered(ctx context.Context) ([]model.Permission, error) {
 	var items []model.Permission
 	err := r.db.WithContext(ctx).Order("sort_order ASC, created_at ASC").Find(&items).Error
 	return items, err
 }
 
-// FindByCode finds a permission by its code.
+// FindByCode 根据权限唯一标识编码 Code 查询权限记录
 func (r *PermissionRepository) FindByCode(ctx context.Context, code string) (*model.Permission, error) {
 	var item model.Permission
 	err := r.db.WithContext(ctx).Where("code = ?", code).First(&item).Error
 	return &item, err
 }
 
-// CountByCode counts permissions with the given code.
+// CountByCode 统计使用指定权限编码的记录数 (主要用于排重检测)
 func (r *PermissionRepository) CountByCode(ctx context.Context, code string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&model.Permission{}).Where("code = ?", code).Count(&count).Error
 	return count, err
 }
 
-// FindByIDs returns permissions matching the given IDs.
+// FindByIDs 根据一组 ID 列表批量查询权限信息
 func (r *PermissionRepository) FindByIDs(ctx context.Context, ids []string) ([]model.Permission, error) {
 	var items []model.Permission
 	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&items).Error
 	return items, err
 }
 
-// ExistsByID checks if a permission with the given ID exists.
+// ExistsByID 检查指定 ID 的权限是否存在
 func (r *PermissionRepository) ExistsByID(ctx context.Context, id string) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&model.Permission{}).Where("id = ?", id).Count(&count).Error
 	return count > 0, err
 }
 
-// CountAssignedRoles returns how many roles are assigned the given permission.
+// CountAssignedRoles 统计有多少个角色被授予了指定的权限 (用于防误删防护检查)
 func (r *PermissionRepository) CountAssignedRoles(ctx context.Context, permissionID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Table("role_permissions").Where("permission_id = ?", permissionID).Count(&count).Error
 	return count, err
 }
 
-// FindMenusByRoleIDs returns menu type permissions for given role IDs.
+// FindMenusByRoleIDs 根据一组角色 ID 列表，关联角色权限关系，查询这些角色拥有的所有“菜单”类型权限 (按排序权重排序)
 func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs []string) ([]model.Permission, error) {
 	var items []model.Permission
 	err := r.db.WithContext(ctx).
@@ -150,3 +153,4 @@ func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs [
 		Find(&items).Error
 	return items, err
 }
+

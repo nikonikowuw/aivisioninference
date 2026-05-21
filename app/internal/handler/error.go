@@ -6,6 +6,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
 )
 
 // attachError 将错误挂载到 Gin Context，供全局错误中间件统一响应。
@@ -15,9 +16,16 @@ func attachError(c *gin.Context, err error) {
 	}
 }
 
-// getUserID extracts the authenticated user ID from the Gin context.
-// Returns the user ID and true on success, or empty string and false on failure
-// (in which case an unauthorized error is attached to the context).
+// badRequestError 将请求绑定/校验错误封装为本地化翻译的 AppError。
+func badRequestError(c *gin.Context, err error) error {
+	// lang 属性由 i18n 中间件注入；如果获取不到，验证器默认使用英文。
+	lang, _ := c.Get(middleware.ContextKeyLang)
+	langStr, _ := lang.(string)
+	return apperrors.New(apperrors.ErrBadRequest, validatorx.TranslateValidationError(err, langStr))
+}
+
+// getUserID 从 Gin 上下文中提取已认证的用户 ID。
+// 成功时返回用户 ID 和 true；失败时返回空字符串和 false，并自动在上下文中挂载未授权错误。
 func getUserID(c *gin.Context) (string, bool) {
 	userID, exists := c.Get(middleware.ContextKeyUserID)
 	if !exists {

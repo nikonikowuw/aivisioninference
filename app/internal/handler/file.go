@@ -14,17 +14,17 @@ import (
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// FileHandler handles HTTP requests for file upload and management.
+// FileHandler 处理文件上传和管理的 HTTP 请求。
 type FileHandler struct {
 	svc *service.FileService
 }
 
-// NewFileHandler creates a new FileHandler with the given dependencies.
+// NewFileHandler 创建一个新的 FileHandler 实例。
 func NewFileHandler(svc *service.FileService) *FileHandler {
 	return &FileHandler{svc: svc}
 }
 
-// InitUpload initializes a chunked upload session and returns an upload_id.
+// InitUpload 初始化分片上传会话，生成并返回唯一上传任务 ID（upload_id）。
 //
 // @Summary      初始化分片上传
 // @Description  创建分片上传会话，返回 upload_id
@@ -37,11 +37,13 @@ func NewFileHandler(svc *service.FileService) *FileHandler {
 // @Security     BearerAuth
 func (h *FileHandler) InitUpload(c *gin.Context) {
 	var req dto.InitUploadRequest
+	// 绑定并验证初始化请求参数
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
+	// 开启分片上传任务并记录元数据
 	chunk, err := h.svc.InitUpload(c.Request.Context(), req)
 	if err != nil {
 		attachError(c, err)
@@ -51,7 +53,7 @@ func (h *FileHandler) InitUpload(c *gin.Context) {
 	response.OK(c, chunk)
 }
 
-// UploadChunk uploads a single chunk for a resumable upload.
+// UploadChunk 上传单个文件分片，支持断点续传。
 //
 // @Summary      上传分片
 // @Description  上传单个分片到指定 upload_id
@@ -65,8 +67,10 @@ func (h *FileHandler) InitUpload(c *gin.Context) {
 // @Router       /files/upload/{upload_id}/chunk [post]
 // @Security     BearerAuth
 func (h *FileHandler) UploadChunk(c *gin.Context) {
+	// 获取 URL 路径中的上传任务 ID
 	uploadID := c.Param("upload_id")
 
+	// 解析表单参数中传递的分片索引号
 	indexStr := c.PostForm("index")
 	index, err := strconv.Atoi(indexStr)
 	if err != nil {
@@ -74,6 +78,7 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 		return
 	}
 
+	// 提取表单中的分片文件二进制内容
 	file, _, err := c.Request.FormFile("chunk")
 	if err != nil {
 		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少分片文件"))
@@ -81,6 +86,7 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	}
 	defer file.Close()
 
+	// 保存该分片到临时目录
 	if err := h.svc.SaveChunk(c.Request.Context(), uploadID, index, file); err != nil {
 		attachError(c, err)
 		return
@@ -89,7 +95,7 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// CompleteUpload merges all chunks and creates the final file record.
+// CompleteUpload 合并所有已上传的分片，并在成功合并后创建最终的数据库文件记录。
 //
 // @Summary      完成分片上传
 // @Description  合并所有分片，保存文件并创建文件记录
@@ -102,6 +108,7 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 func (h *FileHandler) CompleteUpload(c *gin.Context) {
 	uploadID := c.Param("upload_id")
 
+	// 服务层执行合并，并计算文件 MD5 写入库中
 	fileRecord, err := h.svc.CompleteUpload(c.Request.Context(), uploadID)
 	if err != nil {
 		attachError(c, err)
@@ -111,7 +118,7 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 	response.OK(c, fileRecord)
 }
 
-// UploadProgress returns which chunks have been uploaded for a given upload_id.
+// UploadProgress 根据上传会话 ID 获取当前已成功上传的所有分片的索引，用于恢复上传。
 //
 // @Summary      查询上传进度
 // @Description  返回已上传的分片列表
@@ -124,6 +131,7 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 func (h *FileHandler) UploadProgress(c *gin.Context) {
 	uploadID := c.Param("upload_id")
 
+	// 获取已完成分片索引
 	progress, err := h.svc.GetUploadProgress(c.Request.Context(), uploadID)
 	if err != nil {
 		attachError(c, err)
@@ -133,7 +141,7 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 	response.OK(c, progress)
 }
 
-// CheckFile checks if a file with the given MD5 already exists (for instant upload).
+// CheckFile 根据文件的 MD5 哈希校验该文件是否已被他人上传过，实现“秒传”逻辑。
 //
 // @Summary      秒传检查
 // @Description  根据 MD5 检查文件是否已存在
@@ -147,10 +155,11 @@ func (h *FileHandler) UploadProgress(c *gin.Context) {
 func (h *FileHandler) CheckFile(c *gin.Context) {
 	var req dto.CheckFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
+	// 执行秒传比对
 	result, err := h.svc.CheckFile(c.Request.Context(), req.MD5)
 	if err != nil {
 		attachError(c, err)
@@ -160,7 +169,7 @@ func (h *FileHandler) CheckFile(c *gin.Context) {
 	response.OK(c, result)
 }
 
-// List returns a paginated list of files with optional filters.
+// List 返回分页的文件列表，支持按关键词、MIME 类型和存储类型等过滤查询。
 //
 // @Summary      文件列表
 // @Description  分页查询文件列表，支持按关键词、MIME 类型、存储类型筛选
@@ -178,7 +187,7 @@ func (h *FileHandler) CheckFile(c *gin.Context) {
 func (h *FileHandler) List(c *gin.Context) {
 	var req dto.FileListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		attachError(c, badRequestError(c, err))
 		return
 	}
 
@@ -191,7 +200,7 @@ func (h *FileHandler) List(c *gin.Context) {
 	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
 }
 
-// GetByID returns file information by its ID.
+// GetByID 根据指定 ID 查询并返回某个文件的元数据属性详情。
 //
 // @Summary      获取文件详情
 // @Description  根据 ID 查询文件信息
@@ -211,7 +220,7 @@ func (h *FileHandler) GetByID(c *gin.Context) {
 	response.OK(c, file)
 }
 
-// Download serves the file with Range header support for partial downloads.
+// Download 处理文件下载请求，完美支持 HTTP Range 标头进行文件的分片/断点续传下载。
 //
 // @Summary      下载文件
 // @Description  下载文件，支持 Range 请求（断点续传）
@@ -225,12 +234,14 @@ func (h *FileHandler) Download(c *gin.Context) {
 	id := c.Param("id")
 	rangeHeader := c.GetHeader("Range")
 
+	// 获取文件物理下载路径和元数据
 	info, err := h.svc.GetDownloadInfo(c.Request.Context(), id, rangeHeader)
 	if err != nil {
 		attachError(c, err)
 		return
 	}
 
+	// 如果包含 Range 请求头，则按区间返回文件块，从而支持断点续传
 	if rangeHeader != "" {
 		start, end, ok := service.ParseRange(rangeHeader, info.FileSize)
 		if !ok {
@@ -247,6 +258,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 		return
 	}
 
+	// 没有 Range 头，正常发送整个文件，附带附件下载文件名头
 	c.Header("Content-Type", info.ContentType)
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.File.OriginalName))
 	c.Header("Content-Length", strconv.FormatInt(info.FileSize, 10))
@@ -254,7 +266,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 	c.File(info.FilePath)
 }
 
-// Delete soft-deletes a file record and removes the physical file.
+// Delete 软删除文件对应的数据库记录，并在物理/云存储介质中彻底删除物理文件。
 //
 // @Summary      删除文件
 // @Description  软删除文件记录并删除物理文件

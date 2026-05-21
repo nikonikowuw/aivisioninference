@@ -28,6 +28,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/database"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
+	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/router"
 )
@@ -53,6 +54,10 @@ func main() {
 		zap.String("build_time", BuildTime),
 		zap.String("env", cfg.App.Env),
 	)
+
+	if err := validatorx.InitGinBindingValidator(); err != nil {
+		zap.L().Fatal("failed to initialize gin binding validator with i18n translations", zap.Error(err))
+	}
 
 	// Connect to PostgreSQL
 	db, err := database.New(
@@ -113,7 +118,7 @@ func main() {
 
 	// Start Asynq server in background
 	asynqServer := router.NewAsynqServer(rdb)
-	asynqMux := router.NewAsynqMux()
+	asynqMux := router.NewAsynqMux(db)
 	go func() {
 		zap.L().Info("starting asynq server")
 		if err := asynqServer.Run(asynqMux); err != nil {

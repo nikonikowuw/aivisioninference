@@ -84,8 +84,8 @@ export default function AdminNavbar(props: {
 				base: 'calc(100vw - 6%)',
 				md: 'calc(100vw - 8%)',
 				lg: 'calc(100vw - 6%)',
-				xl: collapsed ? 'calc(100vw - 130px)' : 'calc(100vw - 350px)',
-				'2xl': collapsed ? 'calc(100vw - 130px)' : 'calc(100vw - 365px)',
+				xl: collapsed ? 'calc(100vw - 130px)' : 'calc(100vw - 320px)',
+				'2xl': collapsed ? 'calc(100vw - 130px)' : 'calc(100vw - 335px)',
 			}}>
 			<Flex
 				w='100%'

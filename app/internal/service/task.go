@@ -14,17 +14,17 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
-// TaskService handles business logic for Task operations.
+// TaskService 处理异步任务相关的业务逻辑
 type TaskService struct {
-	taskRepo *repository.TaskRepository
+	taskRepo *repository.TaskRepository // 任务数据持久化接口
 }
 
-// NewTaskService creates a new TaskService.
+// NewTaskService 创建并返回一个新的 TaskService 实例
 func NewTaskService(taskRepo *repository.TaskRepository) *TaskService {
 	return &TaskService{taskRepo: taskRepo}
 }
 
-// Create creates a new background task.
+// Create 创建并排队一个新的异步后台任务
 func (s *TaskService) Create(ctx context.Context, req dto.CreateTaskRequest) (*model.Task, error) {
 	item := model.Task{
 		TaskID:     uuid.New().String(),
@@ -42,7 +42,7 @@ func (s *TaskService) Create(ctx context.Context, req dto.CreateTaskRequest) (*m
 	return &item, nil
 }
 
-// List returns a paginated list of tasks with optional filters.
+// List 根据分页和可选的过滤条件返回任务列表和总条数
 //
 // 【核心功能】查询任务列表，支持关键字、类型、状态、时间范围等筛选条件。
 // 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
@@ -59,7 +59,7 @@ func (s *TaskService) List(ctx context.Context, req dto.TaskListRequest) ([]mode
 	return s.taskRepo.List(ctx, req)
 }
 
-// GetByID returns a task by its ID.
+// GetByID 根据任务 ID 查询任务详情
 func (s *TaskService) GetByID(ctx context.Context, id string) (*model.Task, error) {
 	task, err := s.taskRepo.FindByID(ctx, id)
 	if err != nil {
@@ -68,7 +68,7 @@ func (s *TaskService) GetByID(ctx context.Context, id string) (*model.Task, erro
 	return task, nil
 }
 
-// Cancel cancels a pending or running task.
+// Cancel 取消处于排队中（pending）或执行中（running）的后台任务
 func (s *TaskService) Cancel(ctx context.Context, id string) error {
 	task, err := s.taskRepo.FindByID(ctx, id)
 	if err != nil {

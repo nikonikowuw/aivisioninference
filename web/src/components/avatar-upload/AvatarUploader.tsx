@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Avatar,
   Box,
@@ -8,10 +8,11 @@ import {
   useColorModeValue,
   Icon,
   useToast,
+  Flex,
 } from '@chakra-ui/react';
 import { useDropzone } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
-import { FiUpload } from 'react-icons/fi';
+import { FiCamera } from 'react-icons/fi';
 import { authApi, usersApi } from 'services/api';
 import CropperModal from './CropperModal';
 
@@ -30,7 +31,7 @@ interface AvatarUploaderProps {
 export default function AvatarUploader({
   value,
   onChange,
-  size = 96,
+  size = 110,
   disabled = false,
   userId,
   name,
@@ -40,7 +41,12 @@ export default function AvatarUploader({
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const borderColor = useColorModeValue('gray.200', 'gray.600');
-  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const overlayBg = useColorModeValue('blackAlpha.600', 'blackAlpha.700');
+
+  const userIdRef = useRef(userId);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: unknown[]) => {
@@ -88,12 +94,14 @@ export default function AvatarUploader({
       setUploading(true);
       try {
         let result: { avatar_url: string };
-        if (userId) {
-          result = await usersApi.uploadAvatar(userId, file);
+        const currentUserId = userIdRef.current;
+        if (currentUserId) {
+          result = await usersApi.uploadAvatar(currentUserId, file);
         } else {
           result = await authApi.uploadAvatar(file);
         }
         onChange(result.avatar_url);
+        toast({ title: t('profile.avatarUpdateSuccess'), status: 'success' });
       } catch (err) {
         toast({
           title: err instanceof Error ? err.message : t('message.operationFailed'),
@@ -103,7 +111,7 @@ export default function AvatarUploader({
         setUploading(false);
       }
     },
-    [userId, onChange, toast, t],
+    [onChange, toast, t],
   );
 
   return (
@@ -115,43 +123,53 @@ export default function AvatarUploader({
           w={`${size}px`}
           h={`${size}px`}
           borderRadius="full"
-          border="2px dashed"
-          borderColor={borderColor}
           cursor={disabled ? 'not-allowed' : 'pointer'}
-          _hover={disabled ? {} : { bg: hoverBg }}
+          transition="all 0.3s"
+          _hover={{
+            transform: 'scale(1.02)',
+            boxShadow: 'xl',
+          }}
+          border="4px solid"
+          borderColor={useColorModeValue('white', 'navy.700')}
+          boxShadow="lg"
           overflow="hidden"
-          transition="all 0.2s"
+          bg={useColorModeValue('gray.100', 'navy.800')}
         >
           <input {...getInputProps()} />
-          {value ? (
-            <img
-              src={value}
-              alt={name || ''}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                borderRadius: '50%',
-                opacity: uploading ? 0.5 : 1,
-              }}
-            />
-          ) : (
-            <VStack
-              justify="center"
-              align="center"
-              h="100%"
-              spacing={0}
-            >
-              {uploading ? (
-                <Spinner size="sm" color="blue.500" />
-              ) : (
-                <Icon as={FiUpload} boxSize={4} color="gray.400" />
-              )}
-              <Text fontSize="xs" color="gray.500" textAlign="center" px={1}>
-                {t('profile.avatarDragHint')}
-              </Text>
-            </VStack>
-          )}
+          <Avatar
+            src={value}
+            name={name}
+            w="100%"
+            h="100%"
+            opacity={uploading ? 0.5 : 1}
+            borderRadius="full"
+          />
+
+          <Flex
+            position="absolute"
+            top="0"
+            left="0"
+            w="100%"
+            h="100%"
+            bg={overlayBg}
+            opacity="0"
+            transition="opacity 0.2s"
+            _hover={{ opacity: 1 }}
+            justify="center"
+            align="center"
+            flexDirection="column"
+          >
+            {uploading ? (
+              <Spinner size="md" color="white" />
+            ) : (
+              <>
+                <Icon as={FiCamera} boxSize={6} color="white" mb={1} />
+                <Text fontSize="xs" color="white" fontWeight="bold">
+                  {t('profile.avatarUpdate')}
+                </Text>
+              </>
+            )}
+          </Flex>
         </Box>
       </VStack>
 

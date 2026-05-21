@@ -26,17 +26,17 @@ import (
 
 const chunkDir = "tmp/uploads"
 
-// FileService handles business logic for File operations.
+// FileService 处理文件分片上传、合并、下载及删除相关的业务逻辑
 type FileService struct {
-	fileRepo *repository.FileRepository
+	fileRepo *repository.FileRepository // 文件数据持久化接口
 }
 
-// NewFileService creates a new FileService.
+// NewFileService 创建并返回一个新的 FileService 实例
 func NewFileService(fileRepo *repository.FileRepository) *FileService {
 	return &FileService{fileRepo: fileRepo}
 }
 
-// InitUpload creates a chunked upload session.
+// InitUpload 初始化一个分片上传会话，创建临时目录并保存分片元数据
 func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest) (*model.FileChunk, error) {
 	storageType := req.StorageType
 	if storageType == "" {
@@ -69,7 +69,7 @@ func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest)
 	return &chunk, nil
 }
 
-// SaveChunk saves a single chunk to disk and updates the uploaded chunks list.
+// SaveChunk 将单个上传的分片保存到临时目录中，并更新已上传的分片索引列表
 func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int, chunkData io.Reader) error {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
 	if err != nil {
@@ -80,6 +80,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		return apperrors.New(apperrors.ErrBadRequest, "无效的分片索引")
 	}
 
+	// 将分片写入临时目录，文件名为 chunk_{index}，与后续 merge 逻辑匹配。
 	chunkPath := filepath.Join(chunkDir, uploadID, fmt.Sprintf("chunk_%d", index))
 	dst, err := os.Create(chunkPath)
 	if err != nil {
@@ -93,6 +94,8 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 更新已上传的分片索引列表，支持幂等上传：网络抖动导致客户端重试同一分片时，
+	// 已存在的 index 不会重复记录，避免 CompleteUpload 误判分片完整性。
 	var uploaded []int
 	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
 		uploaded = []int{}
@@ -119,13 +122,17 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 	return nil
 }
 
-// CompleteUpload merges all chunks and creates the final file record.
+// CompleteUpload 合并所有已上传分片，验证 MD5 校验和，移动到正式上传目录并记录文件记录
 func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*model.File, error) {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在或已过期")
 	}
 
+	// 使用 canceled 标记做两阶段清理：仅在上下文取消时删除临时分片数据，
+	// 正常流程不应清理（文件已经合并完毕移动到正式目录）。
+	// cleanup 使用 context.WithoutCancel 剥离原始 ctx 的取消信号，
+	// 确保 deferred 清理操作不受父上下文取消影响（父 ctx 取消时清理也必须执行）。
 	canceled := false
 	defer func() {
 		if canceled {
@@ -138,6 +145,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		}
 	}()
 
+	// 验证所有分片是否已上传，JSON 格式的已上传索引列表应与总分片数一致。
 	var uploaded []int
 	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
 		return nil, apperrors.New(apperrors.ErrBadRequest, "分片状态异常")
@@ -149,6 +157,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	chunkDirPath := filepath.Join(chunkDir, uploadID)
 	mergedPath := filepath.Join(chunkDirPath, "merged")
 
+	// 在各关键步骤间检查上下文是否已取消，实现优雅中断。
 	if err := ctx.Err(); err != nil {
 		canceled = true
 		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
@@ -161,6 +170,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	}
 	defer mergedFile.Close()
 
+	// 按索引顺序拼接所有分片，保证合并后文件内容与原始文件一致。
 	for i := 0; i < chunk.TotalChunks; i++ {
 		if err := ctx.Err(); err != nil {
 			canceled = true
@@ -189,6 +199,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
 	}
 
+	// 对整个合并后的文件做 MD5 校验，确保所有分片还原正确。
 	mergedData, err := os.ReadFile(mergedPath)
 	if err != nil {
 		zap.L().Error("read merged file for md5 failed", zap.Error(err))
@@ -203,6 +214,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrBadRequest, "文件校验失败（MD5 不匹配）")
 	}
 
+	// 按日期分目录存储，避免单个目录中文件过多影响性能。
 	dateDir := time.Now().Format("2006/01/02")
 	ext := filepath.Ext(chunk.FileName)
 	storageName := fmt.Sprintf("%s%s", uuid.New().String(), ext)
@@ -214,11 +226,13 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	finalPath := filepath.Join("uploads", storagePath)
+	// os.Rename 要求源和目标在同一文件系统分区，临时目录和 uploads 目录在设计上位于同一分区。
 	if err := os.Rename(mergedPath, finalPath); err != nil {
 		zap.L().Error("move merged file failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 合并成功后删除临时分片目录，释放磁盘空间。
 	os.RemoveAll(chunkDirPath)
 
 	fileRecord := model.File{
@@ -235,6 +249,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 标记分片上传会话为已完成。
 	now := time.Now()
 	if err := s.fileRepo.UpdateChunkCompleted(ctx, uploadID, &now); err != nil {
 		zap.L().Warn("mark chunk upload completed", zap.String("upload_id", uploadID), zap.Error(err))
@@ -243,7 +258,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	return &fileRecord, nil
 }
 
-// GetUploadProgress returns which chunks have been uploaded.
+// GetUploadProgress 获取并返回上传会话的已上传分片索引列表及总分片数
 func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*dto.UploadProgressResponse, error) {
 	chunk, err := s.fileRepo.FindByUploadID(ctx, uploadID)
 	if err != nil {
@@ -262,7 +277,7 @@ func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*
 	}, nil
 }
 
-// CheckFile checks if a file with the given MD5 already exists.
+// CheckFile 检查文件是否已存在（用于秒传，当前作为占位功能，固定返回不存在）
 func (s *FileService) CheckFile(ctx context.Context, md5Hash string) (*dto.CheckFileResponse, error) {
 	return &dto.CheckFileResponse{Exists: false}, nil
 }
@@ -284,7 +299,7 @@ func (s *FileService) List(ctx context.Context, req dto.FileListRequest) ([]mode
 	return s.fileRepo.List(ctx, req)
 }
 
-// GetByID returns a file by its ID.
+// GetByID 根据文件 ID 查询文件信息
 func (s *FileService) GetByID(ctx context.Context, id string) (*model.File, error) {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
@@ -293,16 +308,16 @@ func (s *FileService) GetByID(ctx context.Context, id string) (*model.File, erro
 	return file, nil
 }
 
-// DownloadInfo holds data needed by the handler to serve a file download.
+// DownloadInfo 包含下载文件所需的所有元数据与文件系统信息
 type DownloadInfo struct {
-	File        *model.File
-	FilePath    string
-	FileSize    int64
-	ContentType string
-	RangeHeader string
+	File        *model.File // 文件模型实例
+	FilePath    string      // 磁盘物理文件路径
+	FileSize    int64       // 物理文件实际大小
+	ContentType string      // 文件 MIME 类型
+	RangeHeader string      // HTTP Range 请求头内容
 }
 
-// GetDownloadInfo prepares file download data including Range support.
+// GetDownloadInfo 准备下载文件所需的信息并验证物理文件在磁盘上的存在性
 func (s *FileService) GetDownloadInfo(ctx context.Context, id string, rangeHeader string) (*DownloadInfo, error) {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
@@ -329,7 +344,7 @@ func (s *FileService) GetDownloadInfo(ctx context.Context, id string, rangeHeade
 	}, nil
 }
 
-// Delete soft-deletes a file record and removes the physical file.
+// Delete 软删除文件数据库记录，并尽力而为地删除磁盘上的物理文件
 func (s *FileService) Delete(ctx context.Context, id string) error {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
@@ -341,6 +356,7 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// Best-effort 清理物理文件：数据库记录已删除，物理文件清理失败不应阻塞业务响应。
 	if file.Path != "" {
 		if err := os.Remove(file.Path); err != nil && !os.IsNotExist(err) {
 			zap.L().Warn("remove physical file failed", zap.String("id", id), zap.String("path", file.Path), zap.Error(err))
@@ -351,6 +367,7 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 }
 
 // ParseRange parses the Range header value and returns (start, end, ok).
+// 实现 RFC 7233 §2.1 定义的三种 Range 格式，用于断点续传支持。
 func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
 		return 0, 0, false
@@ -365,6 +382,7 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 	var err error
 
 	if splits[0] == "" {
+		// 后缀范围: bytes=-500 表示文件最后 500 个字节
 		end = fileSize - 1
 		suffixLen, err := strconv.ParseInt(splits[1], 10, 64)
 		if err != nil || suffixLen <= 0 {
@@ -375,12 +393,14 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 			start = 0
 		}
 	} else if splits[1] == "" {
+		// 前缀范围: bytes=0- 表示从字节 0 到文件末尾
 		start, err = strconv.ParseInt(splits[0], 10, 64)
 		if err != nil || start < 0 || start >= fileSize {
 			return 0, 0, false
 		}
 		end = fileSize - 1
 	} else {
+		// 完整范围: bytes=0-499 表示第 0 到 499 字节
 		start, err = strconv.ParseInt(splits[0], 10, 64)
 		if err != nil || start < 0 {
 			return 0, 0, false
@@ -394,7 +414,7 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 	return start, end, true
 }
 
-// WriteRange writes a byte range from a file to an http.ResponseWriter.
+// WriteRange 将物理文件指定字节区间的内容写入 http.ResponseWriter 并设置正确的 Range 响应头
 func WriteRange(w http.ResponseWriter, filePath string, start, end, totalSize int64, contentType string) error {
 	length := end - start + 1
 	w.Header().Set("Content-Type", contentType)
@@ -416,7 +436,7 @@ func WriteRange(w http.ResponseWriter, filePath string, start, end, totalSize in
 	return err
 }
 
-// detectMimeType returns a basic MIME type based on file extension.
+// detectMimeType 根据文件名后缀名映射其相应的 MIME 类型
 func detectMimeType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	mimeMap := map[string]string{

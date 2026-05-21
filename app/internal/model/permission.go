@@ -2,29 +2,31 @@
 // Model: internal/model/permission.go
 // Generate at: 2026-05-15
 
+// Package model 定义系统数据模型，包含 GORM 结构体 and 数据库表映射。
 package model
 
-// Permission type constants.
+// 权限/菜单类型常量
 const (
-	PermTypeMenu   = "menu"
-	PermTypeButton = "button"
+	PermTypeMenu   = "menu"   // 菜单类型权限
+	PermTypeButton = "button" // 按钮/API接口类型权限
 )
 
-// Permission represents a menu item or API permission for RBAC.
+// Permission 表示系统菜单项或操作/API权限，用于 RBAC 角色权限控制
 type Permission struct {
 	BaseModel
-	Name      string       `gorm:"type:varchar(64);not null" json:"name"`
-	Code      string       `gorm:"type:varchar(128);uniqueIndex;not null" json:"code"`
-	Path      string       `gorm:"type:varchar(256)" json:"path"`
-	Method    string       `gorm:"type:varchar(10)" json:"method"`
-	Type      string       `gorm:"type:varchar(20);not null" json:"type"`
-	Icon      string       `gorm:"type:varchar(64)" json:"icon"`
-	ParentID  *string      `gorm:"type:uuid" json:"parent_id"`
-	SortOrder int          `gorm:"default:0" json:"sort_order"`
-	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	Name      string       `gorm:"type:varchar(64);not null" json:"name"`              // 权限/菜单名称
+	Code      string       `gorm:"type:varchar(128);uniqueIndex;not null" json:"code"`  // 权限/菜单唯一编码 (如: "user:list", "menu:dashboard")
+	Path      string       `gorm:"type:varchar(256)" json:"path"`                      // 路由路径或接口路径
+	Method    string       `gorm:"type:varchar(10)" json:"method"`                     // HTTP 请求方法 (GET/POST/PUT/DELETE 等，主要用于API权限)
+	Type      string       `gorm:"type:varchar(20);not null" json:"type"`              // 权限类型 (menu/button)
+	Icon      string       `gorm:"type:varchar(64)" json:"icon"`                      // 菜单图标名称 (仅对菜单有效)
+	ParentID  *string      `gorm:"type:uuid" json:"parent_id"`                         // 父级权限 ID (为 NULL 表示是一级菜单/根权限)
+	SortOrder int          `gorm:"default:0" json:"sort_order"`                        // 菜单排序权重，数值越小越靠前
+	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"`      // 子菜单/子权限列表 (GORM 一对多自关联)
 }
 
-// SortableFields returns the fields allowed for sorting.
+// SortableFields 返回允许排序的字段列表
 func (Permission) SortableFields() []string {
 	return []string{"created_at", "name", "sort_order", "code"}
 }
+

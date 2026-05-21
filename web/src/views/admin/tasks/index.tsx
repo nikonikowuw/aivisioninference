@@ -45,7 +45,7 @@ export default function Tasks() {
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchTasks = useCallback((p: number, ps: number) => {
     return tasksApi.list({
@@ -93,6 +93,7 @@ export default function Tasks() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'type',
@@ -118,8 +119,8 @@ export default function Tasks() {
         ]}
         dateRange
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
-        <Table variant="simple">
+      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
+        <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
               <Th>{t('table.columns.id')}</Th>

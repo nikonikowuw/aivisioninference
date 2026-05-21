@@ -2,6 +2,7 @@
 // Model: internal/model/user.go
 // Generate at: 2026-05-15 22:05:18
 
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (
@@ -15,55 +16,53 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
-// UserRepository handles database operations for User model.
+// UserRepository 处理 User 用户模型的数据持久化操作
 type UserRepository struct {
-	db *gorm.DB
+	db *gorm.DB // GORM 数据库连接实例
 }
 
-// NewUserRepository creates a new UserRepository.
+// NewUserRepository 创建并返回一个新的 UserRepository 实例
 func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// WithTx returns a new UserRepository scoped to the given transaction.
+// WithTx 返回一个绑定了指定事务的 UserRepository 实例
 func (r *UserRepository) WithTx(tx *gorm.DB) *UserRepository {
 	return &UserRepository{db: tx}
 }
 
-// Transaction executes fn within a database transaction, providing the fn
-// with a UserRepository scoped to the transaction.
+// Transaction 在数据库事务中执行 fn，为 fn 提供绑定了该事务的 UserRepository 实例
 func (r *UserRepository) Transaction(ctx context.Context, fn func(txRepo *UserRepository) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(r.WithTx(tx))
 	})
 }
 
-// FindByID finds a user by its ID.
+// FindByID 根据用户 ID 查询用户信息
 func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
 	var item model.User
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
-// FindByIDForUpdate finds a user by ID and acquires a row-level lock (SELECT ... FOR UPDATE).
-// Must be called within a transaction.
+// FindByIDForUpdate 根据用户 ID 查询用户信息并获取行级锁 (SELECT ... FOR UPDATE)，必须在事务中调用
 func (r *UserRepository) FindByIDForUpdate(ctx context.Context, id string) (*model.User, error) {
 	var item model.User
 	err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
-// Create inserts a new user record.
+// Create 插入一条新的用户记录
 func (r *UserRepository) Create(ctx context.Context, item *model.User) error {
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// Update saves changes to a user record.
+// Update 保存用户记录的所有修改
 func (r *UserRepository) Update(ctx context.Context, item *model.User) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// UpdateWithRoles updates a user and assigns roles in a single transaction.
+// UpdateWithRoles 在单个事务中更新用户信息并重新分配角色
 func (r *UserRepository) UpdateWithRoles(ctx context.Context, user *model.User, roleIDs []string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Save(user).Error; err != nil {
@@ -80,7 +79,7 @@ func (r *UserRepository) UpdateWithRoles(ctx context.Context, user *model.User, 
 	})
 }
 
-// Delete removes a user by its ID and cleans up join tables.
+// Delete 根据用户 ID 删除用户记录并清理关联的角色绑定关系
 func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ?", id).Delete(&model.UserRole{}).Error; err != nil {
@@ -93,7 +92,7 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	})
 }
 
-// List returns a paginated list of users with optional filters.
+// List 返回包含分页及可选过滤条件的用户列表和总数
 func (r *UserRepository) List(ctx context.Context, req dto.UserListRequest) ([]model.User, int64, error) {
 	var items []model.User
 	var total int64
@@ -110,14 +109,21 @@ func (r *UserRepository) List(ctx context.Context, req dto.UserListRequest) ([]m
 	return items, total, err
 }
 
-// FindByUsername finds a user by username with roles preloaded.
+// FindByUsername 根据用户名查询用户，并预加载其关联的角色信息
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*model.User, error) {
 	var user model.User
 	err := r.db.WithContext(ctx).Preload("Roles").Where("username = ?", username).First(&user).Error
 	return &user, err
 }
 
-// CountByUsername counts users with the given username, optionally excluding an ID.
+// FindByEmail 根据邮箱查询用户
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", email).First(&user).Error
+	return &user, err
+}
+
+// CountByUsername 统计指定用户名的用户数量，可选排除指定用户 ID
 func (r *UserRepository) CountByUsername(ctx context.Context, username string, excludeID string) (int64, error) {
 	var count int64
 	query := r.db.WithContext(ctx).Model(&model.User{}).Where("username = ?", username)
@@ -152,8 +158,7 @@ func (r *UserRepository) CountByEmail(ctx context.Context, email string, exclude
 	return count, err
 }
 
-// CreateWithRoles creates a user and assigns roles in a single transaction.
-// If role assignment fails, the user creation is rolled back.
+// CreateWithRoles 在单个事务中创建用户并分配角色，若分配失败则回滚用户创建
 func (r *UserRepository) CreateWithRoles(ctx context.Context, user *model.User, roleIDs []string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(user).Error; err != nil {
@@ -170,25 +175,31 @@ func (r *UserRepository) CreateWithRoles(ctx context.Context, user *model.User, 
 	})
 }
 
-// UpdatePassword updates only the password field for a user.
+// UpdatePassword 仅更新用户的密码字段
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID, hashedPassword string) error {
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("password", hashedPassword).Error
 }
 
-// UpdateLoginAttempts updates the login attempts counter.
+// MarkEmailVerified 当邮箱匹配时，将用户的邮箱状态标记为已验证
+func (r *UserRepository) MarkEmailVerified(ctx context.Context, userID, email string) error {
+	return r.db.WithContext(ctx).Model(&model.User{}).
+		Where("id = ? AND LOWER(email) = LOWER(?)", userID, email).
+		Update("email_verified", true).Error
+}
+
+// UpdateLoginAttempts 更新用户的登录尝试次数计数器
 func (r *UserRepository) UpdateLoginAttempts(ctx context.Context, userID string, attempts int) error {
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userID).Update("login_attempts", attempts).Error
 }
 
-// FindByIDWithRoles finds a user by ID with roles preloaded.
+// FindByIDWithRoles 根据用户 ID 查询用户，并预加载其关联的角色信息
 func (r *UserRepository) FindByIDWithRoles(ctx context.Context, id string) (*model.User, error) {
 	var user model.User
 	err := r.db.WithContext(ctx).Preload("Roles").Where("id = ?", id).First(&user).Error
 	return &user, err
 }
 
-// FindMinRoleLevelByUserID returns the minimum (highest authority) level among
-// all roles assigned to a user. Returns nil if the user has no roles.
+// FindMinRoleLevelByUserID 返回用户关联的所有角色中最小的等级（即最高权限级别），如果用户没有关联任何角色则返回 nil
 func (r *UserRepository) FindMinRoleLevelByUserID(ctx context.Context, userID string) (*int, error) {
 	var level *int
 	err := r.db.WithContext(ctx).

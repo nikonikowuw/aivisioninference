@@ -45,7 +45,7 @@ import { useFilter } from 'hooks/useFilter';
 import { parseOptionalNumber } from 'utils/convert';
 
 export default function Users() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
   const { t } = useTranslation('modules/users');
   const { t: tCommon } = useTranslation('common');
   const textColor = useColorModeValue('navy.700', 'white');
@@ -54,7 +54,7 @@ export default function Users() {
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchUsers = useCallback((p: number, ps: number) => {
     return usersApi.list({
@@ -105,14 +105,19 @@ export default function Users() {
   const handleSave = async () => {
     try {
       if (editing) {
-        const updateData: Partial<User> & { password?: string } = {
+        // 更新基本信息
+        const updateData: Partial<User> = {
           username: form.username,
           display_name: form.display_name,
           email: form.email,
-          password: form.password,
         };
-        if (!form.password) delete updateData.password;
         await usersApi.update(editing.id, updateData);
+
+        // 如果填写了密码，单独调用重置密码接口
+        if (form.password) {
+          await usersApi.resetPassword(editing.id, form.password);
+        }
+
         toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
         await usersApi.create(form as Partial<User>);
@@ -174,6 +179,7 @@ export default function Users() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'status',
@@ -185,8 +191,8 @@ export default function Users() {
           },
         ]}
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
-        <Table variant="simple">
+      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
+        <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
               <Th>{t('table.columns.id')}</Th>
@@ -260,15 +266,23 @@ export default function Users() {
           <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <Box textAlign="center" mb={4}>
-              <AvatarUploader
-                value={avatarUrl}
-                onChange={(url) => setAvatarUrl(url)}
-                userId={editing?.id}
-                name={form.display_name || form.username}
-                size={80}
-              />
-            </Box>
+            {editing && (
+              <Box textAlign="center" mb={4}>
+                <AvatarUploader
+                  value={avatarUrl}
+                  onChange={async (url) => {
+                    setAvatarUrl(url);
+                    // 编辑的是当前用户时，同步 auth context 使侧边栏头像立即更新
+                    if (editing.id === currentUser?.id) {
+                      await refreshUser();
+                    }
+                  }}
+                  userId={editing.id}
+                  name={form.display_name || form.username}
+                  size={80}
+                />
+              </Box>
+            )}
             <FormControl mb={4}>
               <FormLabel>{t('form.username.label')}</FormLabel>
               <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder={t('form.username.placeholder')} />

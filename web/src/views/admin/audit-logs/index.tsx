@@ -41,7 +41,7 @@ export default function AuditLogs() {
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchLogs = useCallback((p: number, ps: number) => {
     return auditLogsApi.list({
@@ -76,6 +76,7 @@ export default function AuditLogs() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'resource_type',
@@ -99,11 +100,12 @@ export default function AuditLogs() {
         ]}
         dateRange
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
-        <Table variant="simple">
+      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
+        <Table variant="simple" size="md" minW="900px">
           <Thead>
             <Tr>
               <Th>{t('table.columns.username')}</Th>
+              <Th>{t('table.columns.actionType')}</Th>
               <Th>{t('table.columns.method')}</Th>
               <Th>{t('table.columns.path')}</Th>
               <Th>{t('table.columns.ip')}</Th>
@@ -117,6 +119,7 @@ export default function AuditLogs() {
             {logs.map((l) => (
               <Tr key={l.id}>
                 <Td>{l.username || l.user_id || '-'}</Td>
+                <Td>{t(`actionTypes.${l.action_type}`, { defaultValue: l.action_type || '-' })}</Td>
                 <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method}</Badge></Td>
                 <Td maxW="240px" isTruncated>{l.request_path}</Td>
                 <Td>{l.request_ip}</Td>

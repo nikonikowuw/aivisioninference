@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -6,22 +6,19 @@ import {
   ModalHeader,
   ModalBody,
   ModalCloseButton,
-  Button,
-  VStack,
-  HStack,
-  Input,
-  Text,
-  FormControl,
-  FormLabel,
-  FormErrorMessage,
-  useToast,
-  Divider,
+  Flex,
   Box,
+  VStack,
+  Icon,
+  Text,
+  useColorModeValue,
+  HStack,
 } from '@chakra-ui/react';
 import { useTranslation } from 'react-i18next';
-import { authApi, type User } from 'services/api';
-import { useAuth } from 'contexts/AuthContext';
-import AvatarUploader from 'components/avatar-upload/AvatarUploader';
+import { FiUser, FiLock, FiChevronRight } from 'react-icons/fi';
+import PersonalInfo from '../../views/admin/profile/components/PersonalInfo';
+import SecuritySettings from '../../views/admin/profile/components/SecuritySettings';
+import { type User } from 'services/api';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -29,219 +26,93 @@ interface ProfileModalProps {
   user: User;
 }
 
+type TabType = 'personal' | 'security';
+
 export default function ProfileModal({ isOpen, onClose, user }: ProfileModalProps) {
   const { t } = useTranslation();
-  const toast = useToast();
-  const { refreshUser } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('personal');
 
-  const [displayName, setDisplayName] = useState(user.display_name || '');
-  const [email, setEmail] = useState(user.email || '');
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url || '');
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const textColor = useColorModeValue('secondaryGray.900', 'white');
+  const secondaryColor = useColorModeValue('gray.600', 'gray.400');
+  const activeBg = useColorModeValue('white', 'navy.700');
+  const modalBg = useColorModeValue('white', 'navy.800');
+  const navBg = useColorModeValue('gray.50', 'navy.900');
+  const activeShadow = useColorModeValue(
+    '0px 18px 40px rgba(112, 144, 176, 0.12)',
+    'none'
+  );
 
-  useEffect(() => {
-    if (isOpen) {
-      setDisplayName(user.display_name || '');
-      setEmail(user.email || '');
-      setAvatarUrl(user.avatar_url || '');
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setShowPassword(false);
-    }
-  }, [isOpen, user]);
-
-  const handleSaveProfile = async () => {
-    setProfileLoading(true);
-    try {
-      const data: Record<string, string> = {};
-      if (displayName !== (user.display_name || '')) data.display_name = displayName;
-      if (email !== (user.email || '')) data.email = email;
-      
-      if (Object.keys(data).length === 0) {
-        onClose();
-        return;
-      }
-      await authApi.updateProfile(data);
-      await refreshUser();
-      toast({
-        title: t('common:profile.updateSuccess'),
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      onClose();
-    } catch (err) {
-      toast({
-        title: err instanceof Error ? err.message : t('common:message.operationFailed'),
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: t('common:profile.passwordMismatch'),
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-    if (newPassword.length < 6) {
-      toast({
-        title: t('common:profile.passwordTooShort'),
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    setPasswordLoading(true);
-    try {
-      await authApi.changePassword(oldPassword, newPassword);
-      toast({
-        title: t('common:profile.passwordUpdateSuccess'),
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setShowPassword(false);
-    } catch (err) {
-      toast({
-        title: err instanceof Error ? err.message : t('common:message.operationFailed'),
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setPasswordLoading(false);
-    }
-  };
+  const navItems = [
+    { id: 'personal', label: t('common:profile.basicInfo'), icon: FiUser },
+    { id: 'security', label: t('common:profile.security'), icon: FiLock },
+  ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size={{ base: 'full', md: 'md' }}>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>{t('common:profile.title')}</ModalHeader>
+    <Modal isOpen={isOpen} onClose={onClose} size="4xl" isCentered motionPreset="slideInBottom">
+      <ModalOverlay backdropFilter="blur(4px)" />
+      <ModalContent borderRadius="2xl" overflow="hidden" bg={modalBg} minH="500px">
+        <ModalHeader borderBottomWidth="1px" py={4}>
+          <HStack spacing={2}>
+            <Text fontSize="lg" fontWeight="bold" color={textColor}>
+              {t('common:profile.title')}
+            </Text>
+            <Icon as={FiChevronRight} color="gray.400" />
+            <Text fontSize="lg" fontWeight="bold" color="brand.500">
+              {navItems.find((i) => i.id === activeTab)?.label}
+            </Text>
+          </HStack>
+        </ModalHeader>
         <ModalCloseButton />
-        <ModalBody pb={6}>
-          <VStack spacing={4} align="stretch">
-            <FormControl>
-              <FormLabel>{t('common:profile.displayName')}</FormLabel>
-              <Input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-              />
-            </FormControl>
 
-            <FormControl>
-              <FormLabel>{t('common:profile.email')}</FormLabel>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </FormControl>
-
-            <Box textAlign="center">
-              <AvatarUploader
-                value={avatarUrl}
-                onChange={async (url) => {
-                  setAvatarUrl(url);
-                  await refreshUser();
-                }}
-                name={user.display_name || user.username}
-              />
+        <ModalBody p={0}>
+          <Flex direction={{ base: 'column', md: 'row' }} minH="500px">
+            {/* Left Sidebar Navigation */}
+            <Box
+              w={{ base: '100%', md: '240px' }}
+              bg={navBg}
+              p={4}
+              borderRightWidth={{ base: 0, md: '1px' }}
+              borderBottomWidth={{ base: '1px', md: 0 }}
+            >
+              <VStack spacing={2} align="stretch">
+                {navItems.map((item) => (
+                  <Box
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id as TabType)}
+                    px={4}
+                    py={3}
+                    borderRadius="xl"
+                    cursor="pointer"
+                    bg={activeTab === item.id ? activeBg : 'transparent'}
+                    boxShadow={activeTab === item.id ? activeShadow : 'none'}
+                    _hover={{
+                      bg: activeTab === item.id ? activeBg : useColorModeValue('gray.200', 'whiteAlpha.100'),
+                    }}
+                    color={activeTab === item.id ? 'brand.500' : secondaryColor}
+                    transition="all 0.2s"
+                  >
+                    <Flex align="center">
+                      <Icon
+                        as={item.icon}
+                        boxSize={5}
+                        mr={3}
+                        color={activeTab === item.id ? 'brand.500' : 'gray.400'}
+                      />
+                      <Text fontWeight={activeTab === item.id ? '700' : '500'} fontSize="sm">
+                        {item.label}
+                      </Text>
+                    </Flex>
+                  </Box>
+                ))}
+              </VStack>
             </Box>
 
-            <HStack justify="flex-end">
-              <Button
-                colorScheme="blue"
-                onClick={handleSaveProfile}
-                isLoading={profileLoading}
-              >
-                {t('common:button.save')}
-              </Button>
-            </HStack>
-
-            <Divider />
-
-            <Box>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={t('common:profile.changePassword')}
-              >
-                {t('common:profile.changePassword')}
-              </Button>
-
-              {showPassword && (
-                <VStack spacing={3} mt={3} align="stretch">
-                  <FormControl>
-                    <FormLabel>{t('common:profile.currentPassword')}</FormLabel>
-                    <Input
-                      type="password"
-                      value={oldPassword}
-                      onChange={(e) => setOldPassword(e.target.value)}
-                      isDisabled={passwordLoading}
-                    />
-                  </FormControl>
-
-                  <FormControl>
-                    <FormLabel>{t('common:profile.newPassword')}</FormLabel>
-                    <Input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      isDisabled={passwordLoading}
-                    />
-                  </FormControl>
-
-                  <FormControl isInvalid={confirmPassword.length > 0 && newPassword !== confirmPassword}>
-                    <FormLabel>{t('common:profile.confirmPassword')}</FormLabel>
-                    <Input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      isDisabled={passwordLoading}
-                    />
-                    {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-                      <FormErrorMessage>
-                        {t('common:profile.passwordMismatch')}
-                      </FormErrorMessage>
-                    )}
-                  </FormControl>
-
-                  <HStack justify="flex-end">
-                    <Button
-                      colorScheme="blue"
-                      variant="outline"
-                      onClick={handleChangePassword}
-                      isLoading={passwordLoading}
-                    >
-                      {t('common:profile.changePassword')}
-                    </Button>
-                  </HStack>
-                </VStack>
-              )}
+            {/* Right Content Area */}
+            <Box flex={1} p={8} overflowY="auto" maxH="600px">
+              {activeTab === 'personal' && <PersonalInfo />}
+              {activeTab === 'security' && <SecuritySettings />}
             </Box>
-          </VStack>
+          </Flex>
         </ModalBody>
       </ModalContent>
     </Modal>

@@ -49,7 +49,7 @@ export default function Files() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchFiles = useCallback((p: number, ps: number) => {
     return filesApi.list({
@@ -124,6 +124,7 @@ export default function Files() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'storage_type',
@@ -137,8 +138,8 @@ export default function Files() {
         ]}
         dateRange
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
-        <Table variant="simple">
+      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
+        <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
               <Th>{t('table.columns.id')}</Th>
@@ -153,7 +154,7 @@ export default function Files() {
             {files.map((f) => (
               <Tr key={f.id}>
                 <Td>{f.id}</Td>
-                <Td fontWeight="600">{f.name}</Td>
+                <Td fontWeight="600">{f.original_name}</Td>
                 <Td><Badge>{f.mime_type}</Badge></Td>
                 <Td>{formatSize(f.size, t)}</Td>
                 <Td>{formatDateTime(f.created_at)}</Td>

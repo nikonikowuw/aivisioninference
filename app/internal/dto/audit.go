@@ -13,6 +13,7 @@ type AuditLogResponse struct {
 	ID             string    `json:"id"`
 	UserID         *string   `json:"user_id"`
 	Username       string    `json:"username"`
+	ActionType     string    `json:"action_type"`
 	ResourceType   string    `json:"resource_type"`
 	ResourceID     string    `json:"resource_id"`
 	RequestPath    string    `json:"request_path"`
@@ -30,6 +31,7 @@ type ListAuditLogRequest struct {
 	PageRequest
 	Keyword      string     `form:"keyword"`
 	ResourceType string     `form:"resource_type"`
+	ActionType   string     `form:"action_type"`
 	Result       string     `form:"result"`
 	StartTime    string     `form:"start_time"`
 	EndTime      string     `form:"end_time"`
@@ -40,10 +42,13 @@ type ListAuditLogRequest struct {
 func (r *ListAuditLogRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {
-		sc = append(sc, scopes.MultiLike([]string{"username", "resource_type", "request_path"}, r.Keyword))
+		sc = append(sc, scopes.MultiLike([]string{"username", "resource_type", "request_path", "action_type"}, r.Keyword))
 	}
 	if r.ResourceType != "" {
 		sc = append(sc, scopes.Eq("resource_type", r.ResourceType))
+	}
+	if r.ActionType != "" {
+		sc = append(sc, scopes.Like("action_type", r.ActionType))
 	}
 	if r.Result != "" {
 		sc = append(sc, scopes.Eq("result_summary", r.Result))

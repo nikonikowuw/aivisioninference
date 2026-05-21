@@ -39,37 +39,25 @@ import { rolesApi, permissionsApi, type Role, type Permission } from 'services/a
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
+import PermissionTree from 'components/permission-tree/PermissionTree';
 import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
 import { parseOptionalNumber } from 'utils/convert';
 
-function getDescendantIds(nodes: Permission[], id: string): string[] {
-  const ids: string[] = [];
-  const find = (list: Permission[]): boolean => {
-    for (const n of list) {
-      if (n.id === id) {
-        if (n.children) {
-          const walk = (children: Permission[]) => {
-            for (const c of children) {
-              ids.push(c.id);
-              if (c.children) walk(c.children);
-            }
-          };
-          walk(n.children);
-        }
-        return true;
-      }
-      if (n.children && find(n.children)) return true;
-    }
-    return false;
-  };
-  find(nodes);
-  return ids;
-}
+
 
 export default function Roles() {
   const { t } = useTranslation('modules/roles');
   const { t: tCommon } = useTranslation('common');
+  const { t: tMenu } = useTranslation('menu');
+
+  const getPermissionName = (p: Permission) => {
+    if (p.type === 'menu') {
+      return tMenu(p.code, { defaultValue: p.name });
+    }
+    return p.name;
+  };
+
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
@@ -77,7 +65,7 @@ export default function Roles() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPermOpen, onOpen: onPermOpen, onClose: onPermClose } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, searchTrigger } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchRoles = useCallback((p: number, ps: number) => {
     return rolesApi.list({
@@ -190,42 +178,7 @@ export default function Roles() {
     }
   };
 
-  const togglePerm = (id: string) => {
-    setSelectedPerms((prev) => {
-      const isChecked = prev.includes(id);
-      const descendantIds = getDescendantIds(permTree, id);
 
-      if (isChecked) {
-        return prev.filter((p) => p !== id && !descendantIds.includes(p));
-      } else {
-        const newSet = new Set([...prev, id, ...descendantIds]);
-        return Array.from(newSet);
-      }
-    });
-  };
-
-  const renderPermTree = (nodes: Permission[], depth = 0) =>
-    nodes.map((p) => {
-      const isLeaf = !p.children || p.children.length === 0;
-      const descendantIds = isLeaf ? [] : getDescendantIds(permTree, p.id);
-      const checkedDescendants = descendantIds.filter((id) => selectedPerms.includes(id));
-      const allChecked = isLeaf ? selectedPerms.includes(p.id) : checkedDescendants.length === descendantIds.length;
-      const someChecked = checkedDescendants.length > 0;
-
-      return (
-        <Box key={p.id} ml={depth * 6}>
-          <Checkbox
-            isChecked={allChecked}
-            isIndeterminate={someChecked && !allChecked}
-            onChange={() => togglePerm(p.id)}
-            mb={1}
-          >
-            {p.name} ({p.code})
-          </Checkbox>
-          {p.children && renderPermTree(p.children, depth + 1)}
-        </Box>
-      );
-    });
 
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
@@ -241,6 +194,7 @@ export default function Roles() {
         filters={filters}
         onFilterChange={setFilter}
         onReset={resetFilters}
+        onRefresh={refresh}
         selects={[
           {
             name: 'status',
@@ -252,8 +206,8 @@ export default function Roles() {
           },
         ]}
       />
-      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="hidden">
-        <Table variant="simple">
+      <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
+        <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
               <Th>{t('table.columns.id')}</Th>
@@ -350,9 +304,17 @@ export default function Roles() {
           <ModalHeader>{t('modal.assignPermissionsTitle')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <VStack align="start" spacing={1} maxH="400px" overflowY="auto">
-              {permTree.length > 0 ? renderPermTree(permTree) : <Text>{t('permissions.empty')}</Text>}
-            </VStack>
+            <Box maxH="400px" overflowY="auto" w="100%">
+              {permTree.length > 0 ? (
+                <PermissionTree
+                  tree={permTree}
+                  selectedIds={selectedPerms}
+                  onChange={setSelectedPerms}
+                />
+              ) : (
+                <Text>{t('permissions.empty')}</Text>
+              )}
+            </Box>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onPermClose}>{tCommon('button.cancel')}</Button>

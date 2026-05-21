@@ -16,18 +16,18 @@ import (
 
 const permissionTreeCacheKey = "perm:tree:all"
 
-// PermissionService handles business logic for Permission operations.
+// PermissionService 处理系统权限相关的业务逻辑
 type PermissionService struct {
-	permRepo *repository.PermissionRepository
-	cache    cachepkg.Cache
+	permRepo *repository.PermissionRepository // 权限数据持久化接口
+	cache    cachepkg.Cache                   // 缓存管理器实例
 }
 
-// NewPermissionService creates a new PermissionService.
+// NewPermissionService 创建并返回一个新的 PermissionService 实例
 func NewPermissionService(permRepo *repository.PermissionRepository, cache cachepkg.Cache) *PermissionService {
 	return &PermissionService{permRepo: permRepo, cache: cache}
 }
 
-// Tree returns all permissions as a tree structure.
+// Tree 获取并返回所有权限的树形结构数据（带 Redis 缓存支持）
 func (s *PermissionService) Tree(ctx context.Context) ([]model.Permission, error) {
 	if s.cache != nil {
 		cached, err := s.cache.Get(ctx, permissionTreeCacheKey)
@@ -61,7 +61,7 @@ func (s *PermissionService) Tree(ctx context.Context) ([]model.Permission, error
 	return tree, nil
 }
 
-// buildPermissionTree recursively builds a permission tree from a flat list.
+// buildPermissionTree 递归地将扁平的权限列表构建为树形嵌套结构
 func buildPermissionTree(all []model.Permission, parentID *string) []model.Permission {
 	var result []model.Permission
 	for _, p := range all {
@@ -75,7 +75,7 @@ func buildPermissionTree(all []model.Permission, parentID *string) []model.Permi
 	return result
 }
 
-// invalidateTreeCache deletes the permission tree cache.
+// invalidateTreeCache 清除 Redis 中缓存的权限树数据
 func (s *PermissionService) invalidateTreeCache(ctx context.Context) {
 	if s.cache != nil {
 		if err := s.cache.Del(ctx, permissionTreeCacheKey); err != nil {
@@ -84,7 +84,7 @@ func (s *PermissionService) invalidateTreeCache(ctx context.Context) {
 	}
 }
 
-// Update updates an existing permission.
+// Update 更新现有的权限配置，更新成功后清除权限树缓存
 func (s *PermissionService) Update(ctx context.Context, id string, req dto.UpdatePermissionRequest) error {
 	perm, err := s.permRepo.FindByID(ctx, id)
 	if err != nil {
@@ -136,7 +136,7 @@ func (s *PermissionService) Update(ctx context.Context, id string, req dto.Updat
 	return nil
 }
 
-// Delete deletes a permission and its descendants after checking none are assigned to roles.
+// Delete 删除指定权限及其所有子孙权限，执行前会校验其是否已分配给任何角色
 func (s *PermissionService) Delete(ctx context.Context, id string) error {
 	if _, err := s.permRepo.FindByID(ctx, id); err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "权限不存在")
@@ -169,7 +169,7 @@ func (s *PermissionService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// Create creates a new permission after validation.
+// Create 在校验父节点存在性与编码唯一性后，创建新的权限记录
 func (s *PermissionService) Create(ctx context.Context, req dto.CreatePermissionRequest) (*model.Permission, error) {
 	count, err := s.permRepo.CountByCode(ctx, req.Code)
 	if err != nil {

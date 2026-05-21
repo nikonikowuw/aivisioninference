@@ -43,6 +43,10 @@ export function useFilter(options?: UseFilterOptions) {
     setFilters({ ...initialValuesRef.current });
   }, []);
 
+  const refresh = useCallback(() => {
+    setSearchTrigger(prev => prev + 1);
+  }, []);
+
   // 筛选条件变化后 debounce 自动触发搜索
   // 首次挂载跳过，由页面 useEffect([searchTrigger]) 的初始 searchTrigger=0 触发首次加载
   useEffect(() => {
@@ -60,5 +64,5 @@ export function useFilter(options?: UseFilterOptions) {
     return () => clearTimeout(timer);
   }, [filters, debounceMs]);
 
-  return { filters, setFilter, resetFilters, searchTrigger };
+  return { filters, setFilter, resetFilters, searchTrigger, refresh };
 }

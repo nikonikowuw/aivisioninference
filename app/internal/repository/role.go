@@ -2,6 +2,7 @@
 // Model: internal/model/role.go
 // Generate at: 2026-05-15 22:05:18
 
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (
@@ -14,29 +15,29 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
-// RoleRepository handles database operations for Role model.
+// RoleRepository 处理 Role 角色模型的数据持久化操作
 type RoleRepository struct {
-	db *gorm.DB
+	db *gorm.DB // GORM 数据库连接实例
 }
 
-// NewRoleRepository creates a new RoleRepository.
+// NewRoleRepository 创建并返回一个新的 RoleRepository 实例
 func NewRoleRepository(db *gorm.DB) *RoleRepository {
 	return &RoleRepository{db: db}
 }
 
-// FindByID finds a role by its ID.
+// FindByID 根据主键 ID 查询单个角色信息 (并预加载角色关联的所有权限)
 func (r *RoleRepository) FindByID(ctx context.Context, id string) (*model.Role, error) {
 	var item model.Role
 	err := r.db.WithContext(ctx).Preload("Permissions").Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
-// Create inserts a new role record.
+// Create 插入一条新的角色记录
 func (r *RoleRepository) Create(ctx context.Context, item *model.Role) error {
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// Update saves mutable role fields.
+// Update 更新已存在的角色字段 (排除权限多对多关联的直接更新，走 Updates map)
 func (r *RoleRepository) Update(ctx context.Context, item *model.Role) error {
 	updates := map[string]any{
 		"name":        item.Name,
@@ -49,15 +50,18 @@ func (r *RoleRepository) Update(ctx context.Context, item *model.Role) error {
 	return r.db.WithContext(ctx).Model(&model.Role{}).Where("id = ?", item.ID).Updates(updates).Error
 }
 
-// Delete removes a role by its ID and cleans up join tables.
+// Delete 删除指定角色记录，同时在事务中级联清理角色权限表与用户角色表关系
 func (r *RoleRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 删除关联的角色权限多对多表数据
 		if err := tx.Where("role_id = ?", id).Delete(&model.RolePermission{}).Error; err != nil {
 			return err
 		}
+		// 2. 删除用户与该角色的多对多关系表数据
 		if err := tx.Where("role_id = ?", id).Delete(&model.UserRole{}).Error; err != nil {
 			return err
 		}
+		// 3. 删除角色主表记录
 		if err := tx.Where("id = ?", id).Delete(&model.Role{}).Error; err != nil {
 			return err
 		}
@@ -65,7 +69,7 @@ func (r *RoleRepository) Delete(ctx context.Context, id string) error {
 	})
 }
 
-// List returns a paginated list of roles with optional filters.
+// List 分页查询并返回满足过滤条件的角色的列表
 func (r *RoleRepository) List(ctx context.Context, req dto.RoleListRequest) ([]model.Role, int64, error) {
 	var items []model.Role
 	var total int64
@@ -82,14 +86,14 @@ func (r *RoleRepository) List(ctx context.Context, req dto.RoleListRequest) ([]m
 	return items, total, err
 }
 
-// FindByName finds a role by name.
+// FindByName 根据角色名称查询角色信息
 func (r *RoleRepository) FindByName(ctx context.Context, name string) (*model.Role, error) {
 	var role model.Role
 	err := r.db.WithContext(ctx).Where("name = ?", name).First(&role).Error
 	return &role, err
 }
 
-// CountByName counts roles with the given name, optionally excluding an ID.
+// CountByName 统计使用指定名称的角色数，可选排查排除指定的角色 ID (用于唯一性验证)
 func (r *RoleRepository) CountByName(ctx context.Context, name string, excludeID string) (int64, error) {
 	var count int64
 	query := r.db.WithContext(ctx).Model(&model.Role{}).Where("name = ?", name)
@@ -100,14 +104,14 @@ func (r *RoleRepository) CountByName(ctx context.Context, name string, excludeID
 	return count, err
 }
 
-// CountAssignedUsers returns how many users are assigned to the given role.
+// CountAssignedUsers 统计有多少个用户被授予了指定的角色 (用以做级联防删判断)
 func (r *RoleRepository) CountAssignedUsers(ctx context.Context, roleID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Table("user_roles").Where("role_id = ?", roleID).Count(&count).Error
 	return count, err
 }
 
-// GetPermissionsByRoleID returns permissions assigned to a role via the join table.
+// GetPermissionsByRoleID 根据角色 ID 关联角色权限表，查询该角色关联的所有权限记录
 func (r *RoleRepository) GetPermissionsByRoleID(ctx context.Context, roleID string) ([]model.Permission, error) {
 	var permissions []model.Permission
 	err := r.db.WithContext(ctx).
@@ -118,12 +122,14 @@ func (r *RoleRepository) GetPermissionsByRoleID(ctx context.Context, roleID stri
 	return permissions, err
 }
 
-// ReplacePermissions replaces all permission associations for a role in a transaction.
+// ReplacePermissions 在事务中先清理原有的角色权限多对多关联，再重新插入新的权限列表以实现全新分配操作
 func (r *RoleRepository) ReplacePermissions(ctx context.Context, roleID string, permissionIDs []string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 删除旧关联关系
 		if err := tx.Where("role_id = ?", roleID).Delete(&model.RolePermission{}).Error; err != nil {
 			return err
 		}
+		// 2. 插入新关联关系
 		if len(permissionIDs) > 0 {
 			rolePerms := make([]model.RolePermission, 0, len(permissionIDs))
 			for _, pid := range permissionIDs {
@@ -137,3 +143,4 @@ func (r *RoleRepository) ReplacePermissions(ctx context.Context, roleID string, 
 		return nil
 	})
 }
+

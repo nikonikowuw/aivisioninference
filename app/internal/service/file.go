@@ -26,17 +26,17 @@ import (
 
 const chunkDir = "tmp/uploads"
 
-// FileService handles business logic for File operations.
+// FileService 处理文件分片上传、合并、下载及删除相关的业务逻辑
 type FileService struct {
-	fileRepo *repository.FileRepository
+	fileRepo *repository.FileRepository // 文件数据持久化接口
 }
 
-// NewFileService creates a new FileService.
+// NewFileService 创建并返回一个新的 FileService 实例
 func NewFileService(fileRepo *repository.FileRepository) *FileService {
 	return &FileService{fileRepo: fileRepo}
 }
 
-// InitUpload creates a chunked upload session.
+// InitUpload 初始化一个分片上传会话，创建临时目录并保存分片元数据
 func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest) (*model.FileChunk, error) {
 	storageType := req.StorageType
 	if storageType == "" {
@@ -69,7 +69,7 @@ func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest)
 	return &chunk, nil
 }
 
-// SaveChunk saves a single chunk to disk and updates the uploaded chunks list.
+// SaveChunk 将单个上传的分片保存到临时目录中，并更新已上传的分片索引列表
 func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int, chunkData io.Reader) error {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
 	if err != nil {
@@ -122,7 +122,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 	return nil
 }
 
-// CompleteUpload merges all chunks and creates the final file record.
+// CompleteUpload 合并所有已上传分片，验证 MD5 校验和，移动到正式上传目录并记录文件记录
 func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*model.File, error) {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
 	if err != nil {
@@ -258,7 +258,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	return &fileRecord, nil
 }
 
-// GetUploadProgress returns which chunks have been uploaded.
+// GetUploadProgress 获取并返回上传会话的已上传分片索引列表及总分片数
 func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*dto.UploadProgressResponse, error) {
 	chunk, err := s.fileRepo.FindByUploadID(ctx, uploadID)
 	if err != nil {
@@ -277,7 +277,7 @@ func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*
 	}, nil
 }
 
-// CheckFile checks if a file with the given MD5 already exists.
+// CheckFile 检查文件是否已存在（用于秒传，当前作为占位功能，固定返回不存在）
 func (s *FileService) CheckFile(ctx context.Context, md5Hash string) (*dto.CheckFileResponse, error) {
 	return &dto.CheckFileResponse{Exists: false}, nil
 }
@@ -299,7 +299,7 @@ func (s *FileService) List(ctx context.Context, req dto.FileListRequest) ([]mode
 	return s.fileRepo.List(ctx, req)
 }
 
-// GetByID returns a file by its ID.
+// GetByID 根据文件 ID 查询文件信息
 func (s *FileService) GetByID(ctx context.Context, id string) (*model.File, error) {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
@@ -308,16 +308,16 @@ func (s *FileService) GetByID(ctx context.Context, id string) (*model.File, erro
 	return file, nil
 }
 
-// DownloadInfo holds data needed by the handler to serve a file download.
+// DownloadInfo 包含下载文件所需的所有元数据与文件系统信息
 type DownloadInfo struct {
-	File        *model.File
-	FilePath    string
-	FileSize    int64
-	ContentType string
-	RangeHeader string
+	File        *model.File // 文件模型实例
+	FilePath    string      // 磁盘物理文件路径
+	FileSize    int64       // 物理文件实际大小
+	ContentType string      // 文件 MIME 类型
+	RangeHeader string      // HTTP Range 请求头内容
 }
 
-// GetDownloadInfo prepares file download data including Range support.
+// GetDownloadInfo 准备下载文件所需的信息并验证物理文件在磁盘上的存在性
 func (s *FileService) GetDownloadInfo(ctx context.Context, id string, rangeHeader string) (*DownloadInfo, error) {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
@@ -344,7 +344,7 @@ func (s *FileService) GetDownloadInfo(ctx context.Context, id string, rangeHeade
 	}, nil
 }
 
-// Delete soft-deletes a file record and removes the physical file.
+// Delete 软删除文件数据库记录，并尽力而为地删除磁盘上的物理文件
 func (s *FileService) Delete(ctx context.Context, id string) error {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
@@ -414,7 +414,7 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 	return start, end, true
 }
 
-// WriteRange writes a byte range from a file to an http.ResponseWriter.
+// WriteRange 将物理文件指定字节区间的内容写入 http.ResponseWriter 并设置正确的 Range 响应头
 func WriteRange(w http.ResponseWriter, filePath string, start, end, totalSize int64, contentType string) error {
 	length := end - start + 1
 	w.Header().Set("Content-Type", contentType)
@@ -436,7 +436,7 @@ func WriteRange(w http.ResponseWriter, filePath string, start, end, totalSize in
 	return err
 }
 
-// detectMimeType returns a basic MIME type based on file extension.
+// detectMimeType 根据文件名后缀名映射其相应的 MIME 类型
 func detectMimeType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	mimeMap := map[string]string{

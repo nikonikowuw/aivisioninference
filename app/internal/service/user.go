@@ -139,7 +139,7 @@ func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRo
 	return nil
 }
 
-// ResetPassword allows admin to reset a user's password without old password.
+// ResetPassword 允许管理员直接重置指定用户的密码（不需要旧密码），执行层级安全检查。
 func (s *UserService) ResetPassword(ctx context.Context, targetUserID, password, currentUserID string, isRoot bool) error {
 	// 禁止管理员通过此接口重置自己的密码，防止误操作导致自己无法登录。
 	// 自己改密码应走 ChangePassword 流程（需验证旧密码）。

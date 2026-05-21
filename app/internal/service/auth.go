@@ -47,6 +47,7 @@ type AuthService struct {
 	storage    storage.Storage
 }
 
+// NewAuthService 创建并返回一个新的 AuthService 实例
 func NewAuthService(userRepo *repository.UserRepository, permRepo *repository.PermissionRepository, rdb *redis.Client, jwtManager *jwtutil.Manager, stor storage.Storage) *AuthService {
 	return &AuthService{
 		userRepo:   userRepo,
@@ -177,7 +178,7 @@ func (s *AuthService) getMenuTree(ctx context.Context, roleIDs []string) []dto.M
 
 	key := menuTreeCacheKey(roleIDs)
 
-	// Try cache
+	// 尝试从缓存中获取菜单树
 	if s.rdb != nil {
 		cached, err := s.rdb.Get(ctx, key).Bytes()
 		if err == nil {
@@ -188,7 +189,7 @@ func (s *AuthService) getMenuTree(ctx context.Context, roleIDs []string) []dto.M
 		}
 	}
 
-	// Cache miss — build from DB
+	// 缓存未命中 — 从数据库中查询并构建
 	perms, err := s.permRepo.FindMenusByRoleIDs(ctx, roleIDs)
 	if err != nil {
 		zap.L().Error("find menus by role ids failed", zap.Error(err))
@@ -197,7 +198,7 @@ func (s *AuthService) getMenuTree(ctx context.Context, roleIDs []string) []dto.M
 
 	menus := buildMenuTree(perms)
 
-	// Populate cache
+	// 回写到 Redis 缓存
 	if s.rdb != nil {
 		if data, marshalErr := json.Marshal(menus); marshalErr == nil {
 			if setErr := s.rdb.Set(ctx, key, data, menuTreeCacheTTL).Err(); setErr != nil {
@@ -209,9 +210,10 @@ func (s *AuthService) getMenuTree(ctx context.Context, roleIDs []string) []dto.M
 	return menus
 }
 
+// menuNode 表示构建菜单树时的临时节点结构
 type menuNode struct {
-	menu     dto.Menu
-	parentID string
+	menu     dto.Menu // 菜单 DTO
+	parentID string   // 父菜单 ID
 }
 
 // buildMenuTree 将权限列表构建为菜单树。
@@ -223,6 +225,7 @@ func buildMenuTree(perms []model.Permission) []dto.Menu {
 	return buildMenuRoots(nodes, childrenByParent, rootIDs)
 }
 
+// buildMenuNodes 将权限列表中所有类型为菜单的项解析为临时的 menuNode 映射结构
 func buildMenuNodes(perms []model.Permission) map[string]*menuNode {
 	nodes := make(map[string]*menuNode, len(perms))
 	for _, perm := range perms {
@@ -269,6 +272,7 @@ func buildMenuRelations(nodes map[string]*menuNode) (map[string][]string, []stri
 	return childrenByParent, rootIDs
 }
 
+// sortMenuRelations 对根菜单及各个父菜单的子菜单列表，按照 SortOrder 字段升序进行稳定排序
 func sortMenuRelations(nodes map[string]*menuNode, childrenByParent map[string][]string, rootIDs []string) {
 	sort.SliceStable(rootIDs, func(i, j int) bool {
 		return nodes[rootIDs[i]].menu.SortOrder < nodes[rootIDs[j]].menu.SortOrder
@@ -446,6 +450,7 @@ var allowedAvatarTypes = map[string]bool{
 	"image/webp": true,
 }
 
+// UploadAvatar 校验并上传用户的头像文件，支持本地/对象存储，并删除旧的头像记录
 func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeader *multipart.FileHeader) (string, error) {
 	if fileHeader.Size > maxAvatarSize {
 		return "", errors.New(errors.ErrFileTooLarge, "")

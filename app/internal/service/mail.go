@@ -28,29 +28,35 @@ const (
 	defaultIMAPSyncMins = 10
 )
 
+// mailConfigRepo 邮件配置持久化接口
 type mailConfigRepo interface {
 	First(ctx context.Context) (*model.MailConfig, error)
 	Save(ctx context.Context, cfg *model.MailConfig) error
 }
 
+// inboundEmailRepo 收件箱邮件持久化接口
 type inboundEmailRepo interface {
 	Exists(ctx context.Context, account, mailbox string, uid uint32, messageID string) (bool, error)
 	Create(ctx context.Context, item *model.InboundEmail) error
 }
 
+// feedbackRepo 用户反馈持久化接口
 type feedbackRepo interface {
 	Create(ctx context.Context, item *model.Feedback) error
 }
 
+// smtpClient SMTP 发件客户端接口
 type smtpClient interface {
 	Send(ctx context.Context, msg mailpkg.Message) error
 }
 
+// imapClient IMAP 收件客户端接口
 type imapClient interface {
 	TestConnection(ctx context.Context) error
 	FetchRecent(ctx context.Context, limit int) ([]mailpkg.InboundMessage, error)
 }
 
+// emailTokenRepo 邮件验证令牌持久化接口
 type emailTokenRepo interface {
 	Create(ctx context.Context, item *model.EmailToken) error
 	FindByHash(ctx context.Context, tokenHash, purpose string) (*model.EmailToken, error)
@@ -58,25 +64,28 @@ type emailTokenRepo interface {
 	Update(ctx context.Context, item *model.EmailToken) error
 }
 
+// emailUserRepo 用户邮箱状态更新及密码重置接口
 type emailUserRepo interface {
 	FindByEmail(ctx context.Context, email string) (*model.User, error)
 	MarkEmailVerified(ctx context.Context, userID, email string) error
 	UpdatePassword(ctx context.Context, userID, hashedPassword string) error
 }
 
+// verificationMailSender 验证邮件发送器接口
 type verificationMailSender interface {
 	Send(ctx context.Context, msg mailpkg.Message) error
 }
 
-// MailService handles system mail configuration and protocol operations.
+// MailService 处理系统邮件配置与邮件收发协议（SMTP/IMAP）的相关业务逻辑
 type MailService struct {
-	cfgRepo      mailConfigRepo
-	inboundRepo  inboundEmailRepo
-	feedbackRepo feedbackRepo
-	smtpFactory  func(cfg mailpkg.SMTPConfig) smtpClient
-	imapFactory  func(cfg mailpkg.IMAPConfig) imapClient
+	cfgRepo      mailConfigRepo                          // 邮件配置持久化层
+	inboundRepo  inboundEmailRepo                        // 接收邮件持久化层
+	feedbackRepo feedbackRepo                           // 系统反馈持久化层
+	smtpFactory  func(cfg mailpkg.SMTPConfig) smtpClient // SMTP 客户端工厂函数
+	imapFactory  func(cfg mailpkg.IMAPConfig) imapClient // IMAP 客户端工厂函数
 }
 
+// NewMailService 创建并返回一个新的 MailService 实例
 func NewMailService(cfgRepo *repository.MailConfigRepository, inboundRepo *repository.InboundEmailRepository, feedbackRepo *repository.FeedbackRepository) *MailService {
 	return &MailService{
 		cfgRepo:      cfgRepo,
@@ -91,6 +100,7 @@ func NewMailService(cfgRepo *repository.MailConfigRepository, inboundRepo *repos
 	}
 }
 
+// GetConfig 获取当前的邮件服务器配置信息
 func (s *MailService) GetConfig(ctx context.Context) (*dto.MailConfigResponse, error) {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -100,6 +110,7 @@ func (s *MailService) GetConfig(ctx context.Context) (*dto.MailConfigResponse, e
 	return toMailConfigResponse(cfg), nil
 }
 
+// SaveConfig 保存或更新邮件服务器配置信息
 func (s *MailService) SaveConfig(ctx context.Context, req dto.MailConfigRequest) (*dto.MailConfigResponse, error) {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -115,6 +126,7 @@ func (s *MailService) SaveConfig(ctx context.Context, req dto.MailConfigRequest)
 	return toMailConfigResponse(cfg), nil
 }
 
+// TestSMTP 用指定收件人邮箱测试 SMTP 发送服务是否正常
 func (s *MailService) TestSMTP(ctx context.Context, to string) error {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -133,6 +145,7 @@ func (s *MailService) TestSMTP(ctx context.Context, to string) error {
 	return nil
 }
 
+// TestIMAP 测试 IMAP 收件服务器连接是否正常
 func (s *MailService) TestIMAP(ctx context.Context) error {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -146,6 +159,7 @@ func (s *MailService) TestIMAP(ctx context.Context) error {
 	return nil
 }
 
+// Send 调用 SMTP 发送一封邮件
 func (s *MailService) Send(ctx context.Context, msg mailpkg.Message) error {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -154,6 +168,7 @@ func (s *MailService) Send(ctx context.Context, msg mailpkg.Message) error {
 	return s.smtpFactory(toSMTPConfig(cfg)).Send(ctx, msg)
 }
 
+// NotificationAddress 获取接收系统通知的回复/管理员邮箱地址
 func (s *MailService) NotificationAddress(ctx context.Context) (string, error) {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -162,6 +177,7 @@ func (s *MailService) NotificationAddress(ctx context.Context) (string, error) {
 	return cfg.ReplyTo, nil
 }
 
+// SyncIMAP 从 IMAP 接收新邮件并自动同步转换为系统反馈记录
 func (s *MailService) SyncIMAP(ctx context.Context, limit int) (int, error) {
 	cfg, err := s.getOrDefaultConfig(ctx)
 	if err != nil {
@@ -231,6 +247,7 @@ func (s *MailService) SyncIMAP(ctx context.Context, limit int) (int, error) {
 	return saved, nil
 }
 
+// getOrDefaultConfig 获取邮件配置，若不存在则返回带默认值的占位配置
 func (s *MailService) getOrDefaultConfig(ctx context.Context) (*model.MailConfig, error) {
 	cfg, err := s.cfgRepo.First(ctx)
 	if err != nil {
@@ -248,21 +265,24 @@ func (s *MailService) getOrDefaultConfig(ctx context.Context) (*model.MailConfig
 	}, nil
 }
 
-// EmailVerificationService handles one-time email verification and reset tokens.
+// EmailVerificationService 处理一次性电子邮件验证及密码重置令牌的业务逻辑
 type EmailVerificationService struct {
-	tokenRepo emailTokenRepo
-	userRepo  emailUserRepo
-	mailSvc   verificationMailSender
+	tokenRepo emailTokenRepo         // 验证令牌持久化层
+	userRepo  emailUserRepo          // 用户持久化层
+	mailSvc   verificationMailSender // 验证邮件发送服务
 }
 
+// NewEmailVerificationService 创建并返回一个新的 EmailVerificationService 实例
 func NewEmailVerificationService(tokenRepo *repository.EmailTokenRepository, userRepo *repository.UserRepository, mailSvc *MailService) *EmailVerificationService {
 	return &EmailVerificationService{tokenRepo: tokenRepo, userRepo: userRepo, mailSvc: mailSvc}
 }
 
+// SendVerification 创建并发送一封邮箱所有权验证邮件
 func (s *EmailVerificationService) SendVerification(ctx context.Context, userID, email, requestIP string) error {
 	return s.createAndSend(ctx, &userID, email, model.EmailTokenPurposeChangeVerify, requestIP, "Verify your email")
 }
 
+// SendPasswordReset 创建并发送一封重置密码用的验证邮件
 func (s *EmailVerificationService) SendPasswordReset(ctx context.Context, email, requestIP string) error {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
@@ -271,6 +291,7 @@ func (s *EmailVerificationService) SendPasswordReset(ctx context.Context, email,
 	return s.createAndSend(ctx, &user.ID, email, model.EmailTokenPurposePasswordReset, requestIP, "Reset your password")
 }
 
+// VerifyToken 验证指定用途的令牌，验证成功后将令牌消费并标记邮箱为已验证
 func (s *EmailVerificationService) VerifyToken(ctx context.Context, token, purpose string) error {
 	item, err := s.consumeToken(ctx, token, purpose)
 	if err != nil {
@@ -287,6 +308,7 @@ func (s *EmailVerificationService) VerifyToken(ctx context.Context, token, purpo
 	return nil
 }
 
+// ResetPassword 使用密码重置令牌对用户进行密码重置
 func (s *EmailVerificationService) ResetPassword(ctx context.Context, token, newPassword string) error {
 	item, err := s.consumeToken(ctx, token, model.EmailTokenPurposePasswordReset)
 	if err != nil {
@@ -308,6 +330,7 @@ func (s *EmailVerificationService) ResetPassword(ctx context.Context, token, new
 	return nil
 }
 
+// consumeToken 消费一个一次性令牌，检验其哈希、用途及过期状态，防范重放攻击
 func (s *EmailVerificationService) consumeToken(ctx context.Context, token, purpose string) (*model.EmailToken, error) {
 	tokenHash := hashToken(token)
 	item, err := s.tokenRepo.FindByHash(ctx, tokenHash, purpose)
@@ -324,6 +347,7 @@ func (s *EmailVerificationService) consumeToken(ctx context.Context, token, purp
 	return item, nil
 }
 
+// createAndSend 生成一封包含一次性验证令牌的邮件并发送，且带有限流防护
 func (s *EmailVerificationService) createAndSend(ctx context.Context, userID *string, email, purpose, requestIP, subject string) error {
 	// 限流：同一邮箱在同一时间窗口内的发信次数不能超过上限，防止暴力调用。
 	count, err := s.tokenRepo.CountSince(ctx, email, purpose, requestIP, time.Now().Add(-emailSendWindow))

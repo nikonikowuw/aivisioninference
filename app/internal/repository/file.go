@@ -16,39 +16,39 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
-// FileRepository handles database operations for File model.
+// FileRepository 处理 File 和 FileChunk 模型的数据库读写操作
 type FileRepository struct {
-	db *gorm.DB
+	db *gorm.DB // GORM 数据库连接实例
 }
 
-// NewFileRepository creates a new FileRepository.
+// NewFileRepository 创建并返回一个新的 FileRepository 实例
 func NewFileRepository(db *gorm.DB) *FileRepository {
 	return &FileRepository{db: db}
 }
 
-// FindByID finds a file by its ID.
+// FindByID 根据主键 ID 查询单个已上传文件元数据
 func (r *FileRepository) FindByID(ctx context.Context, id string) (*model.File, error) {
 	var item model.File
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	return &item, err
 }
 
-// Create inserts a new file record.
+// Create 插入一条新的已上传文件记录
 func (r *FileRepository) Create(ctx context.Context, item *model.File) error {
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// Update saves changes to a file record.
+// Update 更新已存在文件的记录信息
 func (r *FileRepository) Update(ctx context.Context, item *model.File) error {
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// Delete removes a file by its ID.
+// Delete 根据 ID 物理/软删除文件记录
 func (r *FileRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.File{}).Error
 }
 
-// List returns a paginated list of files with optional filters.
+// List 分页查询并返回满足筛选条件的文件列表及总数
 func (r *FileRepository) List(ctx context.Context, req dto.FileListRequest) ([]model.File, int64, error) {
 	var items []model.File
 	var total int64
@@ -65,36 +65,36 @@ func (r *FileRepository) List(ctx context.Context, req dto.FileListRequest) ([]m
 	return items, total, err
 }
 
-// FindByUploadID finds a FileChunk by its upload_id.
+// FindByUploadID 根据 upload_id 查询分块上传任务信息
 func (r *FileRepository) FindByUploadID(ctx context.Context, uploadID string) (*model.FileChunk, error) {
 	var chunk model.FileChunk
 	err := r.db.WithContext(ctx).Where("upload_id = ?", uploadID).First(&chunk).Error
 	return &chunk, err
 }
 
-// CreateChunk inserts a new FileChunk record.
+// CreateChunk 创建一条新的分块上传任务记录
 func (r *FileRepository) CreateChunk(ctx context.Context, chunk *model.FileChunk) error {
 	return r.db.WithContext(ctx).Create(chunk).Error
 }
 
-// FindByUploadIDWithStatus finds a FileChunk by upload_id and status.
+// FindByUploadIDWithStatus 根据 upload_id 及特定状态查询分块上传任务信息
 func (r *FileRepository) FindByUploadIDWithStatus(ctx context.Context, uploadID, status string) (*model.FileChunk, error) {
 	var chunk model.FileChunk
 	err := r.db.WithContext(ctx).Where("upload_id = ? AND status = ?", uploadID, status).First(&chunk).Error
 	return &chunk, err
 }
 
-// UpdateChunkUploadedChunks updates the uploaded_chunks JSON field.
+// UpdateChunkUploadedChunks 更新已上传分块索引的 JSON 记录
 func (r *FileRepository) UpdateChunkUploadedChunks(ctx context.Context, uploadID, uploadedChunksJSON string) error {
 	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Update("uploaded_chunks", uploadedChunksJSON).Error
 }
 
-// UpdateChunkStatus updates the status of a FileChunk.
+// UpdateChunkStatus 更新分块上传任务的状态
 func (r *FileRepository) UpdateChunkStatus(ctx context.Context, uploadID, status string) error {
 	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Update("status", status).Error
 }
 
-// UpdateChunkCompleted marks a chunk upload as completed.
+// UpdateChunkCompleted 标记分块上传任务已完成合并，并写入完成时间
 func (r *FileRepository) UpdateChunkCompleted(ctx context.Context, uploadID string, completedAt *time.Time) error {
 	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Updates(map[string]interface{}{
 		"status":       "completed",
@@ -102,7 +102,8 @@ func (r *FileRepository) UpdateChunkCompleted(ctx context.Context, uploadID stri
 	}).Error
 }
 
-// DeleteChunkByUploadID removes a FileChunk record by upload_id.
+// DeleteChunkByUploadID 根据 upload_id 删除一条分块任务记录
 func (r *FileRepository) DeleteChunkByUploadID(ctx context.Context, uploadID string) error {
 	return r.db.WithContext(ctx).Where("upload_id = ?", uploadID).Delete(&model.FileChunk{}).Error
 }
+

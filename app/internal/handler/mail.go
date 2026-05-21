@@ -8,7 +8,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// MailHandler handles system mail configuration requests.
+// MailHandler 处理系统邮件配置的 HTTP 请求。
 type MailHandler struct {
 	svc *service.MailService
 }
@@ -17,7 +17,7 @@ func NewMailHandler(svc *service.MailService) *MailHandler {
 	return &MailHandler{svc: svc}
 }
 
-// GetConfig returns sanitized mail settings.
+// GetConfig 获取脱敏后的系统邮件配置参数。
 //
 // @Summary      获取邮件配置
 // @Tags         系统配置
@@ -34,7 +34,7 @@ func (h *MailHandler) GetConfig(c *gin.Context) {
 	response.OK(c, cfg)
 }
 
-// SaveConfig saves mail settings.
+// SaveConfig 保存/更新系统邮件配置。
 //
 // @Summary      保存邮件配置
 // @Tags         系统配置
@@ -58,7 +58,7 @@ func (h *MailHandler) SaveConfig(c *gin.Context) {
 	response.OK(c, cfg)
 }
 
-// TestSMTP sends a test email.
+// TestSMTP 使用当前邮件配置发送测试邮件以验证 SMTP 服务器可用性。
 //
 // @Summary      测试 SMTP 发信
 // @Tags         系统配置
@@ -81,7 +81,7 @@ func (h *MailHandler) TestSMTP(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// TestIMAP tests IMAP connection.
+// TestIMAP 测试 IMAP 接收邮件服务器连接状态。
 //
 // @Summary      测试 IMAP 连接
 // @Tags         系统配置
@@ -97,7 +97,7 @@ func (h *MailHandler) TestIMAP(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// SyncIMAP synchronizes feedback emails.
+// SyncIMAP 同步反馈邮箱的邮件并解析生成反馈记录。
 //
 // @Summary      同步反馈邮件
 // @Tags         系统配置
@@ -114,7 +114,7 @@ func (h *MailHandler) SyncIMAP(c *gin.Context) {
 	response.OK(c, gin.H{"synced": count})
 }
 
-// FeedbackHandler handles user feedback requests.
+// FeedbackHandler 处理用户意见反馈的 HTTP 请求。
 type FeedbackHandler struct {
 	svc *service.FeedbackService
 }
@@ -123,7 +123,7 @@ func NewFeedbackHandler(svc *service.FeedbackService) *FeedbackHandler {
 	return &FeedbackHandler{svc: svc}
 }
 
-// Create submits user feedback.
+// Create 创建/提交一条新的用户反馈。
 //
 // @Summary      提交反馈
 // @Tags         用户反馈
@@ -151,7 +151,7 @@ func (h *FeedbackHandler) Create(c *gin.Context) {
 	response.OK(c, item)
 }
 
-// List returns feedback list.
+// List 分页查询用户提交的反馈列表，支持状态筛选。
 //
 // @Summary      反馈列表
 // @Tags         用户反馈
@@ -173,7 +173,7 @@ func (h *FeedbackHandler) List(c *gin.Context) {
 	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
 }
 
-// UpdateStatus updates feedback status.
+// UpdateStatus 更新用户反馈的处理状态。
 //
 // @Summary      更新反馈状态
 // @Tags         用户反馈

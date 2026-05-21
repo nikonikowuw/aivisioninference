@@ -10,18 +10,18 @@ import (
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
-// UserHandler handles HTTP requests for User CRUD operations.
+// UserHandler 处理用户管理相关的 HTTP 请求（增删改查、密码重置及头像上传）。
 type UserHandler struct {
 	svc     *service.UserService
 	authSvc *service.AuthService
 }
 
-// NewUserHandler creates a new UserHandler with the given dependencies.
+// NewUserHandler 创建一个新的 UserHandler 实例。
 func NewUserHandler(svc *service.UserService, authSvc *service.AuthService) *UserHandler {
 	return &UserHandler{svc: svc, authSvc: authSvc}
 }
 
-// List returns a paginated list of users with optional search filters.
+// List 返回分页的用户列表，支持关键字（用户名/显示名/邮箱）搜索和启用状态筛选。
 //
 // @Summary      用户列表
 // @Description  分页查询用户列表，支持按关键词、状态筛选
@@ -41,6 +41,7 @@ func (h *UserHandler) List(c *gin.Context) {
 		return
 	}
 
+	// 获取分页数据
 	items, total, err := h.svc.List(c.Request.Context(), req)
 	if err != nil {
 		attachError(c, err)
@@ -50,7 +51,7 @@ func (h *UserHandler) List(c *gin.Context) {
 	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
 }
 
-// Create creates a new user with password hashing and optional role association.
+// Create 创建一个新的用户，自动哈希化密码，并可选地关联角色。
 //
 // @Summary      创建用户
 // @Description  创建新用户，密码自动加密，可关联角色
@@ -68,6 +69,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 提交服务层创建
 	user, err := h.svc.Create(c.Request.Context(), req)
 	if err != nil {
 		attachError(c, err)
@@ -77,7 +79,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 	response.OK(c, user)
 }
 
-// GetByID returns a user by its ID.
+// GetByID 根据用户 ID 获取用户的元数据信息。
 //
 // @Summary      获取用户详情
 // @Description  根据 ID 查询用户信息
@@ -97,7 +99,7 @@ func (h *UserHandler) GetByID(c *gin.Context) {
 	response.OK(c, user)
 }
 
-// Update updates an existing user by its ID.
+// Update 更新用户的基本属性和角色关联，执行层级防越权判定，且不允许自己禁用自己。
 //
 // @Summary      更新用户
 // @Description  更新用户信息，可更新角色关联
@@ -117,15 +119,19 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// 从 Context 提取操作人 ID 和 Root 超管权限
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
 	isRoot, _ := isRootVal.(bool)
+
+	// 安全校验：禁止用户将自身的账号状态设置为禁用
 	if id == uid && req.Status != nil && *req.Status == 0 {
 		attachError(c, apperrors.New(apperrors.ErrCannotDisableSelf, ""))
 		return
 	}
 
+	// 提交更新
 	if err := h.svc.Update(c.Request.Context(), id, req, uid, isRoot); err != nil {
 		attachError(c, err)
 		return
@@ -134,7 +140,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// Delete soft-deletes a user by its ID.
+// Delete 软删除用户，执行层级防越权判定。
 //
 // @Summary      删除用户
 // @Description  软删除用户
@@ -147,11 +153,13 @@ func (h *UserHandler) Update(c *gin.Context) {
 func (h *UserHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
+	// 提取操作人身份用于越权判定
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
 	isRoot, _ := isRootVal.(bool)
 
+	// 执行软删除
 	if err := h.svc.Delete(c.Request.Context(), id, uid, isRoot); err != nil {
 		attachError(c, err)
 		return
@@ -160,7 +168,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// ResetPassword allows admin to reset a user's password.
+// ResetPassword 管理员强制重置某个用户的密码（无需提供旧密码），执行层级防越权校验。
 //
 // @Summary      重置用户密码
 // @Description  管理员重置指定用户的密码（不需要旧密码）
@@ -183,11 +191,13 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
+	// 提取操作人身份用于越权判定
 	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
 	uid, _ := currentUserID.(string)
 	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
 	isRoot, _ := isRootVal.(bool)
 
+	// 执行密码重置
 	if err := h.svc.ResetPassword(c.Request.Context(), id, req.Password, uid, isRoot); err != nil {
 		attachError(c, err)
 		return
@@ -196,7 +206,7 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// UploadAvatar handles avatar upload for a specific user (admin action).
+// UploadAvatar 管理员为指定 ID 的用户上传头像文件。
 //
 // @Summary      管理员上传用户头像
 // @Description  管理员为指定用户上传头像
@@ -213,12 +223,14 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 func (h *UserHandler) UploadAvatar(c *gin.Context) {
 	id := c.Param("id")
 
+	// 提取文件分片/文件流
 	fileHeader, err := c.FormFile("avatar")
 	if err != nil {
 		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少头像文件"))
 		return
 	}
 
+	// 调用认证服务上传并绑定头像元数据
 	avatarURL, err := h.authSvc.UploadAvatar(c.Request.Context(), id, fileHeader)
 	if err != nil {
 		attachError(c, err)

@@ -1,23 +1,4 @@
 export const auth = {
-  hero: {
-    welcome: 'ようこそ',
-    title: 'Niko Admin',
-    subtitle: '開発者や企業向けに構築された、モダンで強力かつスケーラブルな企業管理システム。',
-    features: {
-      modern: {
-        title: 'モダン UI',
-        desc: 'クリーンで直感的なダッシュボード',
-      },
-      secure: {
-        title: 'セキュア',
-        desc: 'エンタープライズ対応のRBAC',
-      },
-      fast: {
-        title: '高速',
-        desc: 'ハイパフォーマンス向けに最適化',
-      },
-    },
-  },
   signIn: {
     title: 'Niko Admin',
     subtitle: 'ユーザー名とパスワードを入力してサインインしてください',

@@ -1,23 +1,4 @@
 export const auth = {
-  hero: {
-    welcome: '欢迎来到',
-    title: 'Niko Admin',
-    subtitle: '一个为开发者和企业构建的现代化、强大且可扩展的企业管理系统。',
-    features: {
-      modern: {
-        title: '现代界面',
-        desc: '干净直观的控制台',
-      },
-      secure: {
-        title: '安全可靠',
-        desc: '企业级基于角色的访问控制',
-      },
-      fast: {
-        title: '极致快速',
-        desc: '为高性能进行深度优化',
-      },
-    },
-  },
   signIn: {
     title: 'Niko Admin',
     subtitle: '输入用户名和密码登录系统',

@@ -48,6 +48,7 @@ export const common = {
       10010: 'Start time must not be after end time',
       10011: 'File size exceeds limit',
       10012: 'Unsupported file type',
+      10042: 'Too many requests, please try again later',
       20001: 'Unauthorized',
       20002: 'Token expired',
       20003: 'Invalid token',

@@ -55,11 +55,15 @@ func RateLimit(rdb *redis.Client, requestsPerMinute int) gin.HandlerFunc {
 			ttl, err := rdb.TTL(ctx, key).Result()
 			if err != nil {
 				ttl = time.Minute
+			} else if ttl == -1 {
+				// Fail-safe: if the key has no TTL (e.g. Expire failed on count=1),
+				// it will block forever. Set TTL now.
+				rdb.Expire(ctx, key, time.Minute)
+				ttl = time.Minute
 			}
 
 			c.Header("Retry-After", fmt.Sprintf("%d", int(ttl.Seconds())+1))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"code":    10042,
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"code": 10042,
 				"message": "请求过于频繁，请稍后再试",
 			})
 			return

@@ -48,6 +48,7 @@ export const common = {
       10010: 'Waktu mulai tidak boleh setelah waktu selesai',
       10011: 'Ukuran file melebihi batas',
       10012: 'Tipe file tidak didukung',
+      10042: 'Terlalu banyak permintaan, silakan coba lagi nanti',
       20001: 'Tidak sah',
       20002: 'Token kedaluwarsa',
       20003: 'Token tidak valid',

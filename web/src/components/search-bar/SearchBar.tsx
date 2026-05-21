@@ -98,7 +98,7 @@ export function SearchBar({
         <Flex gap={3} align="flex-end" wrap="wrap" flex="1" justify="flex-end">
           {onRefresh && (
             <Button variant="lightBrand" onClick={onRefresh}>
-              {t('searchBar.refresh', '刷新')}
+              {t('button.refresh', '刷新')}
             </Button>
           )}
 

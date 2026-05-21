@@ -117,6 +117,18 @@ export const common = {
     inHours: '{{count}} 小时后',
     inDays: '{{count}} 天后',
   },
+  permissions: {
+    empty: '暂无权限数据',
+    expandAll: '全部展开',
+    collapseAll: '全部折叠',
+    selectAll: '全选',
+    deselectAll: '取消全选',
+    type: {
+      menu: '菜单',
+      button: '按钮',
+      api: '接口',
+    }
+  },
 } as const;
 
 export default common;

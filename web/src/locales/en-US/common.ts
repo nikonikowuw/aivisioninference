@@ -117,6 +117,18 @@ export const common = {
     inHours: 'In {{count}} hour(s)',
     inDays: 'In {{count}} day(s)',
   },
+  permissions: {
+    empty: 'No permission data',
+    expandAll: 'Expand All',
+    collapseAll: 'Collapse All',
+    selectAll: 'Select All',
+    deselectAll: 'Deselect All',
+    type: {
+      menu: 'Menu',
+      button: 'Button',
+      api: 'API',
+    }
+  },
 } as const;
 
 export default common;

@@ -72,6 +72,26 @@ var (
 			40001: "資源不存在",
 			50001: "伺服器內部錯誤",
 		},
+		"id": {
+			0:     "berhasil",
+			10001: "permintaan buruk",
+			10002: "tidak dapat menonaktifkan diri sendiri",
+			10003: "tidak ada izin untuk mengoperasi pengguna di tingkat yang sama atau lebih tinggi",
+			10004: "tidak ada izin untuk mengoperasi peran di tingkat yang sama atau lebih tinggi, atau mengatur tingkat peran lebih tinggi dari milik sendiri",
+			10005: "email sudah digunakan",
+			10006: "kata sandi lama salah",
+			10008: "format waktu mulai tidak valid",
+			10009: "format waktu selesai tidak valid",
+			10010: "waktu mulai tidak boleh setelah waktu selesai",
+			20001: "tidak sah",
+			20002: "token kedaluwarsa",
+			20003: "token tidak valid",
+			20004: "penggunaan kembali token penyegaran terdeteksi",
+			30001: "terlarang",
+			30002: "asal permintaan tidak diizinkan",
+			40001: "sumber daya tidak ditemukan",
+			50001: "kesalahan server internal",
+		},
 	}
 )
 

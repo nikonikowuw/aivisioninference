@@ -7,7 +7,7 @@ import type { I18nConfig, LanguageCode } from './types';
 // i18next 配置常量
 export const i18nConfig: I18nConfig = {
   fallbackLng: 'zh-CN',
-  supportedLngs: ['zh-CN', 'zh-TW', 'en-US'],
+  supportedLngs: ['zh-CN', 'zh-TW', 'en-US', 'id-ID'],
   detection: {
     order: ['localStorage', 'navigator', 'htmlTag'],
     caches: ['localStorage'],

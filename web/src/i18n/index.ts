@@ -10,12 +10,14 @@ import { i18nConfig, DEBUG_I18N } from './config';
 import zhCN from '../locales/zh-CN';
 import zhTW from '../locales/zh-TW';
 import enUS from '../locales/en-US';
+import idID from '../locales/id-ID';
 
 // 资源对象
 const resources = {
   'zh-CN': zhCN,
   'zh-TW': zhTW,
   'en-US': enUS,
+  'id-ID': idID,
 };
 
 // 导出资源类型

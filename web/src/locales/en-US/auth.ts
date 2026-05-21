@@ -1,4 +1,23 @@
 export const auth = {
+  hero: {
+    welcome: 'Welcome to',
+    title: 'Niko Admin',
+    subtitle: 'A modern, powerful, and scalable enterprise management system built for developers and businesses.',
+    features: {
+      modern: {
+        title: 'Modern UI',
+        desc: 'Clean and intuitive dashboard',
+      },
+      secure: {
+        title: 'Secure',
+        desc: 'Enterprise-grade RBAC',
+      },
+      fast: {
+        title: 'Fast',
+        desc: 'Optimized for high performance',
+      },
+    },
+  },
   signIn: {
     title: 'Niko Admin',
     subtitle: 'Enter your username and password to sign in',

@@ -1,4 +1,23 @@
 export const auth = {
+  hero: {
+    welcome: 'Selamat datang di',
+    title: 'Niko Admin',
+    subtitle: 'Sistem manajemen perusahaan modern, kuat, dan terukur yang dibangun untuk pengembang dan bisnis.',
+    features: {
+      modern: {
+        title: 'UI Modern',
+        desc: 'Dasbor yang bersih dan intuitif',
+      },
+      secure: {
+        title: 'Aman',
+        desc: 'Kontrol Akses Berbasis Peran tingkat Perusahaan',
+      },
+      fast: {
+        title: 'Cepat',
+        desc: 'Dioptimalkan untuk kinerja tinggi',
+      },
+    },
+  },
   signIn: {
     title: 'Niko Admin',
     subtitle: 'Masukkan nama pengguna dan kata sandi Anda untuk masuk',

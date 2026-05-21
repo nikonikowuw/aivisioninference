@@ -15,7 +15,7 @@ import {
   differenceInHours,
   differenceInDays,
 } from 'date-fns';
-import { zhCN, zhTW, enUS } from 'date-fns/locale';
+import { zhCN, zhTW, enUS, id, ja, ko } from 'date-fns/locale';
 import type { LanguageCode } from '../i18n';
 
 // date-fns locale 映射
@@ -23,6 +23,9 @@ const localeMap: Record<LanguageCode, Locale> = {
   'zh-CN': zhCN,
   'zh-TW': zhTW,
   'en-US': enUS,
+  'id-ID': id,
+  'ja-JP': ja,
+  'ko-KR': ko,
 };
 
 export function useDateFormat() {

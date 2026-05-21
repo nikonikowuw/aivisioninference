@@ -13,7 +13,7 @@ import {
 } from '@chakra-ui/react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { zhCN, zhTW, enUS, type Locale } from 'date-fns/locale';
+import { zhCN, zhTW, enUS, id, ja, ko, type Locale } from 'date-fns/locale';
 import type { LanguageCode } from '../../i18n/types';
 import 'react-calendar/dist/Calendar.css';
 import '../../assets/css/MiniCalendar.css';
@@ -24,12 +24,18 @@ const localeMap: Record<LanguageCode, Locale> = {
   'zh-CN': zhCN,
   'zh-TW': zhTW,
   'en-US': enUS,
+  'id-ID': id,
+  'ja-JP': ja,
+  'ko-KR': ko,
 };
 
 const clearLabelMap: Record<LanguageCode, string> = {
   'zh-CN': '清除',
   'zh-TW': '清除',
   'en-US': 'Clear',
+  'id-ID': 'Bersihkan',
+  'ja-JP': 'クリア',
+  'ko-KR': '초기화',
 };
 
 interface DatePickerProps {

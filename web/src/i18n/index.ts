@@ -11,6 +11,8 @@ import zhCN from '../locales/zh-CN';
 import zhTW from '../locales/zh-TW';
 import enUS from '../locales/en-US';
 import idID from '../locales/id-ID';
+import jaJP from '../locales/ja-JP';
+import koKR from '../locales/ko-KR';
 
 // 资源对象
 const resources = {
@@ -18,6 +20,8 @@ const resources = {
   'zh-TW': zhTW,
   'en-US': enUS,
   'id-ID': idID,
+  'ja-JP': jaJP,
+  'ko-KR': koKR,
 };
 
 // 导出资源类型

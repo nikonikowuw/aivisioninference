@@ -5,7 +5,7 @@
 import type { UseTranslationOptions } from 'react-i18next';
 
 // 支持的语言代码
-export type LanguageCode = 'zh-CN' | 'zh-TW' | 'en-US' | 'id-ID';
+export type LanguageCode = 'zh-CN' | 'zh-TW' | 'en-US' | 'id-ID' | 'ja-JP' | 'ko-KR';
 
 // 语言配置
 export interface LanguageConfig {
@@ -41,6 +41,18 @@ export const supportedLanguages: LanguageConfig[] = [
     flag: '🇮🇩',
     locale: 'id-ID',
   },
+  {
+    code: 'ja-JP',
+    name: '日本語',
+    flag: '🇯🇵',
+    locale: 'ja-JP',
+  },
+  {
+    code: 'ko-KR',
+    name: '한국어',
+    flag: '🇰🇷',
+    locale: 'ko-KR',
+  },
 ];
 
 // 默认语言
@@ -59,6 +71,10 @@ export const browserLanguageMap: Record<string, LanguageCode> = {
   'en-GB': 'en-US',
   'id': 'id-ID',
   'id-ID': 'id-ID',
+  'ja': 'ja-JP',
+  'ja-JP': 'ja-JP',
+  'ko': 'ko-KR',
+  'ko-KR': 'ko-KR',
 };
 
 // 获取浏览器对应的语言代码

@@ -11,11 +11,17 @@ import (
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/locales/en"
+	"github.com/go-playground/locales/id"
+	"github.com/go-playground/locales/ja"
+	"github.com/go-playground/locales/ko"
 	"github.com/go-playground/locales/zh"
 	zhTWLocale "github.com/go-playground/locales/zh_Hant_TW"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	enTranslations "github.com/go-playground/validator/v10/translations/en"
+	idTranslations "github.com/go-playground/validator/v10/translations/id"
+	jaTranslations "github.com/go-playground/validator/v10/translations/ja"
+	koTranslations "github.com/go-playground/validator/v10/translations/ko"
 	zhTranslations "github.com/go-playground/validator/v10/translations/zh"
 	zhTWTranslations "github.com/go-playground/validator/v10/translations/zh_tw"
 )
@@ -48,8 +54,8 @@ func InitGinBindingValidator() error {
 
 		registerTagName(v)
 
-		uni := ut.New(en.New(), zh.New(), zhTWLocale.New(), en.New())
-		transMap = make(map[string]ut.Translator, 3)
+		uni := ut.New(en.New(), en.New(), zh.New(), zhTWLocale.New(), id.New(), ja.New(), ko.New())
+		transMap = make(map[string]ut.Translator, 6)
 
 		enTrans, found := uni.GetTranslator("en")
 		if !found {
@@ -83,6 +89,39 @@ func InitGinBindingValidator() error {
 			return
 		}
 		transMap["zh-tw"] = zhTWTrans
+
+		idTrans, found := uni.GetTranslator("id")
+		if !found {
+			initErr = fmt.Errorf("failed to get id translator")
+			return
+		}
+		if err := idTranslations.RegisterDefaultTranslations(v, idTrans); err != nil {
+			initErr = err
+			return
+		}
+		transMap["id"] = idTrans
+
+		jaTrans, found := uni.GetTranslator("ja")
+		if !found {
+			initErr = fmt.Errorf("failed to get ja translator")
+			return
+		}
+		if err := jaTranslations.RegisterDefaultTranslations(v, jaTrans); err != nil {
+			initErr = err
+			return
+		}
+		transMap["ja"] = jaTrans
+
+		koTrans, found := uni.GetTranslator("ko")
+		if !found {
+			initErr = fmt.Errorf("failed to get ko translator")
+			return
+		}
+		if err := koTranslations.RegisterDefaultTranslations(v, koTrans); err != nil {
+			initErr = err
+			return
+		}
+		transMap["ko"] = koTrans
 	})
 
 	return initErr
@@ -119,23 +158,33 @@ func TranslateValidationError(err error, lang string) string {
 		msgs = append(msgs, fe.Translate(trans))
 	}
 
-	sep := "; "
-	if normalizedLang == "zh" || normalizedLang == "zh-tw" {
+	var sep string
+	switch normalizedLang {
+	case "zh", "zh-tw", "ja", "ko":
 		sep = "；"
+	default:
+		sep = "; "
 	}
 	return strings.Join(msgs, sep)
 }
 
 func normalizeLang(lang string) string {
 	lang = strings.ToLower(strings.TrimSpace(lang))
-	switch {
-	case strings.HasPrefix(lang, "zh-tw"):
-		return "zh-tw"
-	case strings.HasPrefix(lang, "zh"):
-		return "zh"
-	case strings.HasPrefix(lang, "en"):
-		return "en"
-	default:
-		return "en"
+	langMap := []struct {
+		prefix string
+		result string
+	}{
+		{"zh-tw", "zh-tw"},
+		{"zh", "zh"},
+		{"en", "en"},
+		{"id", "id"},
+		{"ja", "ja"},
+		{"ko", "ko"},
 	}
+	for _, item := range langMap {
+		if strings.HasPrefix(lang, item.prefix) {
+			return item.result
+		}
+	}
+	return "en"
 }

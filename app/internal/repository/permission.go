@@ -2,6 +2,7 @@
 // Model: internal/model/permission.go
 // Generate at: 2026-05-15 22:05:18
 
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (

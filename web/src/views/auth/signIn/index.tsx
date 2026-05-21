@@ -18,7 +18,7 @@ import {
 } from '@chakra-ui/react';
 import { HSeparator } from 'components/separator/Separator';
 import DefaultAuth from 'layouts/auth/Default';
-import illustration from 'assets/img/auth/auth.png';
+import illustration from 'assets/img/auth/auth.svg';
 import { MdOutlineRemoveRedEye } from 'react-icons/md';
 import { RiEyeCloseLine } from 'react-icons/ri';
 import { useAuth } from 'contexts/AuthContext';

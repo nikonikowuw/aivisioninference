@@ -82,13 +82,19 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const token = localStorage.getItem('access_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Accept-Language': i18n.language || 'en-US',
-    ...(options.headers as Record<string, string>),
-  };
+  const headers = new Headers(options.headers);
+
+  if (!headers.has('Accept-Language')) {
+    headers.set('Accept-Language', i18n.language || 'en-US');
+  }
+
+  // Only set Content-Type to JSON if not explicitly provided and body is not FormData
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -96,15 +102,21 @@ async function request<T>(
     headers,
   });
 
-  const json: ApiResponse<T> = await response.json();
+  if (response.status === 401 && !window.location.pathname.startsWith('/auth/')) {
+    localStorage.removeItem('access_token');
+    window.location.href = '/auth/sign-in';
+    throw new ApiError(401, getErrorMessage(401), 401);
+  }
+
+  let json: ApiResponse<T>;
+  const text = await response.text();
+  try {
+    json = text ? JSON.parse(text) : { code: 0, message: '', data: null };
+  } catch {
+    throw new ApiError(50001, `Invalid JSON response (HTTP ${response.status})`, response.status);
+  }
 
   if (json.code !== 0) {
-    // 非登录页面收到 401：token 失效，清除凭证并跳转登录页
-    if (response.status === 401 && !window.location.pathname.startsWith('/auth/')) {
-      localStorage.removeItem('access_token');
-      window.location.href = '/auth/sign-in';
-    }
-    // 使用前端翻译的错误消息
     throw new ApiError(
       json.code,
       resolveApiErrorMessage(json.code, json.message),
@@ -146,38 +158,10 @@ export const authApi = {
   uploadAvatar: async (file: File): Promise<{ avatar_url: string }> => {
     const formData = new FormData();
     formData.append('avatar', file);
-    const token = localStorage.getItem('access_token');
-    const response = await fetch(`${API_BASE}/auth/avatar`, {
+    return request<{ avatar_url: string }>('/auth/avatar', {
       method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        'Accept-Language': i18n.language || 'en-US',
-      },
       body: formData,
     });
-    if (!response.ok) {
-      let msg = `Upload failed (HTTP ${response.status})`;
-      let code = 50001; // Internal server error as default
-      try {
-        const errJson = await response.json();
-        if (errJson.code !== undefined && errJson.code !== 0) {
-          code = errJson.code;
-          msg = resolveApiErrorMessage(errJson.code, errJson.message);
-        } else if (errJson.message) {
-          msg = errJson.message;
-        }
-      } catch { /* ignore */ }
-      throw new ApiError(code, msg, response.status);
-    }
-    const json: ApiResponse<{ avatar_url: string }> = await response.json();
-    if (json.code !== 0) {
-      throw new ApiError(
-        json.code,
-        resolveApiErrorMessage(json.code, json.message),
-        response.status,
-      );
-    }
-    return json.data;
   },
 };
 
@@ -363,23 +347,7 @@ function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: s
 }
 
 export const usersApi = {
-  list: (params?: StatusListParams) => {
-    const query = buildQuery(params || {});
-    return request<PaginatedData<User>>(`/users${query}`);
-  },
-  get: (id: string) => request<User>(`/users/${id}`),
-  create: (data: Partial<User>) =>
-    request<User>(`/users`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-  update: (id: string, data: Partial<User>) =>
-    request<User>(`/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  delete: (id: string) =>
-    request(`/users/${id}`, { method: 'DELETE' }),
+  ...crud<User, StatusListParams>('users'),
   resetPassword: (id: string, password: string) =>
     request(`/users/${id}/password`, {
       method: 'PUT',
@@ -388,38 +356,10 @@ export const usersApi = {
   uploadAvatar: async (userId: string, file: File): Promise<{ avatar_url: string }> => {
     const formData = new FormData();
     formData.append('avatar', file);
-    const token = localStorage.getItem('access_token');
-    const response = await fetch(`${API_BASE}/users/${userId}/avatar`, {
+    return request<{ avatar_url: string }>(`/users/${userId}/avatar`, {
       method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        'Accept-Language': i18n.language || 'en-US',
-      },
       body: formData,
     });
-    if (!response.ok) {
-      let msg = `Upload failed (HTTP ${response.status})`;
-      let code = 50001; // Internal server error as default
-      try {
-        const errJson = await response.json();
-        if (errJson.code !== undefined && errJson.code !== 0) {
-          code = errJson.code;
-          msg = resolveApiErrorMessage(errJson.code, errJson.message);
-        } else if (errJson.message) {
-          msg = errJson.message;
-        }
-      } catch { /* ignore */ }
-      throw new ApiError(code, msg, response.status);
-    }
-    const json: ApiResponse<{ avatar_url: string }> = await response.json();
-    if (json.code !== 0) {
-      throw new ApiError(
-        json.code,
-        resolveApiErrorMessage(json.code, json.message),
-        response.status,
-      );
-    }
-    return json.data;
   },
 };
 export const rolesApi = {
@@ -474,22 +414,11 @@ export const filesApi = {
       const formData = new FormData();
       formData.append('chunk', chunk);
       formData.append('index', String(i));
-      const res = await fetch(`${API_BASE}/files/upload/${uploadId}/chunk`, {
+      
+      await request(`/files/upload/${uploadId}/chunk`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-          'Accept-Language': i18n.language || 'en-US',
-        },
         body: formData,
       });
-      const errBody = await res.json().catch(() => null) as ApiResponse | null;
-      if (!res.ok || (errBody && errBody.code !== 0)) {
-        const code = errBody?.code || 50001;
-        const msg = errBody?.code
-          ? resolveApiErrorMessage(errBody.code, errBody.message)
-          : `Chunk upload failed (chunk ${i}, HTTP ${res.status})`;
-        throw new ApiError(code, msg, res.status);
-      }
       onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
     }
 

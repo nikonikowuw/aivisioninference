@@ -45,7 +45,6 @@ type DBConfig struct {
 
 // RedisConfig holds Redis connection settings.
 type RedisConfig struct {
-	Enable   bool   `mapstructure:"enable"`
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
 	Password string `mapstructure:"password"`
@@ -217,7 +216,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("db.max_idle_conns", 5)
 
 	// Redis
-	v.SetDefault("redis.enable", true)
 	v.SetDefault("redis.host", "localhost")
 	v.SetDefault("redis.port", 6379)
 	v.SetDefault("redis.password", "")
@@ -287,8 +285,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("seed.email", "admin@example.com")
 	v.SetDefault("seed.display_name", "管理员")
 
-	// Explicit env bindings for important toggles.
-	_ = v.BindEnv("redis.enable", "NIKO_REDIS_ENABLE")
+	// Explicit env bindings for important sensitive values.
 	_ = v.BindEnv("seed.root_password", "NIKO_SEED_ROOT_PASSWORD")
 	_ = v.BindEnv("seed.root_email", "NIKO_SEED_ROOT_EMAIL")
 
@@ -310,10 +307,6 @@ func (c *Config) Validate() error {
 	}
 	if c.JWT.Secret == "" {
 		return fmt.Errorf("jwt.secret must be configured")
-	}
-
-	if !c.Redis.Enable {
-		return fmt.Errorf("redis.enable must be true because redis is required for jwt refresh tokens and access token blacklist")
 	}
 
 	if !isProduction(c.App.Env) {

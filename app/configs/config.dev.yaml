@@ -14,7 +14,7 @@ db:
   max_idle_conns: 10
 
 redis:
-  enable: true  # Redis 为 JWT refresh token 与 access token blacklist 必需依赖
+  # Redis 为 JWT refresh token 与 access token blacklist 必需依赖
   host: localhost
   port: 6379
   password: ""

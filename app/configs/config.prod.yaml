@@ -14,7 +14,6 @@ db:
   max_idle_conns: 10
 
 redis:
-  enable: true
   host: localhost
   port: 6379
   password: ""

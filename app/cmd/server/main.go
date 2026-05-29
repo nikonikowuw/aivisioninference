@@ -20,7 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/config"
@@ -71,21 +70,12 @@ func main() {
 	}
 	zap.L().Info("database connected")
 
-	// Connect to Redis (optional)
-	var rdb = (*redis.Client)(nil)
-	if cfg.Redis.Enable {
-		rdb, err = cache.New(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
-		if err != nil {
-			zap.L().Fatal("failed to connect to redis", zap.Error(err))
-		}
-		zap.L().Info("redis connected")
-	} else {
-		zap.L().Info("redis disabled by config")
+	// Connect to Redis. Redis is required for JWT refresh tokens and access token blacklist.
+	rdb, err := cache.New(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
+	if err != nil {
+		zap.L().Fatal("failed to connect to redis", zap.Error(err))
 	}
-
-	if rdb == nil {
-		zap.L().Fatal("redis is required for jwt refresh tokens and access token blacklist")
-	}
+	zap.L().Info("redis connected")
 
 	// Initialize JWT manager
 	jwtManager := jwt.NewManager(
@@ -107,7 +97,7 @@ func main() {
 		AllowOrigins:              cfg.CORS.AllowOrigins,
 		RequestsPerMinute:         cfg.RateLimit.RequestsPerMinute,
 		TrustedProxies:            cfg.Proxy.TrustedProxies,
-		PermissionTreeRedisEnable: cfg.Redis.Enable,
+		PermissionTreeRedisEnable: true,
 		ChunkSizeMB:               cfg.Storage.ChunkSizeMB,
 		MaxFileSizeMB:             cfg.Storage.MaxFileSizeMB,
 	}

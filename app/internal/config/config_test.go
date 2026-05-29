@@ -41,21 +41,11 @@ func TestValidateRequiresPositiveStorageLimits(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsDisabledRedis(t *testing.T) {
-	cfg := defaultValidProductionConfig()
-	cfg.Redis.Enable = false
-
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "redis.enable") {
-		t.Fatalf("Validate() error = %v, want redis.enable error", err)
-	}
-}
-
 func defaultValidProductionConfig() *Config {
 	return &Config{
-		App:   AppConfig{Env: "production"},
-		DB:    DBConfig{SSLMode: "require"},
-		Redis: RedisConfig{Enable: true},
-		JWT:   JWTConfig{Secret: "0123456789abcdef0123456789abcdef"},
+		App: AppConfig{Env: "production"},
+		DB:  DBConfig{SSLMode: "require"},
+		JWT: JWTConfig{Secret: "0123456789abcdef0123456789abcdef"},
 		Storage: StorageConfig{
 			ChunkSizeMB:   5,
 			MaxFileSizeMB: 100,

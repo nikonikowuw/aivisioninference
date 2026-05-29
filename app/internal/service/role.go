@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -219,6 +218,9 @@ func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.
 // invalidatePermCache 从 Redis 中清除所有带 perm: 前缀的角色及菜单权限缓存。
 // 使用 SCAN 游标遍历所有 perm:* 前缀的 Key 进行分批删除，避免使用 KEYS 或 FLUSH 导致 Redis 阻塞。
 func (s *RoleService) invalidatePermCache(ctx context.Context) {
+	if s.rdb == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -244,6 +246,6 @@ func (s *RoleService) invalidatePermCache(ctx context.Context) {
 	}
 
 	if deleted > 0 {
-		zap.L().Info(fmt.Sprintf("invalidated permission cache: %d keys deleted", deleted))
+		zap.L().Info("invalidated permission cache", zap.Int64("deleted", deleted))
 	}
 }

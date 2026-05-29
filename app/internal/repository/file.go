@@ -48,6 +48,13 @@ func (r *FileRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.File{}).Error
 }
 
+// FindByMD5 根据文件 MD5 查询已上传文件元数据。
+func (r *FileRepository) FindByMD5(ctx context.Context, md5Hash string) (*model.File, error) {
+	var item model.File
+	err := r.db.WithContext(ctx).Where("md5 = ?", md5Hash).First(&item).Error
+	return &item, err
+}
+
 // List 分页查询并返回满足筛选条件的文件列表及总数
 func (r *FileRepository) List(ctx context.Context, req dto.FileListRequest) ([]model.File, int64, error) {
 	var items []model.File
@@ -106,4 +113,3 @@ func (r *FileRepository) UpdateChunkCompleted(ctx context.Context, uploadID stri
 func (r *FileRepository) DeleteChunkByUploadID(ctx context.Context, uploadID string) error {
 	return r.db.WithContext(ctx).Where("upload_id = ?", uploadID).Delete(&model.FileChunk{}).Error
 }
-

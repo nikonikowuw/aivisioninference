@@ -19,6 +19,12 @@ const (
 // Returns HTTP 429 when the limit is exceeded.
 func RateLimit(rdb *redis.Client, requestsPerMinute int) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Redis 未启用或限流值无效时降级为 no-op，避免启动配置关闭 Redis 后请求 panic。
+		if rdb == nil || requestsPerMinute <= 0 {
+			c.Next()
+			return
+		}
+
 		clientIP := c.ClientIP()
 		key := fmt.Sprintf("%s%s", rateLimitPrefix, clientIP)
 

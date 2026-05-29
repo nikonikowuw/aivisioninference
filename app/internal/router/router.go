@@ -46,6 +46,8 @@ type Config struct {
 	RequestsPerMinute         int
 	TrustedProxies            []string
 	PermissionTreeRedisEnable bool
+	ChunkSizeMB               int
+	MaxFileSizeMB             int64
 }
 
 // New creates a new Router with all dependencies wired.
@@ -124,7 +126,10 @@ func (r *Router) setupRoutes() {
 	}
 	permSvc := service.NewPermissionService(permRepo, permCache)
 	rbacCache := permCache
-	fileSvc := service.NewFileService(fileRepo)
+	fileSvc := service.NewFileService(fileRepo, service.FileOptions{
+		MaxFileSizeBytes:  int64(r.config.MaxFileSizeMB) << 20,
+		MaxChunkSizeBytes: int64(r.config.ChunkSizeMB) << 20,
+	})
 	taskSvc := service.NewTaskService(taskRepo)
 	dashSvc := service.NewDashboardService(dashRepo)
 	mailSvc := service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
@@ -144,7 +149,7 @@ func (r *Router) setupRoutes() {
 	v1.POST("/auth/avatar", middleware.Auth(r.jwtManager), authHandler.UploadAvatar)
 
 	// WebSocket
-	wsHandler := handler.NewWSHandler(r.hub, r.jwtManager)
+	wsHandler := handler.NewWSHandler(r.hub, r.jwtManager, r.config.AllowOrigins)
 	r.engine.GET("/api/v1/ws", wsHandler.HandleWebSocket)
 
 	// Protected routes
@@ -156,7 +161,7 @@ func (r *Router) setupRoutes() {
 	userHandler := handler.NewUserHandler(userSvc, authSvc)
 	users := authorized.Group("/users")
 	{
-		users.GET("", userHandler.List)
+		users.GET("", middleware.RBAC(rbacCache, r.db), userHandler.List)
 		users.POST("", middleware.RBAC(rbacCache, r.db), userHandler.Create)
 		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
 		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
@@ -197,7 +202,7 @@ func (r *Router) setupRoutes() {
 		files.POST("/upload/:upload_id/complete", middleware.RBAC(rbacCache, r.db), fileHandler.CompleteUpload)
 		files.GET("/upload/:upload_id/progress", middleware.RBAC(rbacCache, r.db), fileHandler.UploadProgress)
 		files.POST("/upload/check", middleware.RBAC(rbacCache, r.db), fileHandler.CheckFile)
-		files.GET("", fileHandler.List)
+		files.GET("", middleware.RBAC(rbacCache, r.db), fileHandler.List)
 		files.GET("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.GetByID)
 		files.GET("/:id/download", middleware.RBAC(rbacCache, r.db), fileHandler.Download)
 		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
@@ -212,8 +217,8 @@ func (r *Router) setupRoutes() {
 	tasks := authorized.Group("/tasks")
 	{
 		tasks.POST("", middleware.RBAC(rbacCache, r.db), taskHandler.Create)
-		tasks.GET("", taskHandler.List)
-		tasks.GET("/:id", taskHandler.GetByID)
+		tasks.GET("", middleware.RBAC(rbacCache, r.db), taskHandler.List)
+		tasks.GET("/:id", middleware.RBAC(rbacCache, r.db), taskHandler.GetByID)
 		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
 	}
 
@@ -252,7 +257,13 @@ func (r *Router) setupRoutes() {
 	})
 
 	// Static file serving for uploaded files
-	r.engine.Static("/uploads", "uploads")
+	uploads := r.engine.Group("/uploads")
+	uploads.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("Content-Security-Policy", "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'none'; script-src 'none'")
+		c.Next()
+	})
+	uploads.Static("", "uploads")
 
 	// Frontend static files (SPA)
 	r.engine.Static("/assets", "./web/dist/assets")

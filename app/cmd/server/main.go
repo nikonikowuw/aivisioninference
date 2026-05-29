@@ -61,8 +61,8 @@ func main() {
 
 	// Connect to PostgreSQL
 	db, err := database.New(
-		fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-			cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Name),
+		fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Name, cfg.DB.SSLMode),
 		cfg.DB.MaxOpenConns,
 		cfg.DB.MaxIdleConns,
 	)
@@ -81,6 +81,10 @@ func main() {
 		zap.L().Info("redis connected")
 	} else {
 		zap.L().Info("redis disabled by config")
+	}
+
+	if rdb == nil {
+		zap.L().Fatal("redis is required for jwt refresh tokens and access token blacklist")
 	}
 
 	// Initialize JWT manager
@@ -104,6 +108,8 @@ func main() {
 		RequestsPerMinute:         cfg.RateLimit.RequestsPerMinute,
 		TrustedProxies:            cfg.Proxy.TrustedProxies,
 		PermissionTreeRedisEnable: cfg.Redis.Enable,
+		ChunkSizeMB:               cfg.Storage.ChunkSizeMB,
+		MaxFileSizeMB:             cfg.Storage.MaxFileSizeMB,
 	}
 	r := router.New(db, rdb, jwtManager, hub, routerCfg, l.Access)
 

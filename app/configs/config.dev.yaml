@@ -9,24 +9,26 @@ db:
   user: postgres
   password: postgres
   name: niko_admin
+  sslmode: disable
   max_open_conns: 25
   max_idle_conns: 10
 
 redis:
-  enable: true
+  enable: true  # Redis 为 JWT refresh token 与 access token blacklist 必需依赖
   host: localhost
   port: 6379
   password: ""
   db: 0
 
 jwt:
-  secret: ""  # Set via NIKO_JWT_SECRET env var
+  secret: ""  # Set via NIKO_JWT_SECRET env var or .env
   access_expire: 7200    # 2 hours
   refresh_expire: 604800 # 7 days
 
 storage:
   driver: local
-  chunk_size: 5  # MB
+  chunk_size: 5      # MB
+  max_file_size: 100 # MB
   local:
     upload_dir: ./uploads
     public_url: http://localhost:8080/uploads

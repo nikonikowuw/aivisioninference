@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -26,18 +28,59 @@ import (
 
 const chunkDir = "tmp/uploads"
 
+// FileOptions 定义文件上传安全限制。
+type FileOptions struct {
+	MaxFileSizeBytes  int64 // 单个完整文件最大字节数
+	MaxChunkSizeBytes int64 // 单个上传分片最大字节数
+}
+
 // FileService 处理文件分片上传、合并、下载及删除相关的业务逻辑
 type FileService struct {
 	fileRepo *repository.FileRepository // 文件数据持久化接口
+	opts     FileOptions                // 上传大小限制配置
 }
 
 // NewFileService 创建并返回一个新的 FileService 实例
-func NewFileService(fileRepo *repository.FileRepository) *FileService {
-	return &FileService{fileRepo: fileRepo}
+func NewFileService(fileRepo *repository.FileRepository, opts ...FileOptions) *FileService {
+	option := FileOptions{
+		MaxFileSizeBytes:  100 << 20,
+		MaxChunkSizeBytes: 5 << 20,
+	}
+	if len(opts) > 0 {
+		option = opts[0]
+	}
+	return &FileService{fileRepo: fileRepo, opts: option}
+}
+
+// MaxChunkSizeBytes 返回单分片最大字节数，供 Handler 限制 multipart 内存阈值。
+func (s *FileService) MaxChunkSizeBytes() int64 {
+	return s.opts.MaxChunkSizeBytes
+}
+
+// MaxChunkRequestBytes 返回单次分片上传请求体最大字节数，包含 multipart 边界和普通字段开销。
+func (s *FileService) MaxChunkRequestBytes() int64 {
+	const multipartOverheadBytes int64 = 1 << 20
+	if s.opts.MaxChunkSizeBytes <= 0 {
+		return 0
+	}
+	return s.opts.MaxChunkSizeBytes + multipartOverheadBytes
 }
 
 // InitUpload 初始化一个分片上传会话，创建临时目录并保存分片元数据
 func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest) (*model.FileChunk, error) {
+	if s.opts.MaxFileSizeBytes > 0 && req.FileSize > s.opts.MaxFileSizeBytes {
+		return nil, apperrors.New(apperrors.ErrBadRequest, "文件大小超过限制")
+	}
+	if isSVGFile(req.FileName) {
+		return nil, apperrors.New(apperrors.ErrBadRequest, "不支持上传 SVG 文件")
+	}
+	if s.opts.MaxChunkSizeBytes > 0 {
+		expectedChunks := int((req.FileSize + s.opts.MaxChunkSizeBytes - 1) / s.opts.MaxChunkSizeBytes)
+		if req.TotalChunks != expectedChunks {
+			return nil, apperrors.New(apperrors.ErrBadRequest, "分片数量与文件大小不匹配")
+		}
+	}
+
 	storageType := req.StorageType
 	if storageType == "" {
 		storageType = "local"
@@ -89,9 +132,16 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, chunkData); err != nil {
+	written, err := copyWithLimit(dst, chunkData, s.opts.MaxChunkSizeBytes)
+	if err != nil {
 		zap.L().Error("write chunk file failed", zap.Error(err))
 		return apperrors.New(apperrors.ErrInternal, "")
+	}
+	if s.opts.MaxChunkSizeBytes > 0 && written > s.opts.MaxChunkSizeBytes {
+		if removeErr := os.Remove(chunkPath); removeErr != nil {
+			zap.L().Warn("remove oversized chunk failed", zap.String("path", chunkPath), zap.Error(removeErr))
+		}
+		return apperrors.New(apperrors.ErrBadRequest, "分片大小超过限制")
 	}
 
 	// 更新已上传的分片索引列表，支持幂等上传：网络抖动导致客户端重试同一分片时，
@@ -101,17 +151,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		uploaded = []int{}
 	}
 
-	found := false
-	for _, u := range uploaded {
-		if u == index {
-			found = true
-			break
-		}
-	}
-	if !found {
-		uploaded = append(uploaded, index)
-		sort.Ints(uploaded)
-	}
+	uploaded = appendUniqueChunkIndex(uploaded, index)
 
 	data, _ := json.Marshal(uploaded)
 	if err := s.fileRepo.UpdateChunkUploadedChunks(ctx, uploadID, string(data)); err != nil {
@@ -199,18 +239,24 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
 	}
 
-	// 对整个合并后的文件做 MD5 校验，确保所有分片还原正确。
-	mergedData, err := os.ReadFile(mergedPath)
+	mergedInfo, err := os.Stat(mergedPath)
 	if err != nil {
-		zap.L().Error("read merged file for md5 failed", zap.Error(err))
+		zap.L().Error("stat merged file failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
-	actualMD5 := fmt.Sprintf("%x", md5.Sum(mergedData))
+	if mergedInfo.Size() != chunk.FileSize {
+		s.markUploadFailed(ctx, uploadID, chunkDirPath)
+		return nil, apperrors.New(apperrors.ErrBadRequest, "文件大小与声明不一致")
+	}
+
+	// 对整个合并后的文件做流式 MD5 校验，避免大文件一次性读入内存。
+	actualMD5, err := fileMD5(mergedPath)
+	if err != nil {
+		zap.L().Error("calculate merged file md5 failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
 	if actualMD5 != chunk.MD5 {
-		os.RemoveAll(chunkDirPath)
-		if err := s.fileRepo.UpdateChunkStatus(ctx, uploadID, "failed"); err != nil {
-			zap.L().Warn("mark chunk upload failed", zap.String("upload_id", uploadID), zap.Error(err))
-		}
+		s.markUploadFailed(ctx, uploadID, chunkDirPath)
 		return nil, apperrors.New(apperrors.ErrBadRequest, "文件校验失败（MD5 不匹配）")
 	}
 
@@ -241,6 +287,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		Path:         finalPath,
 		MimeType:     detectMimeType(chunk.FileName),
 		Size:         chunk.FileSize,
+		MD5:          chunk.MD5,
 		StorageType:  chunk.StorageType,
 	}
 
@@ -256,6 +303,16 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	}
 
 	return &fileRecord, nil
+}
+
+// markUploadFailed 标记上传失败并清理临时目录。
+func (s *FileService) markUploadFailed(ctx context.Context, uploadID, chunkDirPath string) {
+	if err := os.RemoveAll(chunkDirPath); err != nil {
+		zap.L().Warn("remove failed upload chunks", zap.String("upload_id", uploadID), zap.Error(err))
+	}
+	if err := s.fileRepo.UpdateChunkStatus(ctx, uploadID, "failed"); err != nil {
+		zap.L().Warn("mark chunk upload failed", zap.String("upload_id", uploadID), zap.Error(err))
+	}
 }
 
 // GetUploadProgress 获取并返回上传会话的已上传分片索引列表及总分片数
@@ -277,9 +334,17 @@ func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*
 	}, nil
 }
 
-// CheckFile 检查文件是否已存在（用于秒传，当前作为占位功能，固定返回不存在）
+// CheckFile 检查文件是否已存在（用于秒传）。
 func (s *FileService) CheckFile(ctx context.Context, md5Hash string) (*dto.CheckFileResponse, error) {
-	return &dto.CheckFileResponse{Exists: false}, nil
+	file, err := s.fileRepo.FindByMD5(ctx, md5Hash)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &dto.CheckFileResponse{Exists: false}, nil
+		}
+		zap.L().Error("check file by md5 failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	return &dto.CheckFileResponse{Exists: true, FileID: file.ID}, nil
 }
 
 // List returns a paginated list of files with optional filters.
@@ -445,7 +510,6 @@ func detectMimeType(filename string) string {
 		".png":  "image/png",
 		".gif":  "image/gif",
 		".webp": "image/webp",
-		".svg":  "image/svg+xml",
 		".pdf":  "application/pdf",
 		".doc":  "application/msword",
 		".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -462,4 +526,44 @@ func detectMimeType(filename string) string {
 		return mime
 	}
 	return "application/octet-stream"
+}
+
+// appendUniqueChunkIndex 追加未记录的分片索引，并保持索引列表有序。
+func appendUniqueChunkIndex(uploaded []int, index int) []int {
+	for _, uploadedIndex := range uploaded {
+		if uploadedIndex == index {
+			return uploaded
+		}
+	}
+	uploaded = append(uploaded, index)
+	sort.Ints(uploaded)
+	return uploaded
+}
+
+// copyWithLimit 写入最多 limit+1 字节，用于识别超过限制的分片。
+func copyWithLimit(dst io.Writer, src io.Reader, limit int64) (int64, error) {
+	if limit <= 0 {
+		return io.Copy(dst, src)
+	}
+	return io.Copy(dst, io.LimitReader(src, limit+1))
+}
+
+// fileMD5 使用流式读取计算文件 MD5，避免大文件占用大量内存。
+func fileMD5(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	h := md5.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// isSVGFile 根据扩展名拒绝 SVG，避免静态目录下产生存储型 XSS 风险。
+func isSVGFile(filename string) bool {
+	return strings.EqualFold(filepath.Ext(filename), ".svg")
 }

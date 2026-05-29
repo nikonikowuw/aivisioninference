@@ -14,24 +14,21 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// 开发环境允许所有跨域请求；生产环境需进行严格域名限制。
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
+const (
+	webSocketReadBufferSize  = 1024
+	webSocketWriteBufferSize = 1024
+)
 
 // WSHandler 处理 WebSocket 连接升级的 HTTP 请求。
 type WSHandler struct {
-	hub *ws.Hub
-	jwt *jwtutil.Manager
+	hub            *ws.Hub
+	jwt            *jwtutil.Manager
+	allowedOrigins []string
 }
 
 // NewWSHandler 创建一个新的 WSHandler 实例。
-func NewWSHandler(hub *ws.Hub, jwt *jwtutil.Manager) *WSHandler {
-	return &WSHandler{hub: hub, jwt: jwt}
+func NewWSHandler(hub *ws.Hub, jwt *jwtutil.Manager, allowedOrigins []string) *WSHandler {
+	return &WSHandler{hub: hub, jwt: jwt, allowedOrigins: allowedOrigins}
 }
 
 // HandleWebSocket 将 HTTP 连接升级为 WebSocket 协议，通过 token 查询参数进行 JWT 身份验证，并将连接注册到 Hub 中心以实现实时消息推送。
@@ -45,17 +42,7 @@ func NewWSHandler(hub *ws.Hub, jwt *jwtutil.Manager) *WSHandler {
 // @Failure      401    {object}  dto.Response
 // @Router       /ws [get]
 func (h *WSHandler) HandleWebSocket(c *gin.Context) {
-	// 从查询参数或 Authorization 请求头中提取 JWT 访问令牌
-	tokenString := c.Query("token")
-	if tokenString == "" {
-		// 如果 query 中没有 token，尝试从 Authorization 头中解析 Bearer token
-		//（部分 WebSocket 客户端不支持在建立握手时直接设置自定义 Header，通常会写在 URL 传参中）
-		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-			tokenString = authHeader[7:]
-		}
-	}
-
+	tokenString := webSocketToken(c)
 	if tokenString == "" {
 		response.Err(c, apperrors.New(apperrors.ErrUnauthorized, "缺少认证令牌"))
 		c.Abort()
@@ -71,7 +58,14 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// 升级当前的 HTTP 协议连接为 WebSocket 协议
+	// 升级当前的 HTTP 协议连接为 WebSocket 协议，并复用 CORS Origin 白名单。
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  webSocketReadBufferSize,
+		WriteBufferSize: webSocketWriteBufferSize,
+		CheckOrigin: func(r *http.Request) bool {
+			return isWebSocketOriginAllowed(r, h.allowedOrigins)
+		},
+	}
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		zap.L().Error("websocket upgrade failed",
@@ -89,4 +83,30 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	// 将该 WebSocket 连接注册到全局 Hub。Hub 将管理消息的读/写通道及客户端生命周期。
 	// Hub.HandleConnection 将会创建一个 Client 结构体并对其进行异步监听读写事件。
 	h.hub.HandleConnection(conn, claims.UserID)
+}
+
+// webSocketToken 从 query 或 Authorization 请求头中提取 JWT 访问令牌。
+func webSocketToken(c *gin.Context) string {
+	if token := c.Query("token"); token != "" {
+		return token
+	}
+	authHeader := c.GetHeader("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return authHeader[7:]
+	}
+	return ""
+}
+
+// isWebSocketOriginAllowed 校验 WebSocket 握手 Origin，非浏览器请求无 Origin 时放行。
+func isWebSocketOriginAllowed(r *http.Request, allowedOrigins []string) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	for _, allowed := range allowedOrigins {
+		if allowed == "*" || allowed == origin {
+			return true
+		}
+	}
+	return false
 }

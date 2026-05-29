@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -171,11 +170,11 @@ func TestRoleServiceRootGuardOnUpdateDeleteAssign(t *testing.T) {
 			roleID := fmt.Sprintf("role-%s", tt.name)
 			roleRepo := repository.NewRoleRepository(db)
 			userRepo := repository.NewUserRepository(db)
-			svc := NewRoleService(roleRepo, userRepo, redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"}))
+			svc := NewRoleService(roleRepo, userRepo, nil)
 
 			role := model.Role{
-				BaseModel: model.BaseModel{ID: roleID},
-				Name:      tt.roleName,
+				BaseModel:   model.BaseModel{ID: roleID},
+				Name:        tt.roleName,
 				Description: "system role",
 				SortOrder:   1,
 				Status:      1,

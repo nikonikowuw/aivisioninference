@@ -20,8 +20,8 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Name)
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Name, cfg.DB.SSLMode)
 
 	db, err := database.New(dsn, cfg.DB.MaxOpenConns, cfg.DB.MaxIdleConns)
 	if err != nil {
@@ -66,6 +66,9 @@ func main() {
 	if err := db.Exec(addAuditLogActionTypeColumnSQL()).Error; err != nil {
 		log.Fatalf("add audit log action type column: %v", err)
 	}
+	if err := db.Exec(addFileMD5ColumnSQL()).Error; err != nil {
+		log.Fatalf("add file md5 column: %v", err)
+	}
 
 	// Migrate existing menus to multi-level structure.
 	if err := migrateMultiLevelMenu(db); err != nil {
@@ -78,6 +81,13 @@ func main() {
 	}
 
 	log.Println("Migration completed successfully")
+}
+
+// addFileMD5ColumnSQL 返回文件 MD5 字段及索引的幂等迁移语句。
+func addFileMD5ColumnSQL() string {
+	return `
+	ALTER TABLE files ADD COLUMN IF NOT EXISTS md5 varchar(64);
+	CREATE INDEX IF NOT EXISTS idx_files_md5 ON files (md5);`
 }
 
 // rootUsernameConstraintSQL 返回 root 用户名一致性的幂等约束语句。
@@ -339,6 +349,7 @@ func defaultMenuList() []parentMenuDef {
 			Name: "用户管理", Code: "user-management", Path: "/user-management", Icon: "MdPeople",
 			Children: []childMenuDef{
 				{Name: "用户", Code: "users", Path: "/users", Icon: "MdPerson", Buttons: []buttonInfo{
+					{Code: "user:list", Name: "用户列表", Path: "/api/v1/users", Method: "GET"},
 					{Code: "user:create", Name: "创建用户", Path: "/api/v1/users", Method: "POST"},
 					{Code: "user:edit", Name: "编辑用户", Path: "/api/v1/users/*", Method: "PUT"},
 					{Code: "user:delete", Name: "删除用户", Path: "/api/v1/users/*", Method: "DELETE"},
@@ -366,6 +377,7 @@ func defaultMenuList() []parentMenuDef {
 			Name: "系统管理", Code: "system-management", Path: "/system-management", Icon: "MdSettings",
 			Children: []childMenuDef{
 				{Name: "文件", Code: "files", Path: "/files", Icon: "MdFolder", Buttons: []buttonInfo{
+					{Code: "file:list", Name: "文件列表", Path: "/api/v1/files", Method: "GET"},
 					{Code: "file:upload", Name: "上传文件", Path: "/api/v1/files/upload/**", Method: "POST"},
 					{Code: "file:check", Name: "校验文件", Path: "/api/v1/files/upload/check", Method: "POST"},
 					{Code: "file:upload-progress", Name: "上传进度", Path: "/api/v1/files/upload/*/progress", Method: "GET"},
@@ -377,6 +389,7 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "audit:view", Name: "查看审计日志", Path: "/api/v1/audit-logs", Method: "GET"},
 				}},
 				{Name: "任务", Code: "tasks", Path: "/tasks", Icon: "MdAssignment", Buttons: []buttonInfo{
+					{Code: "task:list", Name: "任务列表", Path: "/api/v1/tasks", Method: "GET"},
 					{Code: "task:create", Name: "创建任务", Path: "/api/v1/tasks", Method: "POST"},
 					{Code: "task:cancel", Name: "取消任务", Path: "/api/v1/tasks/*/cancel", Method: "POST"},
 					{Code: "task:view", Name: "查看任务", Path: "/api/v1/tasks/*", Method: "GET"},

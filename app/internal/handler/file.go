@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -78,7 +79,14 @@ func (h *FileHandler) UploadChunk(c *gin.Context) {
 		return
 	}
 
-	// 提取表单中的分片文件二进制内容
+	// 限制整个 multipart 请求体大小，避免超大表单字段在解析阶段落盘耗尽资源。
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, h.svc.MaxChunkRequestBytes())
+
+	// 提取表单中的分片文件二进制内容。
+	if err := c.Request.ParseMultipartForm(h.svc.MaxChunkSizeBytes()); err != nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, "分片表单超过限制"))
+		return
+	}
 	file, _, err := c.Request.FormFile("chunk")
 	if err != nil {
 		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少分片文件"))
@@ -259,8 +267,9 @@ func (h *FileHandler) Download(c *gin.Context) {
 	}
 
 	// 没有 Range 头，正常发送整个文件，附带附件下载文件名头
+	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Content-Type", info.ContentType)
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, info.File.OriginalName))
+	c.Header("Content-Disposition", safeAttachmentDisposition(info.File.OriginalName))
 	c.Header("Content-Length", strconv.FormatInt(info.FileSize, 10))
 	c.Header("Accept-Ranges", "bytes")
 	c.File(info.FilePath)
@@ -283,4 +292,9 @@ func (h *FileHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.OK(c, nil)
+}
+
+// safeAttachmentDisposition 生成安全的附件下载头，避免原始文件名中的特殊字符破坏响应头格式。
+func safeAttachmentDisposition(filename string) string {
+	return mime.FormatMediaType("attachment", map[string]string{"filename": filename})
 }

@@ -9,6 +9,7 @@ db:
   user: postgres
   password: ""
   name: niko_admin
+  sslmode: require
   max_open_conns: 25
   max_idle_conns: 10
 
@@ -26,7 +27,8 @@ jwt:
 
 storage:
   driver: local
-  chunk_size: 5  # MB
+  chunk_size: 5      # MB
+  max_file_size: 100 # MB
   local:
     upload_dir: ./uploads
     public_url: /uploads
@@ -59,7 +61,7 @@ log:
 
 cors:
   allow_origins:
-    - http://localhost:3000
+    - https://admin.example.com
   allow_methods:
     - GET
     - POST

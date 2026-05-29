@@ -10,19 +10,19 @@ import (
 type InitUploadRequest struct {
 	FileName    string `json:"file_name" binding:"required"`
 	FileSize    int64  `json:"file_size" binding:"required,gt=0"`
-	MD5         string `json:"md5" binding:"required"`
+	MD5         string `json:"md5" binding:"required,len=32,hexadecimal"`
 	TotalChunks int    `json:"total_chunks" binding:"required,gt=0"`
 	StorageType string `json:"storage_type"`
 }
 
 // CheckFileRequest is the request body for checking file existence by MD5.
 type CheckFileRequest struct {
-	MD5 string `json:"md5" binding:"required"`
+	MD5 string `json:"md5" binding:"required,len=32,hexadecimal"`
 }
 
 // CheckFileResponse is the response for file existence check.
 type CheckFileResponse struct {
-	Exists bool `json:"exists"`
+	Exists bool   `json:"exists"`
 	FileID string `json:"file_id,omitempty"`
 }
 
@@ -40,7 +40,7 @@ type FileListRequest struct {
 	MimeType    string `form:"mime_type"`
 	StorageType string `form:"storage_type"`
 	// UploaderID filters by upload creator. Maps to created_by via BaseModel.
-	UploaderID string `form:"uploader_id"`
+	UploaderID string     `form:"uploader_id"`
 	StartTime  string     `form:"start_time"`
 	EndTime    string     `form:"end_time"`
 	FromTime   *time.Time `form:"-" json:"-"`

@@ -31,7 +31,7 @@ import {
   Badge,
   Checkbox,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
+import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { rolesApi, permissionsApi, type Role, type Permission } from 'services/api';
@@ -80,7 +80,6 @@ export default function Roles() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAssigningPerms, setIsAssigningPerms] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<'delete' | null>(null);
@@ -212,20 +211,6 @@ export default function Roles() {
     }
   };
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      await rolesApi.exportCsv({
-        keyword: filters.keyword,
-        status: parseOptionalNumber(filters.status),
-      });
-    } catch (err) {
-      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const getLevelColorScheme = (level: number | undefined): string => {
     if (level == null) return 'gray';
     if (level <= 1) return 'red';
@@ -242,7 +227,6 @@ export default function Roles() {
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
         <HStack spacing={2}>
-          <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
           <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
         </HStack>
       </Flex>

@@ -103,6 +103,10 @@ const PermissionNode = ({
     return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
   };
 
+  const getTypeLabel = (type: string) => {
+    return t(`permissions.type.${type}`, { defaultValue: type });
+  };
+
   const { menuChildren, buttonChildren } = useMemo(() => {
     const menus: Permission[] = [];
     const buttons: Permission[] = [];
@@ -160,22 +164,23 @@ const PermissionNode = ({
             h="16px"
           />
 
-          <Tooltip label={node.code} placement="top" hasArrow>
-            <Text
-              fontSize="sm"
-              fontWeight={isTopLevel ? 'bold' : 'medium'}
-              color={textColor}
-              noOfLines={1}
-            >
-              {getDisplayName(node)}
-            </Text>
+          <Tooltip label={`${getTypeLabel(node.type)}: ${node.code}`} placement="top" hasArrow>
+            <HStack spacing={1}>
+              <Text
+                fontSize="sm"
+                fontWeight={isTopLevel ? 'bold' : 'medium'}
+                color={textColor}
+                noOfLines={1}
+              >
+                {getDisplayName(node)}
+              </Text>
+              {!isTopLevel && (
+                 <Text fontSize="xs" color="gray.400" fontWeight="normal">
+                   ({node.code})
+                 </Text>
+              )}
+            </HStack>
           </Tooltip>
-
-          {!isTopLevel && (
-             <Text fontSize="xs" color="gray.400" fontWeight="normal">
-               {node.code}
-             </Text>
-          )}
         </HStack>
       </Flex>
 
@@ -223,7 +228,7 @@ const PermissionNode = ({
                             size="sm"
                             colorScheme="orange"
                           />
-                          <Tooltip label={btn.code} hasArrow>
+                          <Tooltip label={`${getTypeLabel(btn.type)}: ${btn.code}`} hasArrow>
                             <Text fontSize="xs" color={secondaryTextColor} fontWeight="medium">
                               {getDisplayName(btn)}
                             </Text>
@@ -303,6 +308,15 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
     onChange([]);
   };
 
+  const getDisplayName = (p: Permission) => {
+    if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
+    return t(`codes.${p.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: p.name });
+  };
+
+  const getTypeLabel = (type: string) => {
+    return t(`permissions.type.${type}`, { defaultValue: type });
+  };
+
   return (
     <VStack spacing={6} align="stretch" w="100%">
       <Flex justify="space-between" align="center" px={2} py={2} bg={headerBg} borderRadius="xl">
@@ -358,9 +372,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
         const isTopNodeFullyChecked = isTopNodeChecked && allDescendantsSelected;
         const isTopNodeIndeterminate = !isTopNodeFullyChecked && (isTopNodeChecked || hasSelectedDescendants);
         const isTopNodeExpanded = expandedIds.has(topNode.id);
-        const topNodeName = topNode.type === 'menu'
-          ? tMenu(topNode.code, { defaultValue: topNode.name })
-          : t(`codes.${topNode.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: topNode.name });
+        const topNodeName = getDisplayName(topNode);
 
         return (
           <Card
@@ -411,7 +423,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
                   py={1}
                   fontSize="xs"
                 >
-                  {topNode.code}
+                  {getTypeLabel(topNode.type)}: {topNode.code}
                 </Badge>
               </HStack>
             </Box>

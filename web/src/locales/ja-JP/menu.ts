@@ -1,16 +1,16 @@
 export const menu = {
-  dashboard: 'ダッシュボード',
-  'user-management': 'ユーザー管理',
-  users: 'ユーザー',
-  roles: 'ロール',
-  permissions: '権限',
-  'system-management': 'システム管理',
-  files: 'ファイル',
-  'audit-logs': '操作ログ',
-  tasks: 'タスク',
-  'brand-config': 'ブランド設定',
-  'mail-config': 'メール設定',
-  feedback: 'フィードバック',
+  dashboard: "ダッシュボード",
+  "user-management": "ユーザー管理",
+  users: "ユーザー",
+  roles: "ロール",
+  permissions: "権限",
+  "system-management": "システム管理",
+  files: "ファイル",
+  "audit-logs": "操作ログ",
+  tasks: "タスク",
+  "brand-config": "ブランド設定",
+  "mail-config": "メール設定",
+  feedback: "フィードバック",
 } as const;
 
 export default menu;

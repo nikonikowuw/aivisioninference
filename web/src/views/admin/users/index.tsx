@@ -372,18 +372,13 @@ export default function Users() {
                 <Td>{user.display_name}</Td>
                 <Td>{user.email}</Td>
                 <Td>
-                  <HStack spacing={2}>
-                    <Switch
-                      aria-label={user.status === 1 ? t('actions.disable') : t('actions.enable')}
-                      isChecked={user.status === 1}
-                      isDisabled={user.id === currentUser?.id || isToggling || toggleTarget?.id === user.id}
-                      onChange={() => setToggleTarget(user)}
-                      colorScheme="green"
-                    />
-                    <Badge colorScheme={user.status === 1 ? 'green' : 'red'}>
-                      {user.status === 1 ? t('table.status.active') : t('table.status.inactive')}
-                    </Badge>
-                  </HStack>
+                  <Switch
+                    aria-label={user.status === 1 ? t('actions.disable') : t('actions.enable')}
+                    isChecked={user.status === 1}
+                    isDisabled={user.id === currentUser?.id || isToggling || toggleTarget?.id === user.id}
+                    onChange={() => setToggleTarget(user)}
+                    colorScheme="green"
+                  />
                 </Td>
                 <Td>{user.roles?.map((r) => r.name).join(', ') || '-'}</Td>
                 <Td>

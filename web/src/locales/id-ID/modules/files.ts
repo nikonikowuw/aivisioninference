@@ -1,48 +1,37 @@
 export const files = {
-  title: 'Manajemen File',
-  button: {
-    upload: 'Unggah File',
-  },
+  title: "Manajemen File",
   filter: {
     storageTypes: {
-      local: 'Lokal',
-      oss: 'OSS',
-      pg: 'PostgreSQL',
+      local: "Lokal",
+      oss: "OSS",
+      pg: "PostgreSQL",
     },
   },
   table: {
     columns: {
-      id: 'ID',
-      name: 'Nama File',
-      type: 'Tipe',
-      size: 'Ukuran',
-      storageType: 'Tipe Penyimpanan',
-      uploadTime: 'Waktu Unggah',
-      actions: 'Tindakan',
+      name: "Nama File",
+      type: "Tipe",
+      size: "Ukuran",
+      storageType: "Tipe Penyimpanan",
+      uploadTime: "Waktu Unggah",
     },
   },
   upload: {
-    uploading: 'Mengunggah...',
-    progress: 'Progres Unggah',
+    uploading: "Mengunggah...",
+    progress: "Progres Unggah",
   },
   message: {
-    uploadSuccess: 'File berhasil diunggah',
-    uploadFailed: 'Unggahan gagal',
-    deleteSuccess: 'File berhasil dihapus',
-    deleteFailed: 'Penghapusan gagal',
-    deleteConfirm: 'Apakah Anda yakin ingin menghapus file ini?',
-    exportFailed: 'Ekspor gagal',
+    deleteConfirm: "Apakah Anda yakin ingin menghapus file ini?",
+    exportFailed: "Ekspor gagal",
   },
   actions: {
-    delete: 'Hapus',
-    download: 'Unduh',
-    export: 'Ekspor',
+    export: "Ekspor",
   },
   size: {
-    bytes: 'B',
-    kilobytes: 'KB',
-    megabytes: 'MB',
-    gigabytes: 'GB',
+    bytes: "B",
+    kilobytes: "KB",
+    megabytes: "MB",
+    gigabytes: "GB",
   },
 } as const;
 

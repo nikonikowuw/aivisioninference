@@ -1,61 +1,49 @@
 export const roles = {
-  title: '角色管理',
+  title: "角色管理",
   button: {
-    create: '新增角色',
-    assignPermissions: '分配權限',
+    assignPermissions: "分配權限",
   },
   table: {
     columns: {
-      id: 'ID',
-      name: '角色名稱',
-      description: '描述',
-      permissionCount: '權限數',
-      status: '狀態',
-      actions: '操作',
-    },
-    status: {
-      active: '啟用',
-      inactive: '停用',
+      name: "角色名稱",
+      description: "描述",
+      permissionCount: "權限數",
     },
   },
   form: {
     name: {
-      label: '角色名稱',
-      placeholder: '請輸入角色名稱',
+      label: "角色名稱",
+      placeholder: "請輸入角色名稱",
     },
     description: {
-      label: '描述',
-      placeholder: '請輸入描述',
+      label: "描述",
+      placeholder: "請輸入描述",
     },
     level: {
-      label: '等級',
-      placeholder: '等級數值越小權限越高',
-      helper: '等級數值越小權限越高；最終權限校驗以後端規則為準',
+      label: "等級",
+      placeholder: "等級數值越小權限越高",
+      helper: "等級數值越小權限越高；最終權限校驗以後端規則為準",
     },
   },
   modal: {
-    createTitle: '新增角色',
-    editTitle: '編輯角色',
-    assignPermissionsTitle: '分配權限',
+    createTitle: "新增角色",
+    editTitle: "編輯角色",
+    assignPermissionsTitle: "分配權限",
   },
   permissions: {
-    empty: '暫無權限資料',
+    empty: "暫無權限資料",
   },
   message: {
-    assignPermissionsSuccess: '權限分配成功',
-    loadPermissionsFailed: '取得權限失敗',
-    assignPermissionsFailed: '分配失敗',
-    deleteConfirm: '確定刪除該角色？',
-    levelInvalidTitle: '等級輸入無效',
-    levelInvalidDescription: '請輸入 {{min}} 到 {{max}} 之間的整數等級',
-    batchDeleteConfirm: '確定刪除選中的 {{count}} 個角色？',
+    assignPermissionsSuccess: "權限分配成功",
+    loadPermissionsFailed: "取得權限失敗",
+    assignPermissionsFailed: "分配失敗",
+    deleteConfirm: "確定刪除該角色？",
+    levelInvalidTitle: "等級輸入無效",
+    levelInvalidDescription: "請輸入 {{min}} 到 {{max}} 之間的整數等級",
+    batchDeleteConfirm: "確定刪除選中的 {{count}} 個角色？",
   },
   batch: {
-    delete: '批量刪除',
-  },
-  actions: {
-    edit: '編輯',
-    delete: '刪除',
+    delete: "批量刪除",
   },
 } as const;
 

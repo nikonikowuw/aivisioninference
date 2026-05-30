@@ -1,39 +1,34 @@
 export const tasks = {
-  title: 'Task Management',
+  title: "Task Management",
   filter: {
     taskTypes: {
-      email: 'Email',
-      export: 'Export',
-      import: 'Import',
-      backup: 'Backup',
+      email: "Email",
+      export: "Export",
+      import: "Import",
+      backup: "Backup",
     },
   },
   table: {
     columns: {
-      id: 'ID',
-      type: 'Type',
-      status: 'Status',
-      error: 'Error',
-      createdAt: 'Created At',
-      updatedAt: 'Updated At',
-      actions: 'Actions',
+      type: "Type",
+      error: "Error",
     },
     status: {
-      pending: 'Pending',
-      running: 'Running',
-      completed: 'Completed',
-      failed: 'Failed',
-      cancelled: 'Cancelled',
+      pending: "Pending",
+      running: "Running",
+      completed: "Completed",
+      failed: "Failed",
+      cancelled: "Cancelled",
     },
   },
   message: {
-    cancelled: 'Task cancelled',
-    cancelFailed: 'Failed to cancel task',
-    cancelConfirm: 'Are you sure you want to cancel this task?',
-    confirmCancel: 'Yes, cancel it',
+    cancelled: "Task cancelled",
+    cancelFailed: "Failed to cancel task",
+    cancelConfirm: "Are you sure you want to cancel this task?",
+    confirmCancel: "Yes, cancel it",
   },
   actions: {
-    cancel: 'Cancel Task',
+    cancel: "Cancel Task",
   },
 } as const;
 

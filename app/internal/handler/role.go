@@ -1,3 +1,4 @@
+// Package handler 提供 HTTP 请求处理层（Controller），负责参数绑定、校验和响应返回。
 package handler
 
 import (

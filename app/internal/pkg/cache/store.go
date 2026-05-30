@@ -1,3 +1,4 @@
+// Package cache 提供 Redis 客户端连接管理和本地内存缓存实现。
 package cache
 
 import (
@@ -7,8 +8,10 @@ import (
 	"time"
 )
 
+// ErrCacheMiss 表示缓存未命中的哨兵错误。
 var ErrCacheMiss = errors.New("cache: miss")
 
+// Cache 定义了统一的缓存读写接口，支持 Redis 和本地内存两种实现。
 type Cache interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
@@ -20,6 +23,7 @@ type memoryItem struct {
 	expiresAt time.Time
 }
 
+// MemoryCache 是一个基于内存的 Cache 实现，支持 TTL 过期和定时清理。
 type MemoryCache struct {
 	mu     sync.RWMutex
 	items  map[string]memoryItem
@@ -74,6 +78,7 @@ func (c *MemoryCache) Stop() {
 	}
 }
 
+// Get 从内存缓存中获取指定键的值（在读取时惰性删除已过期的条目）。
 func (c *MemoryCache) Get(_ context.Context, key string) ([]byte, error) {
 	c.mu.RLock()
 	item, ok := c.items[key]
@@ -92,6 +97,7 @@ func (c *MemoryCache) Get(_ context.Context, key string) ([]byte, error) {
 	return data, nil
 }
 
+// Set 将一个值存入内存缓存，并指定 TTL 过期时间（0 表示永不过期）。
 func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	copied := make([]byte, len(value))
 	copy(copied, value)
@@ -107,6 +113,7 @@ func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.
 	return nil
 }
 
+// Del 从内存缓存中删除指定键。
 func (c *MemoryCache) Del(_ context.Context, key string) error {
 	c.mu.Lock()
 	delete(c.items, key)

@@ -1,3 +1,4 @@
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 import "time"

@@ -1,3 +1,4 @@
+// Package middleware 提供 Gin HTTP 中间件，包含认证鉴权、RBAC 权限控制、审计日志、CORS、限流等功能。
 package middleware
 
 import (

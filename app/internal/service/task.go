@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (

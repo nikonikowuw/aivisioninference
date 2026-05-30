@@ -7,6 +7,7 @@ import (
 	"sync"
 )
 
+// DefaultLanguage 是 i18n 翻译的默认回退语言。
 const DefaultLanguage = "en"
 
 var (

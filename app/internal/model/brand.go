@@ -1,3 +1,4 @@
+// Package model 定义系统数据模型，包含 GORM 结构体和数据库表映射。
 package model
 
 // BrandConfig 存储系统级品牌展示配置。

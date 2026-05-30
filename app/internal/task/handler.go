@@ -1,3 +1,4 @@
+// Package task 提供基于 Asynq 的后台异步任务队列管理功能
 package task
 
 import (

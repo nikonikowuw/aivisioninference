@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -14,6 +15,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
+// permissionTreeCacheKey 权限树数据在缓存中的键名。
 const permissionTreeCacheKey = "perm:tree:all"
 
 // PermissionService 处理系统权限相关的业务逻辑

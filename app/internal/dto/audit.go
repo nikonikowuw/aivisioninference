@@ -1,3 +1,4 @@
+// Package dto 定义请求和响应的数据传输结构体，包含参数校验和序列化标签。
 package dto
 
 import (
@@ -6,6 +7,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
+// DateTimeFormat 是审计日志等响应中使用的时间戳格式（RFC3339）。
 const DateTimeFormat = time.RFC3339
 
 // AuditLogResponse is the audit log data returned in API responses.
@@ -43,6 +45,7 @@ type ListAuditLogRequest struct {
 	ToTime       *time.Time `form:"-" json:"-"` // parsed by service, used by FilterScopes
 }
 
+// FilterScopes 返回当前请求对应的 GORM 查询范围函数列表，用于实现多字段 LIKE 搜索、精确匹配等过滤逻辑。
 func (r *ListAuditLogRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {

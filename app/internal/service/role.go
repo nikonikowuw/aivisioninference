@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -13,6 +14,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
+// permCachePrefix 权限缓存在 Redis 中的键前缀。
 const permCachePrefix = "perm:"
 
 // RoleService 处理系统角色相关的业务逻辑

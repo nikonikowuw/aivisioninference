@@ -1,3 +1,4 @@
+// Package httpx 提供 HTTP 请求工具函数，包括安全连接检测和可信代理校验。
 package httpx
 
 import (

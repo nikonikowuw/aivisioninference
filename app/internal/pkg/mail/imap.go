@@ -1,3 +1,4 @@
+// Package mail 提供 SMTP 邮件发送和 IMAP 邮件同步功能。
 package mail
 
 import (

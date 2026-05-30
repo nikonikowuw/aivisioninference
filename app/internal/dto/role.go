@@ -1,3 +1,4 @@
+// Package dto 定义请求和响应的数据传输结构体，包含参数校验和序列化标签。
 package dto
 
 import "github.com/niko-admin/niko-admin/internal/pkg/scopes"
@@ -11,6 +12,7 @@ type CreateRoleRequest struct {
 	Level       int    `json:"level" binding:"required,gte=1"`
 }
 
+// UpdateRoleRequest is the request body for updating a role.
 type UpdateRoleRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=1,max=64"`
 	Description string `json:"description" binding:"max=256"`
@@ -31,6 +33,7 @@ type RoleListRequest struct {
 	Status  *int   `form:"status"`
 }
 
+// FilterScopes 返回当前请求对应的 GORM 查询范围函数列表，支持关键词和状态过滤。
 func (r *RoleListRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {

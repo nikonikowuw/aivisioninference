@@ -1,3 +1,4 @@
+// Package scopes 提供 GORM 查询范围辅助函数，包含分页、排序、字段过滤和时间范围筛选。
 package scopes
 
 import (
@@ -13,8 +14,10 @@ import (
 
 var validFieldName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
+// Scope 定义了 GORM 查询范围函数的类型签名。
 type Scope = func(*gorm.DB) *gorm.DB
 
+// Paginate 返回一个分页查询范围，根据页码和每页数量计算 offset 和 limit。
 func Paginate(page, pageSize int) Scope {
 	return func(db *gorm.DB) *gorm.DB {
 		offset := (page - 1) * pageSize
@@ -42,6 +45,7 @@ func OrderBy(sort, order string, allowedFields ...string) Scope {
 	}
 }
 
+// Eq 返回一个等值查询范围，支持 nil 值（生成 IS NULL 条件）。
 func Eq(field string, value interface{}) Scope {
 	return func(db *gorm.DB) *gorm.DB {
 		if !validFieldName.MatchString(field) {
@@ -62,6 +66,7 @@ func Eq(field string, value interface{}) Scope {
 	}
 }
 
+// Like 返回一个 LIKE 模糊查询范围，在值前后自动添加通配符 %。
 func Like(field, value string) Scope {
 	return func(db *gorm.DB) *gorm.DB {
 		if !validFieldName.MatchString(field) {
@@ -92,6 +97,7 @@ func MultiLike(fields []string, value string) Scope {
 	}
 }
 
+// TimeRange 返回一个时间范围查询范围，支持开始时间和结束时间单独或同时指定。
 func TimeRange(field string, from, to *time.Time) Scope {
 	return func(db *gorm.DB) *gorm.DB {
 		if !validFieldName.MatchString(field) {

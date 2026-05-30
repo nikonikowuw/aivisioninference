@@ -1,4 +1,4 @@
-// Package router provides HTTP route registration for niko-admin.
+// Package router 提供 HTTP 路由注册和依赖注入编排，串联 Handler、Service、Repository 各层。
 package router
 
 import (

@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -382,6 +383,7 @@ func (s *EmailVerificationService) createAndSend(ctx context.Context, userID *st
 	return nil
 }
 
+// toMailConfigResponse 将 MailConfig 模型转换为脱敏后供前端展示的 DTO 响应结构体。
 func toMailConfigResponse(cfg *model.MailConfig) *dto.MailConfigResponse {
 	return &dto.MailConfigResponse{
 		ID:                     cfg.ID,
@@ -409,6 +411,7 @@ func toMailConfigResponse(cfg *model.MailConfig) *dto.MailConfigResponse {
 	}
 }
 
+// applyMailConfigRequest 将请求 DTO 的值覆盖写入邮件配置模型，仅当新密码不为空时更新密码字段。
 func applyMailConfigRequest(cfg *model.MailConfig, req dto.MailConfigRequest) {
 	cfg.Enabled = req.Enabled
 	cfg.FromName = strings.TrimSpace(req.FromName)
@@ -435,6 +438,7 @@ func applyMailConfigRequest(cfg *model.MailConfig, req dto.MailConfigRequest) {
 	cfg.IMAPSyncMinutes = defaultInt(req.IMAPSyncMinutes, defaultIMAPSyncMins)
 }
 
+// toSMTPConfig 将 MailConfig 模型映射为 SMTP 客户端所需的配置参数。
 func toSMTPConfig(cfg *model.MailConfig) mailpkg.SMTPConfig {
 	return mailpkg.SMTPConfig{
 		Enabled:     cfg.Enabled && cfg.SMTPEnabled,
@@ -450,6 +454,7 @@ func toSMTPConfig(cfg *model.MailConfig) mailpkg.SMTPConfig {
 	}
 }
 
+// toIMAPConfig 将 MailConfig 模型映射为 IMAP 客户端所需的配置参数。
 func toIMAPConfig(cfg *model.MailConfig) mailpkg.IMAPConfig {
 	return mailpkg.IMAPConfig{
 		Enabled:    cfg.Enabled && cfg.IMAPEnabled,
@@ -463,6 +468,7 @@ func toIMAPConfig(cfg *model.MailConfig) mailpkg.IMAPConfig {
 	}
 }
 
+// defaultString 返回 value（去除首尾空格后非空）否则返回 fallback。
 func defaultString(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
@@ -470,6 +476,7 @@ func defaultString(value, fallback string) string {
 	return strings.TrimSpace(value)
 }
 
+// defaultInt 返回 value（大于 0 时）否则返回 fallback。
 func defaultInt(value, fallback int) int {
 	if value <= 0 {
 		return fallback
@@ -477,6 +484,7 @@ func defaultInt(value, fallback int) int {
 	return value
 }
 
+// randomToken 生成一个 144 位的随机安全令牌（URL-safe Base64 编码）。
 func randomToken() (string, error) {
 	var b [18]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -485,15 +493,18 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
+// hashToken 对令牌进行 SHA-256 哈希，用于数据库存储（避免明文泄露）。
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
 
+// hashPassword 对用户密码进行 bcrypt 哈希。
 func hashPassword(password string) (string, error) {
 	return hash.Hash(password)
 }
 
+// sanitizeMailError 对邮件错误信息中的敏感字段（密码、认证信息）进行脱敏处理。
 func sanitizeMailError(err error) error {
 	if err == nil {
 		return nil

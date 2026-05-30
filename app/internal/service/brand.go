@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -110,6 +111,7 @@ func (s *BrandService) UploadLogo(ctx context.Context, fileHeader *multipart.Fil
 	return logoURL, nil
 }
 
+// getOrDefaultConfig 获取品牌配置，不存在时返回包含默认值的占位配置。
 func (s *BrandService) getOrDefaultConfig(ctx context.Context) (*model.BrandConfig, error) {
 	cfg, err := s.cfgRepo.First(ctx)
 	if err != nil {
@@ -121,6 +123,7 @@ func (s *BrandService) getOrDefaultConfig(ctx context.Context) (*model.BrandConf
 	return &model.BrandConfig{SystemName: defaultSystemName, LogoURL: defaultLogoURL}, nil
 }
 
+// toBrandConfigResponse 将 BrandConfig 模型转换为 DTO 响应结构体。
 func toBrandConfigResponse(cfg *model.BrandConfig) *dto.BrandConfigResponse {
 	return &dto.BrandConfigResponse{
 		ID:         cfg.ID,
@@ -131,6 +134,7 @@ func toBrandConfigResponse(cfg *model.BrandConfig) *dto.BrandConfigResponse {
 	}
 }
 
+// readUploadedLogo 读取并校验上传的品牌 Logo 文件内容（大小和完整性校验）。
 func readUploadedLogo(fileHeader *multipart.FileHeader) ([]byte, error) {
 	file, err := fileHeader.Open()
 	if err != nil {
@@ -153,6 +157,7 @@ func readUploadedLogo(fileHeader *multipart.FileHeader) ([]byte, error) {
 	return allBytes, nil
 }
 
+// logoExtension 根据文件名和 MIME 类型推断 Logo 文件的扩展名。
 func logoExtension(filename, mimeType string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	if ext == ".jpeg" {
@@ -171,6 +176,7 @@ func logoExtension(filename, mimeType string) string {
 	return ""
 }
 
+// deleteOldLogo 尽力删除旧 Logo 文件，仅删除本存储后端的文件。
 func (s *BrandService) deleteOldLogo(oldLogoURL string) {
 	if oldLogoURL == "" || oldLogoURL == defaultLogoURL {
 		return

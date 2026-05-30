@@ -1,3 +1,4 @@
+// Package handler 提供 HTTP 请求处理层（Controller），负责参数绑定、校验和响应返回。
 package handler
 
 import (
@@ -13,6 +14,7 @@ type MailHandler struct {
 	svc *service.MailService
 }
 
+// NewMailHandler 创建一个新的 MailHandler 实例。
 func NewMailHandler(svc *service.MailService) *MailHandler {
 	return &MailHandler{svc: svc}
 }
@@ -119,6 +121,7 @@ type FeedbackHandler struct {
 	svc *service.FeedbackService
 }
 
+// NewFeedbackHandler 创建一个新的 FeedbackHandler 实例。
 func NewFeedbackHandler(svc *service.FeedbackService) *FeedbackHandler {
 	return &FeedbackHandler{svc: svc}
 }

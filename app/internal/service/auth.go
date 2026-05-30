@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -28,8 +29,10 @@ import (
 	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
+// menuTreeCacheTTL 菜单树的 Redis 缓存过期时间。
 const menuTreeCacheTTL = 10 * time.Minute
 
+// menuTreeCacheKey 根据角色 ID 列表生成菜单树的缓存键（按排序后的角色 ID 哈希）。
 func menuTreeCacheKey(roleIDs []string) string {
 	sorted := make([]string, len(roleIDs))
 	copy(sorted, roleIDs)
@@ -443,6 +446,7 @@ const (
 	avatarPathPrefix = "avatars"
 )
 
+// allowedAvatarTypes 定义允许上传的头像 MIME 类型白名单。
 var allowedAvatarTypes = map[string]bool{
 	"image/jpeg": true,
 	"image/png":  true,

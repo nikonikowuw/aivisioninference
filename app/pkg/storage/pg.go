@@ -1,4 +1,5 @@
 // PGStorage implements Storage using PostgreSQL Large Objects.
+// Package pkg/storage 提供统一的文件存储接口及本地文件系统、PostgreSQL Large Objects、MinIO/S3 三种存储后端实现。
 package storage
 
 import (

@@ -1,3 +1,4 @@
+// Package dto 定义请求和响应的数据传输结构体，包含参数校验和序列化标签。
 package dto
 
 // LoginRequest is the login request body.

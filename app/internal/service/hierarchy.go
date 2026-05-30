@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
+// noRoleSentinel 当用户没有任何角色时使用的哨兵值（表示最低权限层级）。
 const noRoleSentinel = 99999
 
 // checkRoleRootGuard 校验非 Root 用户不能修改系统管理员角色。

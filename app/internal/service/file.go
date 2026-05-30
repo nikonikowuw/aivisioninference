@@ -1,3 +1,4 @@
+// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -26,6 +27,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
+// chunkDir 分片上传的临时存储目录。
 const chunkDir = "tmp/uploads"
 
 // FileOptions 定义文件上传安全限制。
@@ -40,6 +42,7 @@ type FileService struct {
 	opts     FileOptions                // 上传大小限制配置
 }
 
+// NewFileService 创建并返回一个新的 FileService 实例，可选的 opts 参数用于覆盖默认上传限制。
 func NewFileService(fileRepo *repository.FileRepository, opts ...FileOptions) *FileService {
 	option := FileOptions{
 		MaxFileSizeBytes:  100 << 20,
@@ -155,6 +158,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 	return nil
 }
 
+// unmarshalUploadedChunks 将已上传分片索引的 JSON 字符串解析为整型切片。
 func (s *FileService) unmarshalUploadedChunks(data string) []int {
 	var uploaded []int
 	_ = json.Unmarshal([]byte(data), &uploaded)
@@ -305,6 +309,7 @@ func (s *FileService) markUploadFailed(ctx context.Context, uploadID, chunkDirPa
 	}
 }
 
+// cleanupCanceledUpload 清理已取消上传的数据库记录和临时目录。
 func (s *FileService) cleanupCanceledUpload(ctx context.Context, uploadID string) {
 	cleanupCtx := context.WithoutCancel(ctx)
 	if err := s.fileRepo.DeleteChunkByUploadID(cleanupCtx, uploadID); err != nil {

@@ -1,3 +1,4 @@
+// Package dto 定义请求和响应的数据传输结构体，包含参数校验和序列化标签。
 package dto
 
 import "github.com/niko-admin/niko-admin/internal/pkg/scopes"
@@ -30,6 +31,7 @@ type UserListRequest struct {
 	Status  *int   `form:"status"`
 }
 
+// FilterScopes 返回当前请求对应的 GORM 查询范围函数列表，支持关键词和状态过滤。
 func (r *UserListRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {

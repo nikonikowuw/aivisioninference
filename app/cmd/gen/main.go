@@ -1,4 +1,4 @@
-// Command gen is the CLI entry point for the niko-admin code generator.
+// Package main 提供 niko-admin 代码生成器的 CLI 入口。
 //
 // Usage:
 //

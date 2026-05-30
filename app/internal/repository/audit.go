@@ -1,3 +1,4 @@
+// Package repository 提供数据访问层实现，封装 GORM 数据库操作。
 package repository
 
 import (

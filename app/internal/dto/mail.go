@@ -1,3 +1,4 @@
+// Package dto 定义请求和响应的数据传输结构体，包含参数校验和序列化标签。
 package dto
 
 import (
@@ -86,6 +87,7 @@ type FeedbackListRequest struct {
 	ToTime    *time.Time `form:"-" json:"-"`
 }
 
+// FilterScopes 返回当前请求对应的 GORM 查询范围函数列表，支持关键词、来源、状态等过滤。
 func (r *FeedbackListRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {

@@ -1,3 +1,5 @@
+// Package ws provides a WebSocket hub and client implementation for
+// real-time bidirectional communication.
 package ws
 
 import (

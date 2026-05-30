@@ -298,13 +298,15 @@ export default function Roles() {
       </Modal>
 
       {/* Permissions Modal */}
-      <Modal isOpen={isPermOpen} onClose={onPermClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{t('modal.assignPermissionsTitle')}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <Box maxH="400px" overflowY="auto" w="100%">
+      <Modal isOpen={isPermOpen} onClose={onPermClose} size="xl">
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent borderRadius="20px">
+          <ModalHeader fontSize="22px" fontWeight="800" color={textColor} pt="25px" px="25px">
+            {t('modal.assignPermissionsTitle')}
+          </ModalHeader>
+          <ModalCloseButton top="25px" right="25px" />
+          <ModalBody px="25px" pb="25px">
+            <Box maxH="60vh" overflowY="auto" w="100%" pr="2">
               {permTree.length > 0 ? (
                 <PermissionTree
                   tree={permTree}

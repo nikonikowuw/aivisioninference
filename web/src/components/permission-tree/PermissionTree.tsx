@@ -250,12 +250,14 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
   const topNodeTextColor = useColorModeValue('navy.700', 'white');
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    if (tree.length > 0 && expandedIds.size === 0) {
+    if (tree.length > 0 && !hasInitialized) {
       setExpandedIds(new Set(tree.map((node) => node.id)));
+      setHasInitialized(true);
     }
-  }, [tree, expandedIds.size]);
+  }, [tree, hasInitialized]);
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -285,7 +287,8 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
   };
 
   const expandAll = () => {
-    setExpandedIds(new Set(getExpandableNodeIds(tree)));
+    const allIds = getExpandableNodeIds(tree);
+    setExpandedIds(new Set(allIds));
   };
 
   const collapseAll = () => {
@@ -354,6 +357,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
         const allDescendantsSelected = descendantIds.every((id) => selectedIds.includes(id));
         const isTopNodeFullyChecked = isTopNodeChecked && allDescendantsSelected;
         const isTopNodeIndeterminate = !isTopNodeFullyChecked && (isTopNodeChecked || hasSelectedDescendants);
+        const isTopNodeExpanded = expandedIds.has(topNode.id);
         const topNodeName = topNode.type === 'menu'
           ? tMenu(topNode.code, { defaultValue: topNode.name })
           : t(`codes.${topNode.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: topNode.name });
@@ -378,15 +382,23 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
               borderBottom="1px solid"
               borderColor={borderColor}
             >
-              <HStack justify="space-between">
+              <HStack
+                justify="space-between"
+                cursor="pointer"
+                onClick={() => handleToggleExpand(topNode.id)}
+                _hover={{ opacity: 0.8 }}
+              >
                 <HStack spacing={3}>
                   <Checkbox
                     isChecked={isTopNodeFullyChecked}
                     isIndeterminate={isTopNodeIndeterminate}
-                    onChange={() => handleToggle(topNode.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleToggle(topNode.id);
+                    }}
                     colorScheme="brand"
                   />
-                  <Icon as={MdMenu} color="brand.500" w="22px" h="22px" />
+                  <Icon as={isTopNodeExpanded ? MdExpandMore : MdExpandLess} color="brand.500" w="22px" h="22px" />
                   <Text fontWeight="bold" fontSize="lg" color={topNodeTextColor}>
                     {topNodeName}
                   </Text>
@@ -404,16 +416,18 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
               </HStack>
             </Box>
 
-            <Box p={4}>
-              <PermissionNode
-                node={topNode}
-                depth={0}
-                selectedIds={selectedIds}
-                onToggle={handleToggle}
-                expandedIds={expandedIds}
-                onToggleExpand={handleToggleExpand}
-              />
-            </Box>
+            <Collapse in={isTopNodeExpanded} animateOpacity>
+              <Box p={4}>
+                <PermissionNode
+                  node={topNode}
+                  depth={0}
+                  selectedIds={selectedIds}
+                  onToggle={handleToggle}
+                  expandedIds={expandedIds}
+                  onToggleExpand={handleToggleExpand}
+                />
+              </Box>
+            </Collapse>
           </Card>
         );
       })}

@@ -31,6 +31,11 @@ import {
   Badge,
   Checkbox,
   Switch,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -343,47 +348,157 @@ export default function Roles() {
       />
 
       {/* Create/Edit Modal */}
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent as="form" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
-          <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.name.label')}</FormLabel>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('form.name.placeholder')} />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.description.label')}</FormLabel>
-              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t('form.description.placeholder')} />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.level.label')}</FormLabel>
+      <Modal isOpen={isOpen} onClose={onClose} size="md">
+        <ModalOverlay backdropFilter="blur(8px)" />
+        <ModalContent
+          as="form"
+          onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+          borderRadius="24px"
+          border="1px solid"
+          borderColor={useColorModeValue('gray.100', 'whiteAlpha.100')}
+          boxShadow="2xl"
+          overflow="hidden"
+        >
+          <ModalHeader
+            fontSize="22px"
+            fontWeight="800"
+            color={textColor}
+            pt="30px"
+            px="30px"
+            pb="15px"
+          >
+            {editing ? t('modal.editTitle') : t('modal.createTitle')}
+          </ModalHeader>
+          <ModalCloseButton top="25px" right="30px" borderRadius="12px" />
+          <ModalBody px="30px" py="10px">
+            <FormControl mb="20px" isRequired>
+              <FormLabel fontSize="sm" fontWeight="600" color={textColor} mb="8px">
+                {t('form.name.label')}
+              </FormLabel>
               <Input
-                type="number"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder={t('form.name.placeholder')}
+                borderRadius="16px"
+                h="46px"
+                fontSize="sm"
+                variant="outline"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                _focus={{
+                  borderColor: 'brand.500',
+                  boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
+                }}
+              />
+            </FormControl>
+
+            <FormControl mb="20px">
+              <FormLabel fontSize="sm" fontWeight="600" color={textColor} mb="8px">
+                {t('form.description.label')}
+              </FormLabel>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder={t('form.description.placeholder')}
+                borderRadius="16px"
+                fontSize="sm"
+                minH="90px"
+                py="12px"
+                variant="outline"
+                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                _focus={{
+                  borderColor: 'brand.500',
+                  boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
+                }}
+              />
+            </FormControl>
+
+            <FormControl mb="20px">
+              <FormLabel fontSize="sm" fontWeight="600" color={textColor} mb="8px">
+                {t('form.level.label')}
+              </FormLabel>
+              <NumberInput
                 min={roleLevelMin}
                 max={roleLevelMax}
-                value={Number.isFinite(form.level) ? form.level : ''}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === '') {
+                value={Number.isFinite(form.level) ? form.level : 100}
+                onChange={(valueStr, valueNum) => {
+                  if (valueStr === '') {
                     setForm({ ...form, level: Number.NaN });
                     return;
                   }
-                  setForm({ ...form, level: Number(value) });
+                  setForm({ ...form, level: valueNum });
                 }}
-                placeholder={t('form.level.placeholder')}
-              />
-              <FormHelperText>{t('form.level.helper')}</FormHelperText>
+              >
+                <NumberInputField
+                  placeholder={t('form.level.placeholder')}
+                  borderRadius="16px"
+                  h="46px"
+                  fontSize="sm"
+                  variant="outline"
+                  borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                  _focus={{
+                    borderColor: 'brand.500',
+                    boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
+                  }}
+                />
+                <NumberInputStepper mr="6px">
+                  <NumberIncrementStepper border="none" color="gray.500" _active={{ color: 'brand.500' }} />
+                  <NumberDecrementStepper border="none" color="gray.500" _active={{ color: 'brand.500' }} />
+                </NumberInputStepper>
+              </NumberInput>
+              <FormHelperText fontSize="xs" color="gray.500" mt="6px">
+                {t('form.level.helper')}
+              </FormHelperText>
             </FormControl>
-            <FormControl display="flex" alignItems="center" mb={4}>
-              <FormLabel mb="0">{t('table.columns.status')}</FormLabel>
-              <Switch isChecked={form.status === 1} onChange={(e) => setForm({ ...form, status: e.target.checked ? 1 : 0 })} />
+
+            <FormControl
+              display="flex"
+              alignItems="center"
+              justifyContent="space-between"
+              mb="10px"
+              p="14px 18px"
+              border="1px solid"
+              borderColor={borderColor}
+              borderRadius="16px"
+              bg={useColorModeValue('gray.50', 'whiteAlpha.50')}
+            >
+              <Box>
+                <FormLabel mb="0" fontSize="sm" fontWeight="600" color={textColor}>
+                  {t('table.columns.status')}
+                </FormLabel>
+                <Text fontSize="xs" color="gray.500" mt="2px">
+                  {form.status === 1 ? t('table.status.active') : t('table.status.inactive')}
+                </Text>
+              </Box>
+              <Switch
+                colorScheme="brand"
+                isChecked={form.status === 1}
+                onChange={(e) => setForm({ ...form, status: e.target.checked ? 1 : 0 })}
+              />
             </FormControl>
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" type="submit" isLoading={isSaving}>{tCommon('button.save')}</Button>
+          <ModalFooter px="30px" pt="15px" pb="30px">
+            <Button
+              variant="ghost"
+              mr="12px"
+              onClick={onClose}
+              borderRadius="16px"
+              h="46px"
+              px="24px"
+              fontSize="sm"
+            >
+              {tCommon('button.cancel')}
+            </Button>
+            <Button
+              variant="brand"
+              type="submit"
+              isLoading={isSaving}
+              borderRadius="16px"
+              h="46px"
+              px="24px"
+              fontSize="sm"
+            >
+              {tCommon('button.save')}
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

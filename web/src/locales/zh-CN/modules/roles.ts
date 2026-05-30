@@ -53,6 +53,12 @@ export const roles = {
     deleteFailed: '删除失败',
     levelInvalidTitle: '等级输入无效',
     levelInvalidDescription: '请输入 {{min}} 到 {{max}} 之间的整数等级',
+    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
+    batchDeleteConfirm: '确定删除选中的 {{count}} 个角色？',
+  },
+  batch: {
+    selected: '已选中 {{count}} 项',
+    delete: '批量删除',
   },
   actions: {
     edit: '编辑',

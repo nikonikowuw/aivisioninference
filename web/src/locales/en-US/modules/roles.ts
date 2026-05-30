@@ -53,6 +53,12 @@ export const roles = {
     deleteFailed: 'Delete failed',
     levelInvalidTitle: 'Invalid level input',
     levelInvalidDescription: 'Please enter an integer between {{min}} and {{max}}',
+    batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
+    batchDeleteConfirm: 'Delete the selected {{count}} role(s)?',
+  },
+  batch: {
+    selected: '{{count}} items selected',
+    delete: 'Batch Delete',
   },
   actions: {
     edit: 'Edit',

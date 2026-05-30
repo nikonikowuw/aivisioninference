@@ -21,10 +21,17 @@ export const feedback = {
   },
   actions: {
     refresh: 'Update',
+    batchUpdateStatus: 'Batch Update Status',
   },
   message: {
     updated: 'Feedback status updated',
     updateFailed: 'Failed to update feedback status',
+    batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
+    batchUpdateConfirm: 'Update the status of selected {{count}} feedback item(s)?',
+    operationFailed: 'Operation failed',
+  },
+  batch: {
+    selected: '{{count}} items selected',
   },
 } as const;
 

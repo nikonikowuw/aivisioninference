@@ -21,10 +21,17 @@ export const feedback = {
   },
   actions: {
     refresh: '更新',
+    batchUpdateStatus: '批量修改状态',
   },
   message: {
     updated: '反馈状态已更新',
     updateFailed: '更新反馈状态失败',
+    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
+    batchUpdateConfirm: '确定修改选中的 {{count}} 条反馈的状态？',
+    operationFailed: '操作失败',
+  },
+  batch: {
+    selected: '已选中 {{count}} 项',
   },
 } as const;
 

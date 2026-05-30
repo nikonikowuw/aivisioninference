@@ -31,6 +31,12 @@ export const tasks = {
     cancelFailed: '取消失败',
     cancelConfirm: '确定取消该任务？',
     confirmCancel: '确认取消',
+    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
+    batchCancelConfirm: '确定取消选中的 {{count}} 个任务？',
+    operationFailed: '操作失败',
+  },
+  batch: {
+    selected: '已选中 {{count}} 项',
   },
   actions: {
     cancel: '取消任务',

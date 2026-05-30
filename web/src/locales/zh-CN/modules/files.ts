@@ -32,6 +32,12 @@ export const files = {
     deleteFailed: '删除失败',
     deleteConfirm: '确定删除该文件？',
     exportFailed: '导出失败',
+    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
+    batchDeleteConfirm: '确定删除选中的 {{count}} 个文件？',
+  },
+  batch: {
+    selected: '已选中 {{count}} 项',
+    delete: '批量删除',
   },
   actions: {
     delete: '删除',

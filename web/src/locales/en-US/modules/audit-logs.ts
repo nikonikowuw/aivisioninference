@@ -73,6 +73,9 @@ export const auditLogs = {
       auth: 'Auth operation',
     },
   },
+  batch: {
+    selected: '{{count}} items selected',
+  },
 } as const;
 
 export default auditLogs;

@@ -32,6 +32,12 @@ export const files = {
     deleteFailed: 'Delete failed',
     deleteConfirm: 'Are you sure you want to delete this file?',
     exportFailed: 'Export failed',
+    batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
+    batchDeleteConfirm: 'Delete the selected {{count}} file(s)?',
+  },
+  batch: {
+    selected: '{{count}} items selected',
+    delete: 'Batch Delete',
   },
   actions: {
     delete: 'Delete',

@@ -77,6 +77,7 @@ const PermissionNode = ({
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
 }) => {
+  const { t: tCommon } = useTranslation('common');
   const { t: tMenu } = useTranslation('menu');
   const { t: tPermission } = useTranslation('modules/permissions');
   const isExpanded = expandedIds.has(node.id);
@@ -104,7 +105,7 @@ const PermissionNode = ({
   };
 
   const getTypeLabel = (type: string) => {
-    return t(`permissions.type.${type}`, { defaultValue: type });
+    return tCommon(`permissions.type.${type}`, { defaultValue: type });
   };
 
   const { menuChildren, buttonChildren } = useMemo(() => {
@@ -248,7 +249,7 @@ const PermissionNode = ({
 };
 
 export default function PermissionTree({ tree, selectedIds, onChange }: PermissionTreeProps) {
-  const { t } = useTranslation('common');
+  const { t: tCommon } = useTranslation('common');
   const { t: tMenu } = useTranslation('menu');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const headerBg = useColorModeValue('gray.50', 'whiteAlpha.100');
@@ -310,11 +311,11 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
 
   const getDisplayName = (p: Permission) => {
     if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-    return t(`codes.${p.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: p.name });
+    return tCommon(`codes.${p.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: p.name });
   };
 
   const getTypeLabel = (type: string) => {
-    return t(`permissions.type.${type}`, { defaultValue: type });
+    return tCommon(`permissions.type.${type}`, { defaultValue: type });
   };
 
   return (
@@ -328,7 +329,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
             onClick={expandAll}
             borderRadius="lg"
           >
-            {t('permissions.expandAll')}
+            {tCommon('permissions.expandAll')}
           </Button>
           <Button
             size="sm"
@@ -337,7 +338,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
             onClick={collapseAll}
             borderRadius="lg"
           >
-            {t('permissions.collapseAll')}
+            {tCommon('permissions.collapseAll')}
           </Button>
         </HStack>
         <HStack spacing={2}>
@@ -349,7 +350,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
             onClick={selectAll}
             borderRadius="lg"
           >
-            {t('permissions.selectAll')}
+            {tCommon('permissions.selectAll')}
           </Button>
           <Button
             size="sm"
@@ -359,7 +360,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
             onClick={deselectAll}
             borderRadius="lg"
           >
-            {t('permissions.deselectAll')}
+            {tCommon('permissions.deselectAll')}
           </Button>
         </HStack>
       </Flex>

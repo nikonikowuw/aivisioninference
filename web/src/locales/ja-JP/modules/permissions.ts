@@ -8,6 +8,7 @@ export const permissions = {
     delete: '削除',
   },
   table: {
+    totalCount: '全 {{count}} 件',
     columns: {
       name: '権限名',
       code: '権限コード',

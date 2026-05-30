@@ -8,6 +8,7 @@ export const permissions = {
     delete: 'Delete',
   },
   table: {
+    totalCount: '{{count}} items',
     columns: {
       name: 'Permission Name',
       code: 'Permission Code',

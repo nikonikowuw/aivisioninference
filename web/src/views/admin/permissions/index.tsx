@@ -154,7 +154,7 @@ const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
               px={2}
               borderRadius="full"
             >
-              {tPermission(`form.type.${node.type}`)}
+              {tCommon(`permissions.type.${node.type}`)}
             </Badge>
           </HStack>
         </HStack>
@@ -357,10 +357,11 @@ export default function Permissions() {
         selects={[
           {
             name: 'type',
-            label: t('form.type.label'),
+            label: tCommon('permissions.type.label', { defaultValue: t('form.type.label') }),
             options: [
-              { value: 'menu', label: t('form.type.menu') },
-              { value: 'button', label: t('form.type.button') },
+              { value: 'menu', label: tCommon('permissions.type.menu') },
+              { value: 'button', label: tCommon('permissions.type.button') },
+              { value: 'api', label: tCommon('permissions.type.api') },
             ],
           },
         ]}
@@ -370,7 +371,9 @@ export default function Permissions() {
         <Box px={6} py={4} bg={cardHeaderBg} borderBottom="1px solid" borderColor={borderColor}>
           <HStack justify="space-between">
             <Text fontWeight="bold" color={textColor}>{t('title')}</Text>
-            <Badge colorScheme="brand" borderRadius="full" px={3}>{filteredTree.length} Items</Badge>
+            <Badge colorScheme="brand" borderRadius="full" px={3}>
+              {t('table.totalCount', { count: filteredTree.length, defaultValue: `${filteredTree.length} Items` })}
+            </Badge>
           </HStack>
         </Box>
         <Box p={4}>
@@ -425,14 +428,15 @@ export default function Permissions() {
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>{t('form.type.label')}</FormLabel>
+                <FormLabel>{tCommon('permissions.type.label', { defaultValue: t('form.type.label') })}</FormLabel>
                 <Select 
                   borderRadius="xl"
                   value={form.type} 
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
                 >
-                  <option value="menu">{t('form.type.menu')}</option>
-                  <option value="button">{t('form.type.button')}</option>
+                  <option value="menu">{tCommon('permissions.type.menu')}</option>
+                  <option value="button">{tCommon('permissions.type.button')}</option>
+                  <option value="api">{tCommon('permissions.type.api')}</option>
                 </Select>
               </FormControl>
               <FormControl>

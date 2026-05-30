@@ -154,7 +154,7 @@ export const common = {
     selectAll: '全選',
     deselectAll: '取消全選',
     type: {
-      menu: '菜單',
+      menu: '選單',
       button: '按鈕',
       api: '介面',
     }

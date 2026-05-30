@@ -5,6 +5,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
@@ -48,20 +49,24 @@ func (s *AuditService) List(ctx context.Context, lang string, req dto.ListAuditL
 	list := make([]dto.AuditLogResponse, len(auditLogs))
 	for i, log := range auditLogs {
 		list[i] = dto.AuditLogResponse{
-			ID:             log.ID,
-			UserID:         log.UserID,
-			Username:       log.Username,
-			ActionType:     log.ActionType,
-			ResourceType:   log.ResourceType,
-			ResourceID:     log.ResourceID,
-			RequestPath:    log.RequestPath,
-			RequestMethod:  log.RequestMethod,
-			RequestIP:      log.RequestIP,
-			UserAgent:      log.UserAgent,
-			ResponseStatus: log.ResponseStatus,
-			DurationMs:     log.DurationMs,
-			ResultSummary:  log.ResultSummary,
-			CreatedAt:      log.CreatedAt,
+			ID:                 log.ID,
+			UserID:             log.UserID,
+			Username:           log.Username,
+			ActionType:         log.ActionType,
+			ActionTypeLabel:    i18n.TranslateAction(lang, log.ActionType),
+			ResourceType:       log.ResourceType,
+			ResourceTypeLabel:  i18n.TranslateResource(lang, log.ResourceType),
+			ResourceID:         log.ResourceID,
+			RequestPath:        log.RequestPath,
+			RequestMethod:      log.RequestMethod,
+			RequestMethodLabel: i18n.TranslateMethod(lang, log.RequestMethod),
+			RequestIP:          log.RequestIP,
+			UserAgent:          log.UserAgent,
+			ResponseStatus:     log.ResponseStatus,
+			DurationMs:         log.DurationMs,
+			ResultSummary:      log.ResultSummary,
+			ResultSummaryLabel: i18n.TranslateResult(lang, log.ResultSummary),
+			CreatedAt:          log.CreatedAt,
 		}
 	}
 

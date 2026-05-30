@@ -127,6 +127,7 @@ var methodActions = map[string]string{
 // inferAuditActionType 根据 HTTP 方法和资源类型生成 i18n key。
 // 格式: action.{method}.{resource}
 // 示例: action.create.users, action.view.roles
+// 特殊路径会单独处理，生成语义更准确的 key。
 func inferAuditActionType(method, resourceType, path string) string {
 	action, ok := methodActions[method]
 	if !ok {
@@ -134,18 +135,50 @@ func inferAuditActionType(method, resourceType, path string) string {
 	}
 
 	// 特殊路径处理
-	if resourceType == "auth" {
-		if method == "POST" {
-			// 区分登录和登出
-			if strings.Contains(path, "/logout") {
-				return i18n.ActionLogout
-			}
-			return i18n.ActionLogin
+	switch resourceType {
+	case "auth":
+		return inferAuthAction(method, path)
+	case "tasks":
+		// 取消任务不应归类为 create
+		if method == "POST" && strings.Contains(path, "/cancel") {
+			return i18n.ActionCancelTasks
 		}
-		return i18n.ActionAuth
+	case "brand-config":
+		// 上传品牌 Logo 不应归类为 create brand-config
+		if strings.Contains(path, "/logo") {
+			return i18n.ActionUploadBrandLogo
+		}
+	case "feedback":
+		// 用户提交反馈不应归类为 create（非管理员）
+		if method == "POST" {
+			return i18n.ActionCreateFeedback
+		}
 	}
 
 	return "action." + action + "." + resourceType
+}
+
+// inferAuthAction 根据 auth 子路径推断更精确的操作类型 key。
+// 避免所有 auth 操作都被笼统地归类为 login 或 auth。
+func inferAuthAction(method, path string) string {
+	switch {
+	case strings.Contains(path, "/logout"):
+		return i18n.ActionLogout
+	case strings.Contains(path, "/password-reset"):
+		return i18n.ActionPasswordReset
+	case strings.Contains(path, "/password") && method == "PUT":
+		return i18n.ActionChangePassword
+	case strings.Contains(path, "/profile") && method == "PUT":
+		return i18n.ActionUpdateProfile
+	case strings.Contains(path, "/avatar") && method == "POST":
+		return i18n.ActionUploadAvatar
+	case strings.Contains(path, "/me") && method == "GET":
+		return i18n.ActionViewProfile
+	case method == "POST":
+		return i18n.ActionLogin
+	default:
+		return i18n.ActionLogin
+	}
 }
 
 // inferAuditResponseStatus 推断审计应记录的最终响应状态码。

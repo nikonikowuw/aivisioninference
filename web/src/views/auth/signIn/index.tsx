@@ -1,4 +1,4 @@
-import React, { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,6 +28,17 @@ import { NavLink } from 'react-router-dom';
 
 import loginBg from 'assets/img/auth/login-bg.jpg';
 
+function updateRememberedUser(rememberMe: boolean, username: string) {
+  if (rememberMe) {
+    localStorage.setItem('remember_me', 'true');
+    localStorage.setItem('remembered_username', username);
+    return;
+  }
+
+  localStorage.removeItem('remember_me');
+  localStorage.removeItem('remembered_username');
+}
+
 function SignIn() {
   const { t } = useTranslation('auth');
   const textColor = useColorModeValue('navy.700', 'white');
@@ -40,17 +51,27 @@ function SignIn() {
   const [show, setShow] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('remember_me') === 'true');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+
+  useEffect(() => {
+    if (rememberMe) {
+      const savedUsername = localStorage.getItem('remembered_username');
+      if (savedUsername) {
+        setUsername(savedUsername);
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await login(username, password, rememberMe);
+      updateRememberedUser(rememberMe, username);
       navigate('/admin/default');
     } catch (err) {
       toast({
@@ -152,7 +173,7 @@ function SignIn() {
                       color={textColorSecondary}
                       _hover={{ cursor: 'pointer' }}
                       as={show ? RiEyeCloseLine : MdOutlineRemoveRedEye}
-                      onClick={() => setShow(!show)}
+                      onClick={() => setShow((visible) => !visible)}
                     />
                   </InputRightElement>
                 </InputGroup>

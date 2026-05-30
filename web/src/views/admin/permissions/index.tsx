@@ -446,7 +446,7 @@ export default function Permissions() {
                   <option value="">{t('form.parentId.none')}</option>
                   {flatMenuOptions.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {'　'.repeat(p._depth)}{getDisplayName(p, tMenu, t)} ({p.code})
+                      {'　'.repeat(p._depth)}{getDisplayName(p)} ({p.code})
                     </option>
                   ))}
                 </Select>

@@ -32,7 +32,10 @@ const methodColorMap = {
 
 const methodColor = (method: string) => methodColorMap[method as keyof typeof methodColorMap] ?? 'gray';
 
-const resultColor = (result?: string) => result === 'success' ? 'green' : (result ? 'red' : 'gray');
+const resultColor = (result?: string) => {
+  if (!result) return 'gray';
+  return result === 'success' ? 'green' : 'red';
+};
 
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
@@ -127,7 +130,7 @@ export default function AuditLogs() {
                 <Td>{l.request_ip}</Td>
                 <Td><Badge colorScheme={l.response_status >= 400 ? 'red' : 'green'}>{l.response_status}</Badge></Td>
                 <Td>{t('table.durationMs', { value: l.duration_ms ?? 0 })}</Td>
-                <Td><Badge colorScheme={resultColor(l.result_summary)}>{l.result_summary || '-'}</Badge></Td>
+                <Td><Badge colorScheme={resultColor(l.result_summary)}>{t(`filter.results.${l.result_summary}`, { defaultValue: l.result_summary || '-' })}</Badge></Td>
                 <Td whiteSpace="nowrap">{formatDateTime(l.created_at)}</Td>
               </Tr>
             ))}

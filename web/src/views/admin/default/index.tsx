@@ -1,10 +1,13 @@
-import { Box, SimpleGrid, Text, Icon, Flex, useColorModeValue, useToast, Spinner, Center } from '@chakra-ui/react';
+import { Box, SimpleGrid, Text, Icon, useColorModeValue, useToast, Spinner, Center } from '@chakra-ui/react';
+import type { IconType } from 'react-icons/lib';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
-import { MdPerson, MdSecurity, MdFolder, MdAssignment } from 'react-icons/md';
+import { MdPerson, MdFolder, MdAssignment } from 'react-icons/md';
 import MiniStatistics from 'components/card/MiniStatistics';
 import IconBox from 'components/icons/IconBox';
 import { dashboardApi, type DashboardStats } from 'services/api';
+import UserGrowthChart from 'views/admin/default/components/UserGrowthChart';
+import AuditTable from 'views/admin/default/components/AuditTable';
 
 export default function Dashboard() {
   const { t } = useTranslation('modules/dashboard');
@@ -15,14 +18,31 @@ export default function Dashboard() {
 
   const toast = useToast();
 
+  const statCards: Array<{ name: string; value: number; icon: IconType; gradient?: boolean }> = [
+    { name: t('stats.totalUsers'), value: stats?.total_users ?? 0, icon: MdPerson },
+    { name: t('stats.totalFiles'), value: stats?.total_files ?? 0, icon: MdFolder },
+    { name: t('stats.activeTasks'), value: stats?.active_tasks ?? 0, icon: MdAssignment, gradient: true },
+  ];
+
   useEffect(() => {
+    let cancelled = false;
+
+    setLoading(true);
     dashboardApi
       .stats()
-      .then(setStats)
-      .catch(() => {
-        toast({ title: t('message.loadFailed'), status: 'error' });
+      .then((data) => {
+        if (!cancelled) setStats(data);
       })
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) toast({ title: t('message.loadFailed'), status: 'error' });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [toast, t]);
 
   if (loading) {
@@ -38,64 +58,37 @@ export default function Dashboard() {
       <Text fontSize="2xl" fontWeight="bold" mb="20px">
         {t('title')}
       </Text>
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap="20px" mb="20px">
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w="56px"
-              h="56px"
-              bg={boxBg}
-              icon={
-                <Icon w="32px" h="32px" as={MdPerson} color={brandColor} />
-              }
-            />
-          }
-          name={t('stats.totalUsers')}
-          value={String(stats?.total_users ?? 0)}
-        />
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w="56px"
-              h="56px"
-              bg={boxBg}
-              icon={
-                <Icon w="32px" h="32px" as={MdSecurity} color={brandColor} />
-              }
-            />
-          }
-          name={t('stats.totalRoles')}
-          value={String(stats?.total_roles ?? 0)}
-        />
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w="56px"
-              h="56px"
-              bg={boxBg}
-              icon={
-                <Icon w="32px" h="32px" as={MdFolder} color={brandColor} />
-              }
-            />
-          }
-          name={t('stats.totalFiles')}
-          value={String(stats?.total_files ?? 0)}
-        />
-        <MiniStatistics
-          startContent={
-            <IconBox
-              w="56px"
-              h="56px"
-              bg="linear-gradient(90deg, #4481EB 0%, #04BEFE 100%)"
-              icon={
-                <Icon w="28px" h="28px" as={MdAssignment} color="white" />
-              }
-            />
-          }
-          name={t('stats.activeTasks')}
-          value={String(stats?.active_tasks ?? 0)}
-        />
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="20px" mb="20px">
+        {statCards.map((card) => (
+          <MiniStatistics
+            key={card.name}
+            startContent={
+              <IconBox
+                w="56px"
+                h="56px"
+                bg={card.gradient ? 'linear-gradient(90deg, #4481EB 0%, #04BEFE 100%)' : boxBg}
+                icon={
+                  <Icon
+                    w={card.gradient ? '28px' : '32px'}
+                    h={card.gradient ? '28px' : '32px'}
+                    as={card.icon}
+                    color={card.gradient ? 'white' : brandColor}
+                  />
+                }
+              />
+            }
+            name={card.name}
+            value={String(card.value)}
+          />
+        ))}
       </SimpleGrid>
+
+      <Box mb="20px">
+        <UserGrowthChart chartData={stats?.user_stats} />
+      </Box>
+      <Box mb="20px">
+        <AuditTable tableData={stats?.audit_logs} />
+      </Box>
     </Box>
   );
 }

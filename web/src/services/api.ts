@@ -10,26 +10,26 @@ function isMissingTranslation(result: string, key: string): boolean {
 
 function getServerErrorMessage(): string {
   const key = 'common:message.serverError';
-  const msg = i18n.t(key);
-  return isMissingTranslation(msg, key) ? SERVER_ERROR_FALLBACK : msg;
+  const message = i18n.t(key);
+  return isMissingTranslation(message, key) ? SERVER_ERROR_FALLBACK : message;
 }
 
 export function getErrorMessage(code: number): string {
   if (code === 0) return '';
   const key = `common:message.error.${code}`;
-  const msg = i18n.t(key);
-  return isMissingTranslation(msg, key) ? getServerErrorMessage() : msg;
+  const message = i18n.t(key);
+  return isMissingTranslation(message, key) ? getServerErrorMessage() : message;
 }
 
 function resolveApiErrorMessage(code: number, backendMessage?: string): string {
   const trimmedBackendMessage = backendMessage?.trim();
   if (!trimmedBackendMessage) return getErrorMessage(code);
 
-  // 参数校验错误和前端未知错误优先展示后端具体文案，避免丢失上下文。
+  // 参数校验错误和未知错误优先展示后端具体文案，避免丢失上下文
   const key = `common:message.error.${code}`;
-  const translatedMessage = i18n.t(key);
-  if (code === 10001 || isMissingTranslation(translatedMessage, key)) return trimmedBackendMessage;
-  return getErrorMessage(code);
+  const translated = i18n.t(key);
+  if (code === 10001 || isMissingTranslation(translated, key)) return trimmedBackendMessage;
+  return translated;
 }
 
 export class ApiError extends Error {
@@ -328,11 +328,27 @@ export interface Feedback {
   handled_at?: string | null;
 }
 
+export interface DashboardUserStat {
+  date: string;
+  new: number;
+  active: number;
+}
+
+export interface DashboardAuditLog {
+  username: string;
+  action: string;
+  method: string;
+  created_at: string;
+}
+
 export interface DashboardStats {
   total_users: number;
   total_roles: number;
   total_files: number;
+  total_tasks: number;
   active_tasks: number;
+  user_stats: DashboardUserStat[];
+  audit_logs: DashboardAuditLog[];
 }
 
 interface CrudListParams {

@@ -62,6 +62,10 @@ export const permissions = {
       view: 'Lihat Pengguna',
       'reset-password': 'Reset Kata Sandi',
       'upload-avatar': 'Unggah Avatar',
+      export: 'Ekspor Pengguna',
+      import: 'Impor Pengguna',
+      'batch-delete': 'Hapus Pengguna Massal',
+      'batch-status': 'Perbarui Status Pengguna Massal',
     },
     role: {
       list: 'Daftar Peran',
@@ -71,6 +75,8 @@ export const permissions = {
       'assign-permissions': 'Tetapkan Izin',
       'view-permissions': 'Lihat Izin Peran',
       view: 'Lihat Peran',
+      'batch-delete': 'Hapus Peran Massal',
+      export: 'Ekspor Peran',
     },
     permission: {
       list: 'Daftar Izin',
@@ -87,12 +93,16 @@ export const permissions = {
       delete: 'Hapus File',
       view: 'Lihat File',
       download: 'Unduh File',
+      export: 'Ekspor File',
+      'batch-delete': 'Hapus File Massal',
     },
     audit: {
       view: 'Lihat Log Audit',
+      export: 'Ekspor Log Audit',
     },
     'audit-log': {
       view: 'Lihat Log Audit',
+      export: 'Ekspor Log Audit',
     },
     task: {
       list: 'Daftar Tugas',
@@ -101,6 +111,8 @@ export const permissions = {
       view: 'Lihat Tugas',
       update: 'Edit Tugas',
       delete: 'Hapus Tugas',
+      export: 'Ekspor Tugas',
+      'batch-cancel': 'Batalkan Tugas Massal',
     },
     'brand-config': {
       view: 'Lihat konfigurasi merek',
@@ -121,6 +133,8 @@ export const permissions = {
       view: 'Lihat Umpan Balik',
       'update-status': 'Perbarui Status Umpan Balik',
       update: 'Edit Umpan Balik',
+      export: 'Ekspor Umpan Balik',
+      'batch-status': 'Perbarui Status Umpan Balik Massal',
     },
   },
 } as const;

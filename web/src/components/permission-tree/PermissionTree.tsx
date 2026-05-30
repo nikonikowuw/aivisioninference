@@ -101,7 +101,7 @@ const PermissionNode = ({
 
   const getDisplayName = (p: Permission) => {
     if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-    return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+    return tPermission(`codes.${p.code.toLowerCase().replace(/:/g, '.')}`, { defaultValue: p.name });
   };
 
   const getTypeLabel = (type: string) => {
@@ -311,7 +311,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
 
   const getDisplayName = (p: Permission) => {
     if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-    return tCommon(`codes.${p.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: p.name });
+    return tCommon(`codes.${p.code.toLowerCase().replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: p.name });
   };
 
   const getTypeLabel = (type: string) => {

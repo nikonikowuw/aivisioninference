@@ -102,7 +102,7 @@ const PermissionRow = ({
 
   const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
     if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-    return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+    return tPermission(`codes.${p.code.toLowerCase().replace(/:/g, '.')}`, { defaultValue: p.name });
   };
 
   return (
@@ -226,7 +226,7 @@ export default function Permissions() {
 
   const getDisplayName = (p: Permission) => {
     if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-    return t(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+    return t(`codes.${p.code.toLowerCase().replace(/:/g, '.')}`, { defaultValue: p.name });
   };
 
   const { filters, setFilter, resetFilters, refresh } = useFilter();

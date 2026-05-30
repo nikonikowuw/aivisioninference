@@ -62,6 +62,10 @@ export const permissions = {
       view: 'ユーザー詳細を表示',
       'reset-password': 'パスワードをリセット',
       'upload-avatar': 'アバターをアップロード',
+      export: 'ユーザーをエクスポート',
+      import: 'ユーザーをインポート',
+      'batch-delete': 'ユーザーを一括削除',
+      'batch-status': 'ユーザー状態を一括更新',
     },
     role: {
       list: 'ロール一覧',
@@ -71,6 +75,8 @@ export const permissions = {
       'assign-permissions': '権限を割り当て',
       'view-permissions': 'ロール権限を表示',
       view: 'ロール詳細を表示',
+      'batch-delete': 'ロールを一括削除',
+      export: 'ロールをエクスポート',
     },
     permission: {
       list: '権限一覧',
@@ -87,12 +93,16 @@ export const permissions = {
       delete: 'ファイルを削除',
       view: 'ファイルを表示',
       download: 'ファイルをダウンロード',
+      export: 'ファイルをエクスポート',
+      'batch-delete': 'ファイルを一括削除',
     },
     audit: {
       view: '操作ログを表示',
+      export: '操作ログをエクスポート',
     },
     'audit-log': {
       view: '操作ログを表示',
+      export: '操作ログをエクスポート',
     },
     task: {
       list: 'タスク一覧',
@@ -101,6 +111,8 @@ export const permissions = {
       view: 'タスク詳細を表示',
       update: 'タスクを更新',
       delete: 'タスクを削除',
+      export: 'タスクをエクスポート',
+      'batch-cancel': 'タスクを一括キャンセル',
     },
     'brand-config': {
       view: 'ブランド設定を表示',
@@ -121,6 +133,8 @@ export const permissions = {
       view: 'フィードバックを表示',
       'update-status': 'フィードバックステータスを更新',
       update: 'フィードバックを編集',
+      export: 'フィードバックをエクスポート',
+      'batch-status': 'フィードバック状態を一括更新',
     },
   },
 } as const;

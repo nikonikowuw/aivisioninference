@@ -62,6 +62,10 @@ export const permissions = {
       view: '檢視使用者',
       'reset-password': '重置密碼',
       'upload-avatar': '上傳頭像',
+      export: '匯出使用者',
+      import: '匯入使用者',
+      'batch-delete': '批量刪除使用者',
+      'batch-status': '批量更新使用者狀態',
     },
     role: {
       list: '角色列表',
@@ -71,6 +75,8 @@ export const permissions = {
       'assign-permissions': '分配權限',
       'view-permissions': '檢視角色權限',
       view: '檢視角色',
+      'batch-delete': '批量刪除角色',
+      export: '匯出角色',
     },
     permission: {
       list: '權限列表',
@@ -87,12 +93,16 @@ export const permissions = {
       delete: '刪除檔案',
       view: '檢視檔案',
       download: '下載檔案',
+      export: '匯出檔案',
+      'batch-delete': '批量刪除檔案',
     },
     audit: {
       view: '檢視稽核日誌',
+      export: '匯出稽核日誌',
     },
     'audit-log': {
       view: '檢視稽核日誌',
+      export: '匯出稽核日誌',
     },
     task: {
       list: '任務列表',
@@ -101,6 +111,8 @@ export const permissions = {
       view: '檢視任務',
       update: '編輯任務',
       delete: '刪除任務',
+      export: '匯出任務',
+      'batch-cancel': '批量取消任務',
     },
     'brand-config': {
       view: '檢視品牌設定',
@@ -121,6 +133,8 @@ export const permissions = {
       view: '檢視回饋',
       'update-status': '更新回饋狀態',
       update: '編輯回饋',
+      export: '匯出回饋',
+      'batch-status': '批量更新回饋狀態',
     },
   },
 } as const;

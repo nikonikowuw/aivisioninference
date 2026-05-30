@@ -62,6 +62,10 @@ export const permissions = {
       view: '사용자 상세 조회',
       'reset-password': '비밀번호 재설정',
       'upload-avatar': '아바타 업로드',
+      export: '사용자 내보내기',
+      import: '사용자 가져오기',
+      'batch-delete': '사용자 일괄 삭제',
+      'batch-status': '사용자 상태 일괄 업데이트',
     },
     role: {
       list: '역할 목록',
@@ -71,6 +75,8 @@ export const permissions = {
       'assign-permissions': '권한 할당',
       'view-permissions': '역할 권한 조회',
       view: '역할 상세 조회',
+      'batch-delete': '역할 일괄 삭제',
+      export: '역할 내보내기',
     },
     permission: {
       list: '권한 목록',
@@ -87,12 +93,16 @@ export const permissions = {
       delete: '파일 삭제',
       view: '파일 조회',
       download: '파일 다운로드',
+      export: '파일 내보내기',
+      'batch-delete': '파일 일괄 삭제',
     },
     audit: {
       view: '감사 로그 조회',
+      export: '감사 로그 내보내기',
     },
     'audit-log': {
       view: '감사 로그 조회',
+      export: '감사 로그 내보내기',
     },
     task: {
       list: '작업 목록',
@@ -101,6 +111,8 @@ export const permissions = {
       view: '작업 조회',
       update: '작업 수정',
       delete: '작업 삭제',
+      export: '작업 내보내기',
+      'batch-cancel': '작업 일괄 취소',
     },
     'brand-config': {
       view: '브랜드 설정 보기',
@@ -121,6 +133,8 @@ export const permissions = {
       view: '피드백 조회',
       'update-status': '피드백 상태 업데이트',
       update: '피드백 수정',
+      export: '피드백 내보내기',
+      'batch-status': '피드백 상태 일괄 업데이트',
     },
   },
 } as const;

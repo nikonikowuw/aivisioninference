@@ -62,6 +62,10 @@ export const permissions = {
       view: '查看用户',
       'reset-password': '重置密码',
       'upload-avatar': '上传头像',
+      export: '导出用户',
+      import: '导入用户',
+      'batch-delete': '批量删除用户',
+      'batch-status': '批量更新用户状态',
     },
     role: {
       list: '角色列表',
@@ -71,6 +75,8 @@ export const permissions = {
       'assign-permissions': '分配权限',
       'view-permissions': '查看角色权限',
       view: '查看角色',
+      'batch-delete': '批量删除角色',
+      export: '导出角色',
     },
     permission: {
       list: '权限列表',
@@ -87,12 +93,16 @@ export const permissions = {
       delete: '删除文件',
       view: '查看文件',
       download: '下载文件',
+      export: '导出文件',
+      'batch-delete': '批量删除文件',
     },
     audit: {
       view: '查看审计日志',
+      export: '导出审计日志',
     },
     'audit-log': {
       view: '查看审计日志',
+      export: '导出审计日志',
     },
     task: {
       list: '任务列表',
@@ -101,6 +111,8 @@ export const permissions = {
       view: '查看任务',
       update: '编辑任务',
       delete: '删除任务',
+      export: '导出任务',
+      'batch-cancel': '批量取消任务',
     },
     'brand-config': {
       view: '查看品牌配置',
@@ -121,6 +133,8 @@ export const permissions = {
       view: '查看反馈',
       'update-status': '更新反馈状态',
       update: '编辑反馈',
+      export: '导出反馈',
+      'batch-status': '批量更新反馈状态',
     },
   },
 } as const;

@@ -62,6 +62,10 @@ export const permissions = {
       view: 'View User',
       'reset-password': 'Reset Password',
       'upload-avatar': 'Upload Avatar',
+      export: 'Export Users',
+      import: 'Import Users',
+      'batch-delete': 'Batch Delete Users',
+      'batch-status': 'Batch Update User Status',
     },
     role: {
       list: 'Role List',
@@ -71,6 +75,8 @@ export const permissions = {
       'assign-permissions': 'Assign Permissions',
       'view-permissions': 'View Role Permissions',
       view: 'View Role',
+      'batch-delete': 'Batch Delete Roles',
+      export: 'Export Roles',
     },
     permission: {
       list: 'Permission List',
@@ -87,12 +93,16 @@ export const permissions = {
       delete: 'Delete File',
       view: 'View File',
       download: 'Download File',
+      export: 'Export Files',
+      'batch-delete': 'Batch Delete Files',
     },
     audit: {
       view: 'View Audit Log',
+      export: 'Export Audit Logs',
     },
     'audit-log': {
       view: 'View Audit Log',
+      export: 'Export Audit Logs',
     },
     task: {
       list: 'Task List',
@@ -101,6 +111,8 @@ export const permissions = {
       view: 'View Task',
       update: 'Edit Task',
       delete: 'Delete Task',
+      export: 'Export Tasks',
+      'batch-cancel': 'Batch Cancel Tasks',
     },
     'brand-config': {
       view: 'View brand configuration',
@@ -121,6 +133,8 @@ export const permissions = {
       view: 'View Feedback',
       'update-status': 'Update Feedback Status',
       update: 'Edit Feedback',
+      export: 'Export Feedback',
+      'batch-status': 'Batch Update Feedback Status',
     },
   },
 } as const;

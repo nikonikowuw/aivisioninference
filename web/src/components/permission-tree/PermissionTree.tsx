@@ -98,10 +98,10 @@ const PermissionNode = ({
   const secondaryTextColor = useColorModeValue('gray.600', 'gray.400');
   const buttonHoverBg = useColorModeValue('white', 'whiteAlpha.100');
 
-const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
-  if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-  return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
-};
+  const getDisplayName = (p: Permission) => {
+    if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
+    return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+  };
 
   const { menuChildren, buttonChildren } = useMemo(() => {
     const menus: Permission[] = [];
@@ -167,7 +167,7 @@ const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
               color={textColor}
               noOfLines={1}
             >
-              {getDisplayName(node, tMenu, tPermission)}
+              {getDisplayName(node)}
             </Text>
           </Tooltip>
 
@@ -225,7 +225,7 @@ const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
                           />
                           <Tooltip label={btn.code} hasArrow>
                             <Text fontSize="xs" color={secondaryTextColor} fontWeight="medium">
-                              {getDisplayName(btn, tMenu, tPermission)}
+                              {getDisplayName(btn)}
                             </Text>
                           </Tooltip>
                         </HStack>

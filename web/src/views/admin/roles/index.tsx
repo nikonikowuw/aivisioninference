@@ -28,8 +28,6 @@ import {
   HStack,
   Spinner,
   Center,
-  Checkbox,
-  VStack,
   Badge,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
@@ -50,13 +48,6 @@ export default function Roles() {
   const { t } = useTranslation('modules/roles');
   const { t: tCommon } = useTranslation('common');
   const { t: tMenu } = useTranslation('menu');
-
-  const getPermissionName = (p: Permission) => {
-    if (p.type === 'menu') {
-      return tMenu(p.code, { defaultValue: p.name });
-    }
-    return p.name;
-  };
 
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
@@ -178,7 +169,12 @@ export default function Roles() {
     }
   };
 
-
+  const getLevelColorScheme = (level: number | undefined): string => {
+    if (level == null) return 'gray';
+    if (level <= 1) return 'red';
+    if (level <= 50) return 'orange';
+    return 'gray';
+  };
 
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
@@ -224,7 +220,7 @@ export default function Roles() {
                 <Td>{r.id}</Td>
                 <Td fontWeight="600">{r.name}</Td>
                 <Td>{r.description || '-'}</Td>
-                <Td><Badge colorScheme={r.level <= 1 ? 'red' : r.level <= 50 ? 'orange' : 'gray'}>{r.level ?? 100}</Badge></Td>
+                <Td><Badge colorScheme={getLevelColorScheme(r.level)}>{r.level ?? 100}</Badge></Td>
                 <Td>{r.permissions?.length ?? 0}</Td>
                 <Td>
                   <HStack spacing={2}>
@@ -292,7 +288,7 @@ export default function Roles() {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleSave} isLoading={isSaving} isDisabled={isSaving}>{tCommon('button.save')}</Button>
+            <Button variant="brand" onClick={handleSave} isLoading={isSaving}>{tCommon('button.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
@@ -320,7 +316,7 @@ export default function Roles() {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onPermClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleAssignPerms} isLoading={isAssigningPerms} isDisabled={isAssigningPerms}>{tCommon('button.save')}</Button>
+            <Button variant="brand" onClick={handleAssignPerms} isLoading={isAssigningPerms}>{tCommon('button.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

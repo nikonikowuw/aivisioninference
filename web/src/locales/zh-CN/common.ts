@@ -34,7 +34,6 @@ export const common = {
     serverError: '服务器错误',
     loadFailed: '加载失败',
     requiredFields: '请填写必填字段',
-    // 错误码翻译（后端只返回 code，前端翻译 message）
     error: {
       0: '成功',
       10001: '请求参数错误',
@@ -133,6 +132,9 @@ export const common = {
     inMinutes: '{{count}} 分钟后',
     inHours: '{{count}} 小时后',
     inDays: '{{count}} 天后',
+    daily: '日视图',
+    monthly: '月视图',
+    yearly: '年视图',
   },
   permissions: {
     empty: '暂无权限数据',
@@ -144,7 +146,7 @@ export const common = {
       menu: '菜单',
       button: '按钮',
       api: '接口',
-    }
+    },
   },
 } as const;
 

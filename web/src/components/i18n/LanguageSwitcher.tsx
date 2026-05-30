@@ -18,19 +18,16 @@ import { MdLanguage } from 'react-icons/md';
 import { supportedLanguages, type LanguageCode } from '../../i18n';
 
 export function LanguageSwitcher() {
-  const { i18n, t } = useTranslation('common');
+  const { i18n } = useTranslation('common');
   const currentLang = i18n.language as LanguageCode;
 
-  // 获取当前语言配置
-  const currentLanguage = supportedLanguages.find((lang) => lang.code === currentLang);
-
-  // 颜色配置
   const bgHover = useColorModeValue('gray.100', 'whiteAlpha.200');
   const textColor = useColorModeValue('gray.700', 'white');
   const menuBg = useColorModeValue('white', 'navy.800');
   const menuBorder = useColorModeValue('gray.200', 'whiteAlpha.300');
 
   const handleLanguageChange = (langCode: LanguageCode) => {
+    if (i18n.language === langCode) return;
     i18n.changeLanguage(langCode);
   };
 
@@ -64,18 +61,18 @@ export function LanguageSwitcher() {
           <MenuItem
             key={lang.code}
             onClick={() => handleLanguageChange(lang.code)}
-            bg={currentLang === lang.code ? 'brand.50' : 'transparent'}
-            color={currentLang === lang.code ? 'brand.600' : textColor}
+            bg={lang.code === currentLang ? 'brand.50' : 'transparent'}
+            color={lang.code === currentLang ? 'brand.600' : textColor}
             borderRadius="lg"
             mb="4px"
             _last={{ mb: '0px' }}
             _hover={{
-              bg: currentLang === lang.code ? 'brand.100' : bgHover,
+              bg: lang.code === currentLang ? 'brand.100' : bgHover,
             }}
           >
             <Flex align="center" gap="10px">
               <Text fontSize="lg">{lang.flag}</Text>
-              <Text fontSize="sm" fontWeight={currentLang === lang.code ? '600' : 'normal'}>
+              <Text fontSize="sm" fontWeight={lang.code === currentLang ? '600' : 'normal'}>
                 {lang.name}
               </Text>
             </Flex>

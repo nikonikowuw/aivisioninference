@@ -117,8 +117,8 @@ export const common = {
   },
   date: {
     format: {
-      date: 'yyyy년 M월 d일',
-      datetime: 'yyyy년 M월 d일 HH:mm',
+      date: 'yyyy. MM. dd.',
+      datetime: 'yyyy. MM. dd. HH:mm',
       time: 'HH:mm',
     },
     today: '오늘',

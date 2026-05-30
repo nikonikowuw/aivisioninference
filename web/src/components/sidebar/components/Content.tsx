@@ -12,7 +12,7 @@ function SidebarContent(props: { routes: SidebarRouteType[]; collapsed: boolean 
 		<Flex direction='column' height='100%' pt='25px' borderRadius='30px'>
 			<Brand collapsed={collapsed} />
 			<Stack direction='column' mt='8px' mb='auto'>
-				<Box ps={collapsed ? '10px' : '20px'} pe={collapsed ? '6px' : '16px'}>
+				<Box px={collapsed ? '10px' : '20px'} w="100%">
 					<Links routes={routes} collapsed={collapsed} />
 				</Box>
 			</Stack>

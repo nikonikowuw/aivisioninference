@@ -34,7 +34,6 @@ export const common = {
     serverError: 'Server error',
     loadFailed: 'Failed to load data',
     requiredFields: 'Please fill in required fields',
-    // Error code translations (backend returns code only, frontend translates)
     error: {
       0: 'Success',
       10001: 'Bad request',
@@ -133,6 +132,9 @@ export const common = {
     inMinutes: 'In {{count}} minute(s)',
     inHours: 'In {{count}} hour(s)',
     inDays: 'In {{count}} day(s)',
+    daily: 'Daily',
+    monthly: 'Monthly',
+    yearly: 'Yearly',
   },
   permissions: {
     empty: 'No permission data',
@@ -144,7 +146,7 @@ export const common = {
       menu: 'Menu',
       button: 'Button',
       api: 'API',
-    }
+    },
   },
 } as const;
 

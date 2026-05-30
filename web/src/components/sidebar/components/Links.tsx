@@ -76,10 +76,10 @@ export function SidebarLinks(props: {
 					<Box key={index} mb='4px'>
 						<Flex
 							alignItems='center'
-							justifyContent='space-between'
+							justifyContent={collapsed ? 'center' : 'space-between'}
 							py='8px'
-							ps={isSubMenu ? '34px' : '10px'}
-							pe='10px'
+							ps={collapsed ? '0' : (isSubMenu ? '34px' : '10px')}
+							pe={collapsed ? '0' : '10px'}
 							cursor='pointer'
 							onClick={() => {
 								if (collapsed && hasItems) {
@@ -93,7 +93,7 @@ export function SidebarLinks(props: {
 							transition='0.2s linear'
 							borderRadius='8px'
 							_hover={{ bg: hoverBg }}>
-							<HStack spacing={collapsed ? '0' : '15px'} w='full'>
+							<HStack spacing={collapsed ? '0' : '15px'} w='full' justifyContent={collapsed ? 'center' : 'flex-start'}>
 								<Box color={isActive ? activeIcon : textColor} display="flex" alignItems="center">
 									{route.icon}
 								</Box>
@@ -131,7 +131,8 @@ export function SidebarLinks(props: {
 							<HStack
 								spacing={isActive ? '22px' : '26px'}
 								py='8px'
-								ps={isSubMenu ? '34px' : '10px'}
+								ps={collapsed ? '0' : (isSubMenu ? '34px' : '10px')}
+								pe={collapsed ? '0' : '10px'}
 								justifyContent={collapsed ? 'center' : 'flex-start'}
 								transition='0.2s linear'
 								borderRadius='8px'

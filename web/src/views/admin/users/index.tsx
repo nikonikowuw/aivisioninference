@@ -29,6 +29,9 @@ import {
   Badge,
   Spinner,
   Center,
+  Checkbox,
+  CheckboxGroup,
+  Stack,
   Switch,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
@@ -69,7 +72,14 @@ export default function Users() {
 
   const [allRoles, setAllRoles] = useState<Role[]>([]);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form, setForm] = useState({ username: '', display_name: '', email: '', password: '', status: 1 });
+  const [form, setForm] = useState({
+    username: '',
+    display_name: '',
+    email: '',
+    password: '',
+    status: 1,
+    role_ids: [] as string[],
+  });
   const [avatarUrl, setAvatarUrl] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -90,14 +100,28 @@ export default function Users() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ username: '', display_name: '', email: '', password: '', status: 1 });
+    setForm({
+      username: '',
+      display_name: '',
+      email: '',
+      password: '',
+      status: 1,
+      role_ids: [],
+    });
     setAvatarUrl('');
     onOpen();
   };
 
   const openEdit = (user: User) => {
     setEditing(user);
-    setForm({ username: user.username, display_name: user.display_name, email: user.email, password: '', status: user.status });
+    setForm({
+      username: user.username,
+      display_name: user.display_name,
+      email: user.email,
+      password: '',
+      status: user.status,
+      role_ids: user.roles?.map((r) => r.id) || [],
+    });
     setAvatarUrl(user.avatar_url || '');
     onOpen();
   };
@@ -106,10 +130,11 @@ export default function Users() {
     try {
       if (editing) {
         // 更新基本信息
-        const updateData: Partial<User> = {
+        const updateData: Partial<User> & { role_ids?: string[] } = {
           username: form.username,
           display_name: form.display_name,
           email: form.email,
+          role_ids: form.role_ids,
         };
         await usersApi.update(editing.id, updateData);
 
@@ -120,7 +145,10 @@ export default function Users() {
 
         toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
-        await usersApi.create(form as Partial<User>);
+        await usersApi.create({
+          ...form,
+          role_ids: form.role_ids,
+        } as any);
         toast({ title: t('message.createSuccess'), status: 'success' });
       }
       onClose();
@@ -298,6 +326,22 @@ export default function Users() {
             <FormControl mb={4}>
               <FormLabel>{t('form.password.label')}{editing && `（${t('form.password.hint')}）`}</FormLabel>
               <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={t('form.password.placeholder')} />
+            </FormControl>
+            <FormControl mb={4}>
+              <FormLabel>{t('table.columns.roles')}</FormLabel>
+              <CheckboxGroup
+                colorScheme="brand"
+                value={form.role_ids}
+                onChange={(values) => setForm({ ...form, role_ids: values as string[] })}
+              >
+                <Stack spacing={[2, 4]} direction="row" wrap="wrap">
+                  {allRoles.map((role) => (
+                    <Checkbox key={role.id} value={role.id}>
+                      {role.name}
+                    </Checkbox>
+                  ))}
+                </Stack>
+              </CheckboxGroup>
             </FormControl>
             {!editing ? (
               <FormControl mb={4}>

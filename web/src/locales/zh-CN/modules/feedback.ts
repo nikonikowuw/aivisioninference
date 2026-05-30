@@ -22,7 +22,6 @@ export const feedback = {
   actions: {
     refresh: '更新',
     batchUpdateStatus: '批量修改状态',
-    exportSelected: '导出选中项',
   },
   message: {
     updated: '反馈状态已更新',

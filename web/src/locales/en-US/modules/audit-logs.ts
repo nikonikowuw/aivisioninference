@@ -73,9 +73,6 @@ export const auditLogs = {
       auth: 'Auth operation',
     },
   },
-  actions: {
-    exportSelected: 'Export Selected',
-  },
 } as const;
 
 export default auditLogs;

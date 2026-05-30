@@ -14,6 +14,7 @@ export const common = {
     refresh: 'Refresh',
     export: 'Export',
     import: 'Import',
+    exportSelected: 'Export Selected',
   },
   status: {
     loading: 'Loading...',

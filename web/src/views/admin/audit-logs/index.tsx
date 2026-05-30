@@ -109,7 +109,7 @@ export default function AuditLogs() {
           onClick={handleExport}
           isLoading={isExporting}
         >
-          {selectedIds.length > 0 ? t('actions.exportSelected') : tCommon('button.export')}
+          {selectedIds.length > 0 ? tCommon('button.exportSelected') : tCommon('button.export')}
         </Button>
       </Flex>
       <SearchBar

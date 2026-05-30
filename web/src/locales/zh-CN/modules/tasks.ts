@@ -40,7 +40,6 @@ export const tasks = {
   },
   actions: {
     cancel: '取消任务',
-    exportSelected: '导出选中项',
   },
 } as const;
 

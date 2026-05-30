@@ -14,6 +14,7 @@ export const common = {
     refresh: '刷新',
     export: '导出',
     import: '导入',
+    exportSelected: '导出选中项',
   },
   status: {
     loading: '加载中...',

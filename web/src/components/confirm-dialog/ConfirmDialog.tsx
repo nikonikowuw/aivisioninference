@@ -36,6 +36,13 @@ export default function ConfirmDialog({
   const { t: tCommon } = useTranslation('common');
   const cancelRef = useRef<HTMLButtonElement>(null);
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isLoading) {
+      e.preventDefault();
+      onConfirm();
+    }
+  };
+
   return (
     <AlertDialog
       isOpen={isOpen}
@@ -45,7 +52,7 @@ export default function ConfirmDialog({
       closeOnOverlayClick={!isLoading}
       isCentered
     >
-      <AlertDialogOverlay>
+      <AlertDialogOverlay onKeyDown={handleKeyDown}>
         <AlertDialogContent>
           <AlertDialogHeader fontSize="lg" fontWeight="bold">
             {title}

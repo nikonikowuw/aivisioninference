@@ -254,7 +254,7 @@ export default function Roles() {
       {/* Create/Edit Modal */}
       <Modal isOpen={isOpen} onClose={onClose}>
         <ModalOverlay />
-        <ModalContent>
+        <ModalContent as="form" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
           <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
@@ -288,7 +288,7 @@ export default function Roles() {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleSave} isLoading={isSaving}>{tCommon('button.save')}</Button>
+            <Button variant="brand" type="submit" isLoading={isSaving}>{tCommon('button.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

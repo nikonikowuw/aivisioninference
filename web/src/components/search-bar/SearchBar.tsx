@@ -70,8 +70,17 @@ export function SearchBar({
     [onFilterChange],
   );
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
+
   return (
     <Box
+      as="form"
+      onSubmit={handleSubmit}
       bg={bgColor}
       p={4}
       borderRadius="lg"
@@ -97,7 +106,7 @@ export function SearchBar({
 
         <Flex gap={3} align="flex-end" wrap="wrap" flex="1" justify="flex-end">
           {onRefresh && (
-            <Button variant="lightBrand" onClick={onRefresh}>
+            <Button variant="lightBrand" type="submit">
               {t('searchBar.search')}
             </Button>
           )}

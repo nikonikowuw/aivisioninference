@@ -15,6 +15,7 @@ export const common = {
     export: '导出',
     import: '导入',
     exportSelected: '导出选中项',
+    batchDelete: '批量删除',
   },
   status: {
     loading: '加载中...',
@@ -36,6 +37,9 @@ export const common = {
     loadFailed: '加载失败',
     exportFailed: '导出失败',
     importFailed: '导入失败',
+    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
+    operationSuccess: '操作成功',
+    operationFailed: '操作失败',
     requiredFields: '请填写必填字段',
     error: {
       0: '成功',
@@ -107,6 +111,9 @@ export const common = {
     previous: '上一页',
     next: '下一页',
     goToPage: '跳转到第 {{page}} 页',
+  },
+  batch: {
+    selected: '已选中 {{count}} 项',
   },
   searchBar: {
     keyword: '关键字',

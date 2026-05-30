@@ -31,12 +31,7 @@ export const tasks = {
     cancelFailed: 'Failed to cancel task',
     cancelConfirm: 'Are you sure you want to cancel this task?',
     confirmCancel: 'Yes, cancel it',
-    batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
     batchCancelConfirm: 'Cancel the selected {{count}} task(s)?',
-    operationFailed: 'Operation failed',
-  },
-  batch: {
-    selected: '{{count}} items selected',
   },
   actions: {
     cancel: 'Cancel Task',

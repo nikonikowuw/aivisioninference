@@ -14,6 +14,8 @@ export const common = {
     refresh: '更新',
     export: 'エクスポート',
     import: 'インポート',
+    exportSelected: '選択した項目をエクスポート',
+    batchDelete: '一括削除',
   },
   status: {
     loading: '読み込み中...',
@@ -35,6 +37,12 @@ export const common = {
     loadFailed: 'データの読み込みに失敗しました',
     exportFailed: 'エクスポートに失敗しました',
     importFailed: 'インポートに失敗しました',
+    batchDone: '一括操作が完了しました：成功 {{success}}、失敗 {{failed}}',
+    createSuccess: '作成に成功しました',
+    updateSuccess: '更新に成功しました',
+    deleteSuccess: '削除に成功しました',
+    operationSuccess: '操作が成功しました',
+    operationFailed: '操作が失敗しました',
     requiredFields: '必須項目を入力してください',
     // Error code translations (backend returns code only, frontend translates)
     error: {
@@ -107,6 +115,9 @@ export const common = {
     previous: '前へ',
     next: '次へ',
     goToPage: '{{page}} ページへ移動',
+  },
+  batch: {
+    selected: '{{count}} 件選択中',
   },
   searchBar: {
     keyword: 'キーワード',

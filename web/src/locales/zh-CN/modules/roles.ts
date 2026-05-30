@@ -42,22 +42,15 @@ export const roles = {
     empty: '暂无权限数据',
   },
   message: {
-    createSuccess: '创建成功',
-    updateSuccess: '更新成功',
-    deleteSuccess: '删除成功',
     assignPermissionsSuccess: '权限分配成功',
     loadPermissionsFailed: '获取权限失败',
     assignPermissionsFailed: '分配失败',
     deleteConfirm: '确定删除该角色？',
-    operationFailed: '操作失败',
-    deleteFailed: '删除失败',
     levelInvalidTitle: '等级输入无效',
     levelInvalidDescription: '请输入 {{min}} 到 {{max}} 之间的整数等级',
-    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
     batchDeleteConfirm: '确定删除选中的 {{count}} 个角色？',
   },
   batch: {
-    selected: '已选中 {{count}} 项',
     delete: '批量删除',
   },
   actions: {

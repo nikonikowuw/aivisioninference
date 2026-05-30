@@ -14,6 +14,8 @@ export const common = {
     refresh: '새로고침',
     export: '내보내기',
     import: '가져오기',
+    exportSelected: '선택 항목 내보내기',
+    batchDelete: '일괄 삭제',
   },
   status: {
     loading: '로드 중...',
@@ -35,6 +37,12 @@ export const common = {
     loadFailed: '데이터를 불러오는 데 실패했습니다',
     exportFailed: '내보내기 실패',
     importFailed: '가져오기 실패',
+    batchDone: '일괄 작업이 완료되었습니다: 성공 {{success}}, 실패 {{failed}}',
+    createSuccess: '성공적으로 생성되었습니다',
+    updateSuccess: '성공적으로 업데이트되었습니다',
+    deleteSuccess: '성공적으로 삭제되었습니다',
+    operationSuccess: '작업이 성공적으로 완료되었습니다',
+    operationFailed: '작업에 실패했습니다',
     requiredFields: '필수 항목을 입력해 주세요',
     // Error code translations (backend returns code only, frontend translates)
     error: {
@@ -107,6 +115,9 @@ export const common = {
     previous: '이전',
     next: '다음',
     goToPage: '{{page}} 페이지로 이동',
+  },
+  batch: {
+    selected: '{{count}}개 항목 선택됨',
   },
   searchBar: {
     keyword: '키워드',

@@ -14,6 +14,8 @@ export const common = {
     refresh: 'Segarkan',
     export: 'Ekspor',
     import: 'Impor',
+    exportSelected: 'Ekspor yang Dipilih',
+    batchDelete: 'Hapus Massal',
   },
   status: {
     loading: 'Memuat...',
@@ -35,6 +37,12 @@ export const common = {
     loadFailed: 'Gagal memuat data',
     exportFailed: 'Ekspor gagal',
     importFailed: 'Impor gagal',
+    batchDone: 'Batch selesai: {{success}} berhasil, {{failed}} gagal',
+    createSuccess: 'Berhasil dibuat',
+    updateSuccess: 'Berhasil diperbarui',
+    deleteSuccess: 'Berhasil dihapus',
+    operationSuccess: 'Operasi berhasil',
+    operationFailed: 'Operasi gagal',
     requiredFields: 'Silakan isi bidang yang wajib diisi',
     // Error code translations (backend returns code only, frontend translates)
     error: {
@@ -107,6 +115,9 @@ export const common = {
     previous: 'Sebelumnya',
     next: 'Berikutnya',
     goToPage: 'Ke halaman {{page}}',
+  },
+  batch: {
+    selected: '{{count}} item dipilih',
   },
   searchBar: {
     keyword: 'Kata Kunci',

@@ -42,17 +42,16 @@ export const roles = {
     empty: '権限データがありません',
   },
   message: {
-    createSuccess: 'ロールを作成しました',
-    updateSuccess: 'ロールを更新しました',
-    deleteSuccess: 'ロールを削除しました',
     assignPermissionsSuccess: '権限を割り当てました',
     loadPermissionsFailed: '権限の読み込みに失敗しました',
     assignPermissionsFailed: '権限の割り当てに失敗しました',
     deleteConfirm: 'このロールを削除してもよろしいですか？',
-    operationFailed: '操作が失敗しました',
-    deleteFailed: '削除に失敗しました',
     levelInvalidTitle: '無効なレベル入力',
     levelInvalidDescription: '{{min}} から {{max}} の間の整数を入力してください',
+    batchDeleteConfirm: '選択した {{count}} 件のロールを削除しますか？',
+  },
+  batch: {
+    delete: '一括削除',
   },
   actions: {
     edit: '編集',

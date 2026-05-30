@@ -42,17 +42,16 @@ export const roles = {
     empty: 'Tidak ada data izin',
   },
   message: {
-    createSuccess: 'Peran berhasil dibuat',
-    updateSuccess: 'Peran berhasil diperbarui',
-    deleteSuccess: 'Peran berhasil dihapus',
     assignPermissionsSuccess: 'Izin berhasil ditetapkan',
     loadPermissionsFailed: 'Gagal memuat izin',
     assignPermissionsFailed: 'Gagal menetapkan izin',
     deleteConfirm: 'Apakah Anda yakin ingin menghapus peran ini?',
-    operationFailed: 'Operasi gagal',
-    deleteFailed: 'Penghapusan gagal',
     levelInvalidTitle: 'Input tingkat tidak valid',
     levelInvalidDescription: 'Silakan masukkan angka bulat antara {{min}} dan {{max}}',
+    batchDeleteConfirm: 'Hapus {{count}} peran yang dipilih?',
+  },
+  batch: {
+    delete: 'Hapus massal',
   },
   actions: {
     edit: 'Edit',

@@ -42,17 +42,16 @@ export const roles = {
     empty: '暫無權限資料',
   },
   message: {
-    createSuccess: '建立成功',
-    updateSuccess: '更新成功',
-    deleteSuccess: '刪除成功',
     assignPermissionsSuccess: '權限分配成功',
     loadPermissionsFailed: '取得權限失敗',
     assignPermissionsFailed: '分配失敗',
     deleteConfirm: '確定刪除該角色？',
-    operationFailed: '操作失敗',
-    deleteFailed: '刪除失敗',
     levelInvalidTitle: '等級輸入無效',
     levelInvalidDescription: '請輸入 {{min}} 到 {{max}} 之間的整數等級',
+    batchDeleteConfirm: '確定刪除選中的 {{count}} 個角色？',
+  },
+  batch: {
+    delete: '批量刪除',
   },
   actions: {
     edit: '編輯',

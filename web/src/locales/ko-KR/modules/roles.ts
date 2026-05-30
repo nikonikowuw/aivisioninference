@@ -42,17 +42,16 @@ export const roles = {
     empty: '권한 데이터 없음',
   },
   message: {
-    createSuccess: '역할이 성공적으로 생성되었습니다',
-    updateSuccess: '역할이 성공적으로 업데이트되었습니다',
-    deleteSuccess: '역할이 성공적으로 삭제되었습니다',
     assignPermissionsSuccess: '권한이 성공적으로 할당되었습니다',
     loadPermissionsFailed: '권한을 불러오지 못했습니다',
     assignPermissionsFailed: '권한 할당 실패',
     deleteConfirm: '이 역할을 삭제하시겠습니까?',
-    operationFailed: '작업 실패',
-    deleteFailed: '삭제 실패',
     levelInvalidTitle: '잘못된 레벨 입력',
     levelInvalidDescription: '{{min}}에서 {{max}} 사이의 정수를 입력하세요',
+    batchDeleteConfirm: '선택한 역할 {{count}}개를 삭제하시겠습니까?',
+  },
+  batch: {
+    delete: '일괄 삭제',
   },
   actions: {
     edit: '편집',

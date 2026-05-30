@@ -28,14 +28,10 @@ export const files = {
   message: {
     uploadSuccess: '上传成功',
     uploadFailed: '上传失败',
-    deleteSuccess: '删除成功',
-    deleteFailed: '删除失败',
     deleteConfirm: '确定删除该文件？',
-    batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
     batchDeleteConfirm: '确定删除选中的 {{count}} 个文件？',
   },
   batch: {
-    selected: '已选中 {{count}} 项',
     delete: '批量删除',
   },
   actions: {

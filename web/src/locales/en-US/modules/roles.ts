@@ -42,22 +42,15 @@ export const roles = {
     empty: 'No permission data',
   },
   message: {
-    createSuccess: 'Role created successfully',
-    updateSuccess: 'Role updated successfully',
-    deleteSuccess: 'Role deleted successfully',
     assignPermissionsSuccess: 'Permissions assigned successfully',
     loadPermissionsFailed: 'Failed to load permissions',
     assignPermissionsFailed: 'Failed to assign permissions',
     deleteConfirm: 'Are you sure you want to delete this role?',
-    operationFailed: 'Operation failed',
-    deleteFailed: 'Delete failed',
     levelInvalidTitle: 'Invalid level input',
     levelInvalidDescription: 'Please enter an integer between {{min}} and {{max}}',
-    batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
     batchDeleteConfirm: 'Delete the selected {{count}} role(s)?',
   },
   batch: {
-    selected: '{{count}} items selected',
     delete: 'Batch Delete',
   },
   actions: {

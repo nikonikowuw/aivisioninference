@@ -14,6 +14,8 @@ export const common = {
     refresh: '重新整理',
     export: '匯出',
     import: '匯入',
+    exportSelected: '匯出選中項',
+    batchDelete: '批量刪除',
   },
   status: {
     loading: '載入中...',
@@ -35,6 +37,12 @@ export const common = {
     loadFailed: '載入失敗',
     exportFailed: '匯出失敗',
     importFailed: '匯入失敗',
+    batchDone: '批量操作完成：成功 {{success}}，失敗 {{failed}}',
+    createSuccess: '建立成功',
+    updateSuccess: '更新成功',
+    deleteSuccess: '刪除成功',
+    operationSuccess: '操作成功',
+    operationFailed: '操作失敗',
     requiredFields: '請填寫必填欄位',
     // 錯誤碼翻譯（後端只返回 code，前端翻譯 message）
     error: {
@@ -107,6 +115,9 @@ export const common = {
     previous: '上一頁',
     next: '下一頁',
     goToPage: '跳轉到第 {{page}} 頁',
+  },
+  batch: {
+    selected: '已選中 {{count}} 項',
   },
   searchBar: {
     keyword: '關鍵字',

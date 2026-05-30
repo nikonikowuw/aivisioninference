@@ -15,6 +15,7 @@ export const common = {
     export: 'Export',
     import: 'Import',
     exportSelected: 'Export Selected',
+    batchDelete: 'Batch Delete',
   },
   status: {
     loading: 'Loading...',
@@ -36,6 +37,9 @@ export const common = {
     loadFailed: 'Failed to load data',
     exportFailed: 'Export failed',
     importFailed: 'Import failed',
+    batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
+    operationSuccess: 'Operation successful',
+    operationFailed: 'Operation failed',
     requiredFields: 'Please fill in required fields',
     error: {
       0: 'Success',
@@ -107,6 +111,9 @@ export const common = {
     previous: 'Previous',
     next: 'Next',
     goToPage: 'Go to page {{page}}',
+  },
+  batch: {
+    selected: '{{count}} items selected',
   },
   searchBar: {
     keyword: 'Keyword',

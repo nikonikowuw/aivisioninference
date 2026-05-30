@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -55,3 +56,62 @@ func (r *DashboardRepository) CountActiveTasks(ctx context.Context) (int64, erro
 	return count, err
 }
 
+// RecentAuditLogs 查询最近的审计日志列表。
+func (r *DashboardRepository) RecentAuditLogs(ctx context.Context, limit int) ([]model.AuditLog, error) {
+	var logs []model.AuditLog
+	err := r.db.WithContext(ctx).Order("created_at DESC").Limit(limit).Find(&logs).Error
+	return logs, err
+}
+
+// UserStatRow 表示某一天的新增用户和活跃用户统计行。
+type UserStatRow struct {
+	Date   string // 日期标签，格式为 MM-DD
+	New    int64  // 当日新增用户数
+	Active int64  // 当日活跃用户数
+}
+
+// RecentUserStats 查询最近 days 天的用户新增和活跃统计。
+func (r *DashboardRepository) RecentUserStats(ctx context.Context, days int) ([]UserStatRow, error) {
+	stats := make([]UserStatRow, days)
+	now := time.Now()
+	for i := 0; i < days; i++ {
+		day := now.AddDate(0, 0, i-days+1)
+		start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+		end := start.AddDate(0, 0, 1)
+
+		newUsers, err := r.countNewUsers(ctx, start, end)
+		if err != nil {
+			return nil, err
+		}
+		activeUsers, err := r.countActiveUsers(ctx, start, end)
+		if err != nil {
+			return nil, err
+		}
+
+		stats[i] = UserStatRow{
+			Date:   day.Format("01-02"),
+			New:    newUsers,
+			Active: activeUsers,
+		}
+	}
+	return stats, nil
+}
+
+// countNewUsers 统计指定日期范围内新增用户数。
+func (r *DashboardRepository) countNewUsers(ctx context.Context, start, end time.Time) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.User{}).
+		Where("created_at >= ? AND created_at < ?", start, end).
+		Count(&count).Error
+	return count, err
+}
+
+// countActiveUsers 统计指定日期范围内有审计记录的去重用户数。
+func (r *DashboardRepository) countActiveUsers(ctx context.Context, start, end time.Time) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+		Where("created_at >= ? AND created_at < ? AND user_id IS NOT NULL", start, end).
+		Distinct("user_id").
+		Count(&count).Error
+	return count, err
+}

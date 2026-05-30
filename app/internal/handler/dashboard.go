@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -27,8 +28,10 @@ func NewDashboardHandler(svc *service.DashboardService) *DashboardHandler {
 // @Router       /dashboard/stats [get]
 // @Security     BearerAuth
 func (h *DashboardHandler) Stats(c *gin.Context) {
-	// 调用服务层获取统计数据
-	stats, err := h.svc.Stats(c.Request.Context())
+	lang, _ := c.Get(middleware.ContextKeyLang)
+	langStr, _ := lang.(string)
+
+	stats, err := h.svc.Stats(c.Request.Context(), langStr)
 	if err != nil {
 		attachError(c, err)
 		return

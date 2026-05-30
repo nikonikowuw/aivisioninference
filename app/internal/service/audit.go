@@ -5,7 +5,6 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
-	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
@@ -41,29 +40,29 @@ func (s *AuditService) List(ctx context.Context, lang string, req dto.ListAuditL
 		req.ToTime = to
 	}
 
-	logs, total, err := s.auditRepo.List(ctx, req)
+	auditLogs, total, err := s.auditRepo.List(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	list := make([]dto.AuditLogResponse, 0, len(logs))
-	for _, l := range logs {
-		list = append(list, dto.AuditLogResponse{
-			ID:             l.ID,
-			UserID:         l.UserID,
-			Username:       l.Username,
-			ActionType:     i18n.TranslateAction(lang, l.ActionType),
-			ResourceType:   l.ResourceType,
-			ResourceID:     l.ResourceID,
-			RequestPath:    l.RequestPath,
-			RequestMethod:  l.RequestMethod,
-			RequestIP:      l.RequestIP,
-			UserAgent:      l.UserAgent,
-			ResponseStatus: l.ResponseStatus,
-			DurationMs:     l.DurationMs,
-			ResultSummary:  l.ResultSummary,
-			CreatedAt:      l.CreatedAt,
-		})
+	list := make([]dto.AuditLogResponse, len(auditLogs))
+	for i, log := range auditLogs {
+		list[i] = dto.AuditLogResponse{
+			ID:             log.ID,
+			UserID:         log.UserID,
+			Username:       log.Username,
+			ActionType:     log.ActionType,
+			ResourceType:   log.ResourceType,
+			ResourceID:     log.ResourceID,
+			RequestPath:    log.RequestPath,
+			RequestMethod:  log.RequestMethod,
+			RequestIP:      log.RequestIP,
+			UserAgent:      log.UserAgent,
+			ResponseStatus: log.ResponseStatus,
+			DurationMs:     log.DurationMs,
+			ResultSummary:  log.ResultSummary,
+			CreatedAt:      log.CreatedAt,
+		}
 	}
 
 	return &ListResult{List: list, Total: total}, nil

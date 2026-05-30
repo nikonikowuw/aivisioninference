@@ -32,6 +32,8 @@ const (
 	ActionLogin             = "action.login"
 	ActionLogout            = "action.logout"
 	ActionAuth              = "action.auth"
+
+	resultKeyPrefix = "result."
 )
 
 // 审计日志操作类型翻译
@@ -67,6 +69,8 @@ var actionStorage = map[string]map[string]string{
 		"action.login":              "User login",
 		"action.logout":             "User logout",
 		"action.auth":               "Auth operation",
+		"result.success":            "Success",
+		"result.failed":             "Failed",
 	},
 	"zh": {
 		"action.view.users":         "查看用户",
@@ -99,6 +103,8 @@ var actionStorage = map[string]map[string]string{
 		"action.login":              "用户登录",
 		"action.logout":             "用户登出",
 		"action.auth":               "认证操作",
+		"result.success":            "成功",
+		"result.failed":             "失败",
 	},
 	"zh-tw": {
 		"action.view.users":         "檢視使用者",
@@ -131,6 +137,8 @@ var actionStorage = map[string]map[string]string{
 		"action.login":              "使用者登入",
 		"action.logout":             "使用者登出",
 		"action.auth":               "認證操作",
+		"result.success":            "成功",
+		"result.failed":             "失敗",
 	},
 	"id": {
 		"action.view.users":         "Lihat pengguna",
@@ -163,6 +171,8 @@ var actionStorage = map[string]map[string]string{
 		"action.login":              "Login pengguna",
 		"action.logout":             "Logout pengguna",
 		"action.auth":               "Operasi autentikasi",
+		"result.success":            "Berhasil",
+		"result.failed":             "Gagal",
 	},
 	"ja": {
 		"action.view.users":         "ユーザー一覧表示",
@@ -195,6 +205,8 @@ var actionStorage = map[string]map[string]string{
 		"action.login":              "ユーザーログイン",
 		"action.logout":             "ユーザーログアウト",
 		"action.auth":               "認証操作",
+		"result.success":            "成功",
+		"result.failed":             "失敗",
 	},
 	"ko": {
 		"action.view.users":         "사용자 목록 보기",
@@ -227,11 +239,23 @@ var actionStorage = map[string]map[string]string{
 		"action.login":              "사용자 로그인",
 		"action.logout":             "사용자 로그아웃",
 		"action.auth":               "인증 작업",
+		"result.success":            "성공",
+		"result.failed":             "실패",
 	},
 }
 
 // TranslateAction 将审计日志操作 key 翻译为本地化文本。
 func TranslateAction(lang, key string) string {
+	return translateActionMessage(lang, key, key)
+}
+
+// TranslateResult 将审计日志结果摘要翻译为本地化文本。
+func TranslateResult(lang, result string) string {
+	return translateActionMessage(lang, resultKeyPrefix+result, result)
+}
+
+// translateActionMessage 按请求语言查找审计文案，缺失时回退到默认语言。
+func translateActionMessage(lang, key, fallback string) string {
 	if lang == "" {
 		lang = DefaultLanguage
 	}
@@ -239,18 +263,21 @@ func TranslateAction(lang, key string) string {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	if msgs, ok := actionStorage[lang]; ok {
-		if msg, ok := msgs[key]; ok {
-			return msg
-		}
+	if msg, ok := lookupActionMessage(lang, key); ok {
+		return msg
 	}
-
-	// 回退到英文
-	if msgs, ok := actionStorage[DefaultLanguage]; ok {
-		if msg, ok := msgs[key]; ok {
-			return msg
-		}
+	if msg, ok := lookupActionMessage(DefaultLanguage, key); ok {
+		return msg
 	}
+	return fallback
+}
 
-	return key
+// lookupActionMessage 从指定语言文案表中读取审计文案。
+func lookupActionMessage(lang, key string) (string, bool) {
+	msgs, ok := actionStorage[lang]
+	if !ok {
+		return "", false
+	}
+	msg, ok := msgs[key]
+	return msg, ok
 }

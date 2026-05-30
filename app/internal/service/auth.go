@@ -162,6 +162,9 @@ func toRoleInfosAndIDs(roles []model.Role) (infos []dto.RoleInfo, ids []string) 
 	infos = make([]dto.RoleInfo, 0, len(roles))
 	ids = make([]string, 0, len(roles))
 	for _, role := range roles {
+		if role.Status != 1 {
+			continue
+		}
 		ids = append(ids, role.ID)
 		infos = append(infos, dto.RoleInfo{
 			ID:          role.ID,

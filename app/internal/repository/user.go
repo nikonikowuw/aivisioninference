@@ -219,7 +219,7 @@ func (r *UserRepository) FindMinRoleLevelByUserID(ctx context.Context, userID st
 		Table("user_roles").
 		Select("MIN(roles.level)").
 		Joins("JOIN roles ON roles.id = user_roles.role_id").
-		Where("user_roles.user_id = ?", userID).
+		Where("user_roles.user_id = ? AND roles.status = 1", userID).
 		Scan(&level).Error
 	return level, err
 }

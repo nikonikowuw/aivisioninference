@@ -15,11 +15,13 @@ func TestToRoleInfosAndIDs(t *testing.T) {
 			BaseModel:   model.BaseModel{ID: "role-1"},
 			Name:        "Admin",
 			Description: "Admin role",
+			Status:      1,
 		},
 		{
 			BaseModel:   model.BaseModel{ID: "role-2"},
 			Name:        "User",
 			Description: "User role",
+			Status:      1,
 		},
 	}
 

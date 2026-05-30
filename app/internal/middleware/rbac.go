@@ -114,8 +114,10 @@ func CheckPermission(ctx context.Context, cache cachepkg.Cache, db *gorm.DB, use
 		FROM permissions p
 		INNER JOIN role_permissions rp ON rp.permission_id = p.id
 		INNER JOIN user_roles ur ON ur.role_id = rp.role_id
+		INNER JOIN roles r ON r.id = rp.role_id
 		WHERE ur.user_id = ?
 		AND p.type != ?
+		AND r.status = 1
 	`
 	if err := db.WithContext(ctx).Raw(query, userID, model.PermTypeMenu).Scan(&perms).Error; err != nil {
 		return false, fmt.Errorf("failed to query permissions: %w", err)

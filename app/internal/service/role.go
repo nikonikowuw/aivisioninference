@@ -140,6 +140,9 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 更改角色信息（可能包含启用/禁用状态修改）后，清理角色相关的权限缓存
+	s.invalidatePermCache(ctx)
+
 	return nil
 }
 

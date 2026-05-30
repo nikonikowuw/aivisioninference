@@ -1,5 +1,3 @@
-/* eslint-disable */
-// Chakra Imports
 import { Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Icon, Link, Text, useColorModeValue } from '@chakra-ui/react';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,8 +14,8 @@ export default function AdminNavbar(props: {
 	onOpen: (...args: any[]) => any;
 }) {
 	const [scrolled, setScrolled] = useState(false);
-	const { secondary, brandText, collapsed } = props;
-	const { setCollapsed } = useSidebar();
+	const { secondary, brandText } = props;
+	const { collapsed, setCollapsed } = useSidebar();
 	const { t } = useTranslation('layout');
 
 	useEffect(() => {

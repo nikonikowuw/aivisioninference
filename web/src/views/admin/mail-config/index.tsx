@@ -52,7 +52,7 @@ export default function MailConfigPage() {
       setImapPwdConfigured(cfg.imap_password_configured);
       if (cfg.from_address) setTestEmail(cfg.from_address);
     } catch (err) {
-      toast({ title: t('message.loadFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.loadFailed'), description: toastErrorDesc(err), status: 'error' });
     } finally {
       setLoading(false);
     }
@@ -61,6 +61,8 @@ export default function MailConfigPage() {
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
+
+  const toastErrorDesc = (err: unknown) => err instanceof Error ? err.message : '';
 
   async function save() {
     setSaving(true);
@@ -71,7 +73,7 @@ export default function MailConfigPage() {
       setImapPwdConfigured(next.imap_password_configured);
       toast({ title: t('message.saved'), status: 'success' });
     } catch (err) {
-      toast({ title: t('message.saveFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.saveFailed'), description: toastErrorDesc(err), status: 'error' });
     } finally {
       setSaving(false);
     }
@@ -83,7 +85,7 @@ export default function MailConfigPage() {
       await mailConfigApi.testSMTP(testEmail);
       toast({ title: t('message.smtpTestOk'), status: 'success' });
     } catch (err) {
-      toast({ title: t('message.smtpTestFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.smtpTestFailed'), description: toastErrorDesc(err), status: 'error' });
     } finally {
       setTestingSMTP(false);
     }
@@ -95,7 +97,7 @@ export default function MailConfigPage() {
       await mailConfigApi.testIMAP();
       toast({ title: t('message.imapTestOk'), status: 'success' });
     } catch (err) {
-      toast({ title: t('message.imapTestFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.imapTestFailed'), description: toastErrorDesc(err), status: 'error' });
     } finally {
       setTestingIMAP(false);
     }
@@ -107,7 +109,7 @@ export default function MailConfigPage() {
       const res = await mailConfigApi.syncIMAP();
       toast({ title: t('message.syncOk', { count: res.synced }), status: 'success' });
     } catch (err) {
-      toast({ title: t('message.syncFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+      toast({ title: t('message.syncFailed'), description: toastErrorDesc(err), status: 'error' });
     } finally {
       setSyncing(false);
     }
@@ -152,7 +154,14 @@ export default function MailConfigPage() {
           </FormControl>
           <FormControl>
             <FormLabel>{t('fields.smtpPort')}</FormLabel>
-            <Input type="number" value={form.smtp_port || 0} onChange={e => setField('smtp_port', Number(e.target.value))} />
+            <Input
+              type="number"
+              value={Number.isFinite(form.smtp_port) ? form.smtp_port : ''}
+              onChange={e => {
+                const val = e.target.value;
+                setField('smtp_port', val === '' ? undefined : Number(val));
+              }}
+            />
           </FormControl>
           <FormControl>
             <FormLabel>{t('fields.smtpUsername')}</FormLabel>
@@ -185,7 +194,14 @@ export default function MailConfigPage() {
           </FormControl>
           <FormControl>
             <FormLabel>{t('fields.imapPort')}</FormLabel>
-            <Input type="number" value={form.imap_port || 0} onChange={e => setField('imap_port', Number(e.target.value))} />
+            <Input
+              type="number"
+              value={Number.isFinite(form.imap_port) ? form.imap_port : ''}
+              onChange={e => {
+                const val = e.target.value;
+                setField('imap_port', val === '' ? undefined : Number(val));
+              }}
+            />
           </FormControl>
           <FormControl>
             <FormLabel>{t('fields.imapUsername')}</FormLabel>

@@ -7,7 +7,6 @@ import MiniStatistics from 'components/card/MiniStatistics';
 import IconBox from 'components/icons/IconBox';
 import { dashboardApi, type DashboardStats } from 'services/api';
 import UserGrowthChart from 'views/admin/default/components/UserGrowthChart';
-import AuditTable from 'views/admin/default/components/AuditTable';
 
 export default function Dashboard() {
   const { t } = useTranslation('modules/dashboard');
@@ -85,9 +84,6 @@ export default function Dashboard() {
 
       <Box mb="20px">
         <UserGrowthChart chartData={stats?.user_stats} />
-      </Box>
-      <Box mb="20px">
-        <AuditTable tableData={stats?.audit_logs} />
       </Box>
     </Box>
   );

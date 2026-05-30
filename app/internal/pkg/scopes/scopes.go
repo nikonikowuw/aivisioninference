@@ -45,6 +45,13 @@ func OrderBy(sort, order string, allowedFields ...string) Scope {
 	}
 }
 
+// OrderByDefault applies deterministic fallback ordering after any requested order.
+func OrderByDefault() Scope {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Order("created_at DESC").Order("id DESC")
+	}
+}
+
 // Eq 返回一个等值查询范围，支持 nil 值（生成 IS NULL 条件）。
 func Eq(field string, value interface{}) Scope {
 	return func(db *gorm.DB) *gorm.DB {
@@ -73,28 +80,44 @@ func Like(field, value string) Scope {
 			zap.L().Warn("scopes.Like: invalid field name, skipping", zap.String("field", field))
 			return db
 		}
-		return db.Where(field+" LIKE ?", "%"+value+"%")
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return db
+		}
+		return db.Where(field+" ILIKE ? ESCAPE '\\'", "%"+escapeLike(value)+"%")
 	}
 }
 
-// MultiLike generates an OR-combined LIKE condition across multiple fields.
-// Each field name is validated to prevent SQL injection.
+// MultiLike generates an OR-combined ILIKE condition across multiple fields.
+// Each field name is validated and wildcard characters are escaped.
 func MultiLike(fields []string, value string) Scope {
 	return func(db *gorm.DB) *gorm.DB {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return db
+		}
 		conds := make([]string, 0, len(fields))
 		args := make([]interface{}, 0, len(fields))
+		pattern := "%" + escapeLike(value) + "%"
 		for _, f := range fields {
 			if !validFieldName.MatchString(f) {
 				continue
 			}
-			conds = append(conds, f+" LIKE ?")
-			args = append(args, "%"+value+"%")
+			conds = append(conds, f+" ILIKE ? ESCAPE '\\'")
+			args = append(args, pattern)
 		}
 		if len(conds) == 0 {
 			return db
 		}
 		return db.Where(strings.Join(conds, " OR "), args...)
 	}
+}
+
+func escapeLike(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `%`, `\%`)
+	value = strings.ReplaceAll(value, `_`, `\_`)
+	return value
 }
 
 // TimeRange 返回一个时间范围查询范围，支持开始时间和结束时间单独或同时指定。

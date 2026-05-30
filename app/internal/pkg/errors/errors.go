@@ -24,6 +24,14 @@ const (
 	ErrSMTPTestFailed        = 10014
 	ErrIMAPTestFailed        = 10015
 	ErrTokenInvalidOrExpired = 10016
+	ErrCSVInvalidContent     = 10017
+	ErrCSVRowLimitExceeded   = 10018
+	ErrCSVColumnRequired     = 10019
+	ErrCSVStatusInvalid      = 10020
+	ErrCSVHeaderInvalid      = 10021
+	ErrCSVDuplicateUsername  = 10022
+	ErrCSVWeakPassword       = 10023
+	ErrCSVInvalidEmail       = 10024
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized      = 20001
@@ -62,6 +70,14 @@ var i18nMessages = map[string]map[int]string{
 		ErrSMTPTestFailed:        "SMTP测试失败",
 		ErrIMAPTestFailed:        "IMAP测试失败",
 		ErrTokenInvalidOrExpired: "验证码无效或已过期",
+		ErrCSVInvalidContent:     "CSV内容无效",
+		ErrCSVRowLimitExceeded:   "CSV行数超过限制",
+		ErrCSVColumnRequired:     "CSV至少需要 username、email、display_name、password 四列",
+		ErrCSVStatusInvalid:      "状态必须为0或1",
+		ErrCSVHeaderInvalid:      "CSV表头必须为 username,email,display_name,password,status",
+		ErrCSVDuplicateUsername:  "CSV中存在重复用户名",
+		ErrCSVWeakPassword:       "密码长度不能少于6位",
+		ErrCSVInvalidEmail:       "邮箱格式不正确",
 		ErrUnauthorized:          "未登录",
 		ErrTokenExpired:          "Token已过期",
 		ErrTokenInvalid:          "Token无效",
@@ -89,6 +105,14 @@ var i18nMessages = map[string]map[int]string{
 		ErrSMTPTestFailed:        "SMTP test failed",
 		ErrIMAPTestFailed:        "IMAP test failed",
 		ErrTokenInvalidOrExpired: "Invalid or expired verification token",
+		ErrCSVInvalidContent:     "Invalid CSV content",
+		ErrCSVRowLimitExceeded:   "CSV row limit exceeded",
+		ErrCSVColumnRequired:     "CSV requires at least username, email, display_name, and password columns",
+		ErrCSVStatusInvalid:      "Status must be 0 or 1",
+		ErrCSVHeaderInvalid:      "CSV header must be username,email,display_name,password,status",
+		ErrCSVDuplicateUsername:  "Duplicate username in CSV",
+		ErrCSVWeakPassword:       "Password must be at least 6 characters",
+		ErrCSVInvalidEmail:       "Invalid email format",
 		ErrUnauthorized:          "Unauthorized",
 		ErrTokenExpired:          "Token expired",
 		ErrTokenInvalid:          "Token invalid",
@@ -116,6 +140,14 @@ var i18nMessages = map[string]map[int]string{
 		ErrSMTPTestFailed:        "SMTP測試失敗",
 		ErrIMAPTestFailed:        "IMAP測試失敗",
 		ErrTokenInvalidOrExpired: "驗證碼無效或已過期",
+		ErrCSVInvalidContent:     "CSV內容無效",
+		ErrCSVRowLimitExceeded:   "CSV列數超過限制",
+		ErrCSVColumnRequired:     "CSV至少需要 username、email、display_name、password 四欄",
+		ErrCSVStatusInvalid:      "狀態必須為0或1",
+		ErrCSVHeaderInvalid:      "CSV表頭必須為 username,email,display_name,password,status",
+		ErrCSVDuplicateUsername:  "CSV中存在重複使用者名稱",
+		ErrCSVWeakPassword:       "密碼長度不能少於6位",
+		ErrCSVInvalidEmail:       "信箱格式不正確",
 		ErrUnauthorized:          "未登入",
 		ErrTokenExpired:          "Token已過期",
 		ErrTokenInvalid:          "Token無效",
@@ -143,6 +175,14 @@ var i18nMessages = map[string]map[int]string{
 		ErrSMTPTestFailed:        "Tes SMTP gagal",
 		ErrIMAPTestFailed:        "Tes IMAP gagal",
 		ErrTokenInvalidOrExpired: "Token tidak valid atau kedaluwarsa",
+		ErrCSVInvalidContent:     "Konten CSV tidak valid",
+		ErrCSVRowLimitExceeded:   "Jumlah baris CSV melebihi batas",
+		ErrCSVColumnRequired:     "CSV memerlukan minimal kolom username, email, display_name, dan password",
+		ErrCSVStatusInvalid:      "Status harus 0 atau 1",
+		ErrCSVHeaderInvalid:      "Header CSV harus username,email,display_name,password,status",
+		ErrCSVDuplicateUsername:  "Username duplikat di CSV",
+		ErrCSVWeakPassword:       "Kata sandi minimal 6 karakter",
+		ErrCSVInvalidEmail:       "Format email tidak valid",
 		ErrUnauthorized:          "Tidak sah",
 		ErrTokenExpired:          "Token kedaluwarsa",
 		ErrTokenInvalid:          "Token tidak valid",
@@ -170,6 +210,14 @@ var i18nMessages = map[string]map[int]string{
 		ErrSMTPTestFailed:        "SMTPテストに失敗しました",
 		ErrIMAPTestFailed:        "IMAPテストに失敗しました",
 		ErrTokenInvalidOrExpired: "トークンが無効または期限切れです",
+		ErrCSVInvalidContent:     "CSVの内容が無効です",
+		ErrCSVRowLimitExceeded:   "CSVの行数が制限を超えています",
+		ErrCSVColumnRequired:     "CSVには少なくとも username、email、display_name、password 列が必要です",
+		ErrCSVStatusInvalid:      "ステータスは0または1である必要があります",
+		ErrCSVHeaderInvalid:      "CSVヘッダーは username,email,display_name,password,status である必要があります",
+		ErrCSVDuplicateUsername:  "CSV内に重複したユーザー名があります",
+		ErrCSVWeakPassword:       "パスワードは6文字以上である必要があります",
+		ErrCSVInvalidEmail:       "メールアドレスの形式が正しくありません",
 		ErrUnauthorized:          "認証されていません",
 		ErrTokenExpired:          "トークンの期限が切れました",
 		ErrTokenInvalid:          "無効なトークンです",
@@ -197,6 +245,14 @@ var i18nMessages = map[string]map[int]string{
 		ErrSMTPTestFailed:        "SMTP 테스트 실패",
 		ErrIMAPTestFailed:        "IMAP 테스트 실패",
 		ErrTokenInvalidOrExpired: "유효하지 않거나 만료된 토큰입니다",
+		ErrCSVInvalidContent:     "CSV 내용이 올바르지 않습니다",
+		ErrCSVRowLimitExceeded:   "CSV 행 수가 제한을 초과했습니다",
+		ErrCSVColumnRequired:     "CSV에는 최소 username, email, display_name, password 열이 필요합니다",
+		ErrCSVStatusInvalid:      "상태는 0 또는 1이어야 합니다",
+		ErrCSVHeaderInvalid:      "CSV 헤더는 username,email,display_name,password,status 여야 합니다",
+		ErrCSVDuplicateUsername:  "CSV에 중복된 사용자 이름이 있습니다",
+		ErrCSVWeakPassword:       "비밀번호는 6자 이상이어야 합니다",
+		ErrCSVInvalidEmail:       "이메일 형식이 올바르지 않습니다",
 		ErrUnauthorized:          "인증되지 않았습니다",
 		ErrTokenExpired:          "토큰이 만료되었습니다",
 		ErrTokenInvalid:          "유효하지 않은 토큰입니다",

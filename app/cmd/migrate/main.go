@@ -346,6 +346,10 @@ func defaultMenuList() []parentMenuDef {
 				{Name: "用户", Code: "users", Path: "/users", Icon: "MdPerson", Buttons: []buttonInfo{
 					{Code: "user:list", Name: "用户列表", Path: "/api/v1/users", Method: "GET"},
 					{Code: "user:create", Name: "创建用户", Path: "/api/v1/users", Method: "POST"},
+					{Code: "user:export", Name: "导出用户", Path: "/api/v1/users/export", Method: "GET"},
+					{Code: "user:import", Name: "导入用户", Path: "/api/v1/users/import", Method: "POST"},
+					{Code: "user:batch-delete", Name: "批量删除用户", Path: "/api/v1/users/batch-delete", Method: "POST"},
+					{Code: "user:batch-status", Name: "批量更新用户状态", Path: "/api/v1/users/batch-status", Method: "PUT"},
 					{Code: "user:edit", Name: "编辑用户", Path: "/api/v1/users/*", Method: "PUT"},
 					{Code: "user:delete", Name: "删除用户", Path: "/api/v1/users/*", Method: "DELETE"},
 					{Code: "user:view", Name: "查看用户", Path: "/api/v1/users/*", Method: "GET"},
@@ -354,6 +358,8 @@ func defaultMenuList() []parentMenuDef {
 				}},
 				{Name: "角色", Code: "roles", Path: "/roles", Icon: "MdSecurity", Buttons: []buttonInfo{
 					{Code: "role:create", Name: "创建角色", Path: "/api/v1/roles", Method: "POST"},
+					{Code: "role:export", Name: "导出角色", Path: "/api/v1/roles/export", Method: "GET"},
+					{Code: "role:batch-delete", Name: "批量删除角色", Path: "/api/v1/roles/batch-delete", Method: "POST"},
 					{Code: "role:edit", Name: "编辑角色", Path: "/api/v1/roles/*", Method: "PUT"},
 					{Code: "role:delete", Name: "删除角色", Path: "/api/v1/roles/*", Method: "DELETE"},
 					{Code: "role:assign-permissions", Name: "分配权限", Path: "/api/v1/roles/*/permissions", Method: "PUT"},
@@ -373,6 +379,8 @@ func defaultMenuList() []parentMenuDef {
 			Children: []childMenuDef{
 				{Name: "文件", Code: "files", Path: "/files", Icon: "MdFolder", Buttons: []buttonInfo{
 					{Code: "file:list", Name: "文件列表", Path: "/api/v1/files", Method: "GET"},
+					{Code: "file:export", Name: "导出文件", Path: "/api/v1/files/export", Method: "GET"},
+					{Code: "file:batch-delete", Name: "批量删除文件", Path: "/api/v1/files/batch-delete", Method: "POST"},
 					{Code: "file:upload", Name: "上传文件", Path: "/api/v1/files/upload/**", Method: "POST"},
 					{Code: "file:check", Name: "校验文件", Path: "/api/v1/files/upload/check", Method: "POST"},
 					{Code: "file:upload-progress", Name: "上传进度", Path: "/api/v1/files/upload/*/progress", Method: "GET"},
@@ -382,10 +390,13 @@ func defaultMenuList() []parentMenuDef {
 				}},
 				{Name: "审计日志", Code: "audit-logs", Path: "/audit-logs", Icon: "MdHistory", Buttons: []buttonInfo{
 					{Code: "audit:view", Name: "查看审计日志", Path: "/api/v1/audit-logs", Method: "GET"},
+					{Code: "audit:export", Name: "导出审计日志", Path: "/api/v1/audit-logs/export", Method: "GET"},
 				}},
 				{Name: "任务", Code: "tasks", Path: "/tasks", Icon: "MdAssignment", Buttons: []buttonInfo{
 					{Code: "task:list", Name: "任务列表", Path: "/api/v1/tasks", Method: "GET"},
 					{Code: "task:create", Name: "创建任务", Path: "/api/v1/tasks", Method: "POST"},
+					{Code: "task:export", Name: "导出任务", Path: "/api/v1/tasks/export", Method: "GET"},
+					{Code: "task:batch-cancel", Name: "批量取消任务", Path: "/api/v1/tasks/batch-cancel", Method: "POST"},
 					{Code: "task:cancel", Name: "取消任务", Path: "/api/v1/tasks/*/cancel", Method: "POST"},
 					{Code: "task:view", Name: "查看任务", Path: "/api/v1/tasks/*", Method: "GET"},
 				}},
@@ -403,6 +414,8 @@ func defaultMenuList() []parentMenuDef {
 				}},
 				{Name: "用户反馈", Code: "feedback", Path: "/feedback", Icon: "MdFeedback", Buttons: []buttonInfo{
 					{Code: "feedback:view", Name: "查看反馈", Path: "/api/v1/feedback", Method: "GET"},
+					{Code: "feedback:export", Name: "导出反馈", Path: "/api/v1/feedback/export", Method: "GET"},
+					{Code: "feedback:batch-status", Name: "批量更新反馈状态", Path: "/api/v1/feedback/batch-status", Method: "PUT"},
 					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
 				}},
 			},

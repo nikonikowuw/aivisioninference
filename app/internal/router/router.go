@@ -165,6 +165,10 @@ func (r *Router) setupRoutes() {
 	{
 		users.GET("", middleware.RBAC(rbacCache, r.db), userHandler.List)
 		users.POST("", middleware.RBAC(rbacCache, r.db), userHandler.Create)
+		users.GET("/export", middleware.RBAC(rbacCache, r.db), userHandler.ExportCSV)
+		users.POST("/import", middleware.RBAC(rbacCache, r.db), userHandler.ImportCSV)
+		users.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), userHandler.BatchDelete)
+		users.PUT("/batch-status", middleware.RBAC(rbacCache, r.db), userHandler.BatchUpdateStatus)
 		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
 		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
 		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
@@ -178,6 +182,8 @@ func (r *Router) setupRoutes() {
 	{
 		roles.GET("", roleHandler.List)
 		roles.POST("", middleware.RBAC(rbacCache, r.db), roleHandler.Create)
+		roles.GET("/export", middleware.RBAC(rbacCache, r.db), roleHandler.ExportCSV)
+		roles.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), roleHandler.BatchDelete)
 		roles.GET("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.GetByID)
 		roles.PUT("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Update)
 		roles.DELETE("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Delete)
@@ -205,6 +211,8 @@ func (r *Router) setupRoutes() {
 		files.GET("/upload/:upload_id/progress", middleware.RBAC(rbacCache, r.db), fileHandler.UploadProgress)
 		files.POST("/upload/check", middleware.RBAC(rbacCache, r.db), fileHandler.CheckFile)
 		files.GET("", middleware.RBAC(rbacCache, r.db), fileHandler.List)
+		files.GET("/export", middleware.RBAC(rbacCache, r.db), fileHandler.ExportCSV)
+		files.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), fileHandler.BatchDelete)
 		files.GET("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.GetByID)
 		files.GET("/:id/download", middleware.RBAC(rbacCache, r.db), fileHandler.Download)
 		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
@@ -213,6 +221,7 @@ func (r *Router) setupRoutes() {
 	// Audit Logs
 	auditHandler := handler.NewAuditHandler(auditSvc)
 	authorized.GET("/audit-logs", middleware.RBAC(rbacCache, r.db), auditHandler.List)
+	authorized.GET("/audit-logs/export", middleware.RBAC(rbacCache, r.db), auditHandler.ExportCSV)
 
 	// Tasks
 	taskHandler := handler.NewTaskHandler(taskSvc)
@@ -220,6 +229,8 @@ func (r *Router) setupRoutes() {
 	{
 		tasks.POST("", middleware.RBAC(rbacCache, r.db), taskHandler.Create)
 		tasks.GET("", middleware.RBAC(rbacCache, r.db), taskHandler.List)
+		tasks.GET("/export", middleware.RBAC(rbacCache, r.db), taskHandler.ExportCSV)
+		tasks.POST("/batch-cancel", middleware.RBAC(rbacCache, r.db), taskHandler.BatchCancel)
 		tasks.GET("/:id", middleware.RBAC(rbacCache, r.db), taskHandler.GetByID)
 		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
 	}
@@ -250,6 +261,8 @@ func (r *Router) setupRoutes() {
 	{
 		feedback.POST("", feedbackHandler.Create)
 		feedback.GET("", middleware.RBAC(rbacCache, r.db), feedbackHandler.List)
+		feedback.GET("/export", middleware.RBAC(rbacCache, r.db), feedbackHandler.ExportCSV)
+		feedback.PUT("/batch-status", middleware.RBAC(rbacCache, r.db), feedbackHandler.BatchUpdateStatus)
 		feedback.PUT("/:id/status", middleware.RBAC(rbacCache, r.db), feedbackHandler.UpdateStatus)
 	}
 

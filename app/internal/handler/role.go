@@ -5,7 +5,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -67,14 +66,9 @@ func (h *RoleHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// 获取当前操作人的用户 ID 及其超级管理员标识 (Root) 用于层级权限判定
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
-	root, _ := isRoot.(bool)
+	uid, isRoot := currentUserContext(c)
 
-	// 创建角色
-	role, err := h.svc.Create(c.Request.Context(), req, uid, root)
+	role, err := h.svc.Create(c.Request.Context(), req, uid, isRoot)
 	if err != nil {
 		attachError(c, err)
 		return
@@ -123,14 +117,9 @@ func (h *RoleHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// 获取操作人信息用于防越权校验
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
-	root, _ := isRoot.(bool)
+	uid, isRoot := currentUserContext(c)
 
-	// 执行更新
-	if err := h.svc.Update(c.Request.Context(), id, req, uid, root); err != nil {
+	if err := h.svc.Update(c.Request.Context(), id, req, uid, isRoot); err != nil {
 		attachError(c, err)
 		return
 	}
@@ -150,12 +139,7 @@ func (h *RoleHandler) Update(c *gin.Context) {
 // @Security     BearerAuth
 func (h *RoleHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-
-	// 获取操作人信息用于防越权校验
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
-	root, _ := isRoot.(bool)
+	uid, root := currentUserContext(c)
 
 	// 执行软删除
 	if err := h.svc.Delete(c.Request.Context(), id, uid, root); err != nil {
@@ -163,6 +147,32 @@ func (h *RoleHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.OK(c, nil)
+}
+
+// BatchDelete 批量删除角色，逐条复用单条删除的层级与使用情况校验。
+func (h *RoleHandler) BatchDelete(c *gin.Context) {
+	var req dto.BatchIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	uid, root := currentUserContext(c)
+	response.OK(c, h.svc.BatchDelete(c.Request.Context(), req.IDs, uid, root, currentLang(c)))
+}
+
+// ExportCSV 按当前筛选条件导出角色 CSV。
+func (h *RoleHandler) ExportCSV(c *gin.Context) {
+	var req dto.RoleListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	data, err := h.svc.ExportCSV(c.Request.Context(), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	writeCSV(c, "roles.csv", data)
 }
 
 // GetPermissions 获取指定角色已绑定的所有权限列表。
@@ -205,14 +215,9 @@ func (h *RoleHandler) AssignPermissions(c *gin.Context) {
 		return
 	}
 
-	// 获取操作人信息用于越权检测
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRoot, _ := c.Get(middleware.ContextKeyIsRoot)
-	root, _ := isRoot.(bool)
+	uid, isRoot := currentUserContext(c)
 
-	// 进行角色授权
-	if err := h.svc.AssignPermissions(c.Request.Context(), id, req, uid, root); err != nil {
+	if err := h.svc.AssignPermissions(c.Request.Context(), id, req, uid, isRoot); err != nil {
 		attachError(c, err)
 		return
 	}

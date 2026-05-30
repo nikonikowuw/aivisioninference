@@ -17,6 +17,27 @@ type PageData struct {
 	PageSize int         `json:"page_size"`
 }
 
+// BatchIDsRequest is the common request body for batch operations by IDs.
+type BatchIDsRequest struct {
+	IDs []string `json:"ids" binding:"required,min=1,max=100,dive,required"`
+}
+
+// BatchItemResult describes the outcome of one item in a batch operation.
+type BatchItemResult struct {
+	ID      string `json:"id"`
+	Success bool   `json:"success"`
+	Code    int    `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// BatchResult summarizes a batch operation result.
+type BatchResult struct {
+	Total   int               `json:"total"`
+	Success int               `json:"success"`
+	Failed  int               `json:"failed"`
+	Items   []BatchItemResult `json:"items"`
+}
+
 // PageRequest is the common pagination request.
 type PageRequest struct {
 	Page     int    `form:"page" json:"page"`

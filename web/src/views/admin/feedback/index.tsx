@@ -1,20 +1,6 @@
-import {
-  Badge,
-  Box,
-  Button,
-  HStack,
-  Select,
-  Table,
-  Tbody,
-  Td,
-  Text,
-  Th,
-  Thead,
-  Tr,
-  useColorModeValue,
-  useToast,
-} from '@chakra-ui/react';
-import { useEffect, useMemo } from 'react';
+import { Badge, Box, Button, Flex, HStack, Select, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
+import { useEffect, useMemo, useState } from 'react';
+import { DownloadIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import Pagination from 'components/pagination/Pagination';
@@ -32,12 +18,14 @@ const statusColor: Record<string, string> = {
 
 export default function FeedbackPage() {
   const { t } = useTranslation('modules/feedback');
+  const { t: tCommon } = useTranslation('common');
   const toast = useToast();
   const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchFeedback = useMemo(() => (p: number, ps: number) => feedbackApi.list({
     page: p,
@@ -63,9 +51,29 @@ export default function FeedbackPage() {
     }
   }
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await feedbackApi.exportCsv({
+        keyword: filters.keyword,
+        source: filters.source,
+        status: filters.status,
+        start_time: filters.start_time,
+        end_time: filters.end_time,
+      });
+    } catch (err) {
+      toast({ title: tCommon('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-      <Text fontSize="2xl" fontWeight="bold" color={textColor} mb="20px">{t('title')}</Text>
+      <Flex justify="space-between" align="center" mb="20px">
+        <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
+        <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
+      </Flex>
       <SearchBar
         filters={filters}
         onFilterChange={setFilter}

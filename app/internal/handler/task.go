@@ -114,3 +114,28 @@ func (h *TaskHandler) Cancel(c *gin.Context) {
 	}
 	response.OK(c, nil)
 }
+
+// BatchCancel 批量取消任务。
+func (h *TaskHandler) BatchCancel(c *gin.Context) {
+	var req dto.BatchIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	response.OK(c, h.svc.BatchCancel(c.Request.Context(), req.IDs, currentLang(c)))
+}
+
+// ExportCSV 按当前筛选条件导出任务 CSV。
+func (h *TaskHandler) ExportCSV(c *gin.Context) {
+	var req dto.TaskListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	data, err := h.svc.ExportCSV(c.Request.Context(), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	writeCSV(c, "tasks.csv", data)
+}

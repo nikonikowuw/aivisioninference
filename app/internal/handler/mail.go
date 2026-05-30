@@ -204,3 +204,32 @@ func (h *FeedbackHandler) UpdateStatus(c *gin.Context) {
 	}
 	response.OK(c, item)
 }
+
+// BatchUpdateStatus 批量更新反馈状态。
+func (h *FeedbackHandler) BatchUpdateStatus(c *gin.Context) {
+	uid, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	var req dto.BatchUpdateFeedbackStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	response.OK(c, h.svc.BatchUpdateStatus(c.Request.Context(), req.IDs, req.Status, uid, currentLang(c)))
+}
+
+// ExportCSV 按当前筛选条件导出反馈 CSV。
+func (h *FeedbackHandler) ExportCSV(c *gin.Context) {
+	var req dto.FeedbackListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	data, err := h.svc.ExportCSV(c.Request.Context(), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	writeCSV(c, "feedback.csv", data)
+}

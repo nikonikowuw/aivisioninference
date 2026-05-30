@@ -33,6 +33,8 @@ export const common = {
     notFound: '请求的资源不存在',
     serverError: '服务器错误',
     loadFailed: '加载失败',
+    exportFailed: '导出失败',
+    importFailed: '导入失败',
     requiredFields: '请填写必填字段',
     error: {
       0: '成功',

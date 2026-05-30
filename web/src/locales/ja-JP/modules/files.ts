@@ -31,9 +31,12 @@ export const files = {
     deleteSuccess: 'ファイルを削除しました',
     deleteFailed: '削除に失敗しました',
     deleteConfirm: 'このファイルを削除してもよろしいですか？',
+    exportFailed: 'エクスポートに失敗しました',
   },
   actions: {
     delete: '削除',
+    download: 'ダウンロード',
+    export: 'エクスポート',
   },
   size: {
     bytes: 'B',

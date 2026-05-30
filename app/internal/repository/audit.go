@@ -47,3 +47,14 @@ func (r *AuditRepository) List(ctx context.Context, req dto.ListAuditLogRequest)
 	return logs, total, err
 }
 
+// ListForExport 返回符合筛选条件的审计日志列表，用于导出。
+func (r *AuditRepository) ListForExport(ctx context.Context, req dto.ListAuditLogRequest, limit int) ([]model.AuditLog, error) {
+	var logs []model.AuditLog
+	err := r.db.WithContext(ctx).
+		Model(&model.AuditLog{}).
+		Scopes(req.FilterScopes()...).
+		Scopes(scopes.OrderBy(req.Sort, req.Order, model.AuditLog{}.SortableFields()...), scopes.OrderByDefault()).
+		Limit(limit).
+		Find(&logs).Error
+	return logs, err
+}

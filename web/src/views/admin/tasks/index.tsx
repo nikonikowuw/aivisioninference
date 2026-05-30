@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Flex,
   Table,
   Thead,
@@ -16,7 +17,7 @@ import {
   Badge,
   useToast,
 } from '@chakra-ui/react';
-import { CloseIcon } from '@chakra-ui/icons';
+import { CloseIcon, DownloadIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { tasksApi, type Task } from 'services/api';
@@ -37,6 +38,7 @@ const statusColor: Record<string, string> = {
 
 export default function Tasks() {
   const { t } = useTranslation('modules/tasks');
+  const { t: tCommon } = useTranslation('common');
   const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
@@ -44,6 +46,7 @@ export default function Tasks() {
   const toast = useToast();
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
@@ -69,6 +72,23 @@ export default function Tasks() {
     load({ page: 1 });
   }, [searchTrigger, load]);
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await tasksApi.exportCsv({
+        keyword: filters.keyword,
+        type: filters.type,
+        status: filters.status,
+        start_time: filters.start_time,
+        end_time: filters.end_time,
+      });
+    } catch (err) {
+      toast({ title: tCommon('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (!cancelTarget) return;
     setIsCancelling(true);
@@ -92,6 +112,7 @@ export default function Tasks() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
+        <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
       </Flex>
       <SearchBar
         filters={filters}

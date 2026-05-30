@@ -33,6 +33,8 @@ export const common = {
     notFound: '要求されたリソースが見つかりませんでした',
     serverError: 'サーバーエラーが発生しました',
     loadFailed: 'データの読み込みに失敗しました',
+    exportFailed: 'エクスポートに失敗しました',
+    importFailed: 'インポートに失敗しました',
     requiredFields: '必須項目を入力してください',
     // Error code translations (backend returns code only, frontend translates)
     error: {

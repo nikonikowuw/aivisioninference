@@ -31,9 +31,12 @@ export const files = {
     deleteSuccess: '删除成功',
     deleteFailed: '删除失败',
     deleteConfirm: '确定删除该文件？',
+    exportFailed: '导出失败',
   },
   actions: {
     delete: '删除',
+    download: '下载',
+    export: '导出',
   },
   size: {
     bytes: 'B',

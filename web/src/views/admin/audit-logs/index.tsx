@@ -1,20 +1,7 @@
-import {
-  Badge,
-  Box,
-  Center,
-  Flex,
-  Spinner,
-  Table,
-  Tbody,
-  Td,
-  Text,
-  Th,
-  Thead,
-  Tr,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { Badge, Box, Button, Center, Flex, HStack, Spinner, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
 import { useDateFormat } from 'hooks/useDateFormat';
-import { useEffect, useCallback } from 'react';
+import { DownloadIcon } from '@chakra-ui/icons';
+import { useEffect, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { auditLogsApi, type AuditLog } from 'services/api';
 import Pagination from 'components/pagination/Pagination';
@@ -36,12 +23,15 @@ const resultColor = (result?: string) => (result === 'success' ? 'green' : (resu
 
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
+  const { t: tCommon } = useTranslation('common');
   const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
+  const toast = useToast();
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchLogs = useCallback((p: number, ps: number) => auditLogsApi.list({
       page: p,
@@ -67,6 +57,23 @@ export default function AuditLogs() {
     load({ page: 1 });
   }, [searchTrigger, load]);
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await auditLogsApi.exportCsv({
+        keyword: filters.keyword,
+        resource_type: filters.resource_type,
+        result: filters.result,
+        start_time: filters.start_time,
+        end_time: filters.end_time,
+      });
+    } catch (err) {
+      toast({ title: tCommon('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
@@ -75,6 +82,7 @@ export default function AuditLogs() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
+        <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
       </Flex>
       <SearchBar
         filters={filters}

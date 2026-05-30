@@ -22,8 +22,9 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/csvx"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
-	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+	"github.com/niko-admin/niko-admin/internal/pkg/timex"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -347,19 +348,10 @@ func (s *FileService) CheckFile(ctx context.Context, md5Hash string) (*dto.Check
 	return &dto.CheckFileResponse{Exists: true, FileID: file.ID}, nil
 }
 
-// List returns a paginated list of files with optional filters.
-//
-// 【核心功能】查询文件列表，支持关键字、存储类型、时间范围等筛选条件。
-// 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
+// List 查询文件列表，支持关键字、存储类型、时间范围等筛选条件。
 func (s *FileService) List(ctx context.Context, req dto.FileListRequest) ([]model.File, int64, error) {
-	// 解析时间范围参数
-	if req.StartTime != "" || req.EndTime != "" {
-		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
-		if err != nil {
-			return nil, 0, mapTimeRangeError(err)
-		}
-		req.FromTime = from
-		req.ToTime = to
+	if err := normalizeFileTimeRange(&req); err != nil {
+		return nil, 0, err
 	}
 	return s.fileRepo.List(ctx, req)
 }
@@ -429,6 +421,45 @@ func (s *FileService) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// BatchDelete 批量删除文件，逐条复用单条删除逻辑。
+func (s *FileService) BatchDelete(ctx context.Context, ids []string, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		return s.Delete(ctx, id)
+	})
+}
+
+// ExportCSV 导出当前筛选条件下的文件列表 CSV。
+func (s *FileService) ExportCSV(ctx context.Context, req dto.FileListRequest) ([]byte, error) {
+	if err := normalizeFileTimeRange(&req); err != nil {
+		return nil, err
+	}
+	items, err := s.fileRepo.ListForExport(ctx, req, maxCSVExportRows)
+	if err != nil {
+		zap.L().Error("export files failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{
+			item.ID,
+			item.OriginalName,
+			item.MimeType,
+			strconv.FormatInt(item.Size, 10),
+			item.StorageType,
+			item.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	data, err := csvx.Build([]string{"ID", "OriginalName", "MimeType", "Size", "StorageType", "CreatedAt"}, rows)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	return data, nil
+}
+
+func normalizeFileTimeRange(req *dto.FileListRequest) error {
+	return timex.NormalizeRange(req.StartTime, req.EndTime, &req.FromTime, &req.ToTime)
 }
 
 // ParseRange parses the Range header value and returns (start, end, ok).

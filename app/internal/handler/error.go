@@ -19,10 +19,25 @@ func attachError(c *gin.Context, err error) {
 
 // badRequestError 将请求绑定/校验错误封装为本地化翻译的 AppError。
 func badRequestError(c *gin.Context, err error) error {
-	// lang 属性由 i18n 中间件注入；如果获取不到，验证器默认使用英文。
 	lang, _ := c.Get(middleware.ContextKeyLang)
 	langStr, _ := lang.(string)
 	return apperrors.New(apperrors.ErrBadRequest, validatorx.TranslateValidationError(err, langStr))
+}
+
+// currentLang 从 Gin 上下文中提取中间件注入的当前语言设置。
+func currentLang(c *gin.Context) string {
+	lang, _ := c.Get(middleware.ContextKeyLang)
+	langStr, _ := lang.(string)
+	return langStr
+}
+
+// currentUserContext 从 Gin 上下文中提取当前登录用户 ID 和是否为超级管理员。
+func currentUserContext(c *gin.Context) (string, bool) {
+	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
+	uid, _ := currentUserID.(string)
+	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
+	isRoot, _ := isRootVal.(bool)
+	return uid, isRoot
 }
 
 // getUserID 从 Gin 上下文中提取已认证的用户 ID。

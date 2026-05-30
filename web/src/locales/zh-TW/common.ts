@@ -33,6 +33,8 @@ export const common = {
     notFound: '請求的資源不存在',
     serverError: '伺服器錯誤',
     loadFailed: '載入失敗',
+    exportFailed: '匯出失敗',
+    importFailed: '匯入失敗',
     requiredFields: '請填寫必填欄位',
     // 錯誤碼翻譯（後端只返回 code，前端翻譯 message）
     error: {

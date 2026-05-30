@@ -45,6 +45,15 @@ func (f *fakeFeedbackServiceRepo) Update(_ context.Context, item *model.Feedback
 }
 
 func (f *fakeFeedbackServiceRepo) List(_ context.Context, req dto.FeedbackListRequest) ([]model.Feedback, int64, error) {
+	list := f.filter(req)
+	return list, int64(len(list)), nil
+}
+
+func (f *fakeFeedbackServiceRepo) ListForExport(_ context.Context, req dto.FeedbackListRequest, _ int) ([]model.Feedback, error) {
+	return f.filter(req), nil
+}
+
+func (f *fakeFeedbackServiceRepo) filter(req dto.FeedbackListRequest) []model.Feedback {
 	list := make([]model.Feedback, 0, len(f.items))
 	for _, it := range f.items {
 		if req.Source != "" && it.Source != req.Source {
@@ -64,7 +73,7 @@ func (f *fakeFeedbackServiceRepo) List(_ context.Context, req dto.FeedbackListRe
 		}
 		list = append(list, *it)
 	}
-	return list, int64(len(list)), nil
+	return list
 }
 
 func TestFeedbackServiceCreate(t *testing.T) {

@@ -18,7 +18,7 @@ import {
   Progress,
   Badge,
 } from '@chakra-ui/react';
-import { DeleteIcon } from '@chakra-ui/icons';
+import { DeleteIcon, DownloadIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { filesApi, type FileItem } from 'services/api';
@@ -48,6 +48,7 @@ export default function Files() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
@@ -86,6 +87,22 @@ export default function Files() {
     }
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await filesApi.exportCsv({
+        keyword: filters.keyword,
+        storage_type: filters.storage_type,
+        start_time: filters.start_time,
+        end_time: filters.end_time,
+      });
+    } catch (err) {
+      toast({ title: t('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -109,9 +126,12 @@ export default function Files() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
-        <Button variant="brand" onClick={() => inputRef.current?.click()} isLoading={uploading}>
-          {t('button.upload')}
-        </Button>
+        <HStack spacing={2}>
+          <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{t('actions.export')}</Button>
+          <Button variant="brand" onClick={() => inputRef.current?.click()} isLoading={uploading}>
+            {t('button.upload')}
+          </Button>
+        </HStack>
         <input ref={inputRef} type="file" hidden onChange={handleUpload} />
       </Flex>
       {uploading && (
@@ -160,6 +180,7 @@ export default function Files() {
                 <Td>{formatDateTime(f.created_at)}</Td>
                 <Td>
                   <HStack spacing={2}>
+                    <IconButton aria-label={t('actions.download')} icon={<DownloadIcon />} size="sm" variant="ghost" colorScheme="blue" onClick={() => filesApi.download(f.id, f.original_name)} />
                     <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(f.id)} />
                   </HStack>
                 </Td>

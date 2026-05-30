@@ -31,9 +31,13 @@ export const files = {
     deleteSuccess: '파일이 성공적으로 삭제되었습니다',
     deleteFailed: '삭제 실패',
     deleteConfirm: '이 파일을 삭제하시겠습니까?',
+    exportFailed: '내보내기 실패',
   },
   actions: {
     delete: '삭제',
+    download: '다운로드',
+    export: '내보내기',
+    upload: '업로드',
   },
   size: {
     bytes: 'B',

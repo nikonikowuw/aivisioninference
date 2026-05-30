@@ -33,6 +33,8 @@ export const common = {
     notFound: '요청한 리소스를 찾을 수 없습니다',
     serverError: '서버 오류가 발생했습니다',
     loadFailed: '데이터를 불러오는 데 실패했습니다',
+    exportFailed: '내보내기 실패',
+    importFailed: '가져오기 실패',
     requiredFields: '필수 항목을 입력해 주세요',
     // Error code translations (backend returns code only, frontend translates)
     error: {

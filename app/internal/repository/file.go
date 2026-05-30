@@ -72,6 +72,18 @@ func (r *FileRepository) List(ctx context.Context, req dto.FileListRequest) ([]m
 	return items, total, err
 }
 
+// ListForExport 返回符合筛选条件的文件列表，用于导出。
+func (r *FileRepository) ListForExport(ctx context.Context, req dto.FileListRequest, limit int) ([]model.File, error) {
+	var items []model.File
+	err := r.db.WithContext(ctx).
+		Model(&model.File{}).
+		Scopes(req.FilterScopes()...).
+		Scopes(scopes.OrderBy(req.Sort, req.Order, model.File{}.SortableFields()...), scopes.OrderByDefault()).
+		Limit(limit).
+		Find(&items).Error
+	return items, err
+}
+
 // FindByUploadID 根据 upload_id 查询分块上传任务信息
 func (r *FileRepository) FindByUploadID(ctx context.Context, uploadID string) (*model.FileChunk, error) {
 	var chunk model.FileChunk

@@ -9,9 +9,10 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/csvx"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	mailpkg "github.com/niko-admin/niko-admin/internal/pkg/mail"
-	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+	"github.com/niko-admin/niko-admin/internal/pkg/timex"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -27,6 +28,7 @@ type feedbackServiceRepo interface {
 	FindByID(ctx context.Context, id string) (*model.Feedback, error)
 	Update(ctx context.Context, item *model.Feedback) error
 	List(ctx context.Context, req dto.FeedbackListRequest) ([]model.Feedback, int64, error)
+	ListForExport(ctx context.Context, req dto.FeedbackListRequest, limit int) ([]model.Feedback, error)
 }
 
 // NewFeedbackService 创建并返回一个新的 FeedbackService 实例
@@ -66,13 +68,8 @@ func (s *FeedbackService) Create(ctx context.Context, userID string, req dto.Fee
 
 // List 根据分页和可选的过滤条件返回反馈记录列表和总数
 func (s *FeedbackService) List(ctx context.Context, req dto.FeedbackListRequest) ([]model.Feedback, int64, error) {
-	if req.StartTime != "" || req.EndTime != "" {
-		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
-		if err != nil {
-			return nil, 0, mapTimeRangeError(err)
-		}
-		req.FromTime = from
-		req.ToTime = to
+	if err := normalizeFeedbackTimeRange(&req); err != nil {
+		return nil, 0, err
 	}
 	return s.repo.List(ctx, req)
 }
@@ -92,4 +89,37 @@ func (s *FeedbackService) UpdateStatus(ctx context.Context, id, status, handlerI
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	return item, nil
+}
+
+// BatchUpdateStatus 批量更新反馈状态。
+func (s *FeedbackService) BatchUpdateStatus(ctx context.Context, ids []string, status, handlerID string, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		_, err := s.UpdateStatus(ctx, id, status, handlerID)
+		return err
+	})
+}
+
+// ExportCSV 导出当前筛选条件下的反馈列表 CSV。
+func (s *FeedbackService) ExportCSV(ctx context.Context, req dto.FeedbackListRequest) ([]byte, error) {
+	if err := normalizeFeedbackTimeRange(&req); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListForExport(ctx, req, maxCSVExportRows)
+	if err != nil {
+		zap.L().Error("export feedback failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{item.ID, item.Source, item.Category, item.Title, item.Email, item.Status, item.CreatedAt.Format("2006-01-02 15:04:05")})
+	}
+	data, err := csvx.Build([]string{"ID", "Source", "Category", "Title", "Email", "Status", "CreatedAt"}, rows)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	return data, nil
+}
+
+func normalizeFeedbackTimeRange(req *dto.FeedbackListRequest) error {
+	return timex.NormalizeRange(req.StartTime, req.EndTime, &req.FromTime, &req.ToTime)
 }

@@ -149,3 +149,17 @@ func (r *FeedbackRepository) List(ctx context.Context, req dto.FeedbackListReque
 	).Preload("User").Preload("InboundEmail").Find(&items).Error
 	return items, total, err
 }
+
+// ListForExport 返回符合筛选条件的反馈列表，用于导出。
+func (r *FeedbackRepository) ListForExport(ctx context.Context, req dto.FeedbackListRequest, limit int) ([]model.Feedback, error) {
+	var items []model.Feedback
+	err := r.db.WithContext(ctx).
+		Model(&model.Feedback{}).
+		Scopes(req.FilterScopes()...).
+		Scopes(scopes.OrderBy(req.Sort, req.Order, model.Feedback{}.SortableFields()...), scopes.OrderByDefault()).
+		Limit(limit).
+		Preload("User").
+		Preload("InboundEmail").
+		Find(&items).Error
+	return items, err
+}

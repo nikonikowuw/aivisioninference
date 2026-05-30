@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/csvx"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
@@ -173,6 +175,39 @@ func (s *RoleService) Delete(ctx context.Context, id string, currentUserID strin
 	// 删除后清理角色相关的权限缓存，保证下游用户下次请求时重新加载。
 	s.invalidatePermCache(ctx)
 	return nil
+}
+
+// BatchDelete 批量删除角色，并逐条复用单条删除的层级、Root 与使用情况校验。
+func (s *RoleService) BatchDelete(ctx context.Context, ids []string, currentUserID string, isRoot bool, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		return s.Delete(ctx, id, currentUserID, isRoot)
+	})
+}
+
+// ExportCSV 导出当前筛选条件下的角色列表 CSV。
+func (s *RoleService) ExportCSV(ctx context.Context, req dto.RoleListRequest) ([]byte, error) {
+	items, err := s.roleRepo.ListForExport(ctx, req, maxCSVExportRows)
+	if err != nil {
+		zap.L().Error("export roles failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{
+			item.ID,
+			item.Name,
+			item.Description,
+			strconv.Itoa(item.Level),
+			strconv.Itoa(item.Status),
+			strconv.Itoa(len(item.Permissions)),
+			item.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	data, err := csvx.Build([]string{"ID", "Name", "Description", "Level", "Status", "PermissionCount", "CreatedAt"}, rows)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	return data, nil
 }
 
 // GetPermissions 获取指定角色所拥有的全部权限信息

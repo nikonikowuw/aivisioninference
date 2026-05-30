@@ -33,6 +33,8 @@ export const common = {
     notFound: 'Sumber daya yang diminta tidak ditemukan',
     serverError: 'Kesalahan server',
     loadFailed: 'Gagal memuat data',
+    exportFailed: 'Ekspor gagal',
+    importFailed: 'Impor gagal',
     requiredFields: 'Silakan isi bidang yang wajib diisi',
     // Error code translations (backend returns code only, frontend translates)
     error: {

@@ -75,6 +75,12 @@ type FeedbackUpdateStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=open processing resolved closed"`
 }
 
+// BatchUpdateFeedbackStatusRequest updates multiple feedback records' status.
+type BatchUpdateFeedbackStatusRequest struct {
+	BatchIDsRequest
+	Status string `json:"status" binding:"required,oneof=open processing resolved closed"`
+}
+
 // FeedbackListRequest is the request for listing feedback.
 type FeedbackListRequest struct {
 	PageRequest

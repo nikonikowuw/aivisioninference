@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,8 +11,9 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/csvx"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
-	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+	"github.com/niko-admin/niko-admin/internal/pkg/timex"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -43,19 +45,10 @@ func (s *TaskService) Create(ctx context.Context, req dto.CreateTaskRequest) (*m
 	return &item, nil
 }
 
-// List 根据分页和可选的过滤条件返回任务列表和总条数
-//
-// 【核心功能】查询任务列表，支持关键字、类型、状态、时间范围等筛选条件。
-// 时间范围参数通过公共 ParseTimeRange 方法解析，确保格式统一。
+// List 查询任务列表，支持关键字、类型、状态、时间范围等筛选条件。
 func (s *TaskService) List(ctx context.Context, req dto.TaskListRequest) ([]model.Task, int64, error) {
-	// 解析时间范围参数
-	if req.StartTime != "" || req.EndTime != "" {
-		from, to, err := scopes.ParseTimeRange(req.StartTime, req.EndTime)
-		if err != nil {
-			return nil, 0, mapTimeRangeError(err)
-		}
-		req.FromTime = from
-		req.ToTime = to
+	if err := normalizeTaskTimeRange(&req); err != nil {
+		return nil, 0, err
 	}
 	return s.taskRepo.List(ctx, req)
 }
@@ -87,4 +80,44 @@ func (s *TaskService) Cancel(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+// BatchCancel 批量取消任务，逐条复用单条取消状态校验。
+func (s *TaskService) BatchCancel(ctx context.Context, ids []string, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		return s.Cancel(ctx, id)
+	})
+}
+
+// ExportCSV 导出当前筛选条件下的任务列表 CSV。
+func (s *TaskService) ExportCSV(ctx context.Context, req dto.TaskListRequest) ([]byte, error) {
+	if err := normalizeTaskTimeRange(&req); err != nil {
+		return nil, err
+	}
+	items, err := s.taskRepo.ListForExport(ctx, req, maxCSVExportRows)
+	if err != nil {
+		zap.L().Error("export tasks failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{
+			item.ID,
+			item.TaskID,
+			item.Type,
+			item.Status,
+			strconv.Itoa(item.RetryCount),
+			item.ErrorMessage,
+			item.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	data, err := csvx.Build([]string{"ID", "TaskID", "Type", "Status", "RetryCount", "ErrorMessage", "CreatedAt"}, rows)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	return data, nil
+}
+
+func normalizeTaskTimeRange(req *dto.TaskListRequest) error {
+	return timex.NormalizeRange(req.StartTime, req.EndTime, &req.FromTime, &req.ToTime)
 }

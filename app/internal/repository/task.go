@@ -65,6 +65,18 @@ func (r *TaskRepository) List(ctx context.Context, req dto.TaskListRequest) ([]m
 	return items, total, err
 }
 
+// ListForExport 返回符合筛选条件的任务列表，用于导出。
+func (r *TaskRepository) ListForExport(ctx context.Context, req dto.TaskListRequest, limit int) ([]model.Task, error) {
+	var items []model.Task
+	err := r.db.WithContext(ctx).
+		Model(&model.Task{}).
+		Scopes(req.FilterScopes()...).
+		Scopes(scopes.OrderBy(req.Sort, req.Order, model.Task{}.SortableFields()...), scopes.OrderByDefault()).
+		Limit(limit).
+		Find(&items).Error
+	return items, err
+}
+
 // UpdateStatus 快捷更新任务的状态以及可选的完成时间戳 (FinishedAt)
 func (r *TaskRepository) UpdateStatus(ctx context.Context, taskID, status string, finishedAt *time.Time) error {
 	return r.db.WithContext(ctx).Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]interface{}{
@@ -72,4 +84,3 @@ func (r *TaskRepository) UpdateStatus(ctx context.Context, taskID, status string
 		"finished_at": finishedAt,
 	}).Error
 }
-

@@ -270,7 +270,7 @@ func (h *FileHandler) Download(c *gin.Context) {
 	// 没有 Range 头，正常发送整个文件，附带附件下载文件名头
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Content-Type", info.ContentType)
-	c.Header("Content-Disposition", safeAttachmentDisposition(info.File.OriginalName))
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": info.File.OriginalName}))
 	c.Header("Content-Length", strconv.FormatInt(info.FileSize, 10))
 	c.Header("Accept-Ranges", "bytes")
 	c.File(info.FilePath)
@@ -295,7 +295,29 @@ func (h *FileHandler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-// safeAttachmentDisposition 生成安全的附件下载头，避免原始文件名中的特殊字符破坏响应头格式。
-func safeAttachmentDisposition(filename string) string {
-	return mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+// BatchDelete 批量删除文件。
+func (h *FileHandler) BatchDelete(c *gin.Context) {
+	var req dto.BatchIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	response.OK(c, h.svc.BatchDelete(c.Request.Context(), req.IDs, currentLang(c)))
 }
+
+// ExportCSV 按当前筛选条件导出文件 CSV。
+func (h *FileHandler) ExportCSV(c *gin.Context) {
+	var req dto.FileListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	data, err := h.svc.ExportCSV(c.Request.Context(), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	writeCSV(c, "files.csv", data)
+}
+
+

@@ -86,6 +86,19 @@ func (r *RoleRepository) List(ctx context.Context, req dto.RoleListRequest) ([]m
 	return items, total, err
 }
 
+// ListForExport 返回符合筛选条件的角色列表，用于导出。
+func (r *RoleRepository) ListForExport(ctx context.Context, req dto.RoleListRequest, limit int) ([]model.Role, error) {
+	var items []model.Role
+	err := r.db.WithContext(ctx).
+		Model(&model.Role{}).
+		Scopes(req.FilterScopes()...).
+		Scopes(scopes.OrderBy(req.Sort, req.Order, model.Role{}.SortableFields()...), scopes.OrderByDefault()).
+		Limit(limit).
+		Preload("Permissions").
+		Find(&items).Error
+	return items, err
+}
+
 // FindByName 根据角色名称查询角色信息
 func (r *RoleRepository) FindByName(ctx context.Context, name string) (*model.Role, error) {
 	var role model.Role
@@ -143,4 +156,3 @@ func (r *RoleRepository) ReplacePermissions(ctx context.Context, roleID string, 
 		return nil
 	})
 }
-

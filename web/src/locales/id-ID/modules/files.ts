@@ -31,9 +31,12 @@ export const files = {
     deleteSuccess: 'File berhasil dihapus',
     deleteFailed: 'Penghapusan gagal',
     deleteConfirm: 'Apakah Anda yakin ingin menghapus file ini?',
+    exportFailed: 'Ekspor gagal',
   },
   actions: {
     delete: 'Hapus',
+    download: 'Unduh',
+    export: 'Ekspor',
   },
   size: {
     bytes: 'B',

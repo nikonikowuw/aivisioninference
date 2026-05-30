@@ -99,6 +99,14 @@ interface ApiResponse<T = unknown> {
   data: T;
 }
 
+function isApiResponseLike(value: unknown): value is ApiResponse<unknown> {
+  return typeof value === 'object' && value !== null && typeof (value as { code?: unknown }).code === 'number';
+}
+
+function isJsonResponse(response: Response): boolean {
+  return (response.headers.get('Content-Type') || '').toLowerCase().includes('json');
+}
+
 interface PaginatedData<T> {
   list: T[];
   total: number;
@@ -106,51 +114,70 @@ interface PaginatedData<T> {
   page_size: number;
 }
 
+function authHeaders(base?: HeadersInit): Headers {
+  const headers = new Headers(base);
+  if (!headers.has('Accept-Language')) {
+    headers.set('Accept-Language', i18n.language || 'en-US');
+  }
+  const token = getAccessToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return headers;
+}
+
+async function fetchApi(path: string, options: RequestInit = {}): Promise<Response> {
+  try {
+    return await fetch(`${API_BASE}${path}`, options);
+  } catch {
+    throw new ApiError(50001, i18n.t('common:message.networkError'), 0);
+  }
+}
+
+function redirectOnUnauthorized(response: Response): void {
+  if (response.status !== 401 || window.location.pathname.startsWith('/auth/')) return;
+  clearAccessToken();
+  window.location.href = '/auth/sign-in';
+  throw new ApiError(401, getErrorMessage(401), 401);
+}
+
+async function parseApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  const text = await response.text();
+  try {
+    const json = text ? JSON.parse(text) : { code: 0, message: '', data: null };
+    if (!isApiResponseLike(json)) throw new Error('invalid api response');
+    return json as ApiResponse<T>;
+  } catch {
+    throw new ApiError(50001, getErrorMessage(50001), response.status);
+  }
+}
+
+async function parseOptionalApiResponse(response: Response): Promise<ApiResponse<unknown> | null> {
+  if (!isJsonResponse(response)) return null;
+  const text = await response.text();
+  try {
+    const json = text ? JSON.parse(text) : null;
+    return isApiResponseLike(json) ? json : null;
+  } catch (err) {
+    console.warn('Failed to parse API error response', err);
+    return null;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = getAccessToken();
-  const headers = new Headers(options.headers);
+  const headers = authHeaders(options.headers);
 
-  if (!headers.has('Accept-Language')) {
-    headers.set('Accept-Language', i18n.language || 'en-US');
-  }
-
-  // Only set Content-Type to JSON if not explicitly provided and body is not FormData
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
+  const response = await fetchApi(path, { ...options, headers });
+  redirectOnUnauthorized(response);
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers,
-    });
-  } catch (err) {
-    // Network error or fetch failure
-    throw new ApiError(50001, i18n.t('common:message.networkError'), 0);
-  }
-
-  if (response.status === 401 && !window.location.pathname.startsWith('/auth/')) {
-    clearAccessToken();
-    window.location.href = '/auth/sign-in';
-    throw new ApiError(401, getErrorMessage(401), 401);
-  }
-
-  let json: ApiResponse<T>;
-  const text = await response.text();
-  try {
-    json = text ? JSON.parse(text) : { code: 0, message: '', data: null };
-  } catch {
-    throw new ApiError(50001, getErrorMessage(50001), response.status);
-  }
-
+  const json = await parseApiResponse<T>(response);
   if (json.code !== 0) {
     throw new ApiError(
       json.code,
@@ -167,6 +194,49 @@ function buildQuery(params: Record<string, string | number | undefined>): string
     ([, v]) => v !== undefined && v !== '',
   );
   return entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)]))}` : '';
+}
+
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return sanitizeDownloadFilename(decodeURIComponent(utf8Match[1]));
+  const asciiMatch = header.match(/filename="?([^";]+)"?/i);
+  if (asciiMatch?.[1]) return sanitizeDownloadFilename(asciiMatch[1]);
+  return null;
+}
+
+function sanitizeDownloadFilename(filename: string): string {
+  const cleaned = filename.replace(/[\\/\r\n]/g, '_').trim();
+  return cleaned || 'download.csv';
+}
+
+async function downloadFile(path: string, filename: string): Promise<void> {
+  const headers = authHeaders({ Accept: 'text/csv, application/octet-stream, application/json' });
+  const response = await fetchApi(path, { headers });
+  redirectOnUnauthorized(response);
+
+  const json = await parseOptionalApiResponse(response.clone());
+  if (json) {
+    const code = json.code === 0 ? 50001 : json.code;
+    throw new ApiError(code, resolveApiErrorMessage(code, json.message), response.status);
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, getServerErrorMessage(), response.status);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filenameFromContentDisposition(response.headers.get('Content-Disposition')) || filename;
+  document.body.appendChild(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }
 }
 
 // Auth
@@ -377,6 +447,20 @@ type CrudApi<T, ListParams extends CrudListParams = CrudListParams> = {
   delete: (id: string) => Promise<void>;
 };
 
+export interface BatchItemResult {
+  id: string;
+  success: boolean;
+  code?: number;
+  message?: string;
+}
+
+export interface BatchResult {
+  total: number;
+  success: number;
+  failed: number;
+  items: BatchItemResult[];
+}
+
 type StatusListParams = CrudListParams & { status?: number };
 type FileListParams = CrudListParams & { storage_type?: string; start_time?: string; end_time?: string };
 type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; resource_type?: string; result?: string; start_time?: string; end_time?: string };
@@ -407,6 +491,26 @@ function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: s
 
 export const usersApi = {
   ...crud<User, StatusListParams>('users'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/users/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  batchUpdateStatus: (ids: string[], status: number) =>
+    request<BatchResult>('/users/batch-status', {
+      method: 'PUT',
+      body: JSON.stringify({ ids, status }),
+    }),
+  exportCsv: (params?: StatusListParams) =>
+    downloadFile(`/users/export${buildQuery(params || {})}`, 'users.csv'),
+  importCsv: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<BatchResult>('/users/import', {
+      method: 'POST',
+      body: formData,
+    });
+  },
   resetPassword: (id: string, password: string) =>
     request(`/users/${id}/password`, {
       method: 'PUT',
@@ -423,6 +527,13 @@ export const usersApi = {
 };
 export const rolesApi = {
   ...crud<Role, StatusListParams>('roles'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/roles/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportCsv: (params?: StatusListParams) =>
+    downloadFile(`/roles/export${buildQuery(params || {})}`, 'roles.csv'),
   getPermissions: (id: string) => request<Permission[]>(`/roles/${id}/permissions`),
   assignPermissions: (id: string, permissionIds: string[]) =>
     request(`/roles/${id}/permissions`, {
@@ -449,6 +560,15 @@ export const permissionsApi = {
 };
 export const filesApi = {
   ...crud<FileItem, FileListParams>('files'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/files/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportCsv: (params?: FileListParams) =>
+    downloadFile(`/files/export${buildQuery(params || {})}`, 'files.csv'),
+  download: (id: string, filename: string) =>
+    downloadFile(`/files/${id}/download`, filename),
   upload: async (file: File, onProgress?: (pct: number) => void) => {
     const chunkSize = 5 * 1024 * 1024;
     const totalChunks = Math.ceil(file.size / chunkSize) || 1;
@@ -491,9 +611,18 @@ export const auditLogsApi = {
     const query = buildQuery(params || {});
     return request<PaginatedData<AuditLog>>(`/audit-logs${query}`);
   },
+  exportCsv: (params?: AuditLogListParams) =>
+    downloadFile(`/audit-logs/export${buildQuery(params || {})}`, 'audit-logs.csv'),
 };
 export const tasksApi = {
   ...crud<Task, TaskListParams>('tasks'),
+  batchCancel: (ids: string[]) =>
+    request<BatchResult>('/tasks/batch-cancel', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportCsv: (params?: TaskListParams) =>
+    downloadFile(`/tasks/export${buildQuery(params || {})}`, 'tasks.csv'),
   cancel: (id: string) => request<Task>(`/tasks/${id}/cancel`, { method: 'POST' }),
 };
 
@@ -545,6 +674,13 @@ export const feedbackApi = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     }),
+  batchUpdateStatus: (ids: string[], status: string) =>
+    request<BatchResult>('/feedback/batch-status', {
+      method: 'PUT',
+      body: JSON.stringify({ ids, status }),
+    }),
+  exportCsv: (params?: FeedbackListParams) =>
+    downloadFile(`/feedback/export${buildQuery(params || {})}`, 'feedback.csv'),
 };
 
 export const dashboardApi = {

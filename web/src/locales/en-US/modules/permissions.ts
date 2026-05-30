@@ -101,6 +101,11 @@ export const permissions = {
       update: 'Edit Task',
       delete: 'Delete Task',
     },
+    'brand-config': {
+      view: 'View brand configuration',
+      edit: 'Edit brand configuration',
+      'upload-logo': 'Upload brand logo',
+    },
     'mail-config': {
       view: 'View Mail Config',
       edit: 'Edit Mail Config',

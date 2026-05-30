@@ -37,6 +37,7 @@ func main() {
 		&model.File{},
 		&model.FileChunk{},
 		&model.Task{},
+		&model.BrandConfig{},
 		&model.MailConfig{},
 		&model.EmailToken{},
 		&model.InboundEmail{},
@@ -218,11 +219,6 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
 		return fmt.Errorf("count root user: %w", err)
 	}
 	if rootCount == 0 {
-		var roleCount int64
-		if err := db.Model(&model.Role{}).Where("name = ?", "admin").Count(&roleCount).Error; err != nil {
-			return fmt.Errorf("count admin role: %w", err)
-		}
-
 		if err := db.Transaction(func(tx *gorm.DB) error {
 			rootPwd, err := hash.Hash(seedCfg.RootPassword)
 			if err != nil {
@@ -232,11 +228,10 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
 			if err := tx.Create(&root).Error; err != nil {
 				return fmt.Errorf("create root: %w", err)
 			}
-			if roleCount > 0 {
-				var role model.Role
-				if err := tx.Where("name = ?", "admin").First(&role).Error; err != nil {
-					return fmt.Errorf("query admin role: %w", err)
-				}
+
+			// Find admin role if it already exists and assign to root
+			var role model.Role
+			if err := tx.Where("name = ?", "admin").First(&role).Error; err == nil {
 				if err := tx.Model(&root).Association("Roles").Append(&role); err != nil {
 					return fmt.Errorf("assign admin role to root: %w", err)
 				}
@@ -393,6 +388,11 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "task:create", Name: "创建任务", Path: "/api/v1/tasks", Method: "POST"},
 					{Code: "task:cancel", Name: "取消任务", Path: "/api/v1/tasks/*/cancel", Method: "POST"},
 					{Code: "task:view", Name: "查看任务", Path: "/api/v1/tasks/*", Method: "GET"},
+				}},
+				{Name: "品牌配置", Code: "brand-config", Path: "/brand-config", Icon: "MdPalette", Buttons: []buttonInfo{
+					{Code: "brand-config:view", Name: "查看品牌配置", Path: "/api/v1/system/brand-config", Method: "GET"},
+					{Code: "brand-config:edit", Name: "编辑品牌配置", Path: "/api/v1/system/brand-config", Method: "PUT"},
+					{Code: "brand-config:upload-logo", Name: "上传品牌Logo", Path: "/api/v1/system/brand-config/logo", Method: "POST"},
 				}},
 				{Name: "邮件配置", Code: "mail-config", Path: "/mail-config", Icon: "MdEmail", Buttons: []buttonInfo{
 					{Code: "mail-config:view", Name: "查看邮件配置", Path: "/api/v1/system/mail-config", Method: "GET"},

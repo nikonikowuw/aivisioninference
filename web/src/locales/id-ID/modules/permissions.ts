@@ -101,6 +101,11 @@ export const permissions = {
       update: 'Edit Tugas',
       delete: 'Hapus Tugas',
     },
+    'brand-config': {
+      view: 'Lihat konfigurasi merek',
+      edit: 'Edit konfigurasi merek',
+      'upload-logo': 'Unggah logo merek',
+    },
     'mail-config': {
       view: 'Lihat Konfigurasi Email',
       edit: 'Edit Konfigurasi Email',

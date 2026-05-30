@@ -101,6 +101,11 @@ export const permissions = {
       update: '编辑任务',
       delete: '删除任务',
     },
+    'brand-config': {
+      view: '查看品牌配置',
+      edit: '编辑品牌配置',
+      'upload-logo': '上传品牌Logo',
+    },
     'mail-config': {
       view: '查看邮件配置',
       edit: '编辑邮件配置',

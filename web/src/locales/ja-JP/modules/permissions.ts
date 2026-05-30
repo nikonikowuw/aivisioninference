@@ -101,6 +101,11 @@ export const permissions = {
       update: 'タスクを更新',
       delete: 'タスクを削除',
     },
+    'brand-config': {
+      view: 'ブランド設定を表示',
+      edit: 'ブランド設定を編集',
+      'upload-logo': 'ブランド Logo をアップロード',
+    },
     'mail-config': {
       view: 'メール設定を表示',
       edit: 'メール設定を編集',

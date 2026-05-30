@@ -1,11 +1,13 @@
-import { Flex, Text, useColorModeValue, Image } from '@chakra-ui/react';
+import { Flex, Image, Text, useColorModeValue } from '@chakra-ui/react';
+import { useBrand } from 'contexts/BrandContext';
 
 // Custom components
 import { HSeparator } from 'components/separator/Separator';
 
 export function SidebarBrand(props: { collapsed?: boolean }) {
 	const { collapsed } = props;
-	let brandColor = useColorModeValue('navy.700', 'white');
+	const { brand } = useBrand();
+	const brandColor = useColorModeValue('navy.700', 'white');
 
 	return (
 		<Flex alignItems='flex-start' flexDirection='column' w='100%'>
@@ -17,7 +19,7 @@ export function SidebarBrand(props: { collapsed?: boolean }) {
 				py='36px'
 				gap='12px'
 				transition='all 0.3s cubic-bezier(0.685, 0.0473, 0.346, 1)'>
-				<Image src='/favicon.ico' w='32px' h='32px' minW='32px' />
+				<Image src={brand.logo_url || '/favicon.ico'} fallbackSrc='/favicon.ico' w='32px' h='32px' minW='32px' objectFit='contain' />
 				{!collapsed && (
 					<Text
 						display='flex'
@@ -28,10 +30,7 @@ export function SidebarBrand(props: { collapsed?: boolean }) {
 						letterSpacing='-0.5px'
 						bgGradient='linear(to-r, navy.700, brand.500)'
 						bgClip='text'>
-						Niko
-						<Text as='span' color='brand.500' ml='1.5px'>
-							Admin
-						</Text>
+						{brand.system_name || 'Niko Admin'}
 					</Text>
 				)}
 			</Flex>

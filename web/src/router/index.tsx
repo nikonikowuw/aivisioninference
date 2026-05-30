@@ -20,6 +20,7 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'files': () => import('../views/admin/files'),
   'audit-logs': () => import('../views/admin/audit-logs'),
   'tasks': () => import('../views/admin/tasks'),
+  'brand-config': () => import('../views/admin/brand-config'),
   'mail-config': () => import('../views/admin/mail-config'),
   'feedback': () => import('../views/admin/feedback'),
 };

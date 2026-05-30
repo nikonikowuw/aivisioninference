@@ -62,7 +62,6 @@ export default function UserGrowthChart(props: { chartData?: DashboardUserStat[]
     },
     stroke: {
       curve: 'smooth',
-      type: 'line',
       width: 3
     },
     xaxis: {

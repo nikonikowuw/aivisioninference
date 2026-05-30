@@ -1,5 +1,5 @@
-import i18n from '../i18n';
 import SparkMD5 from 'spark-md5';
+import i18n from '../i18n';
 
 const SERVER_ERROR_FALLBACK = 'Server error';
 
@@ -290,6 +290,14 @@ export interface Task {
   updated_at: string;
 }
 
+export interface BrandConfig {
+  id: string;
+  system_name: string;
+  logo_url: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MailConfig {
   id: string;
   enabled: boolean;
@@ -465,7 +473,7 @@ export const filesApi = {
       const formData = new FormData();
       formData.append('chunk', chunk);
       formData.append('index', String(i));
-      
+
       await request(`/files/upload/${uploadId}/chunk`, {
         method: 'POST',
         body: formData,
@@ -487,6 +495,23 @@ export const auditLogsApi = {
 export const tasksApi = {
   ...crud<Task, TaskListParams>('tasks'),
   cancel: (id: string) => request<Task>(`/tasks/${id}/cancel`, { method: 'POST' }),
+};
+
+export const brandConfigApi = {
+  get: () => request<BrandConfig>('/system/brand-config'),
+  save: (data: Pick<BrandConfig, 'system_name' | 'logo_url'>) =>
+    request<BrandConfig>('/system/brand-config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  uploadLogo: async (file: File): Promise<{ logo_url: string }> => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return request<{ logo_url: string }>('/system/brand-config/logo', {
+      method: 'POST',
+      body: formData,
+    });
+  },
 };
 
 export const mailConfigApi = {

@@ -148,4 +148,3 @@ func (r *FeedbackRepository) List(ctx context.Context, req dto.FeedbackListReque
 	).Preload("User").Preload("InboundEmail").Find(&items).Error
 	return items, total, err
 }
-

@@ -101,6 +101,7 @@ func (r *Router) setupRoutes() {
 	fileRepo := repository.NewFileRepository(r.db)
 	taskRepo := repository.NewTaskRepository(r.db)
 	dashRepo := repository.NewDashboardRepository(r.db)
+	brandConfigRepo := repository.NewBrandConfigRepository(r.db)
 	mailConfigRepo := repository.NewMailConfigRepository(r.db)
 	emailTokenRepo := repository.NewEmailTokenRepository(r.db)
 	inboundEmailRepo := repository.NewInboundEmailRepository(r.db)
@@ -132,6 +133,7 @@ func (r *Router) setupRoutes() {
 	})
 	taskSvc := service.NewTaskService(taskRepo)
 	dashSvc := service.NewDashboardService(dashRepo)
+	brandSvc := service.NewBrandServiceWithStorage(brandConfigRepo, avatarStorage)
 	mailSvc := service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
 	emailVerificationSvc := service.NewEmailVerificationService(emailTokenRepo, userRepo, mailSvc)
 	feedbackSvc := service.NewFeedbackService(feedbackRepo, mailSvc)
@@ -220,6 +222,15 @@ func (r *Router) setupRoutes() {
 		tasks.GET("", middleware.RBAC(rbacCache, r.db), taskHandler.List)
 		tasks.GET("/:id", middleware.RBAC(rbacCache, r.db), taskHandler.GetByID)
 		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
+	}
+
+	// System brand configuration
+	brandHandler := handler.NewBrandHandler(brandSvc)
+	v1.GET("/system/brand-config", brandHandler.GetConfig)
+	brandConfig := authorized.Group("/system/brand-config")
+	{
+		brandConfig.PUT("", middleware.RBAC(rbacCache, r.db), brandHandler.SaveConfig)
+		brandConfig.POST("/logo", middleware.RBAC(rbacCache, r.db), brandHandler.UploadLogo)
 	}
 
 	// System mail configuration

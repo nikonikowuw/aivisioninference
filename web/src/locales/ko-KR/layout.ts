@@ -9,6 +9,9 @@ export const layout = {
     files: '파일',
     auditLogs: '감사 로그',
     tasks: '작업',
+    brandConfig: '브랜드 설정',
+    mailConfig: '메일 설정',
+    feedback: '피드백',
     noAccess: '접근 권한 없음',
   },
   navbar: {

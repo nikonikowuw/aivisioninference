@@ -83,6 +83,14 @@ export const adminRoutes: RouteConfig[] = [
         layout: '/admin',
       },
       {
+        id: 'brand-config',
+        path: '/brand-config',
+        i18nKey: 'layout.sidebar.brandConfig',
+        icon: 'MdPalette',
+        component: () => import('../views/admin/brand-config'),
+        layout: '/admin',
+      },
+      {
         id: 'mail-config',
         path: '/mail-config',
         i18nKey: 'layout.sidebar.mailConfig',

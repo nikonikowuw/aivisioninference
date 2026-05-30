@@ -9,6 +9,7 @@ export const layout = {
     files: '文件',
     auditLogs: '审计日志',
     tasks: '任务',
+    brandConfig: '品牌配置',
     mailConfig: '邮件配置',
     feedback: '用户反馈',
     noAccess: '暂无访问权限',

@@ -101,6 +101,11 @@ export const permissions = {
       update: '작업 수정',
       delete: '작업 삭제',
     },
+    'brand-config': {
+      view: '브랜드 설정 보기',
+      edit: '브랜드 설정 편집',
+      'upload-logo': '브랜드 Logo 업로드',
+    },
     'mail-config': {
       view: '메일 설정 조회',
       edit: '메일 설정 수정',

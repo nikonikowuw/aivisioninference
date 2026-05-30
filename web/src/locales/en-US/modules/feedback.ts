@@ -20,13 +20,27 @@ export const feedback = {
     actions: 'Actions',
   },
   actions: {
-    refresh: 'Update',
     batchUpdateStatus: 'Batch Update Status',
+    viewDetails: 'View Details',
+    copy: 'Copy',
+  },
+  detail: {
+    title: 'Feedback Details',
+    email: 'Contact Email',
+    updatedAt: 'Updated At',
+    noEmail: 'No Email Provided',
+    copySuccess: 'Email copied to clipboard',
+    copyFailed: 'Failed to copy email',
+  },
+  batch: {
+    selected: '{{count}} selected',
   },
   message: {
     updated: 'Feedback status updated',
     updateFailed: 'Failed to update feedback status',
+    batchDone: 'Batch update completed: {{success}} succeeded, {{failed}} failed',
     batchUpdateConfirm: 'Update the status of selected {{count}} feedback item(s)?',
+    operationFailed: 'Operation failed',
   },
 } as const;
 

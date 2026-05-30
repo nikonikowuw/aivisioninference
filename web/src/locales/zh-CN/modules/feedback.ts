@@ -20,13 +20,27 @@ export const feedback = {
     actions: '操作',
   },
   actions: {
-    refresh: '更新',
     batchUpdateStatus: '批量修改状态',
+    viewDetails: '查看详情',
+    copy: '复制',
+  },
+  detail: {
+    title: '反馈详情',
+    email: '联系人邮箱',
+    updatedAt: '更新时间',
+    noEmail: '未提供邮箱',
+    copySuccess: '邮箱已复制',
+    copyFailed: '复制邮箱失败',
+  },
+  batch: {
+    selected: '已选择 {{count}} 条',
   },
   message: {
     updated: '反馈状态已更新',
     updateFailed: '更新反馈状态失败',
+    batchDone: '批量更新完成：成功 {{success}} 条，失败 {{failed}} 条',
     batchUpdateConfirm: '确定修改选中的 {{count}} 条反馈的状态？',
+    operationFailed: '操作失败',
   },
 } as const;
 

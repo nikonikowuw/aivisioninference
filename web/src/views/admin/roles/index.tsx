@@ -1,55 +1,57 @@
+import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import {
+  Badge,
   Box,
   Button,
+  Center,
+  Checkbox,
   Flex,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Text,
-  useColorModeValue,
-  IconButton,
-  useToast,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
   FormControl,
   FormHelperText,
   FormLabel,
-  Input,
-  Textarea,
-  useDisclosure,
   HStack,
-  Spinner,
-  Center,
-  Badge,
-  Checkbox,
-  Switch,
+  IconButton,
+  Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  NumberDecrementStepper,
+  NumberIncrementStepper,
   NumberInput,
   NumberInputField,
   NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
+  Spinner,
+  Switch,
+  Table,
+  Tbody,
+  Td,
+  Text,
+  Textarea,
+  Th,
+  Thead,
+  Tr,
+  useColorModeValue,
+  useDisclosure,
+  useToast,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
-import { useTranslation } from 'react-i18next';
-import { useEffect, useState, useCallback } from 'react';
-import { rolesApi, permissionsApi, type Role, type Permission } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
-import { SearchBar } from 'components/search-bar/SearchBar';
 import PermissionTree from 'components/permission-tree/PermissionTree';
-import { usePagination } from 'hooks/usePagination';
+import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
+import { usePagination } from 'hooks/usePagination';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { permissionsApi, rolesApi, type Permission, type Role } from 'services/api';
 import { parseOptionalNumber } from 'utils/convert';
 
-
+const defaultRoleForm = { name: '', description: '', level: 100, status: 1 };
+const roleLevelMin = 1;
+const roleLevelMax = 99999;
 
 export default function Roles() {
   const { t } = useTranslation('modules/roles');
@@ -58,6 +60,9 @@ export default function Roles() {
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
+  const modalBorderColor = useColorModeValue('gray.100', 'whiteAlpha.100');
+  const inputBorderColor = useColorModeValue('gray.200', 'whiteAlpha.200');
+  const statusControlBg = useColorModeValue('gray.50', 'whiteAlpha.50');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPermOpen, onOpen: onPermOpen, onClose: onPermClose } = useDisclosure();
@@ -76,10 +81,8 @@ export default function Roles() {
   const { list: roles, total, page, pageSize, initialLoading, pageLoading, load: loadRoles, changePage, changePageSize } = usePagination<Role>(fetchRoles);
 
   const [editing, setEditing] = useState<Role | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', level: 100, status: 1 });
+  const [form, setForm] = useState(defaultRoleForm);
   const [isSaving, setIsSaving] = useState(false);
-  const roleLevelMin = 1;
-  const roleLevelMax = 99999;
   const [permTree, setPermTree] = useState<Permission[]>([]);
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
   const [permRoleId, setPermRoleId] = useState<string>('');
@@ -95,8 +98,9 @@ export default function Roles() {
     loadRoles({ page: 1 });
   }, [searchTrigger, loadRoles]);
 
-  const pageRoleIds = roles.map((r) => r.id);
-  const selectedOnPage = pageRoleIds.filter((id) => selectedIds.includes(id));
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const pageRoleIds = useMemo(() => roles.map((role) => role.id), [roles]);
+  const selectedOnPage = pageRoleIds.filter((id) => selectedIdSet.has(id));
   const isAllPageSelected = pageRoleIds.length > 0 && selectedOnPage.length === pageRoleIds.length;
   const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
 
@@ -135,13 +139,18 @@ export default function Roles() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', level: 100, status: 1 });
+    setForm(defaultRoleForm);
     onOpen();
   };
 
   const openEdit = (role: Role) => {
     setEditing(role);
-    setForm({ name: role.name, description: role.description, level: role.level ?? 100, status: role.status ?? 1 });
+    setForm({
+      name: role.name,
+      description: role.description,
+      level: role.level ?? defaultRoleForm.level,
+      status: role.status ?? defaultRoleForm.status,
+    });
     onOpen();
   };
 
@@ -185,6 +194,16 @@ export default function Roles() {
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
+    }
+  };
+
+  const changeRoleStatus = async (role: Role, status: number) => {
+    try {
+      await rolesApi.update(role.id, { ...role, status });
+      toast({ title: t('message.updateSuccess'), status: 'success' });
+      loadRoles();
+    } catch (err) {
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
     }
   };
 
@@ -285,7 +304,7 @@ export default function Roles() {
               <Tr key={r.id}>
                 <Td>
                   <Checkbox
-                    isChecked={selectedIds.includes(r.id)}
+                    isChecked={selectedIdSet.has(r.id)}
                     onChange={() => toggleRowSelection(r.id)}
                   />
                 </Td>
@@ -297,16 +316,7 @@ export default function Roles() {
                   <Switch
                     colorScheme="green"
                     isChecked={r.status === 1}
-                    onChange={async (e) => {
-                      const nextStatus = e.target.checked ? 1 : 0;
-                      try {
-                        await rolesApi.update(r.id, { ...r, status: nextStatus });
-                        toast({ title: t('message.updateSuccess'), status: 'success' });
-                        loadRoles();
-                      } catch (err) {
-                        toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
-                      }
-                    }}
+                    onChange={(e) => changeRoleStatus(r, e.target.checked ? 1 : 0)}
                   />
                 </Td>
                 <Td>{r.permissions?.length ?? 0}</Td>
@@ -355,7 +365,7 @@ export default function Roles() {
           onSubmit={(e) => { e.preventDefault(); handleSave(); }}
           borderRadius="24px"
           border="1px solid"
-          borderColor={useColorModeValue('gray.100', 'whiteAlpha.100')}
+          borderColor={modalBorderColor}
           boxShadow="2xl"
           overflow="hidden"
         >
@@ -383,7 +393,7 @@ export default function Roles() {
                 h="46px"
                 fontSize="sm"
                 variant="outline"
-                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                borderColor={inputBorderColor}
                 _focus={{
                   borderColor: 'brand.500',
                   boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
@@ -404,7 +414,7 @@ export default function Roles() {
                 minH="90px"
                 py="12px"
                 variant="outline"
-                borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                borderColor={inputBorderColor}
                 _focus={{
                   borderColor: 'brand.500',
                   boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
@@ -419,7 +429,8 @@ export default function Roles() {
               <NumberInput
                 min={roleLevelMin}
                 max={roleLevelMax}
-                value={Number.isFinite(form.level) ? form.level : 100}
+                value={Number.isFinite(form.level) ? form.level : defaultRoleForm.level}
+                variant="outline"
                 onChange={(valueStr, valueNum) => {
                   if (valueStr === '') {
                     setForm({ ...form, level: Number.NaN });
@@ -433,8 +444,7 @@ export default function Roles() {
                   borderRadius="16px"
                   h="46px"
                   fontSize="sm"
-                  variant="outline"
-                  borderColor={useColorModeValue('gray.200', 'whiteAlpha.200')}
+                  borderColor={inputBorderColor}
                   _focus={{
                     borderColor: 'brand.500',
                     boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)',
@@ -459,7 +469,7 @@ export default function Roles() {
               border="1px solid"
               borderColor={borderColor}
               borderRadius="16px"
-              bg={useColorModeValue('gray.50', 'whiteAlpha.50')}
+              bg={statusControlBg}
             >
               <Box>
                 <FormLabel mb="0" fontSize="sm" fontWeight="600" color={textColor}>

@@ -3,11 +3,20 @@ package service
 
 import (
 	"context"
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"io"
+	stdmail "net/mail"
+	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/csvx"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/hash"
 	"github.com/niko-admin/niko-admin/internal/repository"
@@ -37,6 +46,16 @@ func (s *UserService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 	}
 	if count > 0 {
 		return nil, apperrors.New(apperrors.ErrBadRequest, "用户名已存在")
+	}
+	if req.Email != "" {
+		count, err := s.userRepo.CountByEmail(ctx, req.Email, "")
+		if err != nil {
+			zap.L().Error("check email uniqueness failed", zap.Error(err))
+			return nil, apperrors.New(apperrors.ErrInternal, "")
+		}
+		if count > 0 {
+			return nil, apperrors.New(apperrors.ErrEmailTaken, "")
+		}
 	}
 
 	hashedPassword, err := hash.Hash(req.Password)
@@ -138,6 +157,202 @@ func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRo
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 	return nil
+}
+
+// BatchDelete 批量软删除用户，并逐条返回处理结果。
+func (s *UserService) BatchDelete(ctx context.Context, ids []string, currentUserID string, isRoot bool, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		return s.Delete(ctx, id, currentUserID, isRoot)
+	})
+}
+
+// BatchUpdateStatus 批量更新用户状态，并保留单条更新的权限校验和自禁用保护。
+func (s *UserService) BatchUpdateStatus(ctx context.Context, ids []string, status int, currentUserID string, isRoot bool, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		if id == currentUserID && status == 0 {
+			return apperrors.New(apperrors.ErrCannotDisableSelf, "")
+		}
+		return s.Update(ctx, id, dto.UpdateUserRequest{Status: &status}, currentUserID, isRoot)
+	})
+}
+
+// ExportCSV 导出当前筛选条件下的用户列表 CSV。
+func (s *UserService) ExportCSV(ctx context.Context, req dto.UserListRequest) ([]byte, error) {
+	items, err := s.userRepo.ListForExport(ctx, req, maxCSVExportRows)
+	if err != nil {
+		zap.L().Error("export users failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{
+			item.ID,
+			item.Username,
+			item.DisplayName,
+			item.Email,
+			strconv.Itoa(item.Status),
+			userRoleNames(item),
+			item.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	data, err := csvx.Build([]string{"ID", "Username", "DisplayName", "Email", "Status", "Roles", "CreatedAt"}, rows)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	return data, nil
+}
+
+// ImportCSV 从 CSV 文件批量导入用户，列顺序为 username,email,display_name,password,status。
+func (s *UserService) ImportCSV(ctx context.Context, reader io.Reader, lang string) (dto.BatchResult, error) {
+	csvReader := csv.NewReader(reader)
+	csvReader.FieldsPerRecord = -1
+	header, err := csvReader.Read()
+	if err != nil {
+		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, localizedDefaultMessage(apperrors.ErrCSVInvalidContent, lang))
+	}
+	if !validUserImportHeader(header) {
+		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVHeaderInvalid, localizedDefaultMessage(apperrors.ErrCSVHeaderInvalid, lang))
+	}
+
+	seenUsernames := make(map[string]int)
+	result := dto.BatchResult{Items: make([]dto.BatchItemResult, 0)}
+	for rowNo := 2; ; rowNo++ {
+		row, err := csvReader.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, localizedDefaultMessage(apperrors.ErrCSVInvalidContent, lang))
+		}
+		if isEmptyCSVRow(row) {
+			continue
+		}
+		if result.Total >= maxCSVImportRows {
+			return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVRowLimitExceeded, localizedDefaultMessage(apperrors.ErrCSVRowLimitExceeded, lang))
+		}
+
+		item := dto.BatchItemResult{ID: strconv.Itoa(rowNo)}
+		result.Total++
+		if len(row) < 4 {
+			appendImportFailure(&result, item, rowNo, apperrors.ErrCSVColumnRequired, lang)
+			continue
+		}
+
+		username := strings.TrimSpace(row[0])
+		if firstRow, ok := seenUsernames[strings.ToLower(username)]; ok {
+			appendImportFailureMessage(&result, item, rowNo, apperrors.ErrCSVDuplicateUsername, fmt.Sprintf("%s (%d)", localizedDefaultMessage(apperrors.ErrCSVDuplicateUsername, lang), firstRow), lang)
+			continue
+		}
+		seenUsernames[strings.ToLower(username)] = rowNo
+
+		status, err := importUserStatus(row)
+		if err != nil {
+			appendImportFailure(&result, item, rowNo, apperrors.ErrCSVStatusInvalid, lang)
+			continue
+		}
+		req := dto.CreateUserRequest{
+			Username:    username,
+			Email:       strings.TrimSpace(row[1]),
+			DisplayName: strings.TrimSpace(row[2]),
+			Password:    strings.TrimSpace(row[3]),
+			Status:      status,
+		}
+		if code := validateImportUserRequest(req); code != 0 {
+			appendImportFailure(&result, item, rowNo, code, lang)
+			continue
+		}
+		if _, err := s.Create(ctx, req); err != nil {
+			code, message := batchErrorMessage(err, lang)
+			appendImportFailureMessage(&result, item, rowNo, code, message, lang)
+			continue
+		}
+		item.Success = true
+		result.Success++
+		result.Items = append(result.Items, item)
+	}
+
+	if result.Total == 0 {
+		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, localizedDefaultMessage(apperrors.ErrCSVInvalidContent, lang))
+	}
+	return result, nil
+}
+
+func validUserImportHeader(header []string) bool {
+	expected := []string{"username", "email", "display_name", "password"}
+	if len(header) < len(expected) {
+		return false
+	}
+	for i, name := range expected {
+		if normalizeCSVHeader(header[i]) != name {
+			return false
+		}
+	}
+	if len(header) >= 5 && normalizeCSVHeader(header[4]) != "status" {
+		return false
+	}
+	return true
+}
+
+func normalizeCSVHeader(value string) string {
+	return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(value, "\ufeff")))
+}
+
+func isEmptyCSVRow(row []string) bool {
+	for _, value := range row {
+		if strings.TrimSpace(value) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func importUserStatus(row []string) (int, error) {
+	if len(row) <= 4 || strings.TrimSpace(row[4]) == "" {
+		return 1, nil
+	}
+	status, err := strconv.Atoi(strings.TrimSpace(row[4]))
+	if err != nil || (status != 0 && status != 1) {
+		return 0, errors.New("invalid status")
+	}
+	return status, nil
+}
+
+func validateImportUserRequest(req dto.CreateUserRequest) int {
+	if utf8.RuneCountInString(req.Username) < 2 || utf8.RuneCountInString(req.Username) > 32 {
+		return apperrors.ErrBadRequest
+	}
+	if req.Email != "" {
+		if _, err := stdmail.ParseAddress(req.Email); err != nil || utf8.RuneCountInString(req.Email) > 255 {
+			return apperrors.ErrCSVInvalidEmail
+		}
+	}
+	if utf8.RuneCountInString(req.DisplayName) > 64 {
+		return apperrors.ErrBadRequest
+	}
+	if len(req.Password) < 6 || len(req.Password) > 72 {
+		return apperrors.ErrCSVWeakPassword
+	}
+	return 0
+}
+
+func appendImportFailure(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code int, lang string) {
+	appendImportFailureMessage(result, item, rowNo, code, localizedDefaultMessage(code, lang), lang)
+}
+
+func appendImportFailureMessage(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code int, message string, lang string) {
+	item.Code = code
+	item.Message = csvRowErrorMessage(rowNo, message, lang)
+	result.Failed++
+	result.Items = append(result.Items, item)
+}
+
+func userRoleNames(user model.User) string {
+	names := make([]string, 0, len(user.Roles))
+	for _, role := range user.Roles {
+		names = append(names, role.Name)
+	}
+	return strings.Join(names, ",")
 }
 
 // ResetPassword 允许管理员直接重置指定用户的密码（不需要旧密码），执行层级安全检查。

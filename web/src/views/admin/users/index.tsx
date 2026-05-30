@@ -36,10 +36,10 @@ import {
   Stack,
   Switch,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
+import { AddIcon, DeleteIcon, DownloadIcon, EditIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState, useCallback } from 'react';
-import { usersApi, rolesApi, type User, type Role } from 'services/api';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { usersApi, rolesApi, type User, type Role, type BatchItemResult } from 'services/api';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import AvatarUploader from 'components/avatar-upload/AvatarUploader';
 import Pagination from 'components/pagination/Pagination';
@@ -48,6 +48,16 @@ import { useAuth } from 'contexts/AuthContext';
 import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
 import { parseOptionalNumber } from 'utils/convert';
+
+const MAX_CSV_IMPORT_SIZE = 10 * 1024 * 1024;
+const CSV_MIME_TYPES = new Set(['', 'text/csv', 'application/csv', 'application/vnd.ms-excel']);
+
+function validateCsvFile(file: File): string | null {
+  const lowerName = file.name.toLowerCase();
+  if (!lowerName.endsWith('.csv') || !CSV_MIME_TYPES.has(file.type)) return 'invalidCsvFile';
+  if (file.size > MAX_CSV_IMPORT_SIZE) return 'csvFileTooLarge';
+  return null;
+}
 
 export default function Users() {
   const { user: currentUser, refreshUser } = useAuth();
@@ -77,6 +87,13 @@ export default function Users() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<User | null>(null);
   const [isToggling, setIsToggling] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchAction, setBatchAction] = useState<'delete' | 'enable' | 'disable' | null>(null);
+  const [isBatching, setIsBatching] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importFailures, setImportFailures] = useState<BatchItemResult[]>([]);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadUsers({ page: 1 }).catch(() => {
@@ -172,6 +189,89 @@ export default function Users() {
     setToggleTarget(user);
   };
 
+  const pageUserIds = users.map((user) => user.id);
+  const selectedOnPage = pageUserIds.filter((id) => selectedIds.includes(id));
+  const isAllPageSelected = pageUserIds.length > 0 && selectedOnPage.length === pageUserIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
+
+  const togglePageSelection = () => {
+    if (isAllPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageUserIds.includes(id)));
+      return;
+    }
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageUserIds])));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    ));
+  };
+
+  const handleBatchConfirm = async () => {
+    if (!batchAction || selectedIds.length === 0) return;
+    setIsBatching(true);
+    try {
+      const result = batchAction === 'delete'
+        ? await usersApi.batchDelete(selectedIds)
+        : await usersApi.batchUpdateStatus(selectedIds, batchAction === 'enable' ? 1 : 0);
+      toast({
+        title: t('message.batchDone', { success: result.success, failed: result.failed }),
+        status: result.failed > 0 ? 'warning' : 'success',
+      });
+      setSelectedIds([]);
+      await loadUsers();
+    } catch (err) {
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsBatching(false);
+      setBatchAction(null);
+    }
+  };
+
+  const handleImport = async (file?: File) => {
+    if (!file) return;
+    const validationKey = validateCsvFile(file);
+    if (validationKey) {
+      toast({ title: t(`message.${validationKey}`), status: 'error' });
+      if (importInputRef.current) importInputRef.current.value = '';
+      return;
+    }
+
+    setIsImporting(true);
+    setImportFailures([]);
+    try {
+      const result = await usersApi.importCsv(file);
+      const failures = result.items.filter((item) => !item.success);
+      setImportFailures(failures);
+      toast({
+        title: t('message.batchDone', { success: result.success, failed: result.failed }),
+        description: failures.slice(0, 3).map((item) => item.message).filter(Boolean).join('\n'),
+        status: result.failed > 0 ? 'warning' : 'success',
+      });
+      await loadUsers({ page: 1 });
+    } catch (err) {
+      toast({ title: t('message.importFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await usersApi.exportCsv({
+        keyword: filters.keyword,
+        status: parseOptionalNumber(filters.status),
+      });
+    } catch (err) {
+      toast({ title: t('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
@@ -180,7 +280,18 @@ export default function Users() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
-        <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
+        <HStack spacing={2}>
+          <Input
+            ref={importInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            display="none"
+            onChange={(e) => handleImport(e.target.files?.[0])}
+          />
+          <Button variant="outline" onClick={() => importInputRef.current?.click()} isLoading={isImporting}>{tCommon('button.import')}</Button>
+          <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
+          <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
+        </HStack>
       </Flex>
       <SearchBar
         filters={filters}
@@ -198,10 +309,37 @@ export default function Users() {
           },
         ]}
       />
+      {importFailures.length > 0 && (
+        <Box mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px">
+          <Text fontSize="sm" fontWeight="bold" color={textColor} mb={2}>{t('message.importPartialFailed')}</Text>
+          {importFailures.slice(0, 5).map((item) => (
+            <Text key={item.id} fontSize="sm" color="red.500">{item.message}</Text>
+          ))}
+        </Box>
+      )}
+      {selectedIds.length > 0 && (
+        <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
+          <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
+          <HStack spacing={2}>
+            <Button size="sm" onClick={() => setBatchAction('enable')}>{t('actions.enable')}</Button>
+            <Button size="sm" onClick={() => setBatchAction('disable')}>{t('actions.disable')}</Button>
+            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.delete')}</Button>
+          </HStack>
+        </Flex>
+      )}
+
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
         <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
+              <Th w="48px">
+                <Checkbox
+                  isChecked={isAllPageSelected}
+                  isIndeterminate={isPageSelectionIndeterminate}
+                  onChange={togglePageSelection}
+                  aria-label={t('batch.selectPage')}
+                />
+              </Th>
               <Th>{t('table.columns.id')}</Th>
               <Th>{t('table.columns.username')}</Th>
               <Th>{t('table.columns.displayName')}</Th>
@@ -214,6 +352,13 @@ export default function Users() {
           <Tbody>
             {users.map((user) => (
               <Tr key={user.id}>
+                <Td>
+                  <Checkbox
+                    isChecked={selectedIds.includes(user.id)}
+                    onChange={() => toggleRowSelection(user.id)}
+                    aria-label={t('batch.selectRow', { username: user.username })}
+                  />
+                </Td>
                 <Td>{user.id}</Td>
                 <Td fontWeight="600">{user.username}</Td>
                 <Td>{user.display_name}</Td>
@@ -267,6 +412,14 @@ export default function Users() {
         title={toggleTarget?.status === 1 ? t('actions.disable') : t('actions.enable')}
         message={toggleTarget?.status === 1 ? t('message.disableConfirm') : t('message.enableConfirm')}
         isLoading={isToggling}
+      />
+      <ConfirmDialog
+        isOpen={batchAction !== null}
+        onClose={() => setBatchAction(null)}
+        onConfirm={handleBatchConfirm}
+        title={batchAction ? t(`batch.${batchAction}`) : ''}
+        message={batchAction ? t(`message.batch${batchAction.charAt(0).toUpperCase()}${batchAction.slice(1)}Confirm`, { count: selectedIds.length }) : ''}
+        isLoading={isBatching}
       />
 
       <Modal isOpen={isOpen} onClose={onClose} size="lg">

@@ -2,14 +2,17 @@
 package handler
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	"github.com/niko-admin/niko-admin/internal/middleware"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
+
+const maxCSVImportSize = 10 * 1024 * 1024
 
 // UserHandler 处理用户管理相关的 HTTP 请求（增删改查、密码重置及头像上传）。
 type UserHandler struct {
@@ -120,11 +123,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// 从 Context 提取操作人 ID 和 Root 超管权限
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
-	isRoot, _ := isRootVal.(bool)
+	uid, isRoot := currentUserContext(c)
 
 	// 安全校验：禁止用户将自身的账号状态设置为禁用
 	if id == uid && req.Status != nil && *req.Status == 0 {
@@ -153,12 +152,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 // @Security     BearerAuth
 func (h *UserHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-
-	// 提取操作人身份用于越权判定
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
-	isRoot, _ := isRootVal.(bool)
+	uid, isRoot := currentUserContext(c)
 
 	// 执行软删除
 	if err := h.svc.Delete(c.Request.Context(), id, uid, isRoot); err != nil {
@@ -167,6 +161,106 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	}
 
 	response.OK(c, nil)
+}
+
+// BatchDelete 批量软删除用户，逐条复用单条删除的层级与自删除保护。
+//
+// @Summary      批量删除用户
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.BatchIDsRequest  true  "用户 ID 列表"
+// @Success      200   {object}  dto.Response{data=dto.BatchResult}
+// @Router       /users/batch-delete [post]
+// @Security     BearerAuth
+func (h *UserHandler) BatchDelete(c *gin.Context) {
+	var req dto.BatchIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	uid, isRoot := currentUserContext(c)
+	response.OK(c, h.svc.BatchDelete(c.Request.Context(), req.IDs, uid, isRoot, currentLang(c)))
+}
+
+// BatchUpdateStatus 批量启用或禁用用户，保留单条更新的权限校验。
+//
+// @Summary      批量更新用户状态
+// @Tags         用户管理
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.BatchUpdateUserStatusRequest  true  "用户状态"
+// @Success      200   {object}  dto.Response{data=dto.BatchResult}
+// @Router       /users/batch-status [put]
+// @Security     BearerAuth
+func (h *UserHandler) BatchUpdateStatus(c *gin.Context) {
+	var req dto.BatchUpdateUserStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	uid, isRoot := currentUserContext(c)
+	response.OK(c, h.svc.BatchUpdateStatus(c.Request.Context(), req.IDs, req.Status, uid, isRoot, currentLang(c)))
+}
+
+// ExportCSV 按当前筛选条件导出用户 CSV。
+//
+// @Summary      导出用户 CSV
+// @Tags         用户管理
+// @Produce      text/csv
+// @Success      200  {file}  file
+// @Router       /users/export [get]
+// @Security     BearerAuth
+func (h *UserHandler) ExportCSV(c *gin.Context) {
+	var req dto.UserListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	data, err := h.svc.ExportCSV(c.Request.Context(), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	writeCSV(c, "users.csv", data)
+}
+
+// ImportCSV 从 CSV 文件批量导入用户。
+//
+// @Summary      导入用户 CSV
+// @Tags         用户管理
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        file  formData  file  true  "CSV 文件"
+// @Success      200   {object}  dto.Response{data=dto.BatchResult}
+// @Router       /users/import [post]
+// @Security     BearerAuth
+func (h *UserHandler) ImportCSV(c *gin.Context) {
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, ""))
+		return
+	}
+	if fileHeader.Size > maxCSVImportSize {
+		attachError(c, apperrors.New(apperrors.ErrFileTooLarge, ""))
+		return
+	}
+	if !strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".csv") {
+		attachError(c, apperrors.New(apperrors.ErrFileInvalidType, ""))
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		attachError(c, apperrors.New(apperrors.ErrBadRequest, ""))
+		return
+	}
+	defer file.Close()
+	result, err := h.svc.ImportCSV(c.Request.Context(), file, currentLang(c))
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, result)
 }
 
 // ResetPassword 管理员强制重置某个用户的密码（无需提供旧密码），执行层级防越权校验。
@@ -192,11 +286,7 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	// 提取操作人身份用于越权判定
-	currentUserID, _ := c.Get(middleware.ContextKeyUserID)
-	uid, _ := currentUserID.(string)
-	isRootVal, _ := c.Get(middleware.ContextKeyIsRoot)
-	isRoot, _ := isRootVal.(bool)
+	uid, isRoot := currentUserContext(c)
 
 	// 执行密码重置
 	if err := h.svc.ResetPassword(c.Request.Context(), id, req.Password, uid, isRoot); err != nil {

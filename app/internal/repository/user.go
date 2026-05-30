@@ -109,6 +109,19 @@ func (r *UserRepository) List(ctx context.Context, req dto.UserListRequest) ([]m
 	return items, total, err
 }
 
+// ListForExport 返回符合筛选条件的用户列表，用于导出，限制最大导出数量避免单次请求过大。
+func (r *UserRepository) ListForExport(ctx context.Context, req dto.UserListRequest, limit int) ([]model.User, error) {
+	var items []model.User
+	err := r.db.WithContext(ctx).
+		Model(&model.User{}).
+		Scopes(req.FilterScopes()...).
+		Scopes(scopes.OrderBy(req.Sort, req.Order, model.User{}.SortableFields()...), scopes.OrderByDefault()).
+		Limit(limit).
+		Preload("Roles").
+		Find(&items).Error
+	return items, err
+}
+
 // FindByUsername 根据用户名查询用户，并预加载其关联的角色信息
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*model.User, error) {
 	var user model.User

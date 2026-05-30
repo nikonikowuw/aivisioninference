@@ -31,6 +31,12 @@ type UserListRequest struct {
 	Status  *int   `form:"status"`
 }
 
+// BatchUpdateUserStatusRequest is the request body for updating multiple users' status.
+type BatchUpdateUserStatusRequest struct {
+	BatchIDsRequest
+	Status int `json:"status" binding:"oneof=0 1"`
+}
+
 // FilterScopes 返回当前请求对应的 GORM 查询范围函数列表，支持关键词和状态过滤。
 func (r *UserListRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope

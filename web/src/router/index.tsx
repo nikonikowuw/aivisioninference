@@ -7,10 +7,40 @@ import { Suspense, lazy, ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Route } from 'react-router-dom';
 import { Icon } from '@chakra-ui/react';
-import * as Icons from 'react-icons/md';
+import {
+  MdHome,
+  MdPeople,
+  MdPerson,
+  MdSecurity,
+  MdVpnKey,
+  MdSettings,
+  MdFolder,
+  MdHistory,
+  MdAssignment,
+  MdPalette,
+  MdEmail,
+  MdFeedback,
+  MdHelpOutline,
+} from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
 import type { Menu } from '../services/api';
+
+const IconsMap: Record<string, ComponentType<any>> = {
+  MdHome,
+  MdPeople,
+  MdPerson,
+  MdSecurity,
+  MdVpnKey,
+  MdSettings,
+  MdFolder,
+  MdHistory,
+  MdAssignment,
+  MdPalette,
+  MdEmail,
+  MdFeedback,
+  MdHelpOutline,
+};
 
 // 菜单 code 到组件的映射
 const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<any> }>> = {
@@ -75,9 +105,7 @@ function createLazyComponent(
 export function getIconComponent(iconName: string): React.ReactNode {
   if (!iconName) return null;
   
-  const IconComponent = Icons[iconName as keyof typeof Icons];
-  if (!IconComponent) return null;
-
+  const IconComponent = IconsMap[iconName] || IconsMap.MdHelpOutline;
   return <Icon as={IconComponent} width="20px" height="20px" color="inherit" />;
 }
 

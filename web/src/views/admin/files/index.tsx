@@ -17,6 +17,7 @@ import {
   Spinner,
   Progress,
   Badge,
+  Checkbox,
 } from '@chakra-ui/react';
 import { DeleteIcon, DownloadIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +50,9 @@ export default function Files() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchAction, setBatchAction] = useState<'delete' | null>(null);
+  const [isBatching, setIsBatching] = useState(false);
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
@@ -68,6 +72,44 @@ export default function Files() {
   useEffect(() => {
     load({ page: 1 });
   }, [searchTrigger, load]);
+
+  const pageFileIds = files.map((f) => f.id);
+  const selectedOnPage = pageFileIds.filter((id) => selectedIds.includes(id));
+  const isAllPageSelected = pageFileIds.length > 0 && selectedOnPage.length === pageFileIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
+
+  const togglePageSelection = () => {
+    if (isAllPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageFileIds.includes(id)));
+      return;
+    }
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageFileIds])));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    ));
+  };
+
+  const handleBatchConfirm = async () => {
+    if (!batchAction || selectedIds.length === 0) return;
+    setIsBatching(true);
+    try {
+      const result = await filesApi.batchDelete(selectedIds);
+      toast({
+        title: t('message.batchDone', { success: result.success, failed: result.failed }),
+        status: result.failed > 0 ? 'warning' : 'success',
+      });
+      setSelectedIds([]);
+      await load();
+    } catch (err) {
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsBatching(false);
+      setBatchAction(null);
+    }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -158,10 +200,25 @@ export default function Files() {
         ]}
         dateRange
       />
+      {selectedIds.length > 0 && (
+        <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
+          <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
+          <HStack spacing={2}>
+            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.delete')}</Button>
+          </HStack>
+        </Flex>
+      )}
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
         <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
+              <Th w="48px">
+                <Checkbox
+                  isChecked={isAllPageSelected}
+                  isIndeterminate={isPageSelectionIndeterminate}
+                  onChange={togglePageSelection}
+                />
+              </Th>
               <Th>{t('table.columns.id')}</Th>
               <Th>{t('table.columns.name')}</Th>
               <Th>{t('table.columns.type')}</Th>
@@ -173,6 +230,12 @@ export default function Files() {
           <Tbody>
             {files.map((f) => (
               <Tr key={f.id}>
+                <Td>
+                  <Checkbox
+                    isChecked={selectedIds.includes(f.id)}
+                    onChange={() => toggleRowSelection(f.id)}
+                  />
+                </Td>
                 <Td>{f.id}</Td>
                 <Td fontWeight="600">{f.original_name}</Td>
                 <Td><Badge>{f.mime_type}</Badge></Td>
@@ -204,6 +267,14 @@ export default function Files() {
         title={t('actions.delete')}
         message={t('message.deleteConfirm')}
         isLoading={isDeleting}
+      />
+      <ConfirmDialog
+        isOpen={batchAction !== null}
+        onClose={() => setBatchAction(null)}
+        onConfirm={handleBatchConfirm}
+        title={t('actions.delete')}
+        message={t('message.batchDeleteConfirm', { count: selectedIds.length })}
+        isLoading={isBatching}
       />
     </Box>
   );

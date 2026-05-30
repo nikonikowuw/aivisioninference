@@ -29,6 +29,7 @@ import {
   Spinner,
   Center,
   Badge,
+  Checkbox,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, DownloadIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -81,9 +82,51 @@ export default function Roles() {
   const [isAssigningPerms, setIsAssigningPerms] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchAction, setBatchAction] = useState<'delete' | null>(null);
+  const [isBatching, setIsBatching] = useState(false);
+
   useEffect(() => {
     loadRoles({ page: 1 });
   }, [searchTrigger, loadRoles]);
+
+  const pageRoleIds = roles.map((r) => r.id);
+  const selectedOnPage = pageRoleIds.filter((id) => selectedIds.includes(id));
+  const isAllPageSelected = pageRoleIds.length > 0 && selectedOnPage.length === pageRoleIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
+
+  const togglePageSelection = () => {
+    if (isAllPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageRoleIds.includes(id)));
+      return;
+    }
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageRoleIds])));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    ));
+  };
+
+  const handleBatchConfirm = async () => {
+    if (!batchAction || selectedIds.length === 0) return;
+    setIsBatching(true);
+    try {
+      const result = await rolesApi.batchDelete(selectedIds);
+      toast({
+        title: t('message.batchDone', { success: result.success, failed: result.failed }),
+        status: result.failed > 0 ? 'warning' : 'success',
+      });
+      setSelectedIds([]);
+      await loadRoles();
+    } catch (err) {
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsBatching(false);
+      setBatchAction(null);
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -219,10 +262,25 @@ export default function Roles() {
           },
         ]}
       />
+      {selectedIds.length > 0 && (
+        <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
+          <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
+          <HStack spacing={2}>
+            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.delete')}</Button>
+          </HStack>
+        </Flex>
+      )}
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
         <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
+              <Th w="48px">
+                <Checkbox
+                  isChecked={isAllPageSelected}
+                  isIndeterminate={isPageSelectionIndeterminate}
+                  onChange={togglePageSelection}
+                />
+              </Th>
               <Th>{t('table.columns.id')}</Th>
               <Th>{t('table.columns.name')}</Th>
               <Th>{t('table.columns.description')}</Th>
@@ -234,6 +292,12 @@ export default function Roles() {
           <Tbody>
             {roles.map((r) => (
               <Tr key={r.id}>
+                <Td>
+                  <Checkbox
+                    isChecked={selectedIds.includes(r.id)}
+                    onChange={() => toggleRowSelection(r.id)}
+                  />
+                </Td>
                 <Td>{r.id}</Td>
                 <Td fontWeight="600">{r.name}</Td>
                 <Td>{r.description || '-'}</Td>
@@ -266,6 +330,14 @@ export default function Roles() {
         title={t('actions.delete')}
         message={t('message.deleteConfirm')}
         isLoading={isDeleting}
+      />
+      <ConfirmDialog
+        isOpen={batchAction !== null}
+        onClose={() => setBatchAction(null)}
+        onConfirm={handleBatchConfirm}
+        title={t('actions.delete')}
+        message={t('message.batchDeleteConfirm', { count: selectedIds.length })}
+        isLoading={isBatching}
       />
 
       {/* Create/Edit Modal */}

@@ -16,6 +16,7 @@ import {
   Spinner,
   Badge,
   useToast,
+  Checkbox,
 } from '@chakra-ui/react';
 import { CloseIcon, DownloadIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -47,6 +48,9 @@ export default function Tasks() {
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatching, setIsBatching] = useState(false);
+  const [isBatchConfirmOpen, setIsBatchConfirmOpen] = useState(false);
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
@@ -71,6 +75,43 @@ export default function Tasks() {
   useEffect(() => {
     load({ page: 1 });
   }, [searchTrigger, load]);
+
+  const pageTaskIds = tasks.map((t) => t.id);
+  const selectedOnPage = pageTaskIds.filter((id) => selectedIds.includes(id));
+  const isAllPageSelected = pageTaskIds.length > 0 && selectedOnPage.length === pageTaskIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
+
+  const togglePageSelection = () => {
+    if (isAllPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageTaskIds.includes(id)));
+      return;
+    }
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageTaskIds])));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    ));
+  };
+
+  const handleBatchCancel = async () => {
+    setIsBatching(true);
+    try {
+      const result = await tasksApi.batchCancel(selectedIds);
+      toast({
+        title: t('message.batchDone', { success: result.success, failed: result.failed }),
+        status: result.failed > 0 ? 'warning' : 'success',
+      });
+      setSelectedIds([]);
+      await load();
+    } catch (err) {
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsBatching(false);
+      setIsBatchConfirmOpen(false);
+    }
+  };
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -144,10 +185,25 @@ export default function Tasks() {
         ]}
         dateRange
       />
+      {selectedIds.length > 0 && (
+        <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
+          <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
+          <HStack spacing={2}>
+            <Button size="sm" colorScheme="red" onClick={() => setIsBatchConfirmOpen(true)}>{t('actions.cancel')}</Button>
+          </HStack>
+        </Flex>
+      )}
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
         <Table variant="simple" size="md" minW="700px">
           <Thead>
             <Tr>
+              <Th w="48px">
+                <Checkbox
+                  isChecked={isAllPageSelected}
+                  isIndeterminate={isPageSelectionIndeterminate}
+                  onChange={togglePageSelection}
+                />
+              </Th>
               <Th>{t('table.columns.id')}</Th>
               <Th>{t('table.columns.type')}</Th>
               <Th>{t('table.columns.status')}</Th>
@@ -160,6 +216,12 @@ export default function Tasks() {
           <Tbody>
             {tasks.map((task) => (
               <Tr key={task.id}>
+                <Td>
+                  <Checkbox
+                    isChecked={selectedIds.includes(task.id)}
+                    onChange={() => toggleRowSelection(task.id)}
+                  />
+                </Td>
                 <Td>{task.id}</Td>
                 <Td fontWeight="600">{t(`filter.taskTypes.${task.type}`, { defaultValue: task.type })}</Td>
                 <Td>
@@ -203,6 +265,15 @@ export default function Tasks() {
         message={t('message.cancelConfirm')}
         confirmText={t('message.confirmCancel')}
         isLoading={isCancelling}
+      />
+      <ConfirmDialog
+        isOpen={isBatchConfirmOpen}
+        onClose={() => setIsBatchConfirmOpen(false)}
+        onConfirm={handleBatchCancel}
+        title={t('actions.cancel')}
+        message={t('message.batchCancelConfirm', { count: selectedIds.length })}
+        confirmText={t('message.confirmCancel')}
+        isLoading={isBatching}
       />
     </Box>
   );

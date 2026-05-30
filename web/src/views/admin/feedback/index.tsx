@@ -1,9 +1,10 @@
-import { Badge, Box, Button, Flex, HStack, Select, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
+import { Badge, Box, Button, Checkbox, Flex, HStack, Select, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { DownloadIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import Pagination from 'components/pagination/Pagination';
+import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import { useDateFormat } from 'hooks/useDateFormat';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
@@ -26,6 +27,9 @@ export default function FeedbackPage() {
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchAction, setBatchAction] = useState<string | null>(null);
+  const [isBatching, setIsBatching] = useState(false);
 
   const fetchFeedback = useMemo(() => (p: number, ps: number) => feedbackApi.list({
     page: p,
@@ -40,6 +44,44 @@ export default function FeedbackPage() {
   const { list, total, page, pageSize, load, changePage, changePageSize } = usePagination<Feedback>(fetchFeedback);
 
   useEffect(() => { load({ page: 1 }); }, [searchTrigger, load]);
+
+  const pageIds = list.map(item => item.id);
+  const selectedOnPage = pageIds.filter(id => selectedIds.includes(id));
+  const isAllPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
+
+  const togglePageSelection = () => {
+    if (isAllPageSelected) {
+      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
+      return;
+    }
+    setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds(prev => (
+      prev.includes(id) ? prev.filter(selectedId => selectedId !== id) : [...prev, id]
+    ));
+  };
+
+  const handleBatchConfirm = async () => {
+    if (!batchAction || selectedIds.length === 0) return;
+    setIsBatching(true);
+    try {
+      const result = await feedbackApi.batchUpdateStatus(selectedIds, batchAction);
+      toast({
+        title: t('message.batchDone', { success: result.success, failed: result.failed }),
+        status: result.failed > 0 ? 'warning' : 'success',
+      });
+      setSelectedIds([]);
+      await load();
+    } catch (err) {
+      toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setIsBatching(false);
+      setBatchAction(null);
+    }
+  };
 
   async function changeStatus(id: string, status: string) {
     try {
@@ -85,10 +127,28 @@ export default function FeedbackPage() {
         ]}
         dateRange
       />
+      {selectedIds.length > 0 && (
+        <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
+          <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
+          <HStack spacing={2}>
+            <Button size="sm" onClick={() => setBatchAction('open')}>{t('status.open')}</Button>
+            <Button size="sm" onClick={() => setBatchAction('processing')}>{t('status.processing')}</Button>
+            <Button size="sm" onClick={() => setBatchAction('resolved')}>{t('status.resolved')}</Button>
+            <Button size="sm" onClick={() => setBatchAction('closed')}>{t('status.closed')}</Button>
+          </HStack>
+        </Flex>
+      )}
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
         <Table variant="simple" size="md" minW="900px">
           <Thead>
             <Tr>
+              <Th w="48px">
+                <Checkbox
+                  isChecked={isAllPageSelected}
+                  isIndeterminate={isPageSelectionIndeterminate}
+                  onChange={togglePageSelection}
+                />
+              </Th>
               <Th>{t('table.columns.id', { ns: 'common', defaultValue: 'ID' })}</Th>
               <Th>{t('table.source')}</Th>
               <Th>{t('table.category')}</Th>
@@ -102,6 +162,12 @@ export default function FeedbackPage() {
           <Tbody>
             {list.map(item => (
               <Tr key={item.id}>
+                <Td>
+                  <Checkbox
+                    isChecked={selectedIds.includes(item.id)}
+                    onChange={() => toggleRowSelection(item.id)}
+                  />
+                </Td>
                 <Td>{item.id}</Td>
                 <Td>{t(`source.${item.source}`)}</Td>
                 <Td>{t(`filter.resourceTypes.${item.category}`, { ns: 'modules/audit-logs', defaultValue: item.category || '-' })}</Td>
@@ -132,6 +198,14 @@ export default function FeedbackPage() {
           onPageSizeChange={changePageSize}
         />
       </Box>
+      <ConfirmDialog
+        isOpen={batchAction !== null}
+        onClose={() => setBatchAction(null)}
+        onConfirm={handleBatchConfirm}
+        title={t('actions.batchUpdateStatus')}
+        message={t('message.batchUpdateConfirm', { count: selectedIds.length })}
+        isLoading={isBatching}
+      />
     </Box>
   );
 }

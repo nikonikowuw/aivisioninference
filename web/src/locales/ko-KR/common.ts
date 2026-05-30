@@ -41,8 +41,6 @@ export const common = {
     createSuccess: '성공적으로 생성되었습니다',
     updateSuccess: '성공적으로 업데이트되었습니다',
     deleteSuccess: '성공적으로 삭제되었습니다',
-    operationSuccess: '작업이 성공적으로 완료되었습니다',
-    operationFailed: '작업에 실패했습니다',
     requiredFields: '필수 항목을 입력해 주세요',
     // Error code translations (backend returns code only, frontend translates)
     error: {

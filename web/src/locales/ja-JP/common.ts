@@ -41,8 +41,6 @@ export const common = {
     createSuccess: '作成に成功しました',
     updateSuccess: '更新に成功しました',
     deleteSuccess: '削除に成功しました',
-    operationSuccess: '操作が成功しました',
-    operationFailed: '操作が失敗しました',
     requiredFields: '必須項目を入力してください',
     // Error code translations (backend returns code only, frontend translates)
     error: {

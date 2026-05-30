@@ -88,6 +88,7 @@ const PermissionRow = ({
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
 }) => {
+  const { t: tCommon } = useTranslation('common');
   const { t: tMenu } = useTranslation('menu');
   const { t: tPermission } = useTranslation('modules/permissions');
   const isExpanded = expandedIds.has(node.id);
@@ -99,10 +100,10 @@ const PermissionRow = ({
   const buttonIconColor = useColorModeValue('orange.500', 'orange.300');
   const textColor = useColorModeValue('navy.700', 'white');
 
-const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
-  if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
-  return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
-};
+  const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
+    if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
+    return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+  };
 
   return (
     <Box w="100%">

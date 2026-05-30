@@ -38,8 +38,9 @@ export const common = {
     exportFailed: 'Export failed',
     importFailed: 'Import failed',
     batchDone: 'Batch completed: {{success}} succeeded, {{failed}} failed',
-    operationSuccess: 'Operation successful',
-    operationFailed: 'Operation failed',
+    createSuccess: 'Created successfully',
+    updateSuccess: 'Updated successfully',
+    deleteSuccess: 'Deleted successfully',
     requiredFields: 'Please fill in required fields',
     error: {
       0: 'Success',

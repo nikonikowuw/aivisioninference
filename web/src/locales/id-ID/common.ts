@@ -41,8 +41,6 @@ export const common = {
     createSuccess: 'Berhasil dibuat',
     updateSuccess: 'Berhasil diperbarui',
     deleteSuccess: 'Berhasil dihapus',
-    operationSuccess: 'Operasi berhasil',
-    operationFailed: 'Operasi gagal',
     requiredFields: 'Silakan isi bidang yang wajib diisi',
     // Error code translations (backend returns code only, frontend translates)
     error: {

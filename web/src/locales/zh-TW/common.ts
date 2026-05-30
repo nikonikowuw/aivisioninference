@@ -41,8 +41,6 @@ export const common = {
     createSuccess: '建立成功',
     updateSuccess: '更新成功',
     deleteSuccess: '刪除成功',
-    operationSuccess: '操作成功',
-    operationFailed: '操作失敗',
     requiredFields: '請填寫必填欄位',
     // 錯誤碼翻譯（後端只返回 code，前端翻譯 message）
     error: {

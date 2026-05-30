@@ -38,8 +38,9 @@ export const common = {
     exportFailed: '导出失败',
     importFailed: '导入失败',
     batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
-    operationSuccess: '操作成功',
-    operationFailed: '操作失败',
+    createSuccess: '创建成功',
+    updateSuccess: '更新成功',
+    deleteSuccess: '删除成功',
     requiredFields: '请填写必填字段',
     error: {
       0: '成功',

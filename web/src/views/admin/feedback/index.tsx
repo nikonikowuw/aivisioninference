@@ -102,6 +102,7 @@ export default function FeedbackPage() {
         status: filters.status,
         start_time: filters.start_time,
         end_time: filters.end_time,
+        ids: selectedIds.length > 0 ? selectedIds.join(',') : undefined,
       });
     } catch (err) {
       toast({ title: tCommon('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
@@ -114,7 +115,14 @@ export default function FeedbackPage() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
-        <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
+        <Button
+          leftIcon={<DownloadIcon />}
+          variant="outline"
+          onClick={handleExport}
+          isLoading={isExporting}
+        >
+          {selectedIds.length > 0 ? t('actions.exportSelected') : tCommon('button.export')}
+        </Button>
       </Flex>
       <SearchBar
         filters={filters}

@@ -264,6 +264,7 @@ export default function Users() {
       await usersApi.exportCsv({
         keyword: filters.keyword,
         status: parseOptionalNumber(filters.status),
+        ids: selectedIds.length > 0 ? selectedIds.join(',') : undefined,
       });
     } catch (err) {
       toast({ title: t('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
@@ -289,7 +290,14 @@ export default function Users() {
             onChange={(e) => handleImport(e.target.files?.[0])}
           />
           <Button variant="outline" onClick={() => importInputRef.current?.click()} isLoading={isImporting}>{tCommon('button.import')}</Button>
-          <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
+          <Button
+            leftIcon={<DownloadIcon />}
+            variant="outline"
+            onClick={handleExport}
+            isLoading={isExporting}
+          >
+            {selectedIds.length > 0 ? t('actions.exportSelected') : tCommon('button.export')}
+          </Button>
           <Button leftIcon={<AddIcon />} variant="brand" onClick={openCreate}>{t('button.create')}</Button>
         </HStack>
       </Flex>

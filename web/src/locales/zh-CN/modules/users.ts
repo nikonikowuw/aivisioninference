@@ -80,6 +80,7 @@ export const users = {
     delete: '删除',
     enable: '启用',
     disable: '禁用',
+    exportSelected: '导出选中项',
   },
 } as const;
 

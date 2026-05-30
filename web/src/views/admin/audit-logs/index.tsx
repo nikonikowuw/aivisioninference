@@ -1,4 +1,4 @@
-import { Badge, Box, Button, Center, Flex, HStack, Spinner, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
+import { Badge, Box, Button, Center, Checkbox, Flex, HStack, Spinner, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
 import { useDateFormat } from 'hooks/useDateFormat';
 import { DownloadIcon } from '@chakra-ui/icons';
 import { useEffect, useCallback, useState } from 'react';
@@ -32,6 +32,7 @@ export default function AuditLogs() {
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchLogs = useCallback((p: number, ps: number) => auditLogsApi.list({
       page: p,
@@ -57,6 +58,25 @@ export default function AuditLogs() {
     load({ page: 1 });
   }, [searchTrigger, load]);
 
+  const pageLogIds = logs.map((l) => l.id);
+  const selectedOnPage = pageLogIds.filter((id) => selectedIds.includes(id));
+  const isAllPageSelected = pageLogIds.length > 0 && selectedOnPage.length === pageLogIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
+
+  const togglePageSelection = () => {
+    if (isAllPageSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageLogIds.includes(id)));
+      return;
+    }
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageLogIds])));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    ));
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
@@ -66,6 +86,7 @@ export default function AuditLogs() {
         result: filters.result,
         start_time: filters.start_time,
         end_time: filters.end_time,
+        ids: selectedIds.length > 0 ? selectedIds.join(',') : undefined,
       });
     } catch (err) {
       toast({ title: tCommon('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
@@ -82,7 +103,14 @@ export default function AuditLogs() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
-        <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{tCommon('button.export')}</Button>
+        <Button
+          leftIcon={<DownloadIcon />}
+          variant="outline"
+          onClick={handleExport}
+          isLoading={isExporting}
+        >
+          {selectedIds.length > 0 ? t('actions.exportSelected') : tCommon('button.export')}
+        </Button>
       </Flex>
       <SearchBar
         filters={filters}
@@ -114,10 +142,22 @@ export default function AuditLogs() {
         ]}
         dateRange
       />
+      {selectedIds.length > 0 && (
+        <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
+          <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
+        </Flex>
+      )}
       <Box bg={bgCard} borderRadius="16px" border="1px solid" borderColor={borderColor} overflow="auto">
         <Table variant="simple" size="md" minW="900px">
           <Thead>
             <Tr>
+              <Th w="48px">
+                <Checkbox
+                  isChecked={isAllPageSelected}
+                  isIndeterminate={isPageSelectionIndeterminate}
+                  onChange={togglePageSelection}
+                />
+              </Th>
               <Th>{t('table.columns.username')}</Th>
               <Th>{t('table.columns.actionType')}</Th>
               <Th>{t('table.columns.method')}</Th>
@@ -132,6 +172,12 @@ export default function AuditLogs() {
           <Tbody>
             {logs.map((l) => (
               <Tr key={l.id}>
+                <Td>
+                  <Checkbox
+                    isChecked={selectedIds.includes(l.id)}
+                    onChange={() => toggleRowSelection(l.id)}
+                  />
+                </Td>
                 <Td>{l.username || l.user_id || '-'}</Td>
                 <Td>{t(`actionTypes.${l.action_type.replace(/:/g, '.')}`, { defaultValue: l.action_type || '-' })}</Td>
                 <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method}</Badge></Td>

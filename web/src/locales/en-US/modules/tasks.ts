@@ -40,6 +40,7 @@ export const tasks = {
   },
   actions: {
     cancel: 'Cancel Task',
+    exportSelected: 'Export Selected',
   },
 } as const;
 

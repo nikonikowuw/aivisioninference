@@ -461,11 +461,11 @@ export interface BatchResult {
   items: BatchItemResult[];
 }
 
-type StatusListParams = CrudListParams & { status?: number };
-type FileListParams = CrudListParams & { storage_type?: string; start_time?: string; end_time?: string };
-type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; resource_type?: string; result?: string; start_time?: string; end_time?: string };
-type TaskListParams = CrudListParams & { type?: string; status?: string; start_time?: string; end_time?: string };
-type FeedbackListParams = CrudListParams & { source?: string; status?: string; start_time?: string; end_time?: string };
+type StatusListParams = CrudListParams & { status?: number; ids?: string };
+type FileListParams = CrudListParams & { storage_type?: string; start_time?: string; end_time?: string; ids?: string };
+type AuditLogListParams = CrudListParams & { sort?: string; order?: string; user_id?: string; resource_type?: string; result?: string; start_time?: string; end_time?: string; ids?: string };
+type TaskListParams = CrudListParams & { type?: string; status?: string; start_time?: string; end_time?: string; ids?: string };
+type FeedbackListParams = CrudListParams & { source?: string; status?: string; start_time?: string; end_time?: string; ids?: string };
 
 function crud<T, ListParams extends CrudListParams = CrudListParams>(resource: string): CrudApi<T, ListParams> {
   return {

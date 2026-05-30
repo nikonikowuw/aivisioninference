@@ -22,6 +22,7 @@ export const feedback = {
   actions: {
     refresh: 'Update',
     batchUpdateStatus: 'Batch Update Status',
+    exportSelected: 'Export Selected',
   },
   message: {
     updated: 'Feedback status updated',

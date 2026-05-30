@@ -80,6 +80,7 @@ export const users = {
     delete: 'Delete',
     enable: 'Enable',
     disable: 'Disable',
+    exportSelected: 'Export Selected',
   },
 } as const;
 

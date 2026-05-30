@@ -1,6 +1,8 @@
 export const auth = {
   signIn: {
     title: 'Niko Admin',
+    titlePart1: 'Niko',
+    titlePart2: 'Admin',
     subtitle: 'ユーザー名とパスワードを入力してサインインしてください',
     divider: 'アカウントでサインイン',
     username: {

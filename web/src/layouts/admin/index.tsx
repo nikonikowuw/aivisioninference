@@ -100,7 +100,7 @@ export default function Dashboard(props: { [x: string]: any }) {
             <Box>
               <Navbar
                 onOpen={onOpen}
-                logoText={'Niko Admin'}
+                logoText={t('navbar.logoText')}
                 brandText={brandText}
                 secondary={false}
                 message={brandText}
@@ -110,7 +110,7 @@ export default function Dashboard(props: { [x: string]: any }) {
             </Box>
           </Portal>
 
-          {getRoute() ? (
+          {getRoute() && (
             <Box
               mx='auto'
               p={{ base: '20px', md: '30px' }}
@@ -131,7 +131,7 @@ export default function Dashboard(props: { [x: string]: any }) {
                 </Routes>
               )}
             </Box>
-          ) : null}
+          )}
         </Box>
       </SidebarContext.Provider>
     </Box>

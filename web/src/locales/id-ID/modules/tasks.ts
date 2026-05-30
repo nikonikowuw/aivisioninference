@@ -1,38 +1,39 @@
 export const tasks = {
-  title: 'Manajemen Tugas',
+  title: 'Task Management',
   filter: {
     taskTypes: {
       email: 'Email',
-      export: 'Ekspor',
-      import: 'Impor',
-      backup: 'Cadangan',
+      export: 'Export',
+      import: 'Import',
+      backup: 'Backup',
     },
   },
   table: {
     columns: {
       id: 'ID',
-      type: 'Tipe',
+      type: 'Type',
       status: 'Status',
-      error: 'Kesalahan',
-      createdAt: 'Dibuat Pada',
-      updatedAt: 'Diperbarui Pada',
-      actions: 'Tindakan',
+      error: 'Error',
+      createdAt: 'Created At',
+      updatedAt: 'Updated At',
+      actions: 'Actions',
     },
     status: {
-      pending: 'Tertunda',
-      running: 'Berjalan',
-      completed: 'Selesai',
-      failed: 'Gagal',
-      cancelled: 'Dibatalkan',
+      pending: 'Pending',
+      running: 'Running',
+      completed: 'Completed',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
     },
   },
   message: {
-    cancelled: 'Tugas dibatalkan',
-    cancelFailed: 'Gagal membatalkan tugas',
-    cancelConfirm: 'Apakah Anda yakin ingin membatalkan tugas ini?',
+    cancelled: 'Task cancelled',
+    cancelFailed: 'Failed to cancel task',
+    cancelConfirm: 'Are you sure you want to cancel this task?',
+    confirmCancel: 'Yes, cancel it',
   },
   actions: {
-    cancel: 'Batalkan Tugas',
+    cancel: 'Cancel Task',
   },
 } as const;
 

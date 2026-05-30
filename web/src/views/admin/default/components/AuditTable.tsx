@@ -40,7 +40,7 @@ export default function AuditTable(props: { tableData?: DashboardAuditLog[] }) {
 			header: () => t('auditLog.columns.action'),
 			cell: (info) => (
 				<Text color={textColor} fontSize='sm' fontWeight='700'>
-					{info.getValue()}
+					{t(`actionTypes.${info.getValue().replace(/:/g, '.')}`, { ns: 'modules/audit-logs', defaultValue: info.getValue() })}
 				</Text>
 			)
 		}),

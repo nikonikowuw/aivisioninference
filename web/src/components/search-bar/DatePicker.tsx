@@ -52,7 +52,7 @@ function formatDate(d: Date): string {
 }
 
 export function DatePicker({ value, onChange, placeholder }: DatePickerProps) {
-  const { i18n, t } = useTranslation();
+  const { i18n, t } = useTranslation('common');
   const lang = (i18n.language as LanguageCode) || 'zh-CN';
   const [isOpen, setIsOpen] = useState(false);
   const selected = value ? new Date(value) : null;
@@ -79,7 +79,7 @@ export function DatePicker({ value, onChange, placeholder }: DatePickerProps) {
           readOnly
           value={value || ''}
           onClick={() => setIsOpen(!isOpen)}
-          placeholder={placeholder || t('searchBar.selectDate', '选择日期')}
+          placeholder={placeholder || t('searchBar.selectDate')}
           cursor="pointer"
         />
       </PopoverTrigger>
@@ -113,7 +113,7 @@ export function DatePicker({ value, onChange, placeholder }: DatePickerProps) {
               _hover={{ color: 'red.300' }}
               onClick={() => { onChange(''); setIsOpen(false); }}
             >
-              {clearLabelMap[lang]}
+              {t('searchBar.reset')}
             </Box>
           </HStack>
         )}

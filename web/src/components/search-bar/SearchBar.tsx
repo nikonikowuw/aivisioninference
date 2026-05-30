@@ -45,7 +45,7 @@ export function SearchBar({
   dateRange,
   onRefresh,
 }: SearchBarProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation('common');
   const bgColor = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
 
@@ -83,11 +83,11 @@ export function SearchBar({
         <Box width={{ base: '100%', md: '30%' }}>
           {keyword && (
             <FormControl>
-              <FormLabel fontSize="sm" mb={0}>{t('searchBar.keyword', '关键字')}</FormLabel>
+              <FormLabel fontSize="sm" mb={0}>{t('searchBar.keyword')}</FormLabel>
               <Input
                 variant="main"
-                aria-label={t('searchBar.keyword', '关键字')}
-                placeholder={t('searchBar.keywordPlaceholder', '搜索关键字...')}
+                aria-label={t('searchBar.keyword')}
+                placeholder={t('searchBar.keywordPlaceholder')}
                 value={filters.keyword || ''}
                 onChange={handleKeywordChange}
               />
@@ -98,7 +98,7 @@ export function SearchBar({
         <Flex gap={3} align="flex-end" wrap="wrap" flex="1" justify="flex-end">
           {onRefresh && (
             <Button variant="lightBrand" onClick={onRefresh}>
-              {t('button.refresh', '刷新')}
+              {t('searchBar.search')}
             </Button>
           )}
 
@@ -108,7 +108,7 @@ export function SearchBar({
                 <FormLabel fontSize="sm" mb={0}>{select.label}</FormLabel>
                 <Select
                   variant="main"
-                  placeholder={select.placeholder || t('searchBar.all', 'All')}
+                  placeholder={select.placeholder || t('searchBar.all')}
                   value={filters[select.name] || ''}
                   onChange={handleSelectChange(select.name)}
                 >
@@ -125,26 +125,26 @@ export function SearchBar({
           {dateRange && (
             <Stack direction="row" spacing={2}>
               <FormControl maxW="180px">
-                <FormLabel fontSize="sm" mb={0}>{t('searchBar.startDate', '开始日期')}</FormLabel>
+                <FormLabel fontSize="sm" mb={0}>{t('searchBar.startDate')}</FormLabel>
                 <DatePicker
                   value={filters.start_time || ''}
                   onChange={handleDateChange('start_time')}
-                  placeholder={t('searchBar.startDate', '开始日期')}
+                  placeholder={t('searchBar.startDate')}
                 />
               </FormControl>
               <FormControl maxW="180px">
-                <FormLabel fontSize="sm" mb={0}>{t('searchBar.endDate', '结束日期')}</FormLabel>
+                <FormLabel fontSize="sm" mb={0}>{t('searchBar.endDate')}</FormLabel>
                 <DatePicker
                   value={filters.end_time || ''}
                   onChange={handleDateChange('end_time')}
-                  placeholder={t('searchBar.endDate', '结束日期')}
+                  placeholder={t('searchBar.endDate')}
                 />
               </FormControl>
             </Stack>
           )}
 
           <Button variant="lightBrand" onClick={onReset}>
-            {t('searchBar.reset', '重置')}
+            {t('searchBar.reset')}
           </Button>
         </Flex>
       </Flex>

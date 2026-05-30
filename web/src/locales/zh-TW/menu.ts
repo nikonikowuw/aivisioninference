@@ -8,6 +8,7 @@ export const menu = {
   files: '文件',
   'audit-logs': '審計日誌',
   tasks: '任務',
+  'brand-config': '品牌設定',
   'mail-config': '郵件設定',
   feedback: '使用者回饋',
 } as const;

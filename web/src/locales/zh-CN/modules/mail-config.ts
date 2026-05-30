@@ -44,6 +44,11 @@ export const mailConfig = {
     secureHint: '密码不会在界面回显',
     passwordConfigured: '已配置，留空表示不修改',
   },
+  encryption: {
+    none: '无加密',
+    starttls: 'STARTTLS',
+    tls: 'TLS/SSL',
+  },
 } as const;
 
 export default mailConfig;

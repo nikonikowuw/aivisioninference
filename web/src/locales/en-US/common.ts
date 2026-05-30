@@ -113,6 +113,7 @@ export const common = {
     startDate: 'Start date',
     endDate: 'End date',
     all: 'All',
+    selectDate: 'Select date',
   },
   date: {
     format: {
@@ -135,6 +136,8 @@ export const common = {
     daily: 'Daily',
     monthly: 'Monthly',
     yearly: 'Yearly',
+    userActivity: 'User Activity',
+    weekly: 'Weekly',
   },
   permissions: {
     empty: 'No permission data',

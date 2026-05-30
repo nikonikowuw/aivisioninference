@@ -30,6 +30,7 @@ export const tasks = {
     cancelled: 'Task cancelled',
     cancelFailed: 'Failed to cancel task',
     cancelConfirm: 'Are you sure you want to cancel this task?',
+    confirmCancel: 'Yes, cancel it',
   },
   actions: {
     cancel: 'Cancel Task',

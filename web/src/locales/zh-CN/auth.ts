@@ -1,6 +1,8 @@
 export const auth = {
   signIn: {
     title: 'Niko Admin',
+    titlePart1: 'Niko',
+    titlePart2: 'Admin',
     subtitle: '输入用户名和密码登录系统',
     divider: '账号登录',
     username: {

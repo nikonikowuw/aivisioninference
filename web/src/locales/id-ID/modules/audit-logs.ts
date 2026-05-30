@@ -12,6 +12,7 @@ export const auditLogs = {
       file: 'File',
       task: 'Tugas',
       system: 'Sistem',
+      feedback: 'Umpan balik',
     },
   },
   table: {
@@ -40,6 +41,7 @@ export const auditLogs = {
         tasks: 'Lihat tugas',
         system: 'Lihat konfigurasi sistem',
         dashboard: 'Lihat dasbor',
+        feedback: 'Lihat umpan balik',
       },
       create: {
         users: 'Buat pengguna',
@@ -47,6 +49,8 @@ export const auditLogs = {
         permissions: 'Buat izin',
         files: 'Unggah file',
         tasks: 'Buat tugas',
+        system: 'Buat konfigurasi sistem',
+        feedback: 'Kirim umpan balik',
       },
       update: {
         users: 'Perbarui pengguna',
@@ -55,6 +59,7 @@ export const auditLogs = {
         files: 'Perbarui file',
         tasks: 'Perbarui tugas',
         system: 'Perbarui konfigurasi sistem',
+        feedback: 'Perbarui status umpan balik',
       },
       delete: {
         users: 'Hapus pengguna',
@@ -64,6 +69,7 @@ export const auditLogs = {
         tasks: 'Hapus tugas',
       },
       login: 'Login pengguna',
+      logout: 'Logout pengguna',
       auth: 'Operasi autentikasi',
     },
   },

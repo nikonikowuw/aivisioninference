@@ -12,6 +12,7 @@ export const auditLogs = {
       file: 'File',
       task: 'Task',
       system: 'System',
+      feedback: 'Feedback',
     },
   },
   table: {
@@ -40,6 +41,7 @@ export const auditLogs = {
         tasks: 'View tasks',
         system: 'View system config',
         dashboard: 'View dashboard',
+        feedback: 'View feedback',
       },
       create: {
         users: 'Create user',
@@ -47,6 +49,8 @@ export const auditLogs = {
         permissions: 'Create permission',
         files: 'Upload file',
         tasks: 'Create task',
+        system: 'Create system config',
+        feedback: 'Submit feedback',
       },
       update: {
         users: 'Update user',
@@ -55,6 +59,7 @@ export const auditLogs = {
         files: 'Update file',
         tasks: 'Update task',
         system: 'Update system config',
+        feedback: 'Update feedback status',
       },
       delete: {
         users: 'Delete user',
@@ -64,6 +69,7 @@ export const auditLogs = {
         tasks: 'Delete task',
       },
       login: 'User login',
+      logout: 'User logout',
       auth: 'Auth operation',
     },
   },

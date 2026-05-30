@@ -49,6 +49,7 @@ export const auditLogs = {
         permissions: '创建权限',
         files: '上传文件',
         tasks: '创建任务',
+        system: '创建系统配置',
         feedback: '提交反馈',
       },
       update: {

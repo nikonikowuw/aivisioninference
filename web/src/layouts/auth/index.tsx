@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 // Chakra imports
@@ -10,6 +11,7 @@ const SignIn = lazy(() => import('views/auth/signIn'));
 // Custom Chakra theme
 export default function Auth() {
   const authBg = useColorModeValue('white', 'navy.900');
+  const { t } = useTranslation('common');
 
   useEffect(() => {
     document.documentElement.dir = 'ltr';
@@ -34,7 +36,7 @@ export default function Auth() {
               <Route
                 path="/sign-in"
                 element={
-                  <Suspense fallback={<div>Loading...</div>}>
+                  <Suspense fallback={<div>{t('status.loading')}</div>}>
                     <SignIn />
                   </Suspense>
                 }

@@ -47,19 +47,23 @@ export default function Tasks() {
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
-  const fetchTasks = useCallback((p: number, ps: number) => {
-    return tasksApi.list({
+  const fetchTasks = useCallback((p: number, ps: number) => tasksApi.list({
       page: p,
       page_size: ps,
-      keyword: filters.keyword,
-      type: filters.type,
-      status: filters.status,
-      start_time: filters.start_time,
-      end_time: filters.end_time,
-    });
-  }, [filters]);
+      ...filters,
+    }), [filters]);
 
-  const { list: tasks, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<Task>(fetchTasks);
+  const {
+    list: tasks,
+    total,
+    page,
+    pageSize,
+    initialLoading,
+    pageLoading,
+    load,
+    changePage,
+    changePageSize,
+  } = usePagination<Task>(fetchTasks);
 
   useEffect(() => {
     load({ page: 1 });
@@ -136,7 +140,7 @@ export default function Tasks() {
             {tasks.map((task) => (
               <Tr key={task.id}>
                 <Td>{task.id}</Td>
-                <Td fontWeight="600">{task.type}</Td>
+                <Td fontWeight="600">{t(`filter.taskTypes.${task.type}`, { defaultValue: task.type })}</Td>
                 <Td>
                   <Badge colorScheme={statusColor[task.status] || 'gray'}>{t(`table.status.${task.status}`)}</Badge>
                 </Td>

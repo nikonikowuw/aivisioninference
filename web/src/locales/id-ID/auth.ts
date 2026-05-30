@@ -1,6 +1,8 @@
 export const auth = {
   signIn: {
     title: 'Niko Admin',
+    titlePart1: 'Niko',
+    titlePart2: 'Admin',
     subtitle: 'Masukkan nama pengguna dan kata sandi Anda untuk masuk',
     divider: 'Masuk dengan Akun',
     username: {

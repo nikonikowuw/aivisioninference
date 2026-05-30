@@ -12,6 +12,7 @@ export const auditLogs = {
       file: '檔案',
       task: '任務',
       system: '系統',
+      feedback: '回饋',
     },
   },
   table: {
@@ -40,6 +41,7 @@ export const auditLogs = {
         tasks: '檢視任務',
         system: '檢視系統配置',
         dashboard: '檢視儀表板',
+        feedback: '檢視回饋',
       },
       create: {
         users: '建立使用者',
@@ -47,6 +49,8 @@ export const auditLogs = {
         permissions: '建立權限',
         files: '上傳檔案',
         tasks: '建立任務',
+        system: '建立系統配置',
+        feedback: '提交回饋',
       },
       update: {
         users: '更新使用者',
@@ -55,6 +59,7 @@ export const auditLogs = {
         files: '更新檔案',
         tasks: '更新任務',
         system: '更新系統配置',
+        feedback: '更新回饋狀態',
       },
       delete: {
         users: '刪除使用者',
@@ -64,6 +69,7 @@ export const auditLogs = {
         tasks: '刪除任務',
       },
       login: '使用者登入',
+      logout: '使用者登出',
       auth: '認證操作',
     },
   },

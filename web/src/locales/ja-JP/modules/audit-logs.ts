@@ -12,6 +12,7 @@ export const auditLogs = {
       file: 'ファイル',
       task: 'タスク',
       system: 'システム',
+      feedback: 'フィードバック',
     },
   },
   table: {
@@ -40,6 +41,7 @@ export const auditLogs = {
         tasks: 'タスク一覧を表示',
         system: 'システム設定を表示',
         dashboard: 'ダッシュボードを表示',
+        feedback: 'フィードバックを表示',
       },
       create: {
         users: 'ユーザーを作成',
@@ -47,6 +49,8 @@ export const auditLogs = {
         permissions: '権限を作成',
         files: 'ファイルをアップロード',
         tasks: 'タスクを作成',
+        system: 'システム設定を作成',
+        feedback: 'フィードバックを送信',
       },
       update: {
         users: 'ユーザーを更新',
@@ -55,6 +59,7 @@ export const auditLogs = {
         files: 'ファイルを更新',
         tasks: 'タスクを更新',
         system: 'システム設定を更新',
+        feedback: 'フィードバック状態を更新',
       },
       delete: {
         users: 'ユーザーを削除',
@@ -64,6 +69,7 @@ export const auditLogs = {
         tasks: 'タスクを削除',
       },
       login: 'ログイン',
+      logout: 'ログアウト',
       auth: '認証操作',
     },
   },

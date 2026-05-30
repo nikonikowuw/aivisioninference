@@ -58,7 +58,7 @@ export default function MailConfigPage() {
     }
   }
 
-  const setField = (key: keyof FormState, value: string | number | boolean | undefined) => {
+  const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -165,9 +165,9 @@ export default function MailConfigPage() {
           <FormControl>
             <FormLabel>{t('fields.smtpEncryption')}</FormLabel>
             <Select value={form.smtp_encryption || 'starttls'} onChange={e => setField('smtp_encryption', e.target.value)}>
-              <option value="none">none</option>
-              <option value="starttls">starttls</option>
-              <option value="tls">tls</option>
+              <option value="none">{t('encryption.none')}</option>
+              <option value="starttls">{t('encryption.starttls')}</option>
+              <option value="tls">{t('encryption.tls')}</option>
             </Select>
           </FormControl>
         </SimpleGrid>
@@ -198,9 +198,9 @@ export default function MailConfigPage() {
           <FormControl>
             <FormLabel>{t('fields.imapEncryption')}</FormLabel>
             <Select value={form.imap_encryption || 'tls'} onChange={e => setField('imap_encryption', e.target.value)}>
-              <option value="none">none</option>
-              <option value="starttls">starttls</option>
-              <option value="tls">tls</option>
+              <option value="none">{t('encryption.none')}</option>
+              <option value="starttls">{t('encryption.starttls')}</option>
+              <option value="tls">{t('encryption.tls')}</option>
             </Select>
           </FormControl>
           <FormControl>

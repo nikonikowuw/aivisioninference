@@ -44,6 +44,11 @@ export const mailConfig = {
     secureHint: 'Passwords are never returned in plaintext',
     passwordConfigured: 'Configured. Leave blank to keep current password.',
   },
+  encryption: {
+    none: 'None',
+    starttls: 'STARTTLS',
+    tls: 'TLS/SSL',
+  },
 } as const;
 
 export default mailConfig;

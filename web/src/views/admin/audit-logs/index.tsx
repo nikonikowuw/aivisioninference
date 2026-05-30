@@ -32,10 +32,7 @@ const methodColorMap = {
 
 const methodColor = (method: string) => methodColorMap[method as keyof typeof methodColorMap] ?? 'gray';
 
-const resultColor = (result?: string) => {
-  if (!result) return 'gray';
-  return result === 'success' ? 'green' : 'red';
-};
+const resultColor = (result?: string) => (result === 'success' ? 'green' : (result ? 'red' : 'gray'));
 
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
@@ -46,21 +43,25 @@ export default function AuditLogs() {
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
-  const fetchLogs = useCallback((p: number, ps: number) => {
-    return auditLogsApi.list({
+  const fetchLogs = useCallback((p: number, ps: number) => auditLogsApi.list({
       page: p,
       page_size: ps,
       sort: 'created_at',
       order: 'desc',
-      keyword: filters.keyword,
-      resource_type: filters.resource_type,
-      result: filters.result,
-      start_time: filters.start_time,
-      end_time: filters.end_time,
-    });
-  }, [filters]);
+      ...filters,
+    }), [filters]);
 
-  const { list: logs, total, page, pageSize, initialLoading, pageLoading, load, changePage, changePageSize } = usePagination<AuditLog>(fetchLogs);
+  const {
+    list: logs,
+    total,
+    page,
+    pageSize,
+    initialLoading,
+    pageLoading,
+    load,
+    changePage,
+    changePageSize,
+  } = usePagination<AuditLog>(fetchLogs);
 
   useEffect(() => {
     load({ page: 1 });
@@ -124,7 +125,7 @@ export default function AuditLogs() {
             {logs.map((l) => (
               <Tr key={l.id}>
                 <Td>{l.username || l.user_id || '-'}</Td>
-                <Td>{t(`actionTypes.${l.action_type}`, { defaultValue: l.action_type || '-' })}</Td>
+                <Td>{t(`actionTypes.${l.action_type.replace(/:/g, '.')}`, { defaultValue: l.action_type || '-' })}</Td>
                 <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method}</Badge></Td>
                 <Td maxW="240px" isTruncated>{l.request_path}</Td>
                 <Td>{l.request_ip}</Td>

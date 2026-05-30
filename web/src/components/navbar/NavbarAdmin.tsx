@@ -2,6 +2,7 @@
 // Chakra Imports
 import { Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Flex, Icon, Link, Text, useColorModeValue } from '@chakra-ui/react';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import AdminNavbarLinks from 'components/navbar/NavbarLinksAdmin';
 import { useSidebar } from 'contexts/SidebarContext';
 import { IoMenuOutline } from 'react-icons/io5';
@@ -15,52 +16,32 @@ export default function AdminNavbar(props: {
 	onOpen: (...args: any[]) => any;
 }) {
 	const [scrolled, setScrolled] = useState(false);
-	const { collapsed, setCollapsed } = useSidebar();
+	const { secondary, brandText, collapsed } = props;
+	const { setCollapsed } = useSidebar();
+	const { t } = useTranslation('layout');
 
 	useEffect(() => {
+		const changeNavbar = () => setScrolled(window.scrollY > 1);
 		window.addEventListener('scroll', changeNavbar);
-		return () => {
-			window.removeEventListener('scroll', changeNavbar);
-		};
-	});
+		return () => window.removeEventListener('scroll', changeNavbar);
+	}, []);
 
-	const { secondary, brandText } = props;
-
-	let mainText = useColorModeValue('navy.700', 'white');
-	let secondaryText = useColorModeValue('gray.700', 'white');
-	let navbarPosition = 'fixed' as const;
-	let navbarFilter = 'none';
-	let navbarBackdrop = 'blur(20px)';
-	let navbarShadow = 'none';
-	let navbarBg = useColorModeValue('rgba(244, 247, 254, 0.2)', 'rgba(11,20,55,0.5)');
-	let navbarBorder = 'transparent';
-	let secondaryMargin = '0px';
-	let paddingX = '15px';
-	let gap = '0px';
-	const changeNavbar = () => {
-		if (window.scrollY > 1) {
-			setScrolled(true);
-		} else {
-			setScrolled(false);
-		}
-	};
+	const mainText = useColorModeValue('navy.700', 'white');
+	const secondaryText = useColorModeValue('gray.700', 'white');
+	const navbarBg = useColorModeValue('rgba(244, 247, 254, 0.2)', 'rgba(11,20,55,0.5)');
 
 	return (
 		<Box
-			position={navbarPosition}
-			boxShadow={navbarShadow}
+			position="fixed"
 			bg={navbarBg}
-			borderColor={navbarBorder}
-			filter={navbarFilter}
-			backdropFilter={navbarBackdrop}
-			backgroundPosition='center'
-			backgroundSize='cover'
+			borderColor="transparent"
+			backdropFilter="blur(20px)"
 			borderRadius='16px'
 			borderWidth='1.5px'
 			borderStyle='solid'
 			transitionDelay='0s, 0s, 0s, 0s'
 			transitionDuration=' 0.25s, 0.25s, 0.25s, 0s'
-			transition-property='box-shadow, background-color, filter, border'
+			transitionProperty='box-shadow, background-color, filter, border'
 			transitionTimingFunction='linear, linear, linear, linear'
 			alignItems={{ xl: 'center' }}
 			display={secondary ? 'block' : 'flex'}
@@ -68,16 +49,10 @@ export default function AdminNavbar(props: {
 			justifyContent={{ xl: 'center' }}
 			lineHeight='25.6px'
 			mx='auto'
-			mt={secondaryMargin}
 			pb='8px'
 			right={{ base: '12px', md: '30px', lg: '30px', xl: '30px' }}
-			px={{
-				sm: paddingX,
-				md: '10px',
-			}}
-			ps={{
-				xl: '12px',
-			}}
+			px={{ sm: '15px', md: '10px' }}
+			ps={{ xl: '12px' }}
 			pt='8px'
 			top={{ base: '12px', md: '16px', xl: '18px' }}
 			w={{
@@ -89,12 +64,8 @@ export default function AdminNavbar(props: {
 			}}>
 			<Flex
 				w='100%'
-				flexDirection={{
-					sm: 'column',
-					md: 'row',
-				}}
-				alignItems={{ xl: 'center' }}
-				mb={gap}>
+				flexDirection={{ sm: 'column', md: 'row' }}
+				alignItems={{ xl: 'center' }}>
 				<Flex alignItems='center' gap='12px'>
 					<Icon
 						as={IoMenuOutline}
@@ -109,7 +80,7 @@ export default function AdminNavbar(props: {
 						<Breadcrumb>
 							<BreadcrumbItem color={secondaryText} fontSize='sm' mb='5px'>
 								<BreadcrumbLink href='#' color={secondaryText}>
-									Pages
+									{t('navbar.pages')}
 								</BreadcrumbLink>
 							</BreadcrumbItem>
 							<BreadcrumbItem color={secondaryText} fontSize='sm'>
@@ -125,7 +96,7 @@ export default function AdminNavbar(props: {
 							borderRadius='inherit'
 							fontWeight='bold'
 							fontSize='34px'
-							_hover={{ color: { mainText } }}
+							_hover={{ color: mainText }}
 							_active={{
 								bg: 'inherit',
 								transform: 'none',
@@ -139,7 +110,7 @@ export default function AdminNavbar(props: {
 					</Box>
 				</Flex>
 				<Box ms='auto' w={{ sm: '100%', md: 'unset' }}>
-					<AdminNavbarLinks secondary={props.secondary} />
+					<AdminNavbarLinks secondary={secondary} />
 				</Box>
 			</Flex>
 		</Box>

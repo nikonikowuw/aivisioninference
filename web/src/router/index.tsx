@@ -4,6 +4,7 @@
 /// <reference types="vite/client" />
 
 import { Suspense, lazy, ComponentType } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Route } from 'react-router-dom';
 import { Icon } from '@chakra-ui/react';
 import * as Icons from 'react-icons/md';
@@ -59,8 +60,9 @@ function createLazyComponent(
 
   const LazyComponent = lazy(importer);
   const Wrapped = function (props: any) {
+    const { t } = useTranslation('common');
     return (
-      <Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={<div>{t('status.loading')}</div>}>
         <LazyComponent {...props} />
       </Suspense>
     );

@@ -30,6 +30,7 @@ export const tasks = {
     cancelled: '已取消',
     cancelFailed: '取消失败',
     cancelConfirm: '确定取消该任务？',
+    confirmCancel: '确认取消',
   },
   actions: {
     cancel: '取消任务',

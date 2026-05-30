@@ -81,7 +81,7 @@ export default function FeedbackPage() {
         <Table variant="simple" size="md" minW="900px">
           <Thead>
             <Tr>
-              <Th>ID</Th>
+              <Th>{t('table.columns.id', { ns: 'common', defaultValue: 'ID' })}</Th>
               <Th>{t('table.source')}</Th>
               <Th>{t('table.category')}</Th>
               <Th>{t('table.title')}</Th>
@@ -96,7 +96,7 @@ export default function FeedbackPage() {
               <Tr key={item.id}>
                 <Td>{item.id}</Td>
                 <Td>{t(`source.${item.source}`)}</Td>
-                <Td>{item.category || '-'}</Td>
+                <Td>{t(`filter.resourceTypes.${item.category}`, { ns: 'modules/audit-logs', defaultValue: item.category || '-' })}</Td>
                 <Td>{item.title}</Td>
                 <Td maxW="320px" whiteSpace="normal">{item.content}</Td>
                 <Td><Badge colorScheme={statusColor[item.status] || 'gray'}>{t(`status.${item.status}`)}</Badge></Td>

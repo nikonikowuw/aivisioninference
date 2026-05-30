@@ -8,6 +8,7 @@ export const menu = {
   files: 'File',
   'audit-logs': 'Log Audit',
   tasks: 'Tugas',
+  'brand-config': 'Konfigurasi Merek',
   'mail-config': 'Konfigurasi Email',
   feedback: 'Umpan Balik Pengguna',
 } as const;

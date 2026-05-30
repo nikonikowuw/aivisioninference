@@ -1,6 +1,8 @@
 export const auth = {
   signIn: {
     title: 'Niko Admin',
+    titlePart1: 'Niko',
+    titlePart2: 'Admin',
     subtitle: 'Enter your username and password to sign in',
     divider: 'Sign In with Account',
     username: {

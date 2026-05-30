@@ -40,7 +40,7 @@ function updateRememberedUser(rememberMe: boolean, username: string) {
 }
 
 function SignIn() {
-  const { t } = useTranslation('auth');
+  const { t } = useTranslation(['auth', 'layout']);
   const textColor = useColorModeValue('navy.700', 'white');
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const textColorBrand = useColorModeValue('brand.500', 'white');
@@ -107,7 +107,7 @@ function SignIn() {
                 color={textColor}
                 letterSpacing="-0.5px"
               >
-                Niko <Text as="span" color="brand.500">Admin</Text>
+                {t('signIn.titlePart1')} <Text as="span" color="brand.500">{t('signIn.titlePart2')}</Text>
               </Text>
             </Flex>
             <Text
@@ -237,7 +237,7 @@ function SignIn() {
           
           <Box textAlign="center">
              <Text color={textColorSecondary} fontSize="sm">
-               © 2026 Niko Admin. All rights reserved.
+               {t('layout:footer.copyright', { year: new Date().getFullYear() })}
              </Text>
           </Box>
         </VStack>

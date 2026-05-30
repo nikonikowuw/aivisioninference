@@ -19,6 +19,8 @@ export const layout = {
     settings: 'Settings',
     logout: 'Logout',
     notifications: 'Notifications',
+    pages: 'Pages',
+    logoText: 'Niko Admin',
   },
   footer: {
     copyright: '© {{year}} Niko Admin. All rights reserved.',

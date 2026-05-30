@@ -8,6 +8,7 @@ export const menu = {
   files: 'Files',
   'audit-logs': 'Audit Logs',
   tasks: 'Tasks',
+  'brand-config': 'Brand Config',
   'mail-config': 'Mail Config',
   feedback: 'Feedback',
 } as const;

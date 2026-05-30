@@ -113,6 +113,7 @@ export const common = {
     startDate: '开始日期',
     endDate: '结束日期',
     all: '全部',
+    selectDate: '选择日期',
   },
   date: {
     format: {
@@ -135,6 +136,8 @@ export const common = {
     daily: '日视图',
     monthly: '月视图',
     yearly: '年视图',
+    userActivity: '用户活跃度',
+    weekly: '周视图',
   },
   permissions: {
     empty: '暂无权限数据',

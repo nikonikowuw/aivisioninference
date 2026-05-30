@@ -31,7 +31,6 @@ export const files = {
     deleteSuccess: '删除成功',
     deleteFailed: '删除失败',
     deleteConfirm: '确定删除该文件？',
-    exportFailed: '导出失败',
     batchDone: '批量操作完成：成功 {{success}}，失败 {{failed}}',
     batchDeleteConfirm: '确定删除选中的 {{count}} 个文件？',
   },
@@ -42,7 +41,6 @@ export const files = {
   actions: {
     delete: '删除',
     download: '下载',
-    export: '导出',
   },
   size: {
     bytes: 'B',

@@ -49,7 +49,6 @@ export default function Files() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<'delete' | null>(null);
   const [isBatching, setIsBatching] = useState(false);
@@ -129,22 +128,6 @@ export default function Files() {
     }
   };
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      await filesApi.exportCsv({
-        keyword: filters.keyword,
-        storage_type: filters.storage_type,
-        start_time: filters.start_time,
-        end_time: filters.end_time,
-      });
-    } catch (err) {
-      toast({ title: t('message.exportFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -169,7 +152,6 @@ export default function Files() {
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
         <HStack spacing={2}>
-          <Button leftIcon={<DownloadIcon />} variant="outline" onClick={handleExport} isLoading={isExporting}>{t('actions.export')}</Button>
           <Button variant="brand" onClick={() => inputRef.current?.click()} isLoading={uploading}>
             {t('button.upload')}
           </Button>

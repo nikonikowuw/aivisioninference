@@ -73,9 +73,6 @@ export const auditLogs = {
       auth: '认证操作',
     },
   },
-  batch: {
-    selected: '已选中 {{count}} 项',
-  },
 } as const;
 
 export default auditLogs;

@@ -30,6 +30,7 @@ import {
   Center,
   Badge,
   Checkbox,
+  Switch,
 } from '@chakra-ui/react';
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -70,7 +71,7 @@ export default function Roles() {
   const { list: roles, total, page, pageSize, initialLoading, pageLoading, load: loadRoles, changePage, changePageSize } = usePagination<Role>(fetchRoles);
 
   const [editing, setEditing] = useState<Role | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', level: 100 });
+  const [form, setForm] = useState({ name: '', description: '', level: 100, status: 1 });
   const [isSaving, setIsSaving] = useState(false);
   const roleLevelMin = 1;
   const roleLevelMax = 99999;
@@ -129,13 +130,13 @@ export default function Roles() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', level: 100 });
+    setForm({ name: '', description: '', level: 100, status: 1 });
     onOpen();
   };
 
   const openEdit = (role: Role) => {
     setEditing(role);
-    setForm({ name: role.name, description: role.description, level: role.level ?? 100 });
+    setForm({ name: role.name, description: role.description, level: role.level ?? 100, status: role.status ?? 1 });
     onOpen();
   };
 
@@ -269,6 +270,7 @@ export default function Roles() {
               <Th>{t('table.columns.name')}</Th>
               <Th>{t('table.columns.description')}</Th>
               <Th>{t('form.level.label')}</Th>
+              <Th>{t('table.columns.status')}</Th>
               <Th>{t('table.columns.permissionCount')}</Th>
               <Th>{t('table.columns.actions')}</Th>
             </Tr>
@@ -286,6 +288,22 @@ export default function Roles() {
                 <Td fontWeight="600">{r.name}</Td>
                 <Td>{r.description || '-'}</Td>
                 <Td><Badge colorScheme={getLevelColorScheme(r.level)}>{r.level ?? 100}</Badge></Td>
+                <Td>
+                  <Switch
+                    colorScheme="green"
+                    isChecked={r.status === 1}
+                    onChange={async (e) => {
+                      const nextStatus = e.target.checked ? 1 : 0;
+                      try {
+                        await rolesApi.update(r.id, { ...r, status: nextStatus });
+                        toast({ title: t('message.updateSuccess'), status: 'success' });
+                        loadRoles();
+                      } catch (err) {
+                        toast({ title: t('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+                      }
+                    }}
+                  />
+                </Td>
                 <Td>{r.permissions?.length ?? 0}</Td>
                 <Td>
                   <HStack spacing={2}>
@@ -357,6 +375,10 @@ export default function Roles() {
                 placeholder={t('form.level.placeholder')}
               />
               <FormHelperText>{t('form.level.helper')}</FormHelperText>
+            </FormControl>
+            <FormControl display="flex" alignItems="center" mb={4}>
+              <FormLabel mb="0">{t('table.columns.status')}</FormLabel>
+              <Switch isChecked={form.status === 1} onChange={(e) => setForm({ ...form, status: e.target.checked ? 1 : 0 })} />
             </FormControl>
           </ModalBody>
           <ModalFooter>

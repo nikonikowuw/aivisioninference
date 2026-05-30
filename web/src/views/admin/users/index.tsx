@@ -31,6 +31,8 @@ import {
   Center,
   Checkbox,
   CheckboxGroup,
+  Radio,
+  RadioGroup,
   Stack,
   Switch,
 } from '@chakra-ui/react';
@@ -59,27 +61,17 @@ export default function Users() {
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
-  const fetchUsers = useCallback((p: number, ps: number) => {
-    return usersApi.list({
-      page: p,
-      page_size: ps,
-      keyword: filters.keyword,
-      status: parseOptionalNumber(filters.status),
-    });
-  }, [filters]);
+  const fetchUsers = useCallback((page: number, pageSize: number) => usersApi.list({
+    page,
+    page_size: pageSize,
+    keyword: filters.keyword,
+    status: parseOptionalNumber(filters.status),
+  }), [filters]);
 
   const { list: users, total, page, pageSize, initialLoading, pageLoading, load: loadUsers, changePage, changePageSize } = usePagination<User>(fetchUsers);
 
   const [allRoles, setAllRoles] = useState<Role[]>([]);
   const [editing, setEditing] = useState<User | null>(null);
-  const [form, setForm] = useState({
-    username: '',
-    display_name: '',
-    email: '',
-    password: '',
-    status: 1,
-    role_ids: [] as string[],
-  });
   const [avatarUrl, setAvatarUrl] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -90,65 +82,52 @@ export default function Users() {
     loadUsers({ page: 1 }).catch(() => {
       toast({ title: tCommon('message.loadFailed'), status: 'error' });
     });
-  }, [searchTrigger, loadUsers]);
+  }, [searchTrigger, loadUsers, toast, tCommon]);
 
   useEffect(() => {
     rolesApi.list({ page: 1, page_size: 100 }).then((d) => setAllRoles(d.list)).catch(() => {
       toast({ title: tCommon('message.loadFailed'), status: 'error' });
     });
-  }, []);
+  }, [toast, tCommon]);
 
-  const openCreate = () => {
-    setEditing(null);
+  const [form, setForm] = useState({
+    username: '',
+    display_name: '',
+    email: '',
+    password: '',
+    status: 1,
+    role_ids: [] as string[],
+  });
+
+  const resetForm = (user?: User) => {
+    setEditing(user || null);
     setForm({
-      username: '',
-      display_name: '',
-      email: '',
+      username: user?.username || '',
+      display_name: user?.display_name || '',
+      email: user?.email || '',
       password: '',
-      status: 1,
-      role_ids: [],
+      status: user?.status ?? 1,
+      role_ids: user?.roles?.map((r) => r.id) || [],
     });
-    setAvatarUrl('');
+    setAvatarUrl(user?.avatar_url || '');
     onOpen();
   };
 
-  const openEdit = (user: User) => {
-    setEditing(user);
-    setForm({
-      username: user.username,
-      display_name: user.display_name,
-      email: user.email,
-      password: '',
-      status: user.status,
-      role_ids: user.roles?.map((r) => r.id) || [],
-    });
-    setAvatarUrl(user.avatar_url || '');
-    onOpen();
-  };
+  const openCreate = () => resetForm();
+  const openEdit = (user: User) => resetForm(user);
 
   const handleSave = async () => {
     try {
       if (editing) {
-        // 更新基本信息
-        const updateData: Partial<User> & { role_ids?: string[] } = {
-          username: form.username,
-          display_name: form.display_name,
-          email: form.email,
-          role_ids: form.role_ids,
-        };
+        const { password, ...updateData } = form;
         await usersApi.update(editing.id, updateData);
 
-        // 如果填写了密码，单独调用重置密码接口
-        if (form.password) {
-          await usersApi.resetPassword(editing.id, form.password);
+        if (password) {
+          await usersApi.resetPassword(editing.id, password);
         }
-
         toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
-        await usersApi.create({
-          ...form,
-          role_ids: form.role_ids,
-        } as any);
+        await usersApi.create(form as any);
         toast({ title: t('message.createSuccess'), status: 'success' });
       }
       onClose();
@@ -233,29 +212,31 @@ export default function Users() {
             </Tr>
           </Thead>
           <Tbody>
-            {users.map((u) => (
-              <Tr key={u.id}>
-                <Td>{u.id}</Td>
-                <Td fontWeight="600">{u.username}</Td>
-                <Td>{u.display_name}</Td>
-                <Td>{u.email}</Td>
+            {users.map((user) => (
+              <Tr key={user.id}>
+                <Td>{user.id}</Td>
+                <Td fontWeight="600">{user.username}</Td>
+                <Td>{user.display_name}</Td>
+                <Td>{user.email}</Td>
                 <Td>
                   <HStack spacing={2}>
                     <Switch
-                      aria-label={u.status === 1 ? t('actions.disable') : t('actions.enable')}
-                      isChecked={u.status === 1}
-                      isDisabled={u.id === currentUser?.id || isToggling || toggleTarget?.id === u.id}
-                      onChange={() => handleToggleClick(u)}
+                      aria-label={user.status === 1 ? t('actions.disable') : t('actions.enable')}
+                      isChecked={user.status === 1}
+                      isDisabled={user.id === currentUser?.id || isToggling || toggleTarget?.id === user.id}
+                      onChange={() => setToggleTarget(user)}
                       colorScheme="green"
                     />
-                    <Badge colorScheme={u.status === 1 ? 'green' : 'red'}>{u.status === 1 ? t('table.status.active') : t('table.status.inactive')}</Badge>
+                    <Badge colorScheme={user.status === 1 ? 'green' : 'red'}>
+                      {user.status === 1 ? t('table.status.active') : t('table.status.inactive')}
+                    </Badge>
                   </HStack>
                 </Td>
-                <Td>{u.roles?.map((r) => r.name).join(', ') || '-'}</Td>
+                <Td>{user.roles?.map((r) => r.name).join(', ') || '-'}</Td>
                 <Td>
                   <HStack spacing={2}>
-                    <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(u)} />
-                    <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(u.id)} />
+                    <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(user)} />
+                    <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(user.id)} />
                   </HStack>
                 </Td>
               </Tr>
@@ -288,12 +269,14 @@ export default function Users() {
         isLoading={isToggling}
       />
 
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{editing ? t('modal.editTitle') : t('modal.createTitle')}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
+      <Modal isOpen={isOpen} onClose={onClose} size="lg">
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent borderRadius="20px">
+          <ModalHeader fontSize="22px" fontWeight="800" color={textColor} pt="25px" px="25px">
+            {editing ? t('modal.editTitle') : t('modal.createTitle')}
+          </ModalHeader>
+          <ModalCloseButton top="25px" right="25px" />
+          <ModalBody px="25px" pb="25px">
             {editing && (
               <Box textAlign="center" mb={4}>
                 <AvatarUploader
@@ -311,57 +294,131 @@ export default function Users() {
                 />
               </Box>
             )}
-            <FormControl mb={4}>
-              <FormLabel>{t('form.username.label')}</FormLabel>
-              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder={t('form.username.placeholder')} />
+            <FormControl isRequired mb="24px">
+              <FormLabel ms="4px" fontSize="sm" fontWeight="700" color={textColor}>
+                {t('form.username.label')}
+              </FormLabel>
+              <Input
+                variant="auth"
+                fontSize="sm"
+                type="text"
+                placeholder={t('form.username.placeholder')}
+                fontWeight="500"
+                size="lg"
+                h="50px"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+              />
             </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.displayName.label')}</FormLabel>
-              <Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} placeholder={t('form.displayName.placeholder')} />
+            <FormControl mb="24px">
+              <FormLabel ms="4px" fontSize="sm" fontWeight="700" color={textColor}>
+                {t('form.displayName.label')}
+              </FormLabel>
+              <Input
+                variant="auth"
+                fontSize="sm"
+                type="text"
+                placeholder={t('form.displayName.placeholder')}
+                fontWeight="500"
+                size="lg"
+                h="50px"
+                value={form.display_name}
+                onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+              />
             </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.email.label')}</FormLabel>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={t('form.email.placeholder')} />
+            <FormControl isRequired mb="24px">
+              <FormLabel ms="4px" fontSize="sm" fontWeight="700" color={textColor}>
+                {t('form.email.label')}
+              </FormLabel>
+              <Input
+                variant="auth"
+                fontSize="sm"
+                type="email"
+                placeholder={t('form.email.placeholder')}
+                fontWeight="500"
+                size="lg"
+                h="50px"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
             </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('form.password.label')}{editing && `（${t('form.password.hint')}）`}</FormLabel>
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={t('form.password.placeholder')} />
+            <FormControl isRequired={!editing} mb="24px">
+              <FormLabel ms="4px" fontSize="sm" fontWeight="700" color={textColor}>
+                {t('form.password.label')}
+                {editing && <Text as="span" fontWeight="400" ms="1">（{t('form.password.hint')}）</Text>}
+              </FormLabel>
+              <Input
+                variant="auth"
+                fontSize="sm"
+                type="password"
+                placeholder={t('form.password.placeholder')}
+                fontWeight="500"
+                size="lg"
+                h="50px"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
             </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>{t('table.columns.roles')}</FormLabel>
+            <FormControl mb="24px">
+              <FormLabel ms="4px" fontSize="sm" fontWeight="700" color={textColor}>
+                {t('table.columns.roles')}
+              </FormLabel>
               <CheckboxGroup
                 colorScheme="brand"
                 value={form.role_ids}
                 onChange={(values) => setForm({ ...form, role_ids: values as string[] })}
               >
-                <Stack spacing={[2, 4]} direction="row" wrap="wrap">
+                <Stack spacing={[2, 4]} direction="row" wrap="wrap" p="4px">
                   {allRoles.map((role) => (
-                    <Checkbox key={role.id} value={role.id}>
+                    <Checkbox key={role.id} value={role.id} fontWeight="500" fontSize="sm">
                       {role.name}
                     </Checkbox>
                   ))}
                 </Stack>
               </CheckboxGroup>
             </FormControl>
-            {!editing ? (
-              <FormControl mb={4}>
-                <FormLabel>{t('form.status.label')}</FormLabel>
-                <Select value={form.status} onChange={(e) => setForm({ ...form, status: Number(e.target.value) })}>
-                  <option value={1}>{t('form.status.active')}</option>
-                  <option value={0}>{t('form.status.inactive')}</option>
-                </Select>
-              </FormControl>
-            ) : (
-              <FormControl mb={4} isReadOnly>
-                <FormLabel>{t('form.status.label')}</FormLabel>
-                <Badge colorScheme={form.status === 1 ? 'green' : 'red'}>{form.status === 1 ? t('form.status.active') : t('form.status.inactive')}</Badge>
-                <FormHelperText>{t('form.status.readOnlyHint')}</FormHelperText>
+            {!editing && (
+              <FormControl mb="24px">
+                <FormLabel ms="4px" fontSize="sm" fontWeight="700" color={textColor}>
+                  {t('form.status.label')}
+                </FormLabel>
+                <RadioGroup
+                  onChange={(val) => setForm({ ...form, status: Number(val) })}
+                  value={String(form.status)}
+                >
+                  <Stack direction="row" spacing={5} ms="4px">
+                    <Radio value="1" colorScheme="green">
+                      <Text fontSize="sm" fontWeight="500">{t('form.status.active')}</Text>
+                    </Radio>
+                    <Radio value="0" colorScheme="red">
+                      <Text fontSize="sm" fontWeight="500">{t('form.status.inactive')}</Text>
+                    </Radio>
+                  </Stack>
+                </RadioGroup>
               </FormControl>
             )}
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>{tCommon('button.cancel')}</Button>
-            <Button variant="brand" onClick={handleSave}>{tCommon('button.save')}</Button>
+          <ModalFooter pb="25px" px="25px">
+            <Button
+              variant="no-effects"
+              mr={3}
+              onClick={onClose}
+              fontWeight="600"
+              fontSize="sm"
+              h="44px"
+            >
+              {tCommon('button.cancel')}
+            </Button>
+            <Button
+              variant="brand"
+              onClick={handleSave}
+              fontWeight="600"
+              fontSize="sm"
+              h="44px"
+              px="24px"
+            >
+              {tCommon('button.save')}
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

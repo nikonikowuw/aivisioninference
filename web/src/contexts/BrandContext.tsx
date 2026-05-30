@@ -37,6 +37,17 @@ export function BrandProvider({ children }: { children: ReactNode }) {
     refreshBrand();
   }, []);
 
+  useEffect(() => {
+    // 动态更新页面标题和 Favicon
+    if (brand.system_name) {
+      document.title = brand.system_name;
+    }
+    const favicon = document.getElementById('favicon') as HTMLLinkElement;
+    if (favicon && brand.logo_url) {
+      favicon.href = brand.logo_url;
+    }
+  }, [brand]);
+
   return (
     <BrandContext.Provider value={{ brand, refreshBrand, setBrand }}>
       {children}

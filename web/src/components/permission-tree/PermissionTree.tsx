@@ -6,16 +6,13 @@ import {
   Flex,
   HStack,
   Icon,
-  IconButton,
   Text,
   VStack,
   useColorModeValue,
   Collapse,
-  useDisclosure,
   Wrap,
   WrapItem,
   Tooltip,
-  Divider,
 } from '@chakra-ui/react';
 import { ChevronDownIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { MdMenu, MdRadioButtonChecked, MdExpandMore, MdExpandLess, MdCheckCircle, MdRemoveCircleOutline } from 'react-icons/md';
@@ -30,24 +27,41 @@ interface PermissionTreeProps {
   onChange: (selectedIds: string[]) => void;
 }
 
-/**
- * 递归获取所有后代节点的 ID
- */
 function getAllDescendantIds(node: Permission): string[] {
-  const ids: string[] = [];
-  const walk = (children: Permission[]) => {
-    for (const child of children) {
-      ids.push(child.id);
-      if (child.children) walk(child.children);
-    }
-  };
-  if (node.children) walk(node.children);
-  return ids;
+  return getAllNodeIds(node.children ?? []);
 }
 
-/**
- * 权限树节点组件
- */
+function getAllNodeIds(nodes: Permission[]): string[] {
+  return nodes.flatMap((node) => [node.id, ...getAllNodeIds(node.children ?? [])]);
+}
+
+function getExpandableNodeIds(nodes: Permission[]): string[] {
+  return nodes.flatMap((node) => {
+    if (!node.children?.length) return [];
+    return [node.id, ...getExpandableNodeIds(node.children)];
+  });
+}
+
+function findPermissionNode(nodes: Permission[], targetId: string): Permission | null {
+  for (const node of nodes) {
+    if (node.id === targetId) return node;
+    const found = findPermissionNode(node.children ?? [], targetId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function addAncestorIds(nodes: Permission[], targetId: string, selectedIds: Set<string>, path: string[] = []): boolean {
+  for (const node of nodes) {
+    if (node.id === targetId) {
+      path.forEach((id) => selectedIds.add(id));
+      return true;
+    }
+    if (addAncestorIds(node.children ?? [], targetId, selectedIds, [...path, node.id])) return true;
+  }
+  return false;
+}
+
 const PermissionNode = ({
   node,
   depth,
@@ -64,35 +78,41 @@ const PermissionNode = ({
   onToggleExpand: (id: string) => void;
 }) => {
   const { t: tMenu } = useTranslation('menu');
+  const { t: tPermission } = useTranslation('modules/permissions');
   const isExpanded = expandedIds.has(node.id);
-  
-  const isLeaf = !node.children || node.children.length === 0;
+
+  const isLeaf = !node.children?.length;
   const descendantIds = useMemo(() => getAllDescendantIds(node), [node]);
-  
+
   const isChecked = selectedIds.includes(node.id);
-  const checkedDescendants = descendantIds.filter((id) => selectedIds.includes(id));
-  
-  const allChecked = isLeaf ? isChecked : (isChecked && checkedDescendants.length === descendantIds.length);
-  const someChecked = isChecked || checkedDescendants.length > 0;
-  const isIndeterminate = someChecked && !allChecked;
+  const checkedDescendantsCount = descendantIds.filter((id) => selectedIds.includes(id)).length;
+
+  const allChecked = isChecked && (isLeaf || checkedDescendantsCount === descendantIds.length);
+  const isIndeterminate = !allChecked && (isChecked || checkedDescendantsCount > 0);
 
   const bgHover = useColorModeValue('gray.50', 'whiteAlpha.50');
   const lineConnectorColor = useColorModeValue('gray.200', 'gray.600');
   const menuIconColor = useColorModeValue('brand.500', 'brand.300');
   const buttonIconColor = useColorModeValue('orange.500', 'orange.300');
   const textColor = useColorModeValue('navy.700', 'white');
+  const secondaryTextColor = useColorModeValue('gray.600', 'gray.400');
+  const buttonHoverBg = useColorModeValue('white', 'whiteAlpha.100');
 
-  const getDisplayName = (p: Permission) => {
-    if (p.type === 'menu') {
-      return tMenu(p.code, { defaultValue: p.name });
-    }
-    return p.name;
-  };
+const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
+  if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
+  return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+};
 
-  // 分离孩子：菜单和按钮
   const { menuChildren, buttonChildren } = useMemo(() => {
-    const menus = (node.children || []).filter(c => c.type === 'menu');
-    const buttons = (node.children || []).filter(c => c.type !== 'menu');
+    const menus: Permission[] = [];
+    const buttons: Permission[] = [];
+    for (const child of node.children ?? []) {
+      if (child.type === 'menu') {
+        menus.push(child);
+      } else {
+        buttons.push(child);
+      }
+    }
     return { menuChildren: menus, buttonChildren: buttons };
   }, [node.children]);
 
@@ -100,11 +120,11 @@ const PermissionNode = ({
 
   return (
     <Box w="100%" position="relative">
-      <Flex 
-        align="center" 
-        py={2} 
-        px={2} 
-        borderRadius="lg" 
+      <Flex
+        align="center"
+        py={2}
+        px={2}
+        borderRadius="lg"
         _hover={{ bg: bgHover }}
         transition="all 0.2s"
         cursor="pointer"
@@ -121,7 +141,7 @@ const PermissionNode = ({
           ) : (
             <Box w="18px" />
           )}
-          
+
           <Checkbox
             isChecked={allChecked}
             isIndeterminate={isIndeterminate}
@@ -139,7 +159,7 @@ const PermissionNode = ({
             w="16px"
             h="16px"
           />
-          
+
           <Tooltip label={node.code} placement="top" hasArrow>
             <Text
               fontSize="sm"
@@ -147,10 +167,10 @@ const PermissionNode = ({
               color={textColor}
               noOfLines={1}
             >
-              {getDisplayName(node)}
+              {getDisplayName(node, tMenu, tPermission)}
             </Text>
           </Tooltip>
-          
+
           {!isTopLevel && (
              <Text fontSize="xs" color="gray.400" fontWeight="normal">
                {node.code}
@@ -161,10 +181,10 @@ const PermissionNode = ({
 
       {!isLeaf && (
         <Collapse in={isExpanded} animateOpacity>
-          <Box 
-            position="relative" 
-            ml={4} 
-            pl={4} 
+          <Box
+            position="relative"
+            ml={4}
+            pl={4}
             mt={1}
             borderLeft="1px solid"
             borderColor={lineConnectorColor}
@@ -182,19 +202,19 @@ const PermissionNode = ({
                   onToggleExpand={onToggleExpand}
                 />
               ))}
-              
-              {/* 如果有按钮类的子节点，横向排列 */}
+
+              {/* 如果有按钮类的子节点,横向排列 */}
               {buttonChildren.length > 0 && (
-                <Box py={3} px={2} mt={1} borderRadius="md" bg={useColorModeValue('gray.50', 'whiteAlpha.50')}>
+                <Box py={3} px={2} mt={1} borderRadius="md" bg={bgHover}>
                   <Wrap spacing={4}>
                     {buttonChildren.map((btn) => (
                       <WrapItem key={btn.id}>
-                        <HStack 
-                          spacing={2} 
-                          px={2} 
-                          py={1} 
-                          borderRadius="md" 
-                          _hover={{ bg: useColorModeValue('white', 'whiteAlpha.100') }}
+                        <HStack
+                          spacing={2}
+                          px={2}
+                          py={1}
+                          borderRadius="md"
+                          _hover={{ bg: buttonHoverBg }}
                           transition="all 0.2s"
                         >
                           <Checkbox
@@ -204,8 +224,8 @@ const PermissionNode = ({
                             colorScheme="orange"
                           />
                           <Tooltip label={btn.code} hasArrow>
-                            <Text fontSize="xs" color={useColorModeValue('gray.600', 'gray.400')} fontWeight="medium">
-                              {getDisplayName(btn)}
+                            <Text fontSize="xs" color={secondaryTextColor} fontWeight="medium">
+                              {getDisplayName(btn, tMenu, tPermission)}
                             </Text>
                           </Tooltip>
                         </HStack>
@@ -227,76 +247,45 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
   const { t: tMenu } = useTranslation('menu');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const headerBg = useColorModeValue('gray.50', 'whiteAlpha.100');
-  
+  const topNodeTextColor = useColorModeValue('navy.700', 'white');
+
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  // 默认展开第一层
   useEffect(() => {
     if (tree.length > 0 && expandedIds.size === 0) {
-      setExpandedIds(new Set(tree.map(n => n.id)));
+      setExpandedIds(new Set(tree.map((node) => node.id)));
     }
-  }, [tree]);
+  }, [tree, expandedIds.size]);
 
   const handleToggleExpand = (id: string) => {
-    const newExpanded = new Set(expandedIds);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedIds(newExpanded);
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const handleToggle = (id: string) => {
-    const findNode = (nodes: Permission[], targetId: string): Permission | null => {
-      for (const n of nodes) {
-        if (n.id === targetId) return n;
-        if (n.children) {
-          const found = findNode(n.children, targetId);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const targetNode = findNode(tree, id);
+    const targetNode = findPermissionNode(tree, id);
     if (!targetNode) return;
 
-    const descendantIds = getAllDescendantIds(targetNode);
-    const allAffectedIds = [id, ...descendantIds];
-    const isCurrentlyChecked = selectedIds.includes(id);
-
-    if (isCurrentlyChecked) {
-      onChange(selectedIds.filter((sid) => !allAffectedIds.includes(sid)));
-    } else {
-      const newSet = new Set([...selectedIds, ...allAffectedIds]);
-      const addParents = (nodes: Permission[], targetId: string, path: string[]): boolean => {
-        for (const n of nodes) {
-          if (n.id === targetId) {
-            path.forEach(pid => newSet.add(pid));
-            return true;
-          }
-          if (n.children && addParents(n.children, targetId, [...path, n.id])) return true;
-        }
-        return false;
-      };
-      addParents(tree, id, []);
-      onChange(Array.from(newSet));
+    const affectedIds = [id, ...getAllDescendantIds(targetNode)];
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((selectedId) => !affectedIds.includes(selectedId)));
+      return;
     }
+
+    const nextSelectedIds = new Set([...selectedIds, ...affectedIds]);
+    addAncestorIds(tree, id, nextSelectedIds);
+    onChange(Array.from(nextSelectedIds));
   };
 
   const expandAll = () => {
-    const allIds = new Set<string>();
-    const walk = (nodes: Permission[]) => {
-      for (const n of nodes) {
-        if (n.children && n.children.length > 0) {
-          allIds.add(n.id);
-          walk(n.children);
-        }
-      }
-    };
-    walk(tree);
-    setExpandedIds(allIds);
+    setExpandedIds(new Set(getExpandableNodeIds(tree)));
   };
 
   const collapseAll = () => {
@@ -304,15 +293,7 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
   };
 
   const selectAll = () => {
-    const allIds: string[] = [];
-    const walk = (nodes: Permission[]) => {
-      for (const n of nodes) {
-        allIds.push(n.id);
-        if (n.children) walk(n.children);
-      }
-    };
-    walk(tree);
-    onChange(allIds);
+    onChange(getAllNodeIds(tree));
   };
 
   const deselectAll = () => {
@@ -323,41 +304,41 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
     <VStack spacing={6} align="stretch" w="100%">
       <Flex justify="space-between" align="center" px={2} py={2} bg={headerBg} borderRadius="xl">
         <HStack spacing={4}>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            leftIcon={<MdExpandMore />} 
+          <Button
+            size="sm"
+            variant="ghost"
+            leftIcon={<MdExpandMore />}
             onClick={expandAll}
             borderRadius="lg"
           >
-            {t('button.expandAll', { defaultValue: '全部展开' })}
+            {t('permissions.expandAll')}
           </Button>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            leftIcon={<MdExpandLess />} 
+          <Button
+            size="sm"
+            variant="ghost"
+            leftIcon={<MdExpandLess />}
             onClick={collapseAll}
             borderRadius="lg"
           >
-            {t('button.collapseAll', { defaultValue: '全部折叠' })}
+            {t('permissions.collapseAll')}
           </Button>
         </HStack>
         <HStack spacing={2}>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            colorScheme="brand" 
-            leftIcon={<MdCheckCircle />} 
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="brand"
+            leftIcon={<MdCheckCircle />}
             onClick={selectAll}
             borderRadius="lg"
           >
             {t('permissions.selectAll')}
           </Button>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            colorScheme="gray" 
-            leftIcon={<MdRemoveCircleOutline />} 
+          <Button
+            size="sm"
+            variant="outline"
+            colorScheme="gray"
+            leftIcon={<MdRemoveCircleOutline />}
             onClick={deselectAll}
             borderRadius="lg"
           >
@@ -366,64 +347,76 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
         </HStack>
       </Flex>
 
-      {tree.map((topNode) => (
-        <Card
-          key={topNode.id}
-          p={0}
-          overflow="hidden"
-          variant="outline"
-          boxShadow="sm"
-          _hover={{ 
-            boxShadow: 'md',
-            borderColor: 'brand.300'
-          }}
-          transition="all 0.3s"
-        >
-          <Box 
-            px={5} 
-            py={4} 
-            bg={headerBg}
-            borderBottom="1px solid"
-            borderColor={borderColor}
+      {tree.map((topNode) => {
+        const descendantIds = getAllDescendantIds(topNode);
+        const isTopNodeChecked = selectedIds.includes(topNode.id);
+        const hasSelectedDescendants = descendantIds.some((id) => selectedIds.includes(id));
+        const allDescendantsSelected = descendantIds.every((id) => selectedIds.includes(id));
+        const isTopNodeFullyChecked = isTopNodeChecked && allDescendantsSelected;
+        const isTopNodeIndeterminate = !isTopNodeFullyChecked && (isTopNodeChecked || hasSelectedDescendants);
+        const topNodeName = topNode.type === 'menu'
+          ? tMenu(topNode.code, { defaultValue: topNode.name })
+          : t(`codes.${topNode.code.replace(/:/g, '.')}`, { ns: 'modules/permissions', defaultValue: topNode.name });
+
+        return (
+          <Card
+            key={topNode.id}
+            p={0}
+            overflow="hidden"
+            variant="outline"
+            boxShadow="sm"
+            _hover={{
+              boxShadow: 'md',
+              borderColor: 'brand.300'
+            }}
+            transition="all 0.3s"
           >
-            <HStack justify="space-between">
-              <HStack spacing={3}>
-                <Checkbox
-                  isChecked={selectedIds.includes(topNode.id) && getAllDescendantIds(topNode).every(id => selectedIds.includes(id))}
-                  isIndeterminate={selectedIds.includes(topNode.id) || getAllDescendantIds(topNode).some(id => selectedIds.includes(id))}
-                  onChange={() => handleToggle(topNode.id)}
+            <Box
+              px={5}
+              py={4}
+              bg={headerBg}
+              borderBottom="1px solid"
+              borderColor={borderColor}
+            >
+              <HStack justify="space-between">
+                <HStack spacing={3}>
+                  <Checkbox
+                    isChecked={isTopNodeFullyChecked}
+                    isIndeterminate={isTopNodeIndeterminate}
+                    onChange={() => handleToggle(topNode.id)}
+                    colorScheme="brand"
+                  />
+                  <Icon as={MdMenu} color="brand.500" w="22px" h="22px" />
+                  <Text fontWeight="bold" fontSize="lg" color={topNodeTextColor}>
+                    {topNodeName}
+                  </Text>
+                </HStack>
+                <Badge
+                  variant="subtle"
                   colorScheme="brand"
-                />
-                <Icon as={MdMenu} color="brand.500" w="22px" h="22px" />
-                <Text fontWeight="bold" fontSize="lg" color={useColorModeValue('navy.700', 'white')}>
-                  {topNode.type === 'menu' ? tMenu(topNode.code, { defaultValue: topNode.name }) : topNode.name}
-                </Text>
+                  borderRadius="full"
+                  px={3}
+                  py={1}
+                  fontSize="xs"
+                >
+                  {topNode.code}
+                </Badge>
               </HStack>
-              <Badge 
-                variant="subtle" 
-                colorScheme="brand" 
-                borderRadius="full" 
-                px={3} 
-                py={1}
-                fontSize="xs"
-              >
-                {topNode.code}
-              </Badge>
-            </HStack>
-          </Box>
-          
-          <Box p={4}>
-            <PermissionNode
-              node={topNode}
-              depth={0}
-              selectedIds={selectedIds}
-              onToggle={handleToggle}
-              expandedIds={expandedIds}
-              onToggleExpand={handleToggleExpand}
-            />
-          </Box>
-        </Card>
-      ))}
+            </Box>
+
+            <Box p={4}>
+              <PermissionNode
+                node={topNode}
+                depth={0}
+                selectedIds={selectedIds}
+                onToggle={handleToggle}
+                expandedIds={expandedIds}
+                onToggleExpand={handleToggleExpand}
+              />
+            </Box>
+          </Card>
+        );
+      })}
     </VStack>
   );
 }

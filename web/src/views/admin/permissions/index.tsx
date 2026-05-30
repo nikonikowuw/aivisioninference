@@ -24,7 +24,6 @@ import {
   IconButton,
   Icon,
   Collapse,
-  Tooltip,
   VStack,
 } from '@chakra-ui/react';
 import { AddIcon, EditIcon, DeleteIcon, ChevronDownIcon, ChevronRightIcon } from '@chakra-ui/icons';
@@ -38,38 +37,40 @@ import { useFilter } from 'hooks/useFilter';
 import { filterTree, type FilteredNode } from 'utils/treeFilter';
 import Card from 'components/card/Card';
 
-function flattenTree(nodes: Permission[], depth = 0): (Permission & { _depth: number })[] {
-  const result: (Permission & { _depth: number })[] = [];
-  for (const node of nodes) {
-    result.push({ ...node, _depth: depth });
-    if (node.children) {
-      result.push(...flattenTree(node.children, depth + 1));
-    }
-  }
-  return result;
+type PermissionWithDepth = Permission & { _depth: number };
+
+type PermissionForm = {
+  name: string;
+  code: string;
+  type: string;
+  parent_id: string;
+};
+
+const emptyPermissionForm: PermissionForm = { name: '', code: '', type: 'menu', parent_id: '' };
+
+function flattenTree(nodes: Permission[], depth = 0): PermissionWithDepth[] {
+  return nodes.flatMap((node) => [
+    { ...node, _depth: depth },
+    ...flattenTree(node.children ?? [], depth + 1),
+  ]);
 }
 
 function getDescendantIds(nodes: Permission[], id: string): Set<string> {
-  const ids = new Set<string>();
-  function walk(list: Permission[]) {
-    for (const n of list) {
-      ids.add(n.id);
-      if (n.children) walk(n.children);
+  for (const node of nodes) {
+    if (node.id === id) {
+      return new Set([node.id, ...flattenTree(node.children ?? []).map((child) => child.id)]);
     }
+    const ids = getDescendantIds(node.children ?? [], id);
+    if (ids.size > 0) return ids;
   }
-  function find(list: Permission[]): boolean {
-    for (const n of list) {
-      if (n.id === id) {
-        ids.add(n.id);
-        walk(n.children ?? []);
-        return true;
-      }
-      if (n.children && find(n.children)) return true;
-    }
-    return false;
-  }
-  find(nodes);
-  return ids;
+  return new Set();
+}
+
+function getExpandableIds(nodes: Permission[]): string[] {
+  return nodes.flatMap((node) => {
+    if (!node.children?.length) return [];
+    return [node.id, ...getExpandableIds(node.children)];
+  });
 }
 
 const PermissionRow = ({ 
@@ -88,22 +89,20 @@ const PermissionRow = ({
   onToggleExpand: (id: string) => void;
 }) => {
   const { t: tMenu } = useTranslation('menu');
+  const { t: tPermission } = useTranslation('modules/permissions');
   const isExpanded = expandedIds.has(node.id);
   const hasChildren = node.children && node.children.length > 0;
   
   const bgHover = useColorModeValue('gray.50', 'whiteAlpha.50');
-  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const lineConnectorColor = useColorModeValue('gray.200', 'gray.600');
   const menuIconColor = useColorModeValue('brand.500', 'brand.300');
   const buttonIconColor = useColorModeValue('orange.500', 'orange.300');
   const textColor = useColorModeValue('navy.700', 'white');
 
-  const getDisplayName = (p: Permission) => {
-    if (p.type === 'menu') {
-      return tMenu(p.code, { defaultValue: p.name });
-    }
-    return p.name;
-  };
+const getDisplayName = (p: Permission, tMenu: any, tPermission: any) => {
+  if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
+  return tPermission(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+};
 
   return (
     <Box w="100%">
@@ -135,41 +134,45 @@ const PermissionRow = ({
             w="16px"
             h="16px"
           />
-          
+
           <HStack spacing={2}>
-            <Text 
-              fontSize="sm" 
-              fontWeight={depth === 0 ? 'bold' : 'medium'} 
+            <Text
+              fontSize="sm"
+              fontWeight={depth === 0 ? 'bold' : 'medium'}
               color={textColor}
               opacity={node.isAncestor ? 0.6 : 1}
             >
-              {getDisplayName(node as Permission)}
+              {getDisplayName(node as Permission, tMenu, tPermission)}
             </Text>
             <Badge variant="subtle" colorScheme="blue" fontSize="2xs" px={2} borderRadius="full">
               {node.code}
             </Badge>
-            {node.type === 'button' && (
-              <Badge variant="subtle" colorScheme="orange" fontSize="2xs" px={2} borderRadius="full">
-                {node.type}
-              </Badge>
-            )}
+            <Badge
+              variant="subtle"
+              colorScheme={node.type === 'menu' ? 'brand' : 'orange'}
+              fontSize="2xs"
+              px={2}
+              borderRadius="full"
+            >
+              {tPermission(`form.type.${node.type}`)}
+            </Badge>
           </HStack>
         </HStack>
-        
+
         <HStack spacing={1}>
-          <IconButton 
-            aria-label="Edit" 
-            icon={<EditIcon />} 
-            size="xs" 
-            variant="ghost" 
+          <IconButton
+            aria-label={tPermission('actions.edit', { defaultValue: 'Edit' })}
+            icon={<EditIcon />}
+            size="xs"
+            variant="ghost"
             colorScheme="brand"
             onClick={(e) => { e.stopPropagation(); onEdit(node as Permission); }}
           />
-          <IconButton 
-            aria-label="Delete" 
-            icon={<DeleteIcon />} 
-            size="xs" 
-            variant="ghost" 
+          <IconButton
+            aria-label={tPermission('actions.delete', { defaultValue: 'Delete' })}
+            icon={<DeleteIcon />}
+            size="xs"
+            variant="ghost"
             colorScheme="red"
             onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
           />
@@ -208,17 +211,22 @@ export default function Permissions() {
   const { t: tCommon } = useTranslation('common');
   const { t: tMenu } = useTranslation('menu');
   const textColor = useColorModeValue('navy.700', 'white');
-  const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
+  const cardHeaderBg = useColorModeValue('gray.50', 'whiteAlpha.50');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [tree, setTree] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Permission | null>(null);
-  const [form, setForm] = useState({ name: '', code: '', type: 'menu', parent_id: '' });
+  const [form, setForm] = useState<PermissionForm>(emptyPermissionForm);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const getDisplayName = (p: Permission) => {
+    if (p.type === 'menu') return tMenu(p.code, { defaultValue: p.name });
+    return t(`codes.${p.code.replace(/:/g, '.')}`, { defaultValue: p.name });
+  };
 
   const { filters, setFilter, resetFilters, refresh } = useFilter();
 
@@ -226,36 +234,31 @@ export default function Permissions() {
     return filterTree(tree, filters.keyword, filters.type);
   }, [tree, filters.keyword, filters.type]);
 
-  // 默认展开所有（或者根据需要逻辑控制）
   useEffect(() => {
     if (tree.length > 0 && expandedIds.size === 0) {
-      const allIds = new Set<string>();
-      const walk = (nodes: Permission[]) => {
-        nodes.forEach(n => {
-          if (n.children && n.children.length > 0) {
-            allIds.add(n.id);
-            walk(n.children);
-          }
-        });
-      };
-      walk(tree);
-      setExpandedIds(allIds);
+      setExpandedIds(new Set(getExpandableIds(tree)));
     }
-  }, [tree]);
+  }, [tree, expandedIds.size]);
 
   const handleToggleExpand = (id: string) => {
-    const newExpanded = new Set(expandedIds);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedIds(newExpanded);
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const resetForm = () => {
+    setEditing(null);
+    setForm(emptyPermissionForm);
   };
 
   const handleClose = () => {
-    setEditing(null);
-    setForm({ name: '', code: '', type: 'menu', parent_id: '' });
+    resetForm();
     onClose();
   };
 
@@ -280,8 +283,7 @@ export default function Permissions() {
   }, []);
 
   const openCreate = () => {
-    setEditing(null);
-    setForm({ name: '', code: '', type: 'menu', parent_id: '' });
+    resetForm();
     onOpen();
   };
 
@@ -298,13 +300,13 @@ export default function Permissions() {
     }
     try {
       const payload = { ...form, parent_id: form.parent_id || null };
+      const successKey = editing ? 'message.updateSuccess' : 'message.createSuccess';
       if (editing) {
         await permissionsApi.update(editing.id, payload);
-        toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
         await permissionsApi.create(payload);
-        toast({ title: t('message.createSuccess'), status: 'success' });
       }
+      toast({ title: t(successKey), status: 'success' });
       handleClose();
       loadTree();
     } catch (err) {
@@ -326,13 +328,6 @@ export default function Permissions() {
       setIsDeleting(false);
       setDeleteTarget(null);
     }
-  };
-
-  const getPermissionName = (p: Permission) => {
-    if (p.type === 'menu') {
-      return tMenu(p.code, { defaultValue: p.name });
-    }
-    return p.name;
   };
 
   if (loading) {
@@ -372,7 +367,7 @@ export default function Permissions() {
       />
 
       <Card variant="outline" p={0} overflow="hidden">
-        <Box px={6} py={4} bg={useColorModeValue('gray.50', 'whiteAlpha.50')} borderBottom="1px solid" borderColor={borderColor}>
+        <Box px={6} py={4} bg={cardHeaderBg} borderBottom="1px solid" borderColor={borderColor}>
           <HStack justify="space-between">
             <Text fontWeight="bold" color={textColor}>{t('title')}</Text>
             <Badge colorScheme="brand" borderRadius="full" px={3}>{filteredTree.length} Items</Badge>
@@ -451,7 +446,7 @@ export default function Permissions() {
                   <option value="">{t('form.parentId.none')}</option>
                   {flatMenuOptions.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {'　'.repeat(p._depth)}{getPermissionName(p)} ({p.code})
+                      {'　'.repeat(p._depth)}{getDisplayName(p, tMenu, t)} ({p.code})
                     </option>
                   ))}
                 </Select>

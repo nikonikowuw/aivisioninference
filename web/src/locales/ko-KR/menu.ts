@@ -8,6 +8,8 @@ export const menu = {
   files: '파일',
   'audit-logs': '감사 로그',
   tasks: '작업',
+  'mail-config': '메일 설정',
+  feedback: '사용자 피드백',
 } as const;
 
 export default menu;

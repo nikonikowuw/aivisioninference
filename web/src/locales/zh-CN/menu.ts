@@ -8,6 +8,8 @@ export const menu = {
   files: '文件',
   'audit-logs': '审计日志',
   tasks: '任务',
+  'mail-config': '邮件配置',
+  feedback: '用户反馈',
 } as const;
 
 export default menu;

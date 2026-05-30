@@ -30,8 +30,8 @@ const chunkDir = "tmp/uploads"
 
 // FileOptions 定义文件上传安全限制。
 type FileOptions struct {
-	MaxFileSizeBytes  int64 // 单个完整文件最大字节数
-	MaxChunkSizeBytes int64 // 单个上传分片最大字节数
+	MaxFileSizeBytes  int64
+	MaxChunkSizeBytes int64
 }
 
 // FileService 处理文件分片上传、合并、下载及删除相关的业务逻辑
@@ -40,7 +40,6 @@ type FileService struct {
 	opts     FileOptions                // 上传大小限制配置
 }
 
-// NewFileService 创建并返回一个新的 FileService 实例
 func NewFileService(fileRepo *repository.FileRepository, opts ...FileOptions) *FileService {
 	option := FileOptions{
 		MaxFileSizeBytes:  100 << 20,
@@ -144,13 +143,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		return apperrors.New(apperrors.ErrBadRequest, "分片大小超过限制")
 	}
 
-	// 更新已上传的分片索引列表，支持幂等上传：网络抖动导致客户端重试同一分片时，
-	// 已存在的 index 不会重复记录，避免 CompleteUpload 误判分片完整性。
-	var uploaded []int
-	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
-		uploaded = []int{}
-	}
-
+	uploaded := s.unmarshalUploadedChunks(chunk.UploadedChunks)
 	uploaded = appendUniqueChunkIndex(uploaded, index)
 
 	data, _ := json.Marshal(uploaded)
@@ -162,6 +155,12 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 	return nil
 }
 
+func (s *FileService) unmarshalUploadedChunks(data string) []int {
+	var uploaded []int
+	_ = json.Unmarshal([]byte(data), &uploaded)
+	return uploaded
+}
+
 // CompleteUpload 合并所有已上传分片，验证 MD5 校验和，移动到正式上传目录并记录文件记录
 func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*model.File, error) {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
@@ -169,27 +168,14 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在或已过期")
 	}
 
-	// 使用 canceled 标记做两阶段清理：仅在上下文取消时删除临时分片数据，
-	// 正常流程不应清理（文件已经合并完毕移动到正式目录）。
-	// cleanup 使用 context.WithoutCancel 剥离原始 ctx 的取消信号，
-	// 确保 deferred 清理操作不受父上下文取消影响（父 ctx 取消时清理也必须执行）。
 	canceled := false
 	defer func() {
 		if canceled {
-			if err := s.fileRepo.DeleteChunkByUploadID(context.WithoutCancel(ctx), uploadID); err != nil {
-				zap.L().Warn("cleanup canceled upload chunk record failed", zap.String("upload_id", uploadID), zap.Error(err))
-			}
-			if err := os.RemoveAll(filepath.Join(chunkDir, uploadID)); err != nil {
-				zap.L().Warn("cleanup canceled upload chunk dir failed", zap.String("upload_id", uploadID), zap.Error(err))
-			}
+			s.cleanupCanceledUpload(ctx, uploadID)
 		}
 	}()
 
-	// 验证所有分片是否已上传，JSON 格式的已上传索引列表应与总分片数一致。
-	var uploaded []int
-	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "分片状态异常")
-	}
+	uploaded := s.unmarshalUploadedChunks(chunk.UploadedChunks)
 	if len(uploaded) != chunk.TotalChunks {
 		return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("分片不完整，已上传 %d/%d", len(uploaded), chunk.TotalChunks))
 	}
@@ -197,7 +183,6 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	chunkDirPath := filepath.Join(chunkDir, uploadID)
 	mergedPath := filepath.Join(chunkDirPath, "merged")
 
-	// 在各关键步骤间检查上下文是否已取消，实现优雅中断。
 	if err := ctx.Err(); err != nil {
 		canceled = true
 		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
@@ -260,6 +245,13 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		return nil, apperrors.New(apperrors.ErrBadRequest, "文件校验失败（MD5 不匹配）")
 	}
 
+	// 增强安全性：基于合并后的文件内容探测 MIME 类型，防止后缀名欺骗。
+	mimeType := detectMimeType(chunk.FileName, mergedPath)
+	if mimeType == "image/svg+xml" {
+		s.markUploadFailed(ctx, uploadID, chunkDirPath)
+		return nil, apperrors.New(apperrors.ErrBadRequest, "不支持上传 SVG 文件")
+	}
+
 	// 按日期分目录存储，避免单个目录中文件过多影响性能。
 	dateDir := time.Now().Format("2006/01/02")
 	ext := filepath.Ext(chunk.FileName)
@@ -285,7 +277,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 		Name:         storageName,
 		OriginalName: chunk.FileName,
 		Path:         finalPath,
-		MimeType:     detectMimeType(chunk.FileName),
+		MimeType:     mimeType,
 		Size:         chunk.FileSize,
 		MD5:          chunk.MD5,
 		StorageType:  chunk.StorageType,
@@ -307,11 +299,19 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 
 // markUploadFailed 标记上传失败并清理临时目录。
 func (s *FileService) markUploadFailed(ctx context.Context, uploadID, chunkDirPath string) {
-	if err := os.RemoveAll(chunkDirPath); err != nil {
-		zap.L().Warn("remove failed upload chunks", zap.String("upload_id", uploadID), zap.Error(err))
-	}
+	_ = os.RemoveAll(chunkDirPath)
 	if err := s.fileRepo.UpdateChunkStatus(ctx, uploadID, "failed"); err != nil {
 		zap.L().Warn("mark chunk upload failed", zap.String("upload_id", uploadID), zap.Error(err))
+	}
+}
+
+func (s *FileService) cleanupCanceledUpload(ctx context.Context, uploadID string) {
+	cleanupCtx := context.WithoutCancel(ctx)
+	if err := s.fileRepo.DeleteChunkByUploadID(cleanupCtx, uploadID); err != nil {
+		zap.L().Warn("cleanup canceled upload chunk record failed", zap.String("upload_id", uploadID), zap.Error(err))
+	}
+	if err := os.RemoveAll(filepath.Join(chunkDir, uploadID)); err != nil {
+		zap.L().Warn("cleanup canceled upload chunk dir failed", zap.String("upload_id", uploadID), zap.Error(err))
 	}
 }
 
@@ -322,14 +322,9 @@ func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*
 		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在")
 	}
 
-	var uploaded []int
-	if err := json.Unmarshal([]byte(chunk.UploadedChunks), &uploaded); err != nil {
-		uploaded = []int{}
-	}
-
 	return &dto.UploadProgressResponse{
 		UploadID:       chunk.UploadID,
-		UploadedChunks: uploaded,
+		UploadedChunks: s.unmarshalUploadedChunks(chunk.UploadedChunks),
 		TotalChunks:    chunk.TotalChunks,
 	}, nil
 }
@@ -443,37 +438,28 @@ func ParseRange(rangeHeader string, fileSize int64) (int64, int64, bool) {
 		return 0, 0, false
 	}
 
-	var start, end int64
-	var err error
-
-	if splits[0] == "" {
-		// 后缀范围: bytes=-500 表示文件最后 500 个字节
-		end = fileSize - 1
+	switch {
+	case splits[0] == "":
 		suffixLen, err := strconv.ParseInt(splits[1], 10, 64)
 		if err != nil || suffixLen <= 0 {
 			return 0, 0, false
 		}
-		start = fileSize - suffixLen
-		if start < 0 {
-			start = 0
-		}
-	} else if splits[1] == "" {
-		// 前缀范围: bytes=0- 表示从字节 0 到文件末尾
-		start, err = strconv.ParseInt(splits[0], 10, 64)
+		return max(fileSize-suffixLen, 0), fileSize - 1, true
+	case splits[1] == "":
+		start, err := strconv.ParseInt(splits[0], 10, 64)
 		if err != nil || start < 0 || start >= fileSize {
 			return 0, 0, false
 		}
-		end = fileSize - 1
-	} else {
-		// 完整范围: bytes=0-499 表示第 0 到 499 字节
-		start, err = strconv.ParseInt(splits[0], 10, 64)
-		if err != nil || start < 0 {
-			return 0, 0, false
-		}
-		end, err = strconv.ParseInt(splits[1], 10, 64)
-		if err != nil || end < start || end >= fileSize {
-			return 0, 0, false
-		}
+		return start, fileSize - 1, true
+	}
+
+	start, err := strconv.ParseInt(splits[0], 10, 64)
+	if err != nil || start < 0 {
+		return 0, 0, false
+	}
+	end, err := strconv.ParseInt(splits[1], 10, 64)
+	if err != nil || end < start || end >= fileSize {
+		return 0, 0, false
 	}
 
 	return start, end, true
@@ -501,8 +487,19 @@ func WriteRange(w http.ResponseWriter, filePath string, start, end, totalSize in
 	return err
 }
 
-// detectMimeType 根据文件名后缀名映射其相应的 MIME 类型
-func detectMimeType(filename string) string {
+// detectMimeType 根据文件名和文件内容探测 MIME 类型。
+func detectMimeType(filename, path string) string {
+	if file, err := os.Open(path); err == nil {
+		defer file.Close()
+		buffer := make([]byte, 512)
+		if n, _ := file.Read(buffer); n > 0 {
+			contentType := http.DetectContentType(buffer[:n])
+			if contentType != "application/octet-stream" && contentType != "text/plain" {
+				return contentType
+			}
+		}
+	}
+
 	ext := strings.ToLower(filepath.Ext(filename))
 	mimeMap := map[string]string{
 		".jpg":  "image/jpeg",
@@ -521,6 +518,7 @@ func detectMimeType(filename string) string {
 		".txt":  "text/plain",
 		".json": "application/json",
 		".csv":  "text/csv",
+		".svg":  "image/svg+xml",
 	}
 	if mime, ok := mimeMap[ext]; ok {
 		return mime

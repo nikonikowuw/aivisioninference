@@ -3,6 +3,10 @@ export const permissions = {
   button: {
     create: 'Tambah Izin',
   },
+  actions: {
+    edit: 'Edit',
+    delete: 'Hapus',
+  },
   table: {
     columns: {
       name: 'Nama Izin',
@@ -17,7 +21,7 @@ export const permissions = {
     },
     code: {
       label: 'Kode Izin',
-      placeholder: 'misal, user:create',
+      placeholder: 'contoh: user:create',
     },
     type: {
       label: 'Tipe',
@@ -44,6 +48,74 @@ export const permissions = {
     deleteFailed: 'Gagal menghapus izin',
     deleteConfirm: 'Apakah Anda yakin ingin menghapus izin ini dan semua anaknya?',
     emptyData: 'Tidak ada data izin',
+  },
+  codes: {
+    dashboard: {
+      view: 'Lihat Dasbor',
+    },
+    user: {
+      list: 'Daftar Pengguna',
+      create: 'Tambah Pengguna',
+      edit: 'Edit Pengguna',
+      delete: 'Hapus Pengguna',
+      view: 'Lihat Pengguna',
+      'reset-password': 'Reset Kata Sandi',
+      'upload-avatar': 'Unggah Avatar',
+    },
+    role: {
+      list: 'Daftar Peran',
+      create: 'Tambah Peran',
+      edit: 'Edit Peran',
+      delete: 'Hapus Peran',
+      'assign-permissions': 'Tetapkan Izin',
+      'view-permissions': 'Lihat Izin Peran',
+      view: 'Lihat Peran',
+    },
+    permission: {
+      list: 'Daftar Izin',
+      create: 'Tambah Izin',
+      edit: 'Edit Izin',
+      delete: 'Hapus Izin',
+      view: 'Lihat Izin',
+    },
+    file: {
+      list: 'Daftar File',
+      upload: 'Unggah File',
+      check: 'Periksa File',
+      'upload-progress': 'Progres Unggahan',
+      delete: 'Hapus File',
+      view: 'Lihat File',
+      download: 'Unduh File',
+    },
+    audit: {
+      view: 'Lihat Log Audit',
+    },
+    'audit-log': {
+      view: 'Lihat Log Audit',
+    },
+    task: {
+      list: 'Daftar Tugas',
+      create: 'Tambah Tugas',
+      cancel: 'Batalkan Tugas',
+      view: 'Lihat Tugas',
+      update: 'Edit Tugas',
+      delete: 'Hapus Tugas',
+    },
+    'mail-config': {
+      view: 'Lihat Konfigurasi Email',
+      edit: 'Edit Konfigurasi Email',
+      'test-smtp': 'Uji SMTP',
+      'test-imap': 'Uji IMAP',
+      'sync-imap': 'Sinkronisasi Email Umpan Balik',
+      update: 'Edit Konfigurasi Email',
+      test: 'Uji Konfigurasi Email',
+      sync: 'Sinkronisasi Email',
+    },
+    feedback: {
+      view: 'Lihat Umpan Balik',
+      'update-status': 'Perbarui Status Umpan Balik',
+      update: 'Edit Umpan Balik',
+    },
   },
 } as const;
 

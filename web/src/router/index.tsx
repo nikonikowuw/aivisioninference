@@ -4,7 +4,7 @@
 /// <reference types="vite/client" />
 
 import { Suspense, lazy, ComponentType } from 'react';
-import { Route, RouteProps } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import { Icon } from '@chakra-ui/react';
 import * as Icons from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
@@ -20,6 +20,8 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'files': () => import('../views/admin/files'),
   'audit-logs': () => import('../views/admin/audit-logs'),
   'tasks': () => import('../views/admin/tasks'),
+  'mail-config': () => import('../views/admin/mail-config'),
+  'feedback': () => import('../views/admin/feedback'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();
@@ -42,11 +44,9 @@ if (import.meta.hot) {
 
 function pruneLazyCache(activeKeys: string[]) {
   const activeSet = new Set(activeKeys);
-  for (const key of lazyCache.keys()) {
-    if (!activeSet.has(key)) {
-      lazyCache.delete(key);
-    }
-  }
+  lazyCache.forEach((_, key) => {
+    if (!activeSet.has(key)) lazyCache.delete(key);
+  });
 }
 
 function createLazyComponent(
@@ -73,15 +73,11 @@ export function getIconComponent(iconName: string): React.ReactNode {
   if (!iconName) return null;
   
   const IconComponent = Icons[iconName as keyof typeof Icons];
-  if (IconComponent) {
-    return <Icon as={IconComponent} width="20px" height="20px" color="inherit" />;
-  }
-  return null;
+  if (!IconComponent) return null;
+
+  return <Icon as={IconComponent} width="20px" height="20px" color="inherit" />;
 }
 
-/**
- * 根据路由配置生成 Route 组件
- */
 export function generateRoutes(routes: RouteConfig[]): React.ReactNode[] {
   const activeKeys = routes.map((route) => `route:${route.id || route.path}`);
   pruneLazyCache(activeKeys);
@@ -89,13 +85,14 @@ export function generateRoutes(routes: RouteConfig[]): React.ReactNode[] {
   const result: React.ReactNode[] = [];
   for (let index = 0; index < routes.length; index++) {
     const route = routes[index];
-    // 父菜单（无 component）递归处理子路由
+    // 父菜单没有组件时，仅递归生成其子路由。
     if (!route.component) {
-      if (route.children && route.children.length > 0) {
+      if (route.children?.length) {
         result.push(...generateRoutes(route.children));
       }
       continue;
     }
+
     const cacheKey = `route:${route.id || route.path}`;
     const LazyComponent = createLazyComponent(cacheKey, route.component);
     result.push(
@@ -205,7 +202,7 @@ export function generateRoutesFromMenus(menus: Menu[]): React.ReactNode[] {
     const result: Menu[] = [];
     for (const menu of menuList) {
       result.push(menu);
-      if (menu.children && menu.children.length > 0) {
+      if (menu.children?.length) {
         result.push(...flattenMenus(menu.children));
       }
     }
@@ -214,12 +211,10 @@ export function generateRoutesFromMenus(menus: Menu[]): React.ReactNode[] {
 
   const allMenus = flattenMenus(menus);
   const routedMenus = allMenus.filter((menu) => menuComponentMap[menu.code]);
-  const activeKeys = routedMenus.map((menu) => `menu:${menu.code}`);
-  pruneLazyCache(activeKeys);
+  pruneLazyCache(routedMenus.map((menu) => `menu:${menu.code}`));
 
   return routedMenus.map((menu) => {
-    const cacheKey = `menu:${menu.code}`;
-    const LazyComponent = createLazyComponent(cacheKey, menuComponentMap[menu.code]);
+    const LazyComponent = createLazyComponent(`menu:${menu.code}`, menuComponentMap[menu.code]);
     return (
       <Route
         key={menu.id}

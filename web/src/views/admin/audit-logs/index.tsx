@@ -32,7 +32,7 @@ const methodColorMap = {
 
 const methodColor = (method: string) => methodColorMap[method as keyof typeof methodColorMap] ?? 'gray';
 
-const resultColor = (r?: string) => !r ? 'gray' : r === 'success' ? 'green' : 'red';
+const resultColor = (result?: string) => result === 'success' ? 'green' : (result ? 'red' : 'gray');
 
 export default function AuditLogs() {
   const { t } = useTranslation('modules/audit-logs');
@@ -87,6 +87,8 @@ export default function AuditLogs() {
               { value: 'permission', label: t('filter.resourceTypes.permission') },
               { value: 'file', label: t('filter.resourceTypes.file') },
               { value: 'task', label: t('filter.resourceTypes.task') },
+              { value: 'system', label: t('filter.resourceTypes.system') },
+              { value: 'feedback', label: t('filter.resourceTypes.feedback') },
             ],
           },
           {

@@ -1,23 +1,34 @@
 import i18n from '../i18n';
 import SparkMD5 from 'spark-md5';
 
-/**
- * 根据错误码获取翻译后的错误消息
- * 后端只返回错误码，前端根据当前语言翻译
- * 前置条件：调用方已确保 code !== 0（成功码不应调用此函数）
- */
+const SERVER_ERROR_FALLBACK = 'Server error';
+
+function isMissingTranslation(result: string, key: string): boolean {
+  const [, keyWithoutNamespace = key] = key.split(':');
+  return result === key || result === keyWithoutNamespace;
+}
+
+function getServerErrorMessage(): string {
+  const key = 'common:message.serverError';
+  const msg = i18n.t(key);
+  return isMissingTranslation(msg, key) ? SERVER_ERROR_FALLBACK : msg;
+}
+
 export function getErrorMessage(code: number): string {
   if (code === 0) return '';
   const key = `common:message.error.${code}`;
   const msg = i18n.t(key);
-  return msg === key ? i18n.t('common:message.serverError') : msg;
+  return isMissingTranslation(msg, key) ? getServerErrorMessage() : msg;
 }
 
 function resolveApiErrorMessage(code: number, backendMessage?: string): string {
-  // 参数校验错误优先展示后端具体提示，避免前端只显示“请求参数错误”。
-  if (code === 10001 && backendMessage && backendMessage.trim() !== '') {
-    return backendMessage;
-  }
+  const trimmedBackendMessage = backendMessage?.trim();
+  if (!trimmedBackendMessage) return getErrorMessage(code);
+
+  // 参数校验错误和前端未知错误优先展示后端具体文案，避免丢失上下文。
+  const key = `common:message.error.${code}`;
+  const translatedMessage = i18n.t(key);
+  if (code === 10001 || isMissingTranslation(translatedMessage, key)) return trimmedBackendMessage;
   return getErrorMessage(code);
 }
 
@@ -31,6 +42,10 @@ export class ApiError extends Error {
     this.code = code;
     this.status = status;
   }
+
+  isUnauthenticated(): boolean {
+    return this.status === 401 || (this.code >= 20001 && this.code <= 20004);
+  }
 }
 
 function computeMD5(file: File): Promise<string> {
@@ -41,28 +56,42 @@ function computeMD5(file: File): Promise<string> {
     const reader = new FileReader();
     let current = 0;
 
+    const loadNext = () => {
+      const start = current * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      reader.readAsArrayBuffer(file.slice(start, end));
+    };
+
     reader.onload = (e) => {
       if (e.target?.result) spark.append(e.target.result as ArrayBuffer);
-      current++;
-      if (current < chunks) {
+      if (++current < chunks) {
         loadNext();
       } else {
         resolve(spark.end());
       }
     };
     reader.onerror = () => reject(reader.error);
-
-    function loadNext() {
-      const start = current * chunkSize;
-      const end = Math.min(start + chunkSize, file.size);
-      reader.readAsArrayBuffer(file.slice(start, end));
-    }
-
     loadNext();
   });
 }
 
 const API_BASE = '/api/v1';
+const ACCESS_TOKEN_KEY = 'access_token';
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function setAccessToken(token: string, rememberMe: boolean): void {
+  clearAccessToken();
+  const storage = rememberMe ? localStorage : sessionStorage;
+  storage.setItem(ACCESS_TOKEN_KEY, token);
+}
+
+export function clearAccessToken(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+}
 
 interface ApiResponse<T = unknown> {
   code: number;
@@ -81,7 +110,7 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = localStorage.getItem('access_token');
+  const token = getAccessToken();
   const headers = new Headers(options.headers);
 
   if (!headers.has('Accept-Language')) {
@@ -97,13 +126,19 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    // Network error or fetch failure
+    throw new ApiError(50001, i18n.t('common:message.networkError'), 0);
+  }
 
   if (response.status === 401 && !window.location.pathname.startsWith('/auth/')) {
-    localStorage.removeItem('access_token');
+    clearAccessToken();
     window.location.href = '/auth/sign-in';
     throw new ApiError(401, getErrorMessage(401), 401);
   }
@@ -113,7 +148,7 @@ async function request<T>(
   try {
     json = text ? JSON.parse(text) : { code: 0, message: '', data: null };
   } catch {
-    throw new ApiError(50001, `Invalid JSON response (HTTP ${response.status})`, response.status);
+    throw new ApiError(50001, getErrorMessage(50001), response.status);
   }
 
   if (json.code !== 0) {

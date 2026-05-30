@@ -43,39 +43,181 @@ const (
 	ErrInternal = 50001
 )
 
-// Standard error messages keyed by code.
-var messages = map[int]string{
-	Success:                  "success",
-	ErrBadRequest:            "请求参数错误",
-	ErrCannotDisableSelf:     "不能禁用自己",
-	ErrHierarchyLevelUser:    "没有权限操作同级或更高级别的用户",
-	ErrHierarchyLevelRole:    "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
-	ErrEmailTaken:            "邮箱已被使用",
-	ErrOldPasswordWrong:      "旧密码错误",
-	ErrStartTimeFormat:       "开始时间格式错误",
-	ErrEndTimeFormat:         "结束时间格式错误",
-	ErrTimeRangeOrder:        "开始时间不能晚于结束时间",
-	ErrFileTooLarge:          "文件大小超过限制",
-	ErrFileInvalidType:       "不支持的文件类型",
-	ErrMailNotEnabled:        "邮件服务未启用",
-	ErrSMTPTestFailed:        "SMTP测试失败",
-	ErrIMAPTestFailed:        "IMAP测试失败",
-	ErrTokenInvalidOrExpired: "验证码无效或已过期",
-	ErrUnauthorized:          "未登录",
-	ErrTokenExpired:          "Token已过期",
-	ErrTokenInvalid:          "Token无效",
-	ErrRefreshTokenReuse:     "Token已被复用",
-	ErrForbidden:             "无权限",
-	ErrOriginNotAllowed:      "请求来源不被允许",
-	ErrNotFound:              "资源不存在",
-	ErrFeedbackNotFound:      "反馈不存在",
-	ErrInternal:              "服务器内部错误",
+// Standard error messages keyed by language and code.
+var i18nMessages = map[string]map[int]string{
+	"zh": {
+		Success:                  "成功",
+		ErrBadRequest:            "请求参数错误",
+		ErrCannotDisableSelf:     "不能禁用自己",
+		ErrHierarchyLevelUser:    "没有权限操作同级或更高级别的用户",
+		ErrHierarchyLevelRole:    "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级",
+		ErrEmailTaken:            "邮箱已被使用",
+		ErrOldPasswordWrong:      "旧密码错误",
+		ErrStartTimeFormat:       "开始时间格式错误",
+		ErrEndTimeFormat:         "结束时间格式错误",
+		ErrTimeRangeOrder:        "开始时间不能晚于结束时间",
+		ErrFileTooLarge:          "文件大小超过限制",
+		ErrFileInvalidType:       "不支持的文件类型",
+		ErrMailNotEnabled:        "邮件服务未启用",
+		ErrSMTPTestFailed:        "SMTP测试失败",
+		ErrIMAPTestFailed:        "IMAP测试失败",
+		ErrTokenInvalidOrExpired: "验证码无效或已过期",
+		ErrUnauthorized:          "未登录",
+		ErrTokenExpired:          "Token已过期",
+		ErrTokenInvalid:          "Token无效",
+		ErrRefreshTokenReuse:     "Token已被复用",
+		ErrForbidden:             "无权限",
+		ErrOriginNotAllowed:      "请求来源不被允许",
+		ErrNotFound:              "资源不存在",
+		ErrFeedbackNotFound:      "反馈不存在",
+		ErrInternal:              "服务器内部错误",
+	},
+	"en": {
+		Success:                  "Success",
+		ErrBadRequest:            "Bad request parameters",
+		ErrCannotDisableSelf:     "Cannot disable yourself",
+		ErrHierarchyLevelUser:    "No permission to operate on users at or above your level",
+		ErrHierarchyLevelRole:    "No permission to operate on roles at or above your level",
+		ErrEmailTaken:            "Email is already taken",
+		ErrOldPasswordWrong:      "Old password is incorrect",
+		ErrStartTimeFormat:       "Invalid start time format",
+		ErrEndTimeFormat:         "Invalid end time format",
+		ErrTimeRangeOrder:        "Start time cannot be later than end time",
+		ErrFileTooLarge:          "File size exceeds limit",
+		ErrFileInvalidType:       "Unsupported file type",
+		ErrMailNotEnabled:        "Mail service is not enabled",
+		ErrSMTPTestFailed:        "SMTP test failed",
+		ErrIMAPTestFailed:        "IMAP test failed",
+		ErrTokenInvalidOrExpired: "Invalid or expired verification token",
+		ErrUnauthorized:          "Unauthorized",
+		ErrTokenExpired:          "Token expired",
+		ErrTokenInvalid:          "Token invalid",
+		ErrRefreshTokenReuse:     "Token reused",
+		ErrForbidden:             "Forbidden",
+		ErrOriginNotAllowed:      "Origin not allowed",
+		ErrNotFound:              "Resource not found",
+		ErrFeedbackNotFound:      "Feedback not found",
+		ErrInternal:              "Internal server error",
+	},
+	"zh-tw": {
+		Success:                  "成功",
+		ErrBadRequest:            "請求參數錯誤",
+		ErrCannotDisableSelf:     "不能停用自己",
+		ErrHierarchyLevelUser:    "沒有權限操作同級或更高級別的使用者",
+		ErrHierarchyLevelRole:    "沒有權限操作同級或更高級別的角色，也不能設定高於自己權限的角色等級",
+		ErrEmailTaken:            "信箱已被使用",
+		ErrOldPasswordWrong:      "舊密碼錯誤",
+		ErrStartTimeFormat:       "開始時間格式錯誤",
+		ErrEndTimeFormat:         "結束時間格式錯誤",
+		ErrTimeRangeOrder:        "開始時間不能晚於結束時間",
+		ErrFileTooLarge:          "檔案大小超過限制",
+		ErrFileInvalidType:       "不支援的檔案類型",
+		ErrMailNotEnabled:        "郵件服務未啟用",
+		ErrSMTPTestFailed:        "SMTP測試失敗",
+		ErrIMAPTestFailed:        "IMAP測試失敗",
+		ErrTokenInvalidOrExpired: "驗證碼無效或已過期",
+		ErrUnauthorized:          "未登入",
+		ErrTokenExpired:          "Token已過期",
+		ErrTokenInvalid:          "Token無效",
+		ErrRefreshTokenReuse:     "Token已被重複使用",
+		ErrForbidden:             "無權限",
+		ErrOriginNotAllowed:      "請求來源不被允許",
+		ErrNotFound:              "資源不存在",
+		ErrFeedbackNotFound:      "回饋不存在",
+		ErrInternal:              "伺服器內部錯誤",
+	},
+	"id": {
+		Success:                  "Berhasil",
+		ErrBadRequest:            "Permintaan buruk",
+		ErrCannotDisableSelf:     "Tidak dapat menonaktifkan diri sendiri",
+		ErrHierarchyLevelUser:    "Tidak ada izin untuk mengoperasi pengguna di tingkat yang sama atau lebih tinggi",
+		ErrHierarchyLevelRole:    "Tidak ada izin untuk mengoperasi peran di tingkat yang sama atau lebih tinggi",
+		ErrEmailTaken:            "Email sudah digunakan",
+		ErrOldPasswordWrong:      "Kata sandi lama salah",
+		ErrStartTimeFormat:       "Format waktu mulai tidak valid",
+		ErrEndTimeFormat:         "Format waktu selesai tidak valid",
+		ErrTimeRangeOrder:        "Waktu mulai tidak boleh setelah waktu selesai",
+		ErrFileTooLarge:          "Ukuran file melebihi batas",
+		ErrFileInvalidType:       "Tipe file tidak didukung",
+		ErrMailNotEnabled:        "Layanan email dinonaktifkan",
+		ErrSMTPTestFailed:        "Tes SMTP gagal",
+		ErrIMAPTestFailed:        "Tes IMAP gagal",
+		ErrTokenInvalidOrExpired: "Token tidak valid atau kedaluwarsa",
+		ErrUnauthorized:          "Tidak sah",
+		ErrTokenExpired:          "Token kedaluwarsa",
+		ErrTokenInvalid:          "Token tidak valid",
+		ErrRefreshTokenReuse:     "Penggunaan kembali token penyegaran terdeteksi",
+		ErrForbidden:             "Terlarang",
+		ErrOriginNotAllowed:      "Asal permintaan tidak diizinkan",
+		ErrNotFound:              "Sumber daya tidak ditemukan",
+		ErrFeedbackNotFound:      "Umpan balik tidak ditemukan",
+		ErrInternal:              "Kesalahan server internal",
+	},
+	"ja": {
+		Success:                  "成功",
+		ErrBadRequest:            "不正なリクエスト",
+		ErrCannotDisableSelf:     "自分自身を無効にすることはできません",
+		ErrHierarchyLevelUser:    "同等またはそれ以上のレベルのユーザーを操作する権限がありません",
+		ErrHierarchyLevelRole:    "同等またはそれ以上のレベルのロールを操作する権限がありません",
+		ErrEmailTaken:            "このメールアドレスは既に使用されています",
+		ErrOldPasswordWrong:      "現在のパスワードが正しくありません",
+		ErrStartTimeFormat:       "開始時間の形式が不正です",
+		ErrEndTimeFormat:         "終了時間の形式が不正です",
+		ErrTimeRangeOrder:        "開始時間は終了時間より前である必要があります",
+		ErrFileTooLarge:          "ファイルサイズが制限を超えています",
+		ErrFileInvalidType:       "サポートされていないファイル形式です",
+		ErrMailNotEnabled:        "メールサービスが無効です",
+		ErrSMTPTestFailed:        "SMTPテストに失敗しました",
+		ErrIMAPTestFailed:        "IMAPテストに失敗しました",
+		ErrTokenInvalidOrExpired: "トークンが無効または期限切れです",
+		ErrUnauthorized:          "認証されていません",
+		ErrTokenExpired:          "トークンの期限が切れました",
+		ErrTokenInvalid:          "無効なトークンです",
+		ErrRefreshTokenReuse:     "リフレッシュトークンの再利用が検出されました",
+		ErrForbidden:             "アクセス禁止",
+		ErrOriginNotAllowed:      "許可されていないリクエスト元です",
+		ErrNotFound:              "リソースが見つかりません",
+		ErrFeedbackNotFound:      "フィードバックが見つかりません",
+		ErrInternal:              "内部サーバーエラー",
+	},
+	"ko": {
+		Success:                  "성공",
+		ErrBadRequest:            "잘못된 요청",
+		ErrCannotDisableSelf:     "자기 자신을 비활성화할 수 없습니다",
+		ErrHierarchyLevelUser:    "동일하거나 더 높은 레벨의 사용자를 조작할 권한이 없습니다",
+		ErrHierarchyLevelRole:    "동일하거나 더 높은 레벨의 역할을 조작할 권한이 없습니다",
+		ErrEmailTaken:            "이미 사용 중인 이메일입니다",
+		ErrOldPasswordWrong:      "현재 비밀번호가 일치하지 않습니다",
+		ErrStartTimeFormat:       "잘못된 시작 시간 형식입니다",
+		ErrEndTimeFormat:         "잘못된 종료 시간 형식입니다",
+		ErrTimeRangeOrder:        "시작 시간은 종료 시간보다 빨라야 합니다",
+		ErrFileTooLarge:          "파일 크기가 제한을 초과했습니다",
+		ErrFileInvalidType:       "지원되지 않는 파일 형식입니다",
+		ErrMailNotEnabled:        "메일 서비스가 활성화되지 않았습니다",
+		ErrSMTPTestFailed:        "SMTP 테스트 실패",
+		ErrIMAPTestFailed:        "IMAP 테스트 실패",
+		ErrTokenInvalidOrExpired: "유효하지 않거나 만료된 토큰입니다",
+		ErrUnauthorized:          "인증되지 않았습니다",
+		ErrTokenExpired:          "토큰이 만료되었습니다",
+		ErrTokenInvalid:          "유효하지 않은 토큰입니다",
+		ErrRefreshTokenReuse:     "리프레시 토큰 재사용이 감지되었습니다",
+		ErrForbidden:             "접근 거부",
+		ErrOriginNotAllowed:      "허용되지 않은 요청 출처입니다",
+		ErrNotFound:              "리소스를 찾을 수 없습니다",
+		ErrFeedbackNotFound:      "피드백을 찾을 수 없습니다",
+		ErrInternal:              "내부 서버 오류",
+	},
 }
+
+const defaultLanguage = "en"
 
 // AppError represents a business-level error with a code and message.
 type AppError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+
+	// defaultMessage 标记 Message 是否由错误码默认文案生成，避免响应层通过字符串比较判断。
+	defaultMessage bool
 }
 
 // Error implements the error interface.
@@ -86,26 +228,34 @@ func (e *AppError) Error() string {
 // New creates a new AppError with the given code and message.
 // If the message is empty, the default message for the code is used.
 func New(code int, msg string) *AppError {
-	if msg == "" {
-		if m, ok := messages[code]; ok {
-			msg = m
-		} else {
-			msg = "未知错误"
+	isDefault := msg == ""
+	if isDefault {
+		msg = DefaultMessage(code, defaultLanguage)
+	}
+	return &AppError{Code: code, Message: msg, defaultMessage: isDefault}
+}
+
+// IsDefaultMessage reports whether the message was generated from the default code mapping.
+func (e *AppError) IsDefaultMessage() bool {
+	return e != nil && e.defaultMessage
+}
+
+// Newf creates a new AppError with a formatted explicit message.
+func Newf(code int, format string, args ...interface{}) *AppError {
+	return &AppError{Code: code, Message: fmt.Sprintf(format, args...), defaultMessage: false}
+}
+
+// DefaultMessage returns the default message for a business error code in the specified language.
+func DefaultMessage(code int, lang string) string {
+	if m, ok := i18nMessages[lang]; ok {
+		if msg, ok := m[code]; ok {
+			return msg
 		}
 	}
-	return &AppError{Code: code, Message: msg}
-}
-
-// Newf creates a new AppError with a formatted message.
-func Newf(code int, format string, args ...interface{}) *AppError {
-	return New(code, fmt.Sprintf(format, args...))
-}
-
-// DefaultMessage returns the default message for a business error code.
-// Falls back to "未知错误" if the code is not registered.
-func DefaultMessage(code int) string {
-	if m, ok := messages[code]; ok {
-		return m
+	if m, ok := i18nMessages[defaultLanguage]; ok {
+		if msg, ok := m[code]; ok {
+			return msg
+		}
 	}
-	return "未知错误"
+	return "Unknown error"
 }

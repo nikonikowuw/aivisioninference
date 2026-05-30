@@ -34,8 +34,8 @@ function SignIn() {
   const textColorSecondary = useColorModeValue('gray.600', 'gray.400');
   const textColorBrand = useColorModeValue('brand.500', 'white');
   const brandStars = useColorModeValue('brand.500', 'brand.400');
-  const cardBg = useColorModeValue('rgba(255, 255, 255, 0.25)', 'rgba(11, 20, 55, 0.35)');
-  const cardBorder = useColorModeValue('rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.2)');
+  const cardBg = useColorModeValue('whiteAlpha.200', 'whiteAlpha.100');
+  const cardBorder = useColorModeValue('whiteAlpha.300', 'whiteAlpha.200');
 
   const [show, setShow] = useState(false);
   const [username, setUsername] = useState('');
@@ -50,7 +50,7 @@ function SignIn() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(username, password);
+      await login(username, password, rememberMe);
       navigate('/admin/default');
     } catch (err) {
       toast({

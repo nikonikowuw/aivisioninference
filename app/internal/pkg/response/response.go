@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 )
@@ -25,45 +26,41 @@ type PageData struct {
 	PageSize int         `json:"page_size"`
 }
 
+const successMessage = "success"
+
 // OK sends a success response with code=0.
-// message 固定为 "success"，前端优先翻译；后端 message 仅作 fallback。
 func OK(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		Code:    apperrors.Success,
-		Message: "success",
+		Message: successMessage,
 		Data:    data,
 	})
 }
 
-// Err sends an error response based on the AppError code.
-// If AppError.Message is empty, falls back to DefaultMessage for the code.
+// Err 根据 AppError 错误码返回统一错误响应。
 func Err(c *gin.Context, err error) {
-	if appErr, ok := err.(*apperrors.AppError); ok {
-		httpStatus := codeToHTTPStatus(appErr.Code)
-		// message 为空时回退到错误码默认消息，防止前端收到空字符串
-		msg := appErr.Message
-		if msg == "" {
-			msg = apperrors.DefaultMessage(appErr.Code)
-		}
-		c.JSON(httpStatus, Response{
-			Code:    appErr.Code,
-			Message: msg,
-		})
-		return
+	appErr, ok := err.(*apperrors.AppError)
+	if !ok {
+		zap.L().Error("unexpected non-app error response", zap.Error(err))
+		appErr = apperrors.New(apperrors.ErrInternal, "")
 	}
-	// 非 AppError 类型，返回通用错误码让前端优先翻译，后端 message 作为 fallback
-	c.JSON(http.StatusInternalServerError, Response{
-		Code:    apperrors.ErrInternal,
-		Message: apperrors.DefaultMessage(apperrors.ErrInternal),
+
+	message := appErr.Message
+	if appErr.IsDefaultMessage() {
+		message = apperrors.DefaultMessage(appErr.Code, contextLanguage(c))
+	}
+
+	c.JSON(codeToHTTPStatus(appErr.Code), Response{
+		Code:    appErr.Code,
+		Message: message,
 	})
 }
 
 // Page sends a paginated success response.
-// message 固定为 "success"，前端优先翻译；后端 message 仅作 fallback。
 func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 	c.JSON(http.StatusOK, Response{
 		Code:    apperrors.Success,
-		Message: "success",
+		Message: successMessage,
 		Data: PageData{
 			List:     list,
 			Total:    total,
@@ -73,18 +70,28 @@ func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 	})
 }
 
+// contextLanguage extracts the language from the context.
+func contextLanguage(c *gin.Context) string {
+	if lang, ok := c.Get("lang"); ok {
+		if langStr, ok := lang.(string); ok && langStr != "" {
+			return langStr
+		}
+	}
+	return "en"
+}
+
 // codeToHTTPStatus maps business error codes to HTTP status codes.
 func codeToHTTPStatus(code int) int {
-	switch {
-	case code >= 10000 && code < 20000:
+	switch code / 10000 {
+	case 1:
 		return http.StatusBadRequest // 1xxxx -> 400
-	case code >= 20000 && code < 30000:
+	case 2:
 		return http.StatusUnauthorized // 2xxxx -> 401
-	case code >= 30000 && code < 40000:
+	case 3:
 		return http.StatusForbidden // 3xxxx -> 403
-	case code >= 40000 && code < 50000:
+	case 4:
 		return http.StatusNotFound // 4xxxx -> 404
-	case code >= 50000 && code < 60000:
+	case 5:
 		return http.StatusInternalServerError // 5xxxx -> 500
 	default:
 		return http.StatusOK

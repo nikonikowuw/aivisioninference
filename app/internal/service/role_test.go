@@ -34,7 +34,8 @@ func TestRoleHierarchyLevelRoleMessageExplainsLevelChangeRule(t *testing.T) {
 	err := apperrors.New(apperrors.ErrHierarchyLevelRole, "")
 
 	assert.Equal(t, apperrors.ErrHierarchyLevelRole, err.Code)
-	assert.Equal(t, "没有权限操作同级或更高级别的角色，也不能设置高于自己权限的角色等级", err.Message)
+	// Tests always run in default language (en) since New() uses defaultLanguage ("en")
+	assert.Equal(t, "No permission to operate on roles at or above your level", err.Message)
 }
 
 func TestCheckRoleRootGuardRejectsNonRootSystemRoleChanges(t *testing.T) {

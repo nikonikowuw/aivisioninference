@@ -41,7 +41,7 @@ type TaskListRequest struct {
 	ToTime    *time.Time `form:"-" json:"-"`
 }
 
-// FilterScopes 返回当前请求对应的 GORM 查询范围函数列表，支持关键词、类型、状态和时间范围过滤。
+// FilterScopes 返回任务列表的过滤条件，支持关键词、类型、状态和时间范围。
 func (r *TaskListRequest) FilterScopes() []scopes.Scope {
 	var sc []scopes.Scope
 	if r.Keyword != "" {

@@ -35,10 +35,10 @@ func (a *App) Run() {
 		zap.L().Fatal("failed to initialize gin binding validator", zap.Error(err))
 	}
 
-	// Start WebSocket hub
+	// 启动 WebSocket Hub
 	go a.Hub.Run()
 
-	// Start Asynq background worker
+	// 启动 Asynq 后台 worker
 	go func() {
 		zap.L().Info("starting asynq server")
 		if err := a.AsynqServer.Run(a.AsynqMux); err != nil {
@@ -46,7 +46,7 @@ func (a *App) Run() {
 		}
 	}()
 
-	// Start HTTP server
+	// 启动 HTTP 服务
 	go func() {
 		zap.L().Info("server starting", zap.String("addr", a.HTTPServer.Addr))
 		if err := a.HTTPServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -54,7 +54,7 @@ func (a *App) Run() {
 		}
 	}()
 
-	// Wait for signal
+	// 等待退出信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

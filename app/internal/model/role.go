@@ -8,12 +8,12 @@ package model
 // Role 表示角色，用于 RBAC 权限分组
 type Role struct {
 	BaseModel
-	Name        string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"` // 角色名称 (唯一)
-	Description string       `gorm:"type:varchar(256)" json:"description"`              // 角色描述信息
-	SortOrder   int          `gorm:"default:0" json:"sort_order"`                        // 角色在列表中的排序权重
-	Status      int          `gorm:"type:smallint;default:1" json:"status"`              // 角色状态 (1=启用, 0=禁用)
-	Level       int          `gorm:"default:100" json:"level"`                           // 角色等级 (数值越小等级越高，用于层级权限控制)
-	Permissions []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"` // 角色关联的权限列表 (多对多)
+	Name        string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"`        // (唯一)
+	Description string       `gorm:"type:varchar(256)" json:"description"`
+	SortOrder   int          `gorm:"default:0" json:"sort_order"`
+	Status      int          `gorm:"type:smallint;default:1" json:"status"`                    // (1=启用, 0=禁用)
+	Level       int          `gorm:"default:100" json:"level"`                                 // (数值越小等级越高，用于层级权限控制)
+	Permissions []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"` // (多对多)
 }
 
 // SortableFields 返回允许排序的字段列表
@@ -23,7 +23,6 @@ func (Role) SortableFields() []string {
 
 // RolePermission 是角色与权限多对多关系的关联表
 type RolePermission struct {
-	RoleID       string `gorm:"type:uuid;primaryKey"` // 关联的角色 ID
-	PermissionID string `gorm:"type:uuid;primaryKey"` // 关联的权限 ID
+	RoleID       string `gorm:"type:uuid;primaryKey"`
+	PermissionID string `gorm:"type:uuid;primaryKey"`
 }
-

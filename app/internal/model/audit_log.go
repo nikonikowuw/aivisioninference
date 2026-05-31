@@ -9,21 +9,21 @@ import "time"
 
 // AuditLog 记录请求级别的审计事件，用于安全审计
 type AuditLog struct {
-	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"` // 审计日志主键 ID (UUID)
-	UserID         *string   `gorm:"type:uuid" json:"user_id"`                                 // 执行操作的用户 ID (未登录则为空)
-	Username       string    `gorm:"type:varchar(64)" json:"username"`                         // 执行操作的用户名
-	ActionType     string    `gorm:"type:varchar(128)" json:"action_type"`                     // 操作类型 (如: create, update, delete)
-	ResourceType   string    `gorm:"type:varchar(64)" json:"resource_type"`                    // 操作的资源类型 (如: user, role)
-	ResourceID     string    `gorm:"type:varchar(64)" json:"resource_id"`                      // 被操作资源的 ID
-	RequestPath    string    `gorm:"type:varchar(512)" json:"request_path"`                    // 请求的 URL 路径
-	RequestMethod  string    `gorm:"type:varchar(10)" json:"request_method"`                   // 请求的 HTTP 方法 (GET/POST/PUT/DELETE)
-	RequestIP      string    `gorm:"type:varchar(45)" json:"request_ip"`                       // 客户端请求的 IP 地址
-	UserAgent      string    `gorm:"type:varchar(512)" json:"user_agent"`                      // 客户端浏览器代理标识 UA
-	RequestBody    string    `gorm:"type:text" json:"request_body"`                            // 原始请求 Body 数据 (脱敏处理)
-	ResponseStatus int       `json:"response_status"`                                          // HTTP 响应状态码 (如: 200, 400, 500)
-	DurationMs     int64     `json:"duration_ms"`                                              // 请求处理耗时 (毫秒)
-	ResultSummary  string    `gorm:"type:varchar(255)" json:"result_summary"`                  // 执行结果的简短描述或错误日志
-	CreatedAt      time.Time `json:"created_at"`                                               // 日志创建/操作执行时间
+	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	UserID         *string   `gorm:"type:uuid" json:"user_id"`                                 // (未登录则为空)
+	Username       string    `gorm:"type:varchar(64)" json:"username"`
+	ActionType     string    `gorm:"type:varchar(128)" json:"action_type"`                     // (如: create, update, delete)
+	ResourceType   string    `gorm:"type:varchar(64)" json:"resource_type"`                    // (如: user, role)
+	ResourceID     string    `gorm:"type:varchar(64)" json:"resource_id"`
+	RequestPath    string    `gorm:"type:varchar(512)" json:"request_path"`
+	RequestMethod  string    `gorm:"type:varchar(10)" json:"request_method"`                   // (GET/POST/PUT/DELETE)
+	RequestIP      string    `gorm:"type:varchar(45)" json:"request_ip"`
+	UserAgent      string    `gorm:"type:varchar(512)" json:"user_agent"`
+	RequestBody    string    `gorm:"type:text" json:"request_body"`                            // (脱敏处理)
+	ResponseStatus int       `json:"response_status"`                                          // (如: 200, 400, 500)
+	DurationMs     int64     `json:"duration_ms"`                                              // (毫秒)
+	ResultSummary  string    `gorm:"type:varchar(255)" json:"result_summary"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // SortableFields 返回允许排序的字段列表
@@ -35,4 +35,3 @@ func (AuditLog) SortableFields() []string {
 func (AuditLog) TableName() string {
 	return "audit_logs"
 }
-

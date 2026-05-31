@@ -100,6 +100,8 @@ func main() {
 		PermissionTreeRedisEnable: true,
 		ChunkSizeMB:               cfg.Storage.ChunkSizeMB,
 		MaxFileSizeMB:             cfg.Storage.MaxFileSizeMB,
+		LocalUploadDir:            cfg.Storage.Local.UploadDir,
+		LocalPublicURL:            cfg.Storage.Local.PublicURL,
 	}
 	r := router.New(db, rdb, jwtManager, hub, routerCfg, l.Access)
 

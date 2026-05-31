@@ -14,17 +14,17 @@ import (
 // User 表示系统用户，包含认证和角色关联信息
 type User struct {
 	BaseModel
-	Username      string         `gorm:"type:varchar(64);uniqueIndex:idx_user_username;not null" json:"username"` // 用户名 (唯一，联合软删除唯一索引)
-	Password      string         `gorm:"type:varchar(256);not null" json:"-"`                                     // 加密后的用户密码 (不输出 json)
-	Email         string         `gorm:"type:varchar(128);uniqueIndex:idx_user_email" json:"email"`               // 用户绑定邮箱 (唯一)
-	EmailVerified bool           `gorm:"default:false" json:"email_verified"`                                     // 邮箱是否已验证
-	DisplayName   string         `gorm:"type:varchar(128)" json:"display_name"`                                   // 显示昵称
-	AvatarURL     string         `gorm:"type:varchar(512)" json:"avatar_url"`                                     // 头像图片链接
-	Status        int            `gorm:"type:smallint;default:1" json:"status"`                                     // 用户状态 (1=启用, 0=禁用)
-	LoginAttempts int            `gorm:"default:0" json:"-"`                                                      // 连续登录失败尝试次数
-	LockedUntil   *time.Time     `json:"-"`                                                                       // 账号锁定截止时间
-	IsRoot        bool           `gorm:"default:false" json:"is_root"`                                            // 是否为系统超级管理员 (不受一般权限控制)
-	Roles         []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`                            // 用户拥有的角色列表 (多对多关联)
+	Username      string         `gorm:"type:varchar(64);uniqueIndex:idx_user_username;not null" json:"username"` // (唯一，联合软删除唯一索引)
+	Password      string         `gorm:"type:varchar(256);not null" json:"-"`                                     // (不输出 json)
+	Email         string         `gorm:"type:varchar(128);uniqueIndex:idx_user_email" json:"email"`               // (唯一)
+	EmailVerified bool           `gorm:"default:false" json:"email_verified"`
+	DisplayName   string         `gorm:"type:varchar(128)" json:"display_name"`
+	AvatarURL     string         `gorm:"type:varchar(512)" json:"avatar_url"`
+	Status        int            `gorm:"type:smallint;default:1" json:"status"`                                   // (1=启用, 0=禁用)
+	LoginAttempts int            `gorm:"default:0" json:"-"`
+	LockedUntil   *time.Time     `json:"-"`
+	IsRoot        bool           `gorm:"default:false" json:"is_root"`                                            // (不受一般权限控制)
+	Roles         []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`                            // (多对多关联)
 	DeletedAt     gorm.DeletedAt `gorm:"uniqueIndex:idx_user_username;uniqueIndex:idx_user_email" json:"-"`       // 软删除标记，解决软删除后重新创建同名用户/同邮箱冲突的问题
 }
 
@@ -38,4 +38,3 @@ type UserRole struct {
 	UserID string `gorm:"type:uuid;primaryKey"` // 用户 ID
 	RoleID string `gorm:"type:uuid;primaryKey"` // 角色 ID
 }
-

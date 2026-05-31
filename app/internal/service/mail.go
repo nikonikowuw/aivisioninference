@@ -81,7 +81,7 @@ type verificationMailSender interface {
 type MailService struct {
 	cfgRepo      mailConfigRepo                          // 邮件配置持久化层
 	inboundRepo  inboundEmailRepo                        // 接收邮件持久化层
-	feedbackRepo feedbackRepo                           // 系统反馈持久化层
+	feedbackRepo feedbackRepo                            // 系统反馈持久化层
 	smtpFactory  func(cfg mailpkg.SMTPConfig) smtpClient // SMTP 客户端工厂函数
 	imapFactory  func(cfg mailpkg.IMAPConfig) imapClient // IMAP 客户端工厂函数
 }
@@ -250,12 +250,8 @@ func (s *MailService) SyncIMAP(ctx context.Context, limit int) (int, error) {
 
 // getOrDefaultConfig 获取邮件配置，若不存在则返回带默认值的占位配置
 func (s *MailService) getOrDefaultConfig(ctx context.Context) (*model.MailConfig, error) {
-	cfg, err := s.cfgRepo.First(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if cfg != nil {
-		return cfg, nil
+	if cfg, err := s.cfgRepo.First(ctx); err != nil || cfg != nil {
+		return cfg, err
 	}
 	return &model.MailConfig{
 		SMTPEncryption:  model.MailEncryptionSTARTTLS,
@@ -470,10 +466,10 @@ func toIMAPConfig(cfg *model.MailConfig) mailpkg.IMAPConfig {
 
 // defaultString 返回 value（去除首尾空格后非空）否则返回 fallback。
 func defaultString(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
+	if v := strings.TrimSpace(value); v != "" {
+		return v
 	}
-	return strings.TrimSpace(value)
+	return fallback
 }
 
 // defaultInt 返回 value（大于 0 时）否则返回 fallback。

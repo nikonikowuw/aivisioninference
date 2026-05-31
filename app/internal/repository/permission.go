@@ -153,4 +153,3 @@ func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs [
 		Find(&items).Error
 	return items, err
 }
-

@@ -33,15 +33,14 @@ type BaseModel struct {
 // 仅在非请求上下文（种子数据、迁移、后台任务）中允许缺少 user_id
 // 如果上下文存在但没有 user_id，会记录警告日志以提醒调用者
 func (b *BaseModel) BeforeCreate(tx *gorm.DB) error {
-	if tx.Statement != nil && tx.Statement.Context != nil {
-		if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
-			b.CreatedBy = &userID
-			return nil
-		}
-		zap.L().Warn("BaseModel.BeforeCreate: context exists but user_id not found — CreatedBy will be empty")
+	if tx.Statement == nil || tx.Statement.Context == nil {
 		return nil
 	}
-	// 在请求作用域外（如种子数据、迁移、后台任务）期望 nil 上下文
+	if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
+		b.CreatedBy = &userID
+		return nil
+	}
+	zap.L().Warn("BaseModel.BeforeCreate: context exists but user_id not found — CreatedBy will be empty")
 	return nil
 }
 
@@ -49,15 +48,13 @@ func (b *BaseModel) BeforeCreate(tx *gorm.DB) error {
 // 仅在非请求上下文（种子数据、迁移、后台任务）中允许缺少 user_id
 // 如果上下文存在但没有 user_id，会记录警告日志以提醒调用者
 func (b *BaseModel) BeforeUpdate(tx *gorm.DB) error {
-	if tx.Statement != nil && tx.Statement.Context != nil {
-		if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
-			b.UpdatedBy = &userID
-			return nil
-		}
-		zap.L().Warn("BaseModel.BeforeUpdate: context exists but user_id not found — UpdatedBy will be empty")
+	if tx.Statement == nil || tx.Statement.Context == nil {
 		return nil
 	}
-	// 在请求作用域外（如种子数据、迁移、后台任务）期望 nil 上下文
+	if userID, ok := tx.Statement.Context.Value(ContextKeyUserID).(string); ok && userID != "" {
+		b.UpdatedBy = &userID
+		return nil
+	}
+	zap.L().Warn("BaseModel.BeforeUpdate: context exists but user_id not found — UpdatedBy will be empty")
 	return nil
 }
-

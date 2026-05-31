@@ -262,7 +262,6 @@ func (h *FileHandler) Download(c *gin.Context) {
 		if err := service.WriteRange(c.Writer, info.FilePath, start, end, info.FileSize, info.ContentType); err != nil {
 			zap.L().Error("write range failed", zap.Error(err))
 			attachError(c, apperrors.New(apperrors.ErrInternal, ""))
-			return
 		}
 		return
 	}
@@ -319,5 +318,3 @@ func (h *FileHandler) ExportCSV(c *gin.Context) {
 	}
 	writeCSV(c, "files.csv", data)
 }
-
-

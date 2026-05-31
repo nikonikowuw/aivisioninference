@@ -4,7 +4,6 @@ package router
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
@@ -14,18 +13,13 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/middleware"
-	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
-	"github.com/niko-admin/niko-admin/internal/repository"
-	"github.com/niko-admin/niko-admin/internal/service"
 	"github.com/niko-admin/niko-admin/internal/task"
-	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
 // Router holds all dependencies for route registration.
@@ -48,6 +42,8 @@ type Config struct {
 	PermissionTreeRedisEnable bool
 	ChunkSizeMB               int
 	MaxFileSizeMB             int64
+	LocalUploadDir            string
+	LocalPublicURL            string
 }
 
 // New creates a new Router with all dependencies wired.
@@ -93,74 +89,35 @@ func (r *Router) setupMiddleware() {
 func (r *Router) setupRoutes() {
 	v1 := r.engine.Group("/api/v1")
 
-	// Create repositories
-	userRepo := repository.NewUserRepository(r.db)
-	roleRepo := repository.NewRoleRepository(r.db)
-	permRepo := repository.NewPermissionRepository(r.db)
-	auditRepo := repository.NewAuditRepository(r.db)
-	fileRepo := repository.NewFileRepository(r.db)
-	taskRepo := repository.NewTaskRepository(r.db)
-	dashRepo := repository.NewDashboardRepository(r.db)
-	brandConfigRepo := repository.NewBrandConfigRepository(r.db)
-	mailConfigRepo := repository.NewMailConfigRepository(r.db)
-	emailTokenRepo := repository.NewEmailTokenRepository(r.db)
-	inboundEmailRepo := repository.NewInboundEmailRepository(r.db)
-	feedbackRepo := repository.NewFeedbackRepository(r.db)
-
-	// Create services
-	avatarStorage, err := storage.NewLocalStorage("uploads", "/uploads")
+	deps, err := InitializeRouteDeps(r.db, r.rdb, r.jwtManager, r.hub, r.config)
 	if err != nil {
-		zap.L().Fatal("create avatar storage failed", zap.Error(err))
+		zap.L().Fatal("initialize route dependencies failed", zap.Error(err))
 	}
-	auditSvc := service.NewAuditService(auditRepo)
-	authSvc := service.NewAuthService(userRepo, permRepo, r.rdb, r.jwtManager, avatarStorage)
-	userSvc := service.NewUserService(userRepo)
-	roleSvc := service.NewRoleService(roleRepo, userRepo, r.rdb)
-	var permCache cache.Cache
-	if r.config.PermissionTreeRedisEnable && r.rdb != nil {
-		permCache = cache.NewRedisCache(r.rdb)
-	} else {
-		if r.config.PermissionTreeRedisEnable && r.rdb == nil {
-			zap.L().Warn("permission tree redis cache enabled but redis client is nil, fallback to memory")
-		}
-		permCache = cache.NewMemoryCache(5 * time.Minute)
-	}
-	permSvc := service.NewPermissionService(permRepo, permCache)
-	rbacCache := permCache
-	fileSvc := service.NewFileService(fileRepo, service.FileOptions{
-		MaxFileSizeBytes:  int64(r.config.MaxFileSizeMB) << 20,
-		MaxChunkSizeBytes: int64(r.config.ChunkSizeMB) << 20,
-	})
-	taskSvc := service.NewTaskService(taskRepo)
-	dashSvc := service.NewDashboardService(dashRepo)
-	brandSvc := service.NewBrandServiceWithStorage(brandConfigRepo, avatarStorage)
-	mailSvc := service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
-	emailVerificationSvc := service.NewEmailVerificationService(emailTokenRepo, userRepo, mailSvc)
-	feedbackSvc := service.NewFeedbackService(feedbackRepo, mailSvc)
+	rbacCache := deps.RBACCache
 
 	// Auth (no auth required)
-	authHandler := handler.NewAuthHandlerWithEmail(authSvc, emailVerificationSvc, auditSvc)
+	authHandler := deps.AuthHandler
 	v1.POST("/auth/login", authHandler.Login)
 	v1.POST("/auth/password-reset/request", authHandler.RequestPasswordReset)
 	v1.POST("/auth/password-reset/confirm", authHandler.ResetPassword)
 	v1.POST("/auth/refresh", authHandler.Refresh)
-	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), middleware.Audit(auditSvc), authHandler.Logout)
+	v1.POST("/auth/logout", middleware.Auth(r.jwtManager), middleware.Audit(deps.AuditService), authHandler.Logout)
 	v1.GET("/auth/me", middleware.Auth(r.jwtManager), authHandler.Me)
 	v1.PUT("/auth/password", middleware.Auth(r.jwtManager), authHandler.ChangePassword)
 	v1.PUT("/auth/profile", middleware.Auth(r.jwtManager), authHandler.UpdateProfile)
 	v1.POST("/auth/avatar", middleware.Auth(r.jwtManager), authHandler.UploadAvatar)
 
 	// WebSocket
-	wsHandler := handler.NewWSHandler(r.hub, r.jwtManager, r.config.AllowOrigins)
+	wsHandler := deps.WSHandler
 	r.engine.GET("/api/v1/ws", wsHandler.HandleWebSocket)
 
 	// Protected routes
 	authorized := v1.Group("")
 	authorized.Use(middleware.Auth(r.jwtManager))
-	authorized.Use(middleware.Audit(auditSvc))
+	authorized.Use(middleware.Audit(deps.AuditService))
 
 	// Users
-	userHandler := handler.NewUserHandler(userSvc, authSvc)
+	userHandler := deps.UserHandler
 	users := authorized.Group("/users")
 	{
 		users.GET("", middleware.RBAC(rbacCache, r.db), userHandler.List)
@@ -177,7 +134,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Roles
-	roleHandler := handler.NewRoleHandler(roleSvc)
+	roleHandler := deps.RoleHandler
 	roles := authorized.Group("/roles")
 	{
 		roles.GET("", roleHandler.List)
@@ -192,7 +149,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Permissions
-	permHandler := handler.NewPermissionHandler(permSvc)
+	permHandler := deps.PermissionHandler
 	permissions := authorized.Group("/permissions")
 	{
 		permissions.GET("/tree", permHandler.Tree)
@@ -202,7 +159,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Files
-	fileHandler := handler.NewFileHandler(fileSvc)
+	fileHandler := deps.FileHandler
 	files := authorized.Group("/files")
 	{
 		files.POST("/upload/init", middleware.RBAC(rbacCache, r.db), fileHandler.InitUpload)
@@ -219,12 +176,12 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Audit Logs
-	auditHandler := handler.NewAuditHandler(auditSvc)
+	auditHandler := deps.AuditHandler
 	authorized.GET("/audit-logs", middleware.RBAC(rbacCache, r.db), auditHandler.List)
 	authorized.GET("/audit-logs/export", middleware.RBAC(rbacCache, r.db), auditHandler.ExportCSV)
 
 	// Tasks
-	taskHandler := handler.NewTaskHandler(taskSvc)
+	taskHandler := deps.TaskHandler
 	tasks := authorized.Group("/tasks")
 	{
 		tasks.POST("", middleware.RBAC(rbacCache, r.db), taskHandler.Create)
@@ -236,7 +193,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// System brand configuration
-	brandHandler := handler.NewBrandHandler(brandSvc)
+	brandHandler := deps.BrandHandler
 	v1.GET("/system/brand-config", brandHandler.GetConfig)
 	brandConfig := authorized.Group("/system/brand-config")
 	{
@@ -245,7 +202,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// System mail configuration
-	mailHandler := handler.NewMailHandler(mailSvc)
+	mailHandler := deps.MailHandler
 	mailConfig := authorized.Group("/system/mail-config")
 	{
 		mailConfig.GET("", middleware.RBAC(rbacCache, r.db), mailHandler.GetConfig)
@@ -256,7 +213,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Feedback
-	feedbackHandler := handler.NewFeedbackHandler(feedbackSvc)
+	feedbackHandler := deps.FeedbackHandler
 	feedback := authorized.Group("/feedback")
 	{
 		feedback.POST("", feedbackHandler.Create)
@@ -267,7 +224,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Dashboard
-	dashboardHandler := handler.NewDashboardHandler(dashSvc)
+	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
 
 	// Swagger UI (non-production only)
@@ -308,9 +265,5 @@ func NewAsynqServer(rdb *redis.Client) *asynq.Server {
 
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
 func NewAsynqMux(db *gorm.DB) *asynq.ServeMux {
-	mailConfigRepo := repository.NewMailConfigRepository(db)
-	inboundEmailRepo := repository.NewInboundEmailRepository(db)
-	feedbackRepo := repository.NewFeedbackRepository(db)
-	mailSvc := service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
-	return task.NewMux(mailSvc)
+	return task.NewMux(provideMailServiceForAsynq(db))
 }

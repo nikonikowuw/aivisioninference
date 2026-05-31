@@ -18,8 +18,8 @@ func TestRoleRepositoryUpdateUsesExplicitPrimaryKeyFilter(t *testing.T) {
 	repo := NewRoleRepository(db)
 
 	role := model.Role{
-		BaseModel: model.BaseModel{ID: "role-1"},
-		Name:      "admin",
+		BaseModel:   model.BaseModel{ID: "role-1"},
+		Name:        "admin",
 		Description: "before",
 		SortOrder:   1,
 		Status:      1,
@@ -28,8 +28,8 @@ func TestRoleRepositoryUpdateUsesExplicitPrimaryKeyFilter(t *testing.T) {
 	require.NoError(t, db.Create(&role).Error)
 
 	updated := model.Role{
-		BaseModel: model.BaseModel{ID: role.ID, DeletedAt: gorm.DeletedAt{Time: time.Now(), Valid: true}},
-		Name:      "after",
+		BaseModel:   model.BaseModel{ID: role.ID, DeletedAt: gorm.DeletedAt{Time: time.Now(), Valid: true}},
+		Name:        "after",
 		Description: "updated",
 		SortOrder:   2,
 		Status:      1,
@@ -49,8 +49,8 @@ func TestRoleRepositoryUpdateWithEmptyIDDoesNotUpdateAnyRecord(t *testing.T) {
 	repo := NewRoleRepository(db)
 
 	role := model.Role{
-		BaseModel: model.BaseModel{ID: "role-1"},
-		Name:      "admin",
+		BaseModel:   model.BaseModel{ID: "role-1"},
+		Name:        "admin",
 		Description: "before",
 		SortOrder:   1,
 		Status:      1,

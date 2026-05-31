@@ -33,4 +33,3 @@ func NewMux(mailSvc *service.MailService) *asynq.ServeMux {
 	NewHandler(mailSvc).RegisterHandlers(mux)
 	return mux
 }
-

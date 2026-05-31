@@ -8,7 +8,7 @@ package model
 // Role 表示角色，用于 RBAC 权限分组
 type Role struct {
 	BaseModel
-	Name        string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"`        // (唯一)
+	Name        string       `gorm:"type:varchar(64);uniqueIndex;not null" json:"name"` // (唯一)
 	Description string       `gorm:"type:varchar(256)" json:"description"`
 	SortOrder   int          `gorm:"default:0" json:"sort_order"`
 	Status      int          `gorm:"type:smallint;default:1" json:"status"`                    // (1=启用, 0=禁用)

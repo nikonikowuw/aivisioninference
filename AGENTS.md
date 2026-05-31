@@ -30,6 +30,7 @@ make build        # 编译当前平台
 make build-linux  # 交叉编译 Linux amd64
 make swag         # 生成 Swagger 文档
 make gen          # CRUD 代码生成
+make wire         # 生成 Wire 依赖注入代码
 make unit-test    # 运行测试（-race -cover）
 make lint         # golangci-lint 检查
 make migrate      # 数据库迁移
@@ -51,6 +52,7 @@ app/                  # Go 后端
     config/           # Viper 配置加载
     middleware/       # Gin 中间件 (auth, rbac, cors, i18n, logger, recovery)
     router/           # 路由注册
+    server/           # 应用级依赖组装（Wire 注入）
     handler/          # HTTP Handler（Controller 层）
     service/          # 业务逻辑层
     repository/       # 数据访问层 (GORM)
@@ -88,6 +90,39 @@ Handler → Service → Repository → Model (GORM)
 - **Service**: 业务逻辑、事务管理、权限校验（必要时）。
 - **Repository**: 纯 GORM 数据库操作，不得包含业务逻辑。
 - **DTO**: 请求/响应结构体定义，使用 `validate` tag 校验。
+
+## Dependency Injection
+
+项目使用 **Google Wire** 进行编译时依赖注入，分两层覆盖：
+
+| 层级 | 包 | 入口 |
+|---|---|---|
+| 应用层（App） | `internal/server/` | `InitializeApp()` — 创建 DB、Redis、JWT、WebSocket、Router、Asynq |
+| 路由层（Route） | `internal/router/` | `InitializeRouteDeps()` — 创建 Repo、Service、Handler |
+
+`internal/server/wire.go` 负责顶层依赖（数据库连接、缓存、JWT 管理器、路由配置映射），`internal/router/wire.go` 负责业务层的 Repo-Service-Handler 构造链。`cmd/server/main.go` 仅调用 `server.InitializeApp()` 后执行 `app.Run()`。
+
+### 工作机制
+
+| 文件 | 职责 |
+|---|---|
+| `wire.go` | 声明 `wire.Build()` 定义依赖拓扑（`//go:build wireinject`，不参与编译） |
+| `wire_gen.go` | Wire 自动生成的注入代码（标记 `DO NOT EDIT`），包含完整、类型安全的构造顺序 |
+| `deps.go` | 手写 provider 函数，用于需要自定义构造逻辑的场景（如条件选择缓存后端） |
+
+### 修改流程
+
+1. 在对应 `deps.go` 中新增 provider 函数（或直接复用已有的 `New*` 构造器）
+2. 在对应 `wire.go` 的 `wire.Build()` 中注册新增的 provider
+3. 执行 `make wire` 重新生成所有 `wire_gen.go`
+4. 编译验证：若依赖缺失或类型不匹配，Wire 会在代码生成阶段报错
+
+### 关键约定
+
+- **不允许**手动在 `wire_gen.go` 中修改代码——下次生成会被覆盖
+- **不允许**绕过 Wire 手动 `new` 依赖对象——统一通过 `InitializeApp` / `InitializeRouteDeps` 入口构造
+- Provider 签名必须返回 `(T, error)` 或 `T`，Wire 自动推导构造顺序
+- 接口绑定使用 `wire.Bind(new(interface), new(impl))`（如 `middleware.AuditLogger` → `*service.AuditService`）
 
 ## Conventions
 

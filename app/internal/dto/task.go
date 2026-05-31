@@ -32,9 +32,9 @@ type TaskResponse struct {
 // TaskListRequest is the request for listing tasks with filters.
 type TaskListRequest struct {
 	PageRequest
-	Keyword   string `form:"keyword"`
-	Type      string `form:"type"`
-	Status    string `form:"status"`
+	Keyword   string     `form:"keyword"`
+	Type      string     `form:"type"`
+	Status    string     `form:"status"`
 	StartTime string     `form:"start_time"`
 	EndTime   string     `form:"end_time"`
 	FromTime  *time.Time `form:"-" json:"-"`

@@ -10,18 +10,18 @@ import "time"
 // AuditLog 记录请求级别的审计事件，用于安全审计
 type AuditLog struct {
 	ID             string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID         *string   `gorm:"type:uuid" json:"user_id"`                                 // (未登录则为空)
+	UserID         *string   `gorm:"type:uuid" json:"user_id"` // (未登录则为空)
 	Username       string    `gorm:"type:varchar(64)" json:"username"`
-	ActionType     string    `gorm:"type:varchar(128)" json:"action_type"`                     // (如: create, update, delete)
-	ResourceType   string    `gorm:"type:varchar(64)" json:"resource_type"`                    // (如: user, role)
+	ActionType     string    `gorm:"type:varchar(128)" json:"action_type"`  // (如: create, update, delete)
+	ResourceType   string    `gorm:"type:varchar(64)" json:"resource_type"` // (如: user, role)
 	ResourceID     string    `gorm:"type:varchar(64)" json:"resource_id"`
 	RequestPath    string    `gorm:"type:varchar(512)" json:"request_path"`
-	RequestMethod  string    `gorm:"type:varchar(10)" json:"request_method"`                   // (GET/POST/PUT/DELETE)
+	RequestMethod  string    `gorm:"type:varchar(10)" json:"request_method"` // (GET/POST/PUT/DELETE)
 	RequestIP      string    `gorm:"type:varchar(45)" json:"request_ip"`
 	UserAgent      string    `gorm:"type:varchar(512)" json:"user_agent"`
-	RequestBody    string    `gorm:"type:text" json:"request_body"`                            // (脱敏处理)
-	ResponseStatus int       `json:"response_status"`                                          // (如: 200, 400, 500)
-	DurationMs     int64     `json:"duration_ms"`                                              // (毫秒)
+	RequestBody    string    `gorm:"type:text" json:"request_body"` // (脱敏处理)
+	ResponseStatus int       `json:"response_status"`               // (如: 200, 400, 500)
+	DurationMs     int64     `json:"duration_ms"`                   // (毫秒)
 	ResultSummary  string    `gorm:"type:varchar(255)" json:"result_summary"`
 	CreatedAt      time.Time `json:"created_at"`
 }

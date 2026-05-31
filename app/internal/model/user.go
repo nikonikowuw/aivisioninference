@@ -20,12 +20,12 @@ type User struct {
 	EmailVerified bool           `gorm:"default:false" json:"email_verified"`
 	DisplayName   string         `gorm:"type:varchar(128)" json:"display_name"`
 	AvatarURL     string         `gorm:"type:varchar(512)" json:"avatar_url"`
-	Status        int            `gorm:"type:smallint;default:1" json:"status"`                                   // (1=启用, 0=禁用)
+	Status        int            `gorm:"type:smallint;default:1" json:"status"` // (1=启用, 0=禁用)
 	LoginAttempts int            `gorm:"default:0" json:"-"`
 	LockedUntil   *time.Time     `json:"-"`
-	IsRoot        bool           `gorm:"default:false" json:"is_root"`                                            // (不受一般权限控制)
-	Roles         []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`                            // (多对多关联)
-	DeletedAt     gorm.DeletedAt `gorm:"uniqueIndex:idx_user_username;uniqueIndex:idx_user_email" json:"-"`       // 软删除标记，解决软删除后重新创建同名用户/同邮箱冲突的问题
+	IsRoot        bool           `gorm:"default:false" json:"is_root"`                                      // (不受一般权限控制)
+	Roles         []Role         `gorm:"many2many:user_roles;" json:"roles,omitempty"`                      // (多对多关联)
+	DeletedAt     gorm.DeletedAt `gorm:"uniqueIndex:idx_user_username;uniqueIndex:idx_user_email" json:"-"` // 软删除标记，解决软删除后重新创建同名用户/同邮箱冲突的问题
 }
 
 // SortableFields 返回允许排序的字段列表

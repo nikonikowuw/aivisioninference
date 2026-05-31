@@ -47,7 +47,7 @@ gen:
 
 ## wire: 生成 Wire 依赖注入代码
 wire:
-	go run github.com/google/wire/cmd/wire ./internal/router
+	go run github.com/google/wire/cmd/wire ./internal/router ./internal/server
 
 ## unit-test: 运行测试
 unit-test:

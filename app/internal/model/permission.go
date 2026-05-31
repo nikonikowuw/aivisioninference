@@ -17,12 +17,12 @@ type Permission struct {
 	Name      string       `gorm:"type:varchar(64);not null" json:"name"`
 	Code      string       `gorm:"type:varchar(128);uniqueIndex;not null" json:"code"` // (如: "user:list", "menu:dashboard")
 	Path      string       `gorm:"type:varchar(256)" json:"path"`
-	Method    string       `gorm:"type:varchar(10)" json:"method"`                     // (GET/POST/PUT/DELETE 等，主要用于API权限)
-	Type      string       `gorm:"type:varchar(20);not null" json:"type"`              // (menu/button)
-	Icon      string       `gorm:"type:varchar(64)" json:"icon"`                       // (仅对菜单有效)
-	ParentID  *string      `gorm:"type:uuid" json:"parent_id"`                         // (为 NULL 表示是一级菜单/根权限)
-	SortOrder int          `gorm:"default:0" json:"sort_order"`                        // 数值越小越靠前
-	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"`      // (GORM 一对多自关联)
+	Method    string       `gorm:"type:varchar(10)" json:"method"`                // (GET/POST/PUT/DELETE 等，主要用于API权限)
+	Type      string       `gorm:"type:varchar(20);not null" json:"type"`         // (menu/button)
+	Icon      string       `gorm:"type:varchar(64)" json:"icon"`                  // (仅对菜单有效)
+	ParentID  *string      `gorm:"type:uuid" json:"parent_id"`                    // (为 NULL 表示是一级菜单/根权限)
+	SortOrder int          `gorm:"default:0" json:"sort_order"`                   // 数值越小越靠前
+	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"` // (GORM 一对多自关联)
 }
 
 // SortableFields 返回允许排序的字段列表

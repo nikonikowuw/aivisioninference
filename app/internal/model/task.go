@@ -11,14 +11,14 @@ import "time"
 type Task struct {
 	BaseModel
 	TaskID       string     `gorm:"type:varchar(128);uniqueIndex" json:"task_id"`
-	Type         string     `gorm:"type:varchar(64);not null" json:"type"`        // (如: "email:delivery", "data:export")
-	Payload      string     `gorm:"type:text" json:"payload"`                     // (JSON 序列化后的参数信息)
-	Status       string     `gorm:"type:varchar(20);not null" json:"status"`      // (pending=等待中, running=进行中, completed=已完成, failed=失败)
+	Type         string     `gorm:"type:varchar(64);not null" json:"type"`   // (如: "email:delivery", "data:export")
+	Payload      string     `gorm:"type:text" json:"payload"`                // (JSON 序列化后的参数信息)
+	Status       string     `gorm:"type:varchar(20);not null" json:"status"` // (pending=等待中, running=进行中, completed=已完成, failed=失败)
 	RetryCount   int        `json:"retry_count"`
 	MaxRetries   int        `json:"max_retries"`
-	Result       string     `gorm:"type:text" json:"result"`                      // (成功时的元数据)
+	Result       string     `gorm:"type:text" json:"result"` // (成功时的元数据)
 	ErrorMessage string     `gorm:"type:text" json:"error_message"`
-	FinishedAt   *time.Time `json:"finished_at"`                                  // (无论成功或失败)
+	FinishedAt   *time.Time `json:"finished_at"` // (无论成功或失败)
 }
 
 // SortableFields 返回允许排序的字段列表

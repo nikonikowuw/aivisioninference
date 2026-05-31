@@ -11,25 +11,11 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"go.uber.org/zap"
 
-	"github.com/niko-admin/niko-admin/internal/config"
-	"github.com/niko-admin/niko-admin/internal/pkg/cache"
-	"github.com/niko-admin/niko-admin/internal/pkg/database"
-	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
-	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
-	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
-	"github.com/niko-admin/niko-admin/internal/pkg/ws"
-	"github.com/niko-admin/niko-admin/internal/router"
+	"github.com/niko-admin/niko-admin/internal/server"
 )
 
 var (
@@ -38,114 +24,15 @@ var (
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.Load()
+	app, err := server.InitializeApp()
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		log.Fatalf("failed to initialize app: %v", err)
 	}
-
-	// Initialize logger
-	l := applog.Init(cfg.Log)
-	defer l.Sync()
 
 	zap.L().Info("starting niko-admin",
 		zap.String("version", Version),
 		zap.String("build_time", BuildTime),
-		zap.String("env", cfg.App.Env),
 	)
 
-	if err := validatorx.InitGinBindingValidator(); err != nil {
-		zap.L().Fatal("failed to initialize gin binding validator with i18n translations", zap.Error(err))
-	}
-
-	// Connect to PostgreSQL
-	db, err := database.New(
-		fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-			cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Name, cfg.DB.SSLMode),
-		cfg.DB.MaxOpenConns,
-		cfg.DB.MaxIdleConns,
-	)
-	if err != nil {
-		zap.L().Fatal("failed to connect to database", zap.Error(err))
-	}
-	zap.L().Info("database connected")
-
-	// Connect to Redis. Redis is required for JWT refresh tokens and access token blacklist.
-	rdb, err := cache.New(cfg.Redis.Host, cfg.Redis.Port, cfg.Redis.Password, cfg.Redis.DB)
-	if err != nil {
-		zap.L().Fatal("failed to connect to redis", zap.Error(err))
-	}
-	zap.L().Info("redis connected")
-
-	// Initialize JWT manager
-	jwtManager := jwt.NewManager(
-		cfg.JWT.Secret,
-		cfg.JWT.Issuer,
-		cfg.JWT.Audience,
-		cfg.JWT.AccessExpireSec,
-		cfg.JWT.RefreshExpireSec,
-		rdb,
-	)
-
-	// Initialize WebSocket hub
-	hub := ws.NewHub()
-	go hub.Run()
-
-	// Create router
-	routerCfg := &router.Config{
-		AppEnv:                    cfg.App.Env,
-		AllowOrigins:              cfg.CORS.AllowOrigins,
-		RequestsPerMinute:         cfg.RateLimit.RequestsPerMinute,
-		TrustedProxies:            cfg.Proxy.TrustedProxies,
-		PermissionTreeRedisEnable: true,
-		ChunkSizeMB:               cfg.Storage.ChunkSizeMB,
-		MaxFileSizeMB:             cfg.Storage.MaxFileSizeMB,
-		LocalUploadDir:            cfg.Storage.Local.UploadDir,
-		LocalPublicURL:            cfg.Storage.Local.PublicURL,
-	}
-	r := router.New(db, rdb, jwtManager, hub, routerCfg, l.Access)
-
-	// Start HTTP server
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.App.Port),
-		Handler:      r.Engine(),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-
-	// Start Asynq server in background
-	asynqServer := router.NewAsynqServer(rdb)
-	asynqMux := router.NewAsynqMux(db)
-	go func() {
-		zap.L().Info("starting asynq server")
-		if err := asynqServer.Run(asynqMux); err != nil {
-			zap.L().Error("asynq server error", zap.Error(err))
-		}
-	}()
-
-	// Graceful shutdown
-	go func() {
-		zap.L().Info("server starting", zap.String("addr", srv.Addr))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			zap.L().Fatal("server listen error", zap.Error(err))
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	zap.L().Info("shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		zap.L().Error("server forced shutdown", zap.Error(err))
-	}
-
-	asynqServer.Shutdown()
-
-	zap.L().Info("server exited")
+	app.Run()
 }

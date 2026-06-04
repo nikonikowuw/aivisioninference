@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useLocation, NavLink, useNavigate } from 'react-router-dom';
 import { Box, Flex, HStack, Text, Tooltip, useColorModeValue, Collapse, Icon } from '@chakra-ui/react';
 import { MdChevronRight } from 'react-icons/md';
@@ -20,10 +20,39 @@ export function SidebarLinks(props: {
 
 	const { routes, collapsed } = props;
 
-	// `+ '/'` 后缀确保路径边界精确匹配，防止 /admin/user 误匹配 /admin/users
-	const activeRoute = useCallback((routeName: string) => {
-		return location.pathname === routeName || location.pathname.startsWith(routeName + '/');
-	}, [location.pathname]);
+	const allLeafPaths = useMemo(() => {
+		const paths: string[] = [];
+		const walk = (items: SidebarRouteType[]) => {
+			items.forEach((item) => {
+				if (item.items && item.items.length > 0) {
+					walk(item.items);
+				} else {
+					paths.push(item.layout + item.path);
+				}
+			});
+		};
+		walk(routes);
+		return paths.sort((a, b) => b.length - a.length);
+	}, [routes]);
+
+	const bestMatchPath = useMemo(() => {
+		for (const p of allLeafPaths) {
+			if (location.pathname === p || location.pathname.startsWith(p + '/')) {
+				return p;
+			}
+		}
+		return '';
+	}, [location.pathname, allLeafPaths]);
+
+	const isRouteActive = useCallback(
+		(route: SidebarRouteType): boolean => {
+			if (route.items && route.items.length > 0) {
+				return route.items.some(isRouteActive);
+			}
+			return route.layout + route.path === bestMatchPath;
+		},
+		[bestMatchPath]
+	);
 
 	const toggleMenu = (menuKey: string) => {
 		setOpenMenus((prev) => ({
@@ -40,8 +69,7 @@ export function SidebarLinks(props: {
 			const checkAndExpand = (items: SidebarRouteType[]): boolean => {
 				let anyActive = false;
 				for (const route of items) {
-					const fullPath = route.layout + route.path;
-					const isDirectActive = activeRoute(fullPath);
+					const isDirectActive = (!route.items || route.items.length === 0) && isRouteActive(route);
 					const isChildrenActive = route.items ? checkAndExpand(route.items) : false;
 
 					if (isDirectActive || isChildrenActive) {
@@ -59,17 +87,14 @@ export function SidebarLinks(props: {
 			checkAndExpand(routes);
 			return changed ? next : prev;
 		});
-	}, [location.pathname, routes, activeRoute]);
+	}, [location.pathname, routes, isRouteActive]);
 
 	const createLinks = (routes: SidebarRouteType[], isSubMenu = false) => {
 		return routes.map((route: SidebarRouteType, index: number) => {
 			if (route.layout === '/admin' || route.layout === '/auth' || route.layout === '/rtl') {
 				const fullPath = route.layout + route.path;
 				const hasItems = route.items && route.items.length > 0;
-				// 父菜单 active = 任意子项 active
-				const isActive = hasItems
-					? route.items!.some((item) => activeRoute(item.layout + item.path))
-					: activeRoute(fullPath);
+				const isActive = isRouteActive(route);
 				const isOpen = openMenus[route.key];
 
 				const linkContent = hasItems ? (

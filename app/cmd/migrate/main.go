@@ -98,12 +98,15 @@ func main() {
 	}
 
 		// Production should use a scheduled task to auto-create future partitions.
+	// Use tryExec instead of mustExec because smart_records may not be
+	// a partitioned table if it was created by GORM AutoMigrate.
+	// In that case, drop and recreate it as partitioned, or skip partitions.
 	for _, sql := range []string{
 		"CREATE TABLE IF NOT EXISTS smart_records_202606 PARTITION OF smart_records FOR VALUES FROM ('2026-06-01') TO ('2026-07-01')",
 		"CREATE TABLE IF NOT EXISTS smart_records_202607 PARTITION OF smart_records FOR VALUES FROM ('2026-07-01') TO ('2026-08-01')",
 		"CREATE TABLE IF NOT EXISTS smart_records_default PARTITION OF smart_records FOR VALUES FROM (MINVALUE) TO ('2026-06-01')",
 	} {
-		mustExec(db, sql)
+		tryExec(db, sql)
 	}
 
 	mustExec(db, "CREATE INDEX IF NOT EXISTS idx_person_embeddings_vector ON person_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
@@ -133,6 +136,13 @@ func main() {
 func mustExec(db *gorm.DB, sql string) {
 	if err := db.Exec(sql).Error; err != nil {
 		log.Fatalf("migrate: %s: %v", sql[:min(len(sql), 60)], err)
+	}
+}
+
+// tryExec 执行 SQL 语句，失败时仅记录警告。
+func tryExec(db *gorm.DB, sql string) {
+	if err := db.Exec(sql).Error; err != nil {
+		log.Printf("WARNING: %s: %v", sql[:min(len(sql), 60)], err)
 	}
 }
 
@@ -319,15 +329,20 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
 			}
 
 			// Create admin role.
-			role := model.Role{
-				Name:        "admin",
-				Description: "系统管理员",
-				SortOrder:   1,
-				Status:      1,
-				Level:       1,
-			}
-			if err := tx.Create(&role).Error; err != nil {
-				return fmt.Errorf("create admin role: %w", err)
+			var role model.Role
+			if err := tx.Where("name = ?", "admin").First(&role).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+				role = model.Role{
+					Name:        "admin",
+					Description: "系统管理员",
+					SortOrder:   1,
+					Status:      1,
+					Level:       1,
+				}
+				if err := tx.Create(&role).Error; err != nil {
+					return fmt.Errorf("create admin role: %w", err)
+				}
+			} else if err != nil {
+				return fmt.Errorf("find admin role: %w", err)
 			}
 
 			// Assign admin role to admin user.
@@ -394,6 +409,29 @@ func defaultMenuList() []parentMenuDef {
 				{Code: "dashboard:view", Name: "查看仪表盘", Path: "/api/v1/dashboard/stats", Method: "GET"},
 			},
 			Children: nil,
+		},
+		{
+			Name: "设备管理", Code: "device-management", Path: "/device-management", Icon: "MdVideocam",
+			Children: []childMenuDef{
+				{Name: "设备列表", Code: "devices", Path: "/devices", Icon: "MdVideocam", Buttons: []buttonInfo{
+					{Code: "device:list", Name: "设备列表", Path: "/api/v1/devices", Method: "GET"},
+					{Code: "device:create", Name: "创建设备", Path: "/api/v1/devices", Method: "POST"},
+					{Code: "device:export", Name: "导出设备", Path: "/api/v1/devices/export", Method: "GET"},
+					{Code: "device:import", Name: "导入设备", Path: "/api/v1/devices/import", Method: "POST"},
+					{Code: "device:batch-delete", Name: "批量删除设备", Path: "/api/v1/devices/batch-delete", Method: "POST"},
+					{Code: "device:edit", Name: "编辑设备", Path: "/api/v1/devices/*", Method: "PUT"},
+					{Code: "device:delete", Name: "删除设备", Path: "/api/v1/devices/*", Method: "DELETE"},
+					{Code: "device:view", Name: "查看设备", Path: "/api/v1/devices/*", Method: "GET"},
+					{Code: "device:test", Name: "测试连接", Path: "/api/v1/devices/*/test", Method: "POST"},
+				}},
+				{Name: "设备分组", Code: "device-groups", Path: "/devices/groups", Icon: "MdFolder", Buttons: []buttonInfo{
+					{Code: "device-group:list", Name: "分组列表", Path: "/api/v1/device-groups", Method: "GET"},
+					{Code: "device-group:create", Name: "创建分组", Path: "/api/v1/device-groups", Method: "POST"},
+					{Code: "device-group:edit", Name: "编辑分组", Path: "/api/v1/device-groups/*", Method: "PUT"},
+					{Code: "device-group:delete", Name: "删除分组", Path: "/api/v1/device-groups/*", Method: "DELETE"},
+					{Code: "device-group:view", Name: "查看分组", Path: "/api/v1/device-groups/*", Method: "GET"},
+				}},
+			},
 		},
 		{
 			Name: "用户管理", Code: "user-management", Path: "/user-management", Icon: "MdPeople",

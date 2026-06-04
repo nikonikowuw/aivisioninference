@@ -12,6 +12,7 @@ import { tasks } from "./modules/tasks";
 import { brandConfig } from "./modules/brand-config";
 import { mailConfig } from "./modules/mail-config";
 import { feedback } from "./modules/feedback";
+import { devices } from "./modules/devices";
 
 export default {
   common,
@@ -28,4 +29,5 @@ export default {
   "modules/brand-config": brandConfig,
   "modules/mail-config": mailConfig,
   "modules/feedback": feedback,
+  "modules/devices": devices,
 };

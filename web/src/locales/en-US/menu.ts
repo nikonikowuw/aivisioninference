@@ -1,5 +1,8 @@
 export const menu = {
   dashboard: "Dashboard",
+  "device-management": "Device Management",
+  devices: "Devices",
+  "device-groups": "Device Groups",
   "user-management": "User Management",
   users: "Users",
   roles: "Roles",

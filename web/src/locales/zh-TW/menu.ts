@@ -1,5 +1,8 @@
 export const menu = {
   dashboard: "儀表板",
+  "device-management": "設備管理",
+  devices: "設備列表",
+  "device-groups": "設備分組",
   "user-management": "用戶管理",
   users: "用戶",
   roles: "角色",

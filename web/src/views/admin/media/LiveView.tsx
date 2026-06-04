@@ -39,7 +39,6 @@ const LAYOUTS: Record<number, { cols: number }> = {
 const LiveView: React.FC = () => {
   const [tiles, setTiles] = useState<StreamTile[]>([]);
   const [layout, setLayout] = useState<number>(4);
-  const [loading, setLoading] = useState(false);
   const toast = useToast();
 
   const addTile = async (deviceId: string) => {
@@ -93,7 +92,6 @@ const LiveView: React.FC = () => {
           aria-label="add device"
           icon={<MdRefresh />}
           size="sm"
-          isLoading={loading}
           onClick={() => addTile(String(Date.now()))}
           title="添加临时设备（请输入真实设备ID）"
         />

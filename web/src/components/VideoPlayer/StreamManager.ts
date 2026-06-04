@@ -41,11 +41,10 @@ function generateStreamId(url: string): string {
   const cleanUrl = url.replace(/[?&]token=[^&]+/, '');
   let hash = 0;
   for (let i = 0; i < cleanUrl.length; i++) {
-    const char = cleanUrl.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = ((hash << 5) - hash) + cleanUrl.charCodeAt(i);
     hash |= 0;
   }
-  return 's' + Math.abs(hash).toString(36);
+  return `s${Math.abs(hash).toString(36)}`;
 }
 
 class StreamManager {
@@ -79,7 +78,7 @@ class StreamManager {
 
       if (entry.status === 'ready' && entry.stream) {
         video.srcObject = entry.stream;
-        video.play().catch(() => {});
+        video.play().catch(() => { });
         return { stream: entry.stream, destroy: () => this.unsubscribe(id, video) };
       }
 
@@ -88,7 +87,7 @@ class StreamManager {
           entry!.waitQueue.push({
             resolve: (stream) => {
               video.srcObject = stream;
-              video.play().catch(() => {});
+              video.play().catch(() => { });
               resolve({ stream, destroy: () => this.unsubscribe(id, video) });
             },
             reject,
@@ -111,7 +110,7 @@ class StreamManager {
       protocol,
       stream: null,
       sourceVideo: null,
-      destroy: () => {},
+      destroy: () => { },
       refCount: 1,
       subscribers: new Set([video]),
       status: 'loading',
@@ -137,7 +136,7 @@ class StreamManager {
     // 将共享流绑定到当前 video
     if (entry.stream) {
       video.srcObject = entry.stream;
-      video.play().catch(() => {});
+      video.play().catch(() => { });
     }
 
     return { stream: entry.stream, destroy: () => this.unsubscribe(id, video) };
@@ -179,12 +178,7 @@ class StreamManager {
         return;
       }
 
-      // 隐藏 video 用于 WebRTC 连接
-      const tempVideo = document.createElement('video');
-      tempVideo.style.display = 'none';
-      tempVideo.muted = true;
-      tempVideo.playsInline = true;
-      document.body.appendChild(tempVideo);
+      const tempVideo = this.createHiddenVideo();
 
       let resolved = false;
       let player: any = null;
@@ -220,7 +214,7 @@ class StreamManager {
 
       entry.destroy = () => {
         clearTimeout(timeoutTimer);
-        if (player) { try { player.close(); } catch {} }
+        if (player) { try { player.close(); } catch { } }
         tempVideo.remove();
       };
 
@@ -265,13 +259,7 @@ class StreamManager {
 
   private async connectHls(entry: StreamEntry): Promise<void> {
     return new Promise((resolve, reject) => {
-      // 创建隐藏 video 播放 HLS
-      const hiddenVideo = document.createElement('video');
-      hiddenVideo.style.display = 'none';
-      hiddenVideo.muted = true;
-      hiddenVideo.playsInline = true;
-      hiddenVideo.setAttribute('playsinline', '');
-      document.body.appendChild(hiddenVideo);
+      const hiddenVideo = this.createHiddenVideo();
       entry.sourceVideo = hiddenVideo;
 
       let hlsInstance: any = null;
@@ -294,8 +282,7 @@ class StreamManager {
 
           hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
             hiddenVideo.play().then(() => {
-              // HLS 开始播放后，用 captureStream 获取 MediaStream
-              this.shareViaCaptureStream(entry, hiddenVideo, resolved, resolve, reject);
+              this.shareViaCaptureStream(entry, hiddenVideo, resolve);
               resolved = true;
             }).catch((e) => {
               if (!resolved) {
@@ -316,7 +303,7 @@ class StreamManager {
           hiddenVideo.src = entry.url;
           hiddenVideo.addEventListener('loadedmetadata', () => {
             hiddenVideo.play().then(() => {
-              this.shareViaCaptureStream(entry, hiddenVideo, resolved, resolve, reject);
+              this.shareViaCaptureStream(entry, hiddenVideo, resolve);
               resolved = true;
             }).catch((e) => {
               if (!resolved) {
@@ -350,49 +337,50 @@ class StreamManager {
   private shareViaCaptureStream(
     entry: StreamEntry,
     hiddenVideo: HTMLVideoElement,
-    resolved: boolean,
     resolve: (value: void) => void,
-    reject: (err: Error) => void,
   ): void {
     try {
-      // captureStream 帧率参数
-      const captureStream = (hiddenVideo as any).captureStream
-        ? (hiddenVideo as any).captureStream(30)
-        : (hiddenVideo as any).mozCaptureStream
-          ? (hiddenVideo as any).mozCaptureStream(30)
-          : null;
+      const captureStream = (hiddenVideo as any).captureStream?.(30)
+        ?? (hiddenVideo as any).mozCaptureStream?.(30)
+        ?? null;
 
       if (captureStream) {
         entry.stream = captureStream;
       } else {
-        // 不支持 captureStream 时，直接返回 null
-        // 各分屏仍然独立播放（降级行为）
         console.warn('[StreamManager] captureStream not supported, fallback to independent playback');
       }
 
       entry.status = 'ready';
 
-      // 通知已存在的订阅者
       entry.subscribers.forEach((subVideo) => {
         if (entry.stream) {
           subVideo.srcObject = entry.stream;
-          subVideo.play().catch(() => {});
+          subVideo.play().catch(() => { });
         }
       });
 
       entry.waitQueue.forEach((w) => w.resolve(entry.stream!));
       entry.waitQueue = [];
       resolve();
-    } catch (e: any) {
+    } catch {
       entry.stream = null;
       entry.status = 'ready';
       entry.waitQueue.forEach((w) => w.resolve(null as any));
       entry.waitQueue = [];
-      resolve(); // 不阻塞，降级为独立播放
+      resolve();
     }
   }
 
   // ==================== 工具函数 ====================
+
+  private createHiddenVideo(): HTMLVideoElement {
+    const video = document.createElement('video');
+    video.style.display = 'none';
+    video.muted = true;
+    video.playsInline = true;
+    document.body.appendChild(video);
+    return video;
+  }
 
   private loadZLMRTCClient(): Promise<boolean> {
     if ((window as any).ZLMRTCClient) return Promise.resolve(true);

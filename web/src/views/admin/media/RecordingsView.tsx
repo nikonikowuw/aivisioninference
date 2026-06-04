@@ -36,7 +36,10 @@ import { request } from 'services/api';
 
 interface Recording { id: string; device_id: string; file_name: string; file_size: number; start_time: string; end_time: string; record_type: string }
 interface RecordingPage { list: Recording[]; total: number; page: number; page_size: number }
-const formatSize = (b: number) => b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+const formatSize = (bytes: number): string => {
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+};
 
 export default function RecordingsView() {
   const { t } = useTranslation('modules/media');
@@ -98,8 +101,13 @@ export default function RecordingsView() {
   };
 
   const handlePlayback = async (id: string) => {
-    try { const res = await request<{ url: string }>(`/media/recordings/${id}/playback`, { method: 'POST' }); setPlaybackUrl(res.url); openPlayer(); }
-    catch { toast({ title: t('playbackFailed'), status: 'error', duration: 3000 }); }
+    try {
+      const res = await request<{ url: string }>(`/media/recordings/${id}/playback`, { method: 'POST' });
+      setPlaybackUrl(res.url);
+      openPlayer();
+    } catch {
+      toast({ title: t('playbackFailed'), status: 'error', duration: 3000 });
+    }
   };
 
   const recType = (k: string) => t((k + 'Recording') as any);

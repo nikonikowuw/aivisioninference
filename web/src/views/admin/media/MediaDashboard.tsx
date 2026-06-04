@@ -32,7 +32,7 @@ interface Tile { deviceId: string; deviceName: string; url?: string; protocol?: 
 interface TreeNode { id: string; name: string; type: 'group' | 'device'; children: TreeNode[]; device?: Device }
 
 const LAYOUTS: Record<number, { cols: number; rows: number }> = { 1: { cols: 1, rows: 1 }, 4: { cols: 2, rows: 2 }, 9: { cols: 3, rows: 3 } };
-const STATUS_MAP: Record<string, { color: string; icon: any }> = {
+const STATUS_MAP: Record<string, { color: string; icon: typeof MdCheckCircle }> = {
   online: { color: 'green', icon: MdCheckCircle }, offline: { color: 'red', icon: MdCircle },
   error: { color: 'orange', icon: MdCircle }, unknown: { color: 'gray', icon: MdCircle },
 };
@@ -41,12 +41,22 @@ function buildTree(groups: DeviceGroup[], devices: Device[]): TreeNode[] {
   const map = new Map<string, TreeNode>();
   groups.forEach(g => map.set(g.id, { id: g.id, name: g.group_name, type: 'group', children: [] }));
   const roots: TreeNode[] = [];
-  groups.forEach(g => { const n = map.get(g.id)!; (g.parent_id && map.has(g.parent_id)) ? map.get(g.parent_id)!.children.push(n) : roots.push(n); });
+  groups.forEach(g => {
+    const node = map.get(g.id)!;
+    if (g.parent_id && map.has(g.parent_id)) {
+      map.get(g.parent_id)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
   devices.forEach(d => {
-    const dn: TreeNode = { id: d.id, name: d.device_name, type: 'device', children: [], device: d };
+    const deviceNode: TreeNode = { id: d.id, name: d.device_name, type: 'device', children: [], device: d };
     let attached = false;
-    (d.groups || []).forEach(g => { if (map.has(g.id)) { map.get(g.id)!.children.push(dn); attached = true; } });
-    if (!attached) roots.push(dn);
+    for (const g of d.groups || []) {
+      const groupNode = map.get(g.id);
+      if (groupNode) { groupNode.children.push(deviceNode); attached = true; }
+    }
+    if (!attached) roots.push(deviceNode);
   });
   return roots;
 }
@@ -148,18 +158,46 @@ export default function LiveView() {
       const updated = [...prev];
       updated[emptyIdx] = { deviceId: device.id, deviceName: device.device_name, loading: true };
       request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=auto`)
-        .then(data => setTiles(cur => { const u = [...cur]; if (u[emptyIdx]) { (u[emptyIdx] as Tile).url = data.url; (u[emptyIdx] as Tile).protocol = data.protocol; (u[emptyIdx] as Tile).loading = false; } return [...u]; }))
-        .catch(() => setTiles(cur => { const u = [...cur]; if (u[emptyIdx]) { (u[emptyIdx] as Tile).loading = false; (u[emptyIdx] as Tile).error = t('playFailed'); } return [...u]; }));
+        .then(data => {
+          setTiles(cur => {
+            const u = [...cur];
+            if (u[emptyIdx]) Object.assign(u[emptyIdx]!, { url: data.url, protocol: data.protocol, loading: false });
+            return u;
+          });
+        })
+        .catch(() => {
+          setTiles(cur => {
+            const u = [...cur];
+            if (u[emptyIdx]) Object.assign(u[emptyIdx]!, { loading: false, error: t('playFailed') });
+            return u;
+          });
+        });
       return updated;
     });
-  }, []);
+  }, [t]);
 
   const handleDrop = useCallback((index: number, deviceId: string, deviceName: string) => {
-    setTiles(prev => { const u = [...prev]; u[index] = { deviceId, deviceName, loading: true }; return [...u]; });
-    request<PlayResponse>(`/media/play?device_id=${deviceId}&protocol=auto`)
-      .then(data => setTiles(cur => { const u = [...cur]; if (u[index]) { (u[index] as Tile).url = data.url; (u[index] as Tile).protocol = data.protocol; (u[index] as Tile).loading = false; } return [...u]; }))
-      .catch(() => setTiles(cur => { const u = [...cur]; if (u[index]) { (u[index] as Tile).loading = false; (u[index] as Tile).error = t('playFailed'); } return [...u]; }));
-  }, []);
+    setTiles(prev => {
+      const u = [...prev];
+      u[index] = { deviceId, deviceName, loading: true };
+      request<PlayResponse>(`/media/play?device_id=${deviceId}&protocol=auto`)
+        .then(data => {
+          setTiles(cur => {
+            const u = [...cur];
+            if (u[index]) Object.assign(u[index]!, { url: data.url, protocol: data.protocol, loading: false });
+            return u;
+          });
+        })
+        .catch(() => {
+          setTiles(cur => {
+            const u = [...cur];
+            if (u[index]) Object.assign(u[index]!, { loading: false, error: t('playFailed') });
+            return u;
+          });
+        });
+      return u;
+    });
+  }, [t]);
 
   const handleRemove = useCallback((index: number) => setTiles(prev => { const u = [...prev]; u[index] = null; return [...u]; }), []);
   const handleLayoutChange = useCallback((n: number) => { setLayout(n); setTiles(prev => { const u = [...prev]; while (u.length < n) u.push(null); return u.slice(0, n); }); }, []);

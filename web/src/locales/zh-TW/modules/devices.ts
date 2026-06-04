@@ -15,6 +15,7 @@ export const devices = {
     status: '狀態',
     lastOnlineAt: '最後在線',
     locationDesc: '位置描述',
+    deviceGroups: '所屬分組',
     remark: '備註',
     actions: '操作',
     other: '其他',

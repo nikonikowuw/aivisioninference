@@ -15,6 +15,7 @@ export const devices = {
     status: 'ステータス',
     lastOnlineAt: '最終オンライン',
     locationDesc: '設置場所',
+    deviceGroups: 'デバイスグループ',
     remark: '備考',
     actions: '操作',
     other: 'その他',

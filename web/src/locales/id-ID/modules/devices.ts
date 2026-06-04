@@ -15,6 +15,7 @@ export const devices = {
     status: 'Status',
     lastOnlineAt: 'Terakhir Online',
     locationDesc: 'Deskripsi Lokasi',
+    deviceGroups: 'Grup Perangkat',
     remark: 'Catatan',
     actions: 'Aksi',
     other: 'Lainnya',

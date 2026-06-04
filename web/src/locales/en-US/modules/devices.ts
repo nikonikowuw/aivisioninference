@@ -15,6 +15,7 @@ export const devices = {
     status: 'Status',
     lastOnlineAt: 'Last Online',
     locationDesc: 'Location',
+    deviceGroups: 'Device Groups',
     remark: 'Remark',
     actions: 'Actions',
     other: 'Other',

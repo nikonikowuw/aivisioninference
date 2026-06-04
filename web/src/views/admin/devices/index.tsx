@@ -29,22 +29,19 @@ import {
   Input,
   Select,
   useDisclosure,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
   Icon,
+  CheckboxGroup,
+  Stack,
 } from '@chakra-ui/react';
 import {
   AddIcon,
-  ChevronDownIcon,
   DeleteIcon,
   DownloadIcon,
   EditIcon,
 } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { devicesApi, type Device } from 'services/api';
+import { devicesApi, deviceGroupsApi, type Device, type DeviceGroup } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import Card from 'components/card/Card';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
@@ -62,13 +59,6 @@ const statusColor: Record<string, string> = {
   disabled: 'gray',
 };
 
-const accessTypeLabel: Record<string, string> = {
-  rtsp: 'RTSP',
-  gb28181: 'GB28181',
-  nvr_channel: 'NVR',
-  other: '其他',
-};
-
 export default function Devices() {
   const { t } = useTranslation('modules/devices');
   const { t: tCommon } = useTranslation('common');
@@ -82,9 +72,9 @@ export default function Devices() {
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
-  const fetchDevices = useCallback((p: number, ps: number) => devicesApi.list({
-    page: p,
-    page_size: ps,
+  const fetchDevices = useCallback((page: number, pageSize: number) => devicesApi.list({
+    page,
+    page_size: pageSize,
     keyword: filters.keyword,
     status: filters.status,
     access_type: filters.access_type,
@@ -102,6 +92,11 @@ export default function Devices() {
     changePage,
     changePageSize,
   } = usePagination<Device>(fetchDevices);
+
+  const [allGroups, setAllGroups] = useState<DeviceGroup[]>([]);
+  useEffect(() => {
+    deviceGroupsApi.list({ page: 1, page_size: 1000 }).then((d) => setAllGroups(d.list)).catch(() => {});
+  }, []);
 
   const [editing, setEditing] = useState<Device | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -130,6 +125,7 @@ export default function Devices() {
     firmware_version: '',
     location_desc: '',
     remark: '',
+    group_ids: [] as string[],
   });
 
   const resetForm = (device?: Device) => {
@@ -147,6 +143,7 @@ export default function Devices() {
       firmware_version: device?.firmware_version || '',
       location_desc: device?.location_desc || '',
       remark: device?.remark || '',
+      group_ids: device?.groups?.map((g) => g.id) || [],
     });
     onOpen();
   };
@@ -251,15 +248,17 @@ export default function Devices() {
   const isIndeterminate = selectedOnPage.length > 0 && !isAllSelected;
 
   const toggleAll = () => {
-    if (isAllSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
-    } else {
-      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
-    }
+    setSelectedIds(prev => isAllSelected 
+      ? prev.filter(id => !pageIds.includes(id)) 
+      : [...new Set([...prev, ...pageIds])]
+    );
   };
 
   const toggleOne = (id: string) => {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+    setSelectedIds(prev => prev.includes(id) 
+      ? prev.filter(i => i !== id) 
+      : [...prev, id]
+    );
   };
 
   if (initialLoading) {
@@ -456,6 +455,22 @@ export default function Devices() {
                 <Input variant="main" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
               </FormControl>
             </Flex>
+            <FormControl mb="4">
+              <FormLabel fontSize="sm" fontWeight="700" color={textColor}>{t('fields.deviceGroups')}</FormLabel>
+              <CheckboxGroup
+                colorScheme="brand"
+                value={form.group_ids}
+                onChange={(values) => setForm({ ...form, group_ids: values as string[] })}
+              >
+                <Stack spacing={[2, 4]} direction="row" wrap="wrap" p="4px">
+                  {allGroups.map((group) => (
+                    <Checkbox key={group.id} value={group.id} fontWeight="500" fontSize="sm">
+                      {group.group_name}
+                    </Checkbox>
+                  ))}
+                </Stack>
+              </CheckboxGroup>
+            </FormControl>
             <FormControl mb="4">
               <FormLabel fontSize="sm" fontWeight="700" color={textColor}>{t('fields.remark')}</FormLabel>
               <Input variant="main" value={form.remark} onChange={(e) => setForm({ ...form, remark: e.target.value })} />

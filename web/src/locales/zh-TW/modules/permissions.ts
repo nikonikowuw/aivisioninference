@@ -123,6 +123,34 @@ export const permissions = {
       export: "匯出回饋",
       "batch-status": "批量更新回饋狀態",
     },
+    device: {
+      list: "設備列表",
+      create: "創建設備",
+      export: "匯出設備",
+      import: "匯入設備",
+      "batch-delete": "批量刪除設備",
+      edit: "編輯設備",
+      delete: "刪除設備",
+      view: "檢視設備",
+      test: "測試連接",
+    },
+    "device-group": {
+      list: "分組列表",
+      create: "創建分組",
+      edit: "編輯分組",
+      delete: "刪除分組",
+      view: "檢視分組",
+    },
+    media: {
+      play: "取得播放位址",
+      snapshot: "取得截圖",
+    },
+    recording: {
+      list: "錄影列表",
+      playback: "錄影回放",
+      start: "開始錄影",
+      stop: "停止錄影",
+    },
   },
 } as const;
 

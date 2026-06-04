@@ -43,6 +43,13 @@ export const users = {
     disableConfirm: "確定停用該使用者？",
     enableConfirm: "確定啟用該使用者？",
   },
+  actions: {
+    create: '新增使用者',
+    edit: '編輯',
+    delete: '刪除',
+    enable: '啟用',
+    disable: '停用',
+  },
   batch: {
     selected: "已選取 {{count}} 個使用者",
     selectPage: "選取目前頁面使用者",

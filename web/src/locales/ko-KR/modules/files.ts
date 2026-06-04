@@ -22,7 +22,11 @@ export const files = {
   },
   message: {
     deleteConfirm: "이 파일을 삭제하시겠습니까?",
+    batchDeleteConfirm: "선택한 {{count}}개 파일을 삭제하시겠습니까?",
     exportFailed: "내보내기 실패",
+  },
+  batch: {
+    delete: "일괄 삭제",
   },
   actions: {
     export: "내보내기",

@@ -13,6 +13,8 @@ export const auditLogs = {
       task: "任务",
       system: "系统",
       feedback: "反馈",
+      devices: "设备",
+      "device-groups": "设备分组",
     },
   },
   table: {
@@ -28,6 +30,9 @@ export const auditLogs = {
     },
     durationMs: "{{value}} ms",
   },
+  batch: {
+    selected: "已选中 {{count}} 条日志",
+  },
   actionTypes: {
     action: {
       view: {
@@ -40,6 +45,11 @@ export const auditLogs = {
         system: "查看系统配置",
         dashboard: "查看仪表盘",
         feedback: "查看反馈",
+        devices: "查看设备",
+        "device-groups": "查看设备分组",
+        "mail-config": "查看邮件配置",
+        "brand-config": "查看品牌配置",
+        profile: "查看个人资料",
       },
       create: {
         users: "创建用户",
@@ -49,6 +59,9 @@ export const auditLogs = {
         tasks: "创建任务",
         system: "创建系统配置",
         feedback: "提交反馈",
+        devices: "创建设备",
+        "device-groups": "创建设备分组",
+        "mail-config": "邮件配置操作",
       },
       update: {
         users: "更新用户",
@@ -58,6 +71,11 @@ export const auditLogs = {
         tasks: "更新任务",
         system: "更新系统配置",
         feedback: "更新反馈状态",
+        devices: "更新设备",
+        "device-groups": "更新设备分组",
+        "mail-config": "更新邮件配置",
+        "brand-config": "更新品牌配置",
+        profile: "更新个人资料",
       },
       delete: {
         users: "删除用户",
@@ -65,10 +83,20 @@ export const auditLogs = {
         permissions: "删除权限",
         files: "删除文件",
         tasks: "删除任务",
+        devices: "删除设备",
+        "device-groups": "删除设备分组",
+      },
+      cancel: {
+        tasks: "取消任务",
+      },
+      upload: {
+        "brand-logo": "上传品牌Logo",
+        avatar: "上传头像",
       },
       login: "用户登录",
       logout: "用户登出",
-      auth: "认证操作",
+      "password-reset": "重置密码",
+      "change-password": "修改密码",
     },
   },
 } as const;

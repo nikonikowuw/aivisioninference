@@ -25,6 +25,7 @@ export const files = {
     batchDeleteConfirm: "Delete the selected {{count}} file(s)?",
   },
   batch: {
+    selected: "{{count}} file(s) selected",
     delete: "Batch Delete",
   },
   size: {

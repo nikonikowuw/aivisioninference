@@ -124,6 +124,34 @@ export const permissions = {
       export: "Ekspor Umpan Balik",
       "batch-status": "Perbarui Status Umpan Balik Massal",
     },
+    device: {
+      list: "Daftar Perangkat",
+      create: "Tambah Perangkat",
+      export: "Ekspor Perangkat",
+      import: "Impor Perangkat",
+      "batch-delete": "Hapus Perangkat Massal",
+      edit: "Edit Perangkat",
+      delete: "Hapus Perangkat",
+      view: "Lihat Perangkat",
+      test: "Uji Koneksi",
+    },
+    "device-group": {
+      list: "Daftar Grup",
+      create: "Tambah Grup",
+      edit: "Edit Grup",
+      delete: "Hapus Grup",
+      view: "Lihat Grup",
+    },
+    media: {
+      play: "Dapatkan URL Putar",
+      snapshot: "Dapatkan Cuplikan",
+    },
+    recording: {
+      list: "Daftar Rekaman",
+      playback: "Putar Rekaman",
+      start: "Mulai Rekam",
+      stop: "Hentikan Rekam",
+    },
   },
 } as const;
 

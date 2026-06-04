@@ -43,6 +43,16 @@ export const users = {
     deleteConfirm: "Are you sure you want to delete this user?",
     disableConfirm: "Are you sure you want to disable this user?",
     enableConfirm: "Are you sure you want to enable this user?",
+    batchDeleteConfirm: "Are you sure you want to delete the selected {{count}} user(s)?",
+    batchEnableConfirm: "Are you sure you want to enable the selected {{count}} user(s)?",
+    batchDisableConfirm: "Are you sure you want to disable the selected {{count}} user(s)?",
+  },
+  actions: {
+    create: 'Add User',
+    edit: 'Edit',
+    delete: 'Delete',
+    enable: 'Enable',
+    disable: 'Disable',
   },
   batch: {
     selected: "{{count}} user(s) selected",

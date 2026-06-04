@@ -47,6 +47,13 @@ export const users = {
     batchEnableConfirm: "선택한 사용자 {{count}}명을 활성화하시겠습니까?",
     batchDisableConfirm: "선택한 사용자 {{count}}명을 비활성화하시겠습니까?",
   },
+  actions: {
+    create: '사용자 추가',
+    edit: '편집',
+    delete: '삭제',
+    enable: '활성화',
+    disable: '비활성화',
+  },
   batch: {
     selected: "사용자 {{count}}명 선택됨",
     selectPage: "현재 페이지 사용자 선택",

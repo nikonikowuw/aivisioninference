@@ -22,7 +22,11 @@ export const files = {
   },
   message: {
     deleteConfirm: "Apakah Anda yakin ingin menghapus file ini?",
+    batchDeleteConfirm: "Hapus {{count}} file yang dipilih?",
     exportFailed: "Ekspor gagal",
+  },
+  batch: {
+    delete: "Hapus Massal",
   },
   actions: {
     export: "Ekspor",

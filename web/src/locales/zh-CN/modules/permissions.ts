@@ -123,6 +123,34 @@ export const permissions = {
       export: "导出反馈",
       "batch-status": "批量更新反馈状态",
     },
+    device: {
+      list: "设备列表",
+      create: "创建设备",
+      export: "导出设备",
+      import: "导入设备",
+      "batch-delete": "批量删除设备",
+      edit: "编辑设备",
+      delete: "删除设备",
+      view: "查看设备",
+      test: "测试连接",
+    },
+    "device-group": {
+      list: "分组列表",
+      create: "创建分组",
+      edit: "编辑分组",
+      delete: "删除分组",
+      view: "查看分组",
+    },
+    media: {
+      play: "获取播放地址",
+      snapshot: "获取截图",
+    },
+    recording: {
+      list: "录像列表",
+      playback: "录像回放",
+      start: "开始录像",
+      stop: "停止录像",
+    },
   },
 } as const;
 

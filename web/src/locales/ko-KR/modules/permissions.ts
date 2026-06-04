@@ -123,6 +123,34 @@ export const permissions = {
       export: "피드백 내보내기",
       "batch-status": "피드백 상태 일괄 업데이트",
     },
+    device: {
+      list: "장치 목록",
+      create: "장치 생성",
+      export: "장치 내보내기",
+      import: "장치 가져오기",
+      "batch-delete": "장치 일괄 삭제",
+      edit: "장치 수정",
+      delete: "장치 삭제",
+      view: "장치 상세 조회",
+      test: "연결 테스트",
+    },
+    "device-group": {
+      list: "그룹 목록",
+      create: "그룹 생성",
+      edit: "그룹 수정",
+      delete: "그룹 삭제",
+      view: "그룹 상세 조회",
+    },
+    media: {
+      play: "재생 URL 가져오기",
+      snapshot: "스냅샷 가져오기",
+    },
+    recording: {
+      list: "녹화 목록",
+      playback: "녹화 재생",
+      start: "녹화 시작",
+      stop: "녹화 중지",
+    },
   },
 } as const;
 

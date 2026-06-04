@@ -33,7 +33,7 @@ export const feedback = {
     copyFailed: "复制邮箱失败",
   },
   batch: {
-    selected: "已选择 {{count}} 条",
+    selected: "已选中 {{count}} 条反馈",
   },
   message: {
     updated: "反馈状态已更新",

@@ -42,6 +42,16 @@ export const users = {
     deleteConfirm: "确定删除该用户？",
     disableConfirm: "确定禁用该用户？",
     enableConfirm: "确定启用该用户？",
+    batchDeleteConfirm: "确定删除选中的 {{count}} 个用户？",
+    batchEnableConfirm: "确定启用选中的 {{count}} 个用户？",
+    batchDisableConfirm: "确定禁用选中的 {{count}} 个用户？",
+  },
+  actions: {
+    create: '新增用户',
+    edit: '编辑',
+    delete: '删除',
+    enable: '启用',
+    disable: '禁用',
   },
   batch: {
     selected: "已选择 {{count}} 个用户",

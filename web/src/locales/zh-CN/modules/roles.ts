@@ -43,6 +43,7 @@ export const roles = {
     batchDeleteConfirm: "确定删除选中的 {{count}} 个角色？",
   },
   batch: {
+    selected: "已选中 {{count}} 个角色",
     delete: "批量删除",
   },
 } as const;

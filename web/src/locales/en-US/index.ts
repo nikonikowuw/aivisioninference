@@ -1,18 +1,19 @@
-import { auth } from "./auth";
 import { common } from "./common";
 import { layout } from "./layout";
+import { auth } from "./auth";
 import { menu } from "./menu";
-import { auditLogs } from "./modules/audit-logs";
-import { brandConfig } from "./modules/brand-config";
 import { dashboard } from "./modules/dashboard";
-import { feedback } from "./modules/feedback";
-import { files } from "./modules/files";
-import { mailConfig } from "./modules/mail-config";
-import { permissions } from "./modules/permissions";
-import { roles } from "./modules/roles";
-import { tasks } from "./modules/tasks";
 import { users } from "./modules/users";
+import { roles } from "./modules/roles";
+import { permissions } from "./modules/permissions";
+import { files } from "./modules/files";
+import { auditLogs } from "./modules/audit-logs";
+import { tasks } from "./modules/tasks";
+import { brandConfig } from "./modules/brand-config";
+import { mailConfig } from "./modules/mail-config";
+import { feedback } from "./modules/feedback";
 import { devices } from "./modules/devices";
+import media from "./modules/media";
 
 export default {
   common,
@@ -30,4 +31,5 @@ export default {
   "modules/mail-config": mailConfig,
   "modules/feedback": feedback,
   "modules/devices": devices,
+  "modules/media": media,
 };

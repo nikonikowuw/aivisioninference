@@ -33,7 +33,7 @@ export const feedback = {
     copyFailed: "Failed to copy email",
   },
   batch: {
-    selected: "{{count}} selected",
+    selected: "{{count}} feedback item(s) selected",
   },
   message: {
     updated: "Feedback status updated",

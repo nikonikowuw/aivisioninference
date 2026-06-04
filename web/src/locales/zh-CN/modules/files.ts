@@ -25,6 +25,7 @@ export const files = {
     batchDeleteConfirm: "确定删除选中的 {{count}} 个文件？",
   },
   batch: {
+    selected: "已选中 {{count}} 个文件",
     delete: "批量删除",
   },
   size: {

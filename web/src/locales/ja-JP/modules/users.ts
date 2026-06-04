@@ -47,6 +47,13 @@ export const users = {
     batchEnableConfirm: "選択した {{count}} 件のユーザーを有効化しますか？",
     batchDisableConfirm: "選択した {{count}} 件のユーザーを無効化しますか？",
   },
+  actions: {
+    create: 'ユーザーを追加',
+    edit: '編集',
+    delete: '削除',
+    enable: '有効化',
+    disable: '無効化',
+  },
   batch: {
     selected: "{{count}} 件のユーザーを選択中",
     selectPage: "このページのユーザーを選択",

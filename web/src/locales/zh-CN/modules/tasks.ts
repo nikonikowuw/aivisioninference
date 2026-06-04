@@ -31,6 +31,10 @@ export const tasks = {
   actions: {
     cancel: "取消任务",
   },
+  batch: {
+    selected: "已选中 {{count}} 个任务",
+    cancel: "批量取消",
+  },
 } as const;
 
 export default tasks;

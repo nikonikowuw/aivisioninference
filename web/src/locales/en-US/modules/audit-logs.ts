@@ -13,6 +13,8 @@ export const auditLogs = {
       task: "Task",
       system: "System",
       feedback: "Feedback",
+      devices: "Devices",
+      "device-groups": "Device Groups",
     },
   },
   table: {
@@ -28,6 +30,9 @@ export const auditLogs = {
     },
     durationMs: "{{value}} ms",
   },
+  batch: {
+    selected: "{{count}} log(s) selected",
+  },
   actionTypes: {
     action: {
       view: {
@@ -40,6 +45,11 @@ export const auditLogs = {
         system: "View system config",
         dashboard: "View dashboard",
         feedback: "View feedback",
+        devices: "View devices",
+        "device-groups": "View device groups",
+        "mail-config": "View mail config",
+        "brand-config": "View brand config",
+        profile: "View profile",
       },
       create: {
         users: "Create user",
@@ -49,6 +59,9 @@ export const auditLogs = {
         tasks: "Create task",
         system: "Create system config",
         feedback: "Submit feedback",
+        devices: "Create device",
+        "device-groups": "Create device group",
+        "mail-config": "Operate mail config",
       },
       update: {
         users: "Update user",
@@ -58,6 +71,11 @@ export const auditLogs = {
         tasks: "Update task",
         system: "Update system config",
         feedback: "Update feedback status",
+        devices: "Update device",
+        "device-groups": "Update device group",
+        "mail-config": "Update mail config",
+        "brand-config": "Update brand config",
+        profile: "Update profile",
       },
       delete: {
         users: "Delete user",
@@ -65,10 +83,20 @@ export const auditLogs = {
         permissions: "Delete permission",
         files: "Delete file",
         tasks: "Delete task",
+        devices: "Delete device",
+        "device-groups": "Delete device group",
+      },
+      cancel: {
+        tasks: "Cancel task",
+      },
+      upload: {
+        "brand-logo": "Upload brand logo",
+        avatar: "Upload avatar",
       },
       login: "User login",
       logout: "User logout",
-      auth: "Auth operation",
+      "password-reset": "Password reset",
+      "change-password": "Change password",
     },
   },
 } as const;

@@ -22,7 +22,11 @@ export const files = {
   },
   message: {
     deleteConfirm: "このファイルを削除してもよろしいですか？",
+    batchDeleteConfirm: "選択した {{count}} 個のファイルを削除しますか？",
     exportFailed: "エクスポートに失敗しました",
+  },
+  batch: {
+    delete: "一括削除",
   },
   actions: {
     export: "エクスポート",

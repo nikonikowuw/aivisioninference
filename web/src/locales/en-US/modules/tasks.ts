@@ -31,6 +31,10 @@ export const tasks = {
   actions: {
     cancel: "Cancel Task",
   },
+  batch: {
+    selected: "{{count}} task(s) selected",
+    cancel: "Batch Cancel",
+  },
 } as const;
 
 export default tasks;

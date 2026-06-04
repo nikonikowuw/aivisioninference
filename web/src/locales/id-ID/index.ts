@@ -13,6 +13,7 @@ import { roles } from "./modules/roles";
 import { tasks } from "./modules/tasks";
 import { users } from "./modules/users";
 import { devices } from "./modules/devices";
+import media from "./modules/media";
 
 export default {
   common,
@@ -30,4 +31,5 @@ export default {
   "modules/mail-config": mailConfig,
   "modules/feedback": feedback,
   "modules/devices": devices,
+  "modules/media": media,
 };

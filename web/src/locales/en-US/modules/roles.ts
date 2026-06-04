@@ -45,6 +45,7 @@ export const roles = {
     batchDeleteConfirm: "Delete the selected {{count}} role(s)?",
   },
   batch: {
+    selected: "{{count}} role(s) selected",
     delete: "Batch Delete",
   },
 } as const;

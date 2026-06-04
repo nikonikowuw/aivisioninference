@@ -123,6 +123,34 @@ export const permissions = {
       export: "フィードバックをエクスポート",
       "batch-status": "フィードバック状態を一括更新",
     },
+    device: {
+      list: "デバイス一覧",
+      create: "デバイスを作成",
+      export: "デバイスをエクスポート",
+      import: "デバイスをインポート",
+      "batch-delete": "デバイスを一括削除",
+      edit: "デバイスを編集",
+      delete: "デバイスを削除",
+      view: "デバイス詳細を表示",
+      test: "接続テスト",
+    },
+    "device-group": {
+      list: "グループ一覧",
+      create: "グループを作成",
+      edit: "グループを編集",
+      delete: "グループを削除",
+      view: "グループ詳細を表示",
+    },
+    media: {
+      play: "再生URLを取得",
+      snapshot: "スナップショットを取得",
+    },
+    recording: {
+      list: "録画一覧",
+      playback: "録画再生",
+      start: "録画開始",
+      stop: "録画停止",
+    },
   },
 } as const;
 

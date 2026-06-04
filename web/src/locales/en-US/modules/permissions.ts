@@ -124,6 +124,34 @@ export const permissions = {
       export: "Export Feedback",
       "batch-status": "Batch Update Feedback Status",
     },
+    device: {
+      list: "Device List",
+      create: "Add Device",
+      export: "Export Devices",
+      import: "Import Devices",
+      "batch-delete": "Batch Delete Devices",
+      edit: "Edit Device",
+      delete: "Delete Device",
+      view: "View Device",
+      test: "Test Connection",
+    },
+    "device-group": {
+      list: "Group List",
+      create: "Add Group",
+      edit: "Edit Group",
+      delete: "Delete Group",
+      view: "View Group",
+    },
+    media: {
+      play: "Get Play URL",
+      snapshot: "Get Snapshot",
+    },
+    recording: {
+      list: "Recording List",
+      playback: "Recording Playback",
+      start: "Start Recording",
+      stop: "Stop Recording",
+    },
   },
 } as const;
 

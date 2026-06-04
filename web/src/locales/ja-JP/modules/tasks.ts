@@ -1,34 +1,35 @@
 export const tasks = {
-  title: "Task Management",
+  title: "タスク管理",
   filter: {
     taskTypes: {
-      email: "Email",
-      export: "Export",
-      import: "Import",
-      backup: "Backup",
+      email: "メール",
+      export: "エクスポート",
+      import: "インポート",
+      backup: "バックアップ",
     },
   },
   table: {
     columns: {
-      type: "Type",
-      error: "Error",
+      type: "タイプ",
+      error: "エラー",
     },
     status: {
-      pending: "Pending",
-      running: "Running",
-      completed: "Completed",
-      failed: "Failed",
-      cancelled: "Cancelled",
+      pending: "待機中",
+      running: "実行中",
+      completed: "完了",
+      failed: "失敗",
+      cancelled: "キャンセル済み",
     },
   },
   message: {
-    cancelled: "Task cancelled",
-    cancelFailed: "Failed to cancel task",
-    cancelConfirm: "Are you sure you want to cancel this task?",
-    confirmCancel: "Yes, cancel it",
+    cancelled: "タスクをキャンセルしました",
+    cancelFailed: "タスクのキャンセルに失敗しました",
+    cancelConfirm: "このタスクをキャンセルしてもよろしいですか？",
+    batchCancelConfirm: "選択した {{count}} 個のタスクをキャンセルしますか？",
+    confirmCancel: "はい、キャンセルします",
   },
   actions: {
-    cancel: "Cancel Task",
+    cancel: "タスクをキャンセル",
   },
 } as const;
 

@@ -14,6 +14,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
+	"github.com/niko-admin/niko-admin/internal/task"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -64,13 +65,18 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	dashboardRepository := repository.NewDashboardRepository(db)
 	dashboardService := service.NewDashboardService(dashboardRepository)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler)
+	deviceRepository := repository.NewDeviceRepository(db)
+	client := task.NewClient(rdb)
+	deviceHandler := provideDeviceHandler(deviceRepository, cache, client)
+	deviceGroupRepository := repository.NewDeviceGroupRepository(db)
+	deviceGroupHandler := provideDeviceGroupHandler(deviceGroupRepository)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository)
 
 var serviceSet = wire.NewSet(
 	provideAvatarStorage,
@@ -79,7 +85,9 @@ var serviceSet = wire.NewSet(
 	provideFileService,
 	provideAuthService,
 	provideBrandService,
-	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService,
+	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService, task.NewClient,
 )
 
-var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler)
+var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceHandler,
+	provideDeviceGroupHandler,
+)

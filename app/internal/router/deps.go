@@ -13,6 +13,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
+	"github.com/niko-admin/niko-admin/internal/task"
 	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
@@ -32,6 +33,8 @@ type RouteDeps struct {
 	MailHandler       *handler.MailHandler
 	FeedbackHandler   *handler.FeedbackHandler
 	DashboardHandler  *handler.DashboardHandler
+	DeviceHandler     *handler.DeviceHandler
+	DeviceGroupHandler *handler.DeviceGroupHandler
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -75,6 +78,20 @@ func provideWSHandler(hub *ws.Hub, jwtManager *jwt.Manager, cfg *Config) *handle
 	return handler.NewWSHandler(hub, jwtManager, cfg.AllowOrigins)
 }
 
+func provideDeviceHandler(
+	deviceRepo *repository.DeviceRepository,
+	permCache cache.Cache,
+	taskClient *task.Client,
+) *handler.DeviceHandler {
+	deviceSvc := service.NewDeviceService(deviceRepo, permCache, taskClient)
+	return handler.NewDeviceHandler(deviceSvc)
+}
+
+func provideDeviceGroupHandler(groupRepo *repository.DeviceGroupRepository) *handler.DeviceGroupHandler {
+	groupSvc := service.NewDeviceGroupService(groupRepo)
+	return handler.NewDeviceGroupHandler(groupSvc)
+}
+
 func newRouteDeps(
 	permCache cache.Cache,
 	auditSvc *service.AuditService,
@@ -90,6 +107,8 @@ func newRouteDeps(
 	mailHandler *handler.MailHandler,
 	feedbackHandler *handler.FeedbackHandler,
 	dashboardHandler *handler.DashboardHandler,
+	deviceHandler *handler.DeviceHandler,
+	deviceGroupHandler *handler.DeviceGroupHandler,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:         permCache,
@@ -105,7 +124,9 @@ func newRouteDeps(
 		BrandHandler:      brandHandler,
 		MailHandler:       mailHandler,
 		FeedbackHandler:   feedbackHandler,
-		DashboardHandler:  dashboardHandler,
+		DashboardHandler:   dashboardHandler,
+		DeviceHandler:      deviceHandler,
+		DeviceGroupHandler: deviceGroupHandler,
 	}
 }
 

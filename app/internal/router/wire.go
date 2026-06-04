@@ -14,6 +14,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
+	"github.com/niko-admin/niko-admin/internal/task"
 )
 
 var repositorySet = wire.NewSet(
@@ -29,6 +30,8 @@ var repositorySet = wire.NewSet(
 	repository.NewEmailTokenRepository,
 	repository.NewInboundEmailRepository,
 	repository.NewFeedbackRepository,
+	repository.NewDeviceRepository,
+	repository.NewDeviceGroupRepository,
 )
 
 var serviceSet = wire.NewSet(
@@ -48,6 +51,7 @@ var serviceSet = wire.NewSet(
 	service.NewMailService,
 	service.NewEmailVerificationService,
 	service.NewFeedbackService,
+	task.NewClient,
 )
 
 var handlerSet = wire.NewSet(
@@ -63,6 +67,8 @@ var handlerSet = wire.NewSet(
 	handler.NewMailHandler,
 	handler.NewFeedbackHandler,
 	handler.NewDashboardHandler,
+	provideDeviceHandler,
+	provideDeviceGroupHandler,
 )
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。

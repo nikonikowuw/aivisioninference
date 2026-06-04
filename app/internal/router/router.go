@@ -223,6 +223,32 @@ func (r *Router) setupRoutes() {
 		feedback.PUT("/:id/status", middleware.RBAC(rbacCache, r.db), feedbackHandler.UpdateStatus)
 	}
 
+	// Devices
+	deviceHandler := deps.DeviceHandler
+	devices := authorized.Group("/devices")
+	{
+		devices.GET("", middleware.RBAC(rbacCache, r.db), deviceHandler.List)
+		devices.POST("", middleware.RBAC(rbacCache, r.db), deviceHandler.Create)
+		devices.GET("/export", middleware.RBAC(rbacCache, r.db), deviceHandler.ExportCSV)
+		devices.POST("/import", middleware.RBAC(rbacCache, r.db), deviceHandler.ImportCSV)
+		devices.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deviceHandler.BatchDelete)
+		devices.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.GetByID)
+		devices.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Update)
+		devices.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Delete)
+		devices.POST("/:id/test", middleware.RBAC(rbacCache, r.db), deviceHandler.TestConnection)
+	}
+
+	// Device Groups
+	deviceGroupHandler := deps.DeviceGroupHandler
+	deviceGroups := authorized.Group("/device-groups")
+	{
+		deviceGroups.GET("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.List)
+		deviceGroups.POST("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Create)
+		deviceGroups.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.GetByID)
+		deviceGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Update)
+		deviceGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Delete)
+	}
+
 	// Dashboard
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)

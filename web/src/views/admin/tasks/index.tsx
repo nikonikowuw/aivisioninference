@@ -82,17 +82,20 @@ export default function Tasks() {
   const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
 
   const togglePageSelection = () => {
-    if (isAllPageSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !pageTaskIds.includes(id)));
-      return;
-    }
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageTaskIds])));
+    setSelectedIds((prev) => {
+      const pageIds = tasks.map((t) => t.id);
+      const allSelected = pageIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !pageIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...pageIds]));
+    });
   };
 
   const toggleRowSelection = (id: string) => {
-    setSelectedIds((prev) => (
-      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
-    ));
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
   };
 
   const handleBatchCancel = async () => {

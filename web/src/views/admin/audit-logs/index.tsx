@@ -58,23 +58,21 @@ export default function AuditLogs() {
     load({ page: 1 });
   }, [searchTrigger, load]);
 
-  const pageLogIds = logs.map((l) => l.id);
-  const selectedOnPage = pageLogIds.filter((id) => selectedIds.includes(id));
-  const isAllPageSelected = pageLogIds.length > 0 && selectedOnPage.length === pageLogIds.length;
-  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
-
-  const togglePageSelection = () => {
-    if (isAllPageSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !pageLogIds.includes(id)));
-      return;
-    }
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageLogIds])));
+const togglePageSelection = () => {
+    setSelectedIds((prev) => {
+      const pageIds = logs.map((l) => l.id);
+      const allSelected = pageIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !pageIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...pageIds]));
+    });
   };
 
   const toggleRowSelection = (id: string) => {
-    setSelectedIds((prev) => (
-      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
-    ));
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
   };
 
   const handleExport = async () => {
@@ -94,6 +92,11 @@ export default function AuditLogs() {
       setIsExporting(false);
     }
   };
+
+  const pageIds = logs.map((l) => l.id);
+  const selectedOnPage = pageIds.filter((id) => selectedIds.includes(id));
+  const isAllPageSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length;
+  const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
 
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;

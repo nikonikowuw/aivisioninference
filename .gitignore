@@ -1,10 +1,12 @@
-# === Build ===
+# Build & Binaries
 app/bin/
 app/tmp/
 app/server
 app/migrate
-
-# === Go ===
+dist/
+build/
+bin/
+tmp/
 *.exe
 *.exe~
 *.dll
@@ -12,44 +14,54 @@ app/migrate
 *.dylib
 *.test
 *.out
-vendor/
 
-# === Swagger (auto-generated, don't track) ===
+# Go
+vendor/
+go.work
+go.work.sum
+.wire_gen_cache
+
+# Swagger (Auto-generated)
 app/docs/docs.go
 app/docs/swagger.json
 app/docs/swagger.yaml
 
-# === Environment ===
+# Environment & Configs
 .env
 .env.local
 .env.*.local
 app/.env
 app/configs/*.local.yaml
+configs/local.yaml
 
-# === IDE ===
+# IDE & OS
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# === OS ===
 .DS_Store
 Thumbs.db
 
-# === Logs ===
+# Logs & Coverage
 *.log
+logs/
 /logs/
-
-# === Coverage ===
 coverage.out
 coverage.html
+coverage.txt
 
-# === Uploads (local dev) ===
+# Uploads & Data (Local dev)
 uploads/
+data/
 tmp/chunks/
+.docker-data/
+postgres-data/
+redis-data/
+*.db
+*.sqlite
 
-# === Frontend ===
+# Frontend
 web/node_modules/
 web/dist/
 web/build/
@@ -57,27 +69,18 @@ web/.cache/
 web/tsconfig.tsbuildinfo
 web/.env.local
 web/.env.*.local
-# 使用 pnpm 作为包管理器，忽略 npm 的 lock 文件
 web/package-lock.json
+web/pnpm-lock.yaml
 
-# === Docker ===
+# Docker
 docker-compose.override.yml
 .env.production
 
-# === Database ===
-*.db
-*.sqlite
-
-# === ZLMediaKit (本地流媒体服务器) ===
+# ZLMediaKit (Local Server)
 zlm/
 
-# === AI 工具配置 ===
+# AI & Specs
 .claude/
 .pi/
 .opencode/
-
-# === 项目文档/提案 ===
 openspec/**
-
-# === local ===
-*.local.*

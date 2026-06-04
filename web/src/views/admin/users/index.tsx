@@ -192,17 +192,20 @@ export default function Users() {
   const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
 
   const togglePageSelection = () => {
-    if (isAllPageSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !pageUserIds.includes(id)));
-      return;
-    }
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageUserIds])));
+    setSelectedIds((prev) => {
+      const pageIds = users.map((u) => u.id);
+      const allSelected = pageIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !pageIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...pageIds]));
+    });
   };
 
   const toggleRowSelection = (id: string) => {
-    setSelectedIds((prev) => (
-      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
-    ));
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
   };
 
   const handleBatchConfirm = async () => {

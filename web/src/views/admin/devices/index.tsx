@@ -248,16 +248,19 @@ export default function Devices() {
   const isIndeterminate = selectedOnPage.length > 0 && !isAllSelected;
 
   const toggleAll = () => {
-    setSelectedIds(prev => isAllSelected 
-      ? prev.filter(id => !pageIds.includes(id)) 
-      : [...new Set([...prev, ...pageIds])]
-    );
+    setSelectedIds((prev) => {
+      const pageIds = devices.map((d) => d.id);
+      const allSelected = pageIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !pageIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...pageIds]));
+    });
   };
 
   const toggleOne = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) 
-      ? prev.filter(i => i !== id) 
-      : [...prev, id]
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
     );
   };
 

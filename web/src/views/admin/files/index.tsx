@@ -78,17 +78,20 @@ export default function Files() {
   const isPageSelectionIndeterminate = selectedOnPage.length > 0 && !isAllPageSelected;
 
   const togglePageSelection = () => {
-    if (isAllPageSelected) {
-      setSelectedIds((prev) => prev.filter((id) => !pageFileIds.includes(id)));
-      return;
-    }
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...pageFileIds])));
+    setSelectedIds((prev) => {
+      const pageIds = files.map((f) => f.id);
+      const allSelected = pageIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !pageIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...pageIds]));
+    });
   };
 
   const toggleRowSelection = (id: string) => {
-    setSelectedIds((prev) => (
-      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
-    ));
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
   };
 
   const handleBatchConfirm = async () => {

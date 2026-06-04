@@ -21,6 +21,7 @@ import {
   MdEmail,
   MdFeedback,
   MdHelpOutline,
+  MdVideocam,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -40,11 +41,14 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdEmail,
   MdFeedback,
   MdHelpOutline,
+  MdVideocam,
 };
 
 // 菜单 code 到组件的映射
 const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<any> }>> = {
   'dashboard': () => import('../views/admin/default'),
+  'devices': () => import('../views/admin/devices'),
+  'device-groups': () => import('../views/admin/devices/DeviceGroups'),
   'users': () => import('../views/admin/users'),
   'roles': () => import('../views/admin/roles'),
   'permissions': () => import('../views/admin/permissions'),
@@ -107,80 +111,6 @@ export function getIconComponent(iconName: string): React.ReactNode {
   
   const IconComponent = IconsMap[iconName] || IconsMap.MdHelpOutline;
   return <Icon as={IconComponent} width="20px" height="20px" color="inherit" />;
-}
-
-export function generateRoutes(routes: RouteConfig[]): React.ReactNode[] {
-  const activeKeys = routes.map((route) => `route:${route.id || route.path}`);
-  pruneLazyCache(activeKeys);
-
-  const result: React.ReactNode[] = [];
-  for (let index = 0; index < routes.length; index++) {
-    const route = routes[index];
-    // 父菜单没有组件时，仅递归生成其子路由。
-    if (!route.component) {
-      if (route.children?.length) {
-        result.push(...generateRoutes(route.children));
-      }
-      continue;
-    }
-
-    const cacheKey = `route:${route.id || route.path}`;
-    const LazyComponent = createLazyComponent(cacheKey, route.component);
-    result.push(
-      <Route
-        key={route.id || index}
-        path={route.path}
-        element={<LazyComponent />}
-      />
-    );
-  }
-  return result;
-}
-
-/**
- * 生成管理员路由组件
- */
-export function generateAdminRoutes(): React.ReactNode[] {
-  return generateRoutes(adminRoutes);
-}
-
-/**
- * 生成认证路由组件
- */
-export function generateAuthRoutes(): React.ReactNode[] {
-  return generateRoutes(authRoutes);
-}
-
-/**
- * 生成侧边栏路由（兼容旧版 Links.tsx）
- * @param t - 翻译函数
- */
-export function generateSidebarRoutes(t: (key: string) => string): SidebarRouteType[] {
-  const mapRoutes = (routes: RouteConfig[], depth = 0): SidebarRouteType[] => {
-    const result: SidebarRouteType[] = [];
-    for (const route of routes) {
-      if (route.hidden) {
-        // 隐藏父路由但不隐藏其子路由
-        if (route.children && route.children.length > 0) {
-          result.push(...mapRoutes(route.children, depth));
-        }
-        continue;
-      }
-      const fullPath = route.layout + route.path;
-      const hasChildren = route.children && route.children.length > 0;
-      result.push({
-        key: route.id || fullPath,
-        name: t(route.i18nKey),
-        layout: route.layout,
-        path: route.path,
-        icon: getIconComponent(route.icon),
-        secondary: route.secondary || false,
-        items: depth < 1 && hasChildren ? mapRoutes(route.children!, depth + 1) : undefined,
-      });
-    }
-    return result;
-  };
-  return mapRoutes(adminRoutes);
 }
 
 /**
@@ -278,52 +208,6 @@ export function getActiveRouteFromMenus(
     return null;
   };
   return findName(menus) || t('menu:dashboard', { defaultValue: 'Dashboard' });
-}
-
-/**
- * 获取激活的路由名称（递归遍历嵌套子路由）
- */
-export function getActiveRoute(
-  routes: RouteConfig[],
-  pathname: string,
-  t: (key: string) => string
-): string {
-  const find = (items: RouteConfig[]): string | null => {
-    for (const route of items) {
-      const fullPath = route.layout + route.path;
-      // 优先检查子路由以获得更高的匹配精确度
-      if (route.children) {
-        const child = find(route.children);
-        if (child) return child;
-      }
-      if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
-        return t(route.i18nKey);
-      }
-    }
-    return null;
-  };
-  return find(routes) || t('layout.sidebar.dashboard');
-}
-
-/**
- * 获取激活的导航栏配置（递归遍历嵌套子路由）
- */
-export function getActiveNavbar(routes: RouteConfig[], pathname: string): boolean {
-  const find = (items: RouteConfig[]): boolean | null => {
-    for (const route of items) {
-      const fullPath = route.layout + route.path;
-      // 优先检查子路由
-      if (route.children) {
-        const child = find(route.children);
-        if (child !== null) return child;
-      }
-      if (pathname === fullPath || pathname.startsWith(fullPath + '/')) {
-        return route.secondary || false;
-      }
-    }
-    return null;
-  };
-  return find(routes) ?? false;
 }
 
 // 导出所有路由配置

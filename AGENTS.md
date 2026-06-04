@@ -21,28 +21,6 @@ Niko Admin is a backend admin scaffold built with **Gin + GORM + PostgreSQL + Re
 | Swagger | swaggo/swag + gin-swagger |
 | Hot Reload | air |
 
-## Commands
-
-```bash
-make serve        # 开发模式（docker 依赖 + air 热重载）
-make run          # 本地运行
-make build        # 编译当前平台
-make build-linux  # 交叉编译 Linux amd64
-make swag         # 生成 Swagger 文档
-make gen          # CRUD 代码生成
-make wire         # 生成 Wire 依赖注入代码
-make unit-test    # 运行测试（-race -cover）
-make lint         # golangci-lint 检查
-make migrate      # 数据库迁移
-make docker-up    # 启动 postgres + redis
-make docker-down  # 停止容器
-make init         # 一键初始化（依赖 + .env + 迁移）
-make clean        # 清理构建产物
-make help         # 列出所有命令
-```
-
-> **注意**：以上命令需要在 `app/` 目录下执行。
-
 ## Project Structure
 
 ```

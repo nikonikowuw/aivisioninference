@@ -11,6 +11,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
+	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
 	"github.com/niko-admin/niko-admin/internal/task"
@@ -42,10 +43,10 @@ func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
 }
 
 func providePermissionCache(rdb *redis.Client, cfg *Config) cache.Cache {
-	if cfg.PermissionTreeRedisEnable && rdb != nil {
-		return cache.NewRedisCache(rdb)
-	}
-	if cfg.PermissionTreeRedisEnable && rdb == nil {
+	if cfg.PermissionTreeRedisEnable {
+		if rdb != nil {
+			return cache.NewRedisCache(rdb)
+		}
 		zap.L().Warn("permission tree redis cache enabled but redis client is nil, fallback to memory")
 	}
 	return cache.NewMemoryCache(5 * time.Minute)
@@ -82,8 +83,9 @@ func provideDeviceHandler(
 	deviceRepo *repository.DeviceRepository,
 	permCache cache.Cache,
 	taskClient *task.Client,
+	zlmClient *zlm.Client,
 ) *handler.DeviceHandler {
-	deviceSvc := service.NewDeviceService(deviceRepo, permCache, taskClient)
+	deviceSvc := service.NewDeviceService(deviceRepo, permCache, taskClient, zlmClient)
 	return handler.NewDeviceHandler(deviceSvc)
 }
 
@@ -135,4 +137,26 @@ func provideMailServiceForAsynq(db *gorm.DB) *service.MailService {
 	inboundEmailRepo := repository.NewInboundEmailRepository(db)
 	feedbackRepo := repository.NewFeedbackRepository(db)
 	return service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
+}
+
+func provideZLMClient(cfg *Config) *zlm.Client {
+	return zlm.NewClient(cfg.ZLMAPIURL, cfg.ZLMSecret, zap.L())
+}
+
+func provideMediaServices(db *gorm.DB, cfg *Config) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler) {
+	zlmClient := provideZLMClient(cfg)
+	deviceRepo := repository.NewDeviceRepository(db)
+	mediaStreamRepo := repository.NewMediaStreamRepository(db)
+	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
+	recordingRepo := repository.NewRecordingRepository(db)
+
+	sipSvc := service.NewSIPService(deviceRepo, gbDeviceRepo, mediaStreamRepo)
+	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, cfg.ZLMSecret)
+	recordingSvc := service.NewRecordingService(recordingRepo, zlmClient)
+
+	webhookHandler := handler.NewMediaWebhookHandler(mediaSvc, sipSvc)
+	playHandler := handler.NewMediaPlayHandler(mediaSvc)
+	recordingHandler := handler.NewMediaRecordingHandler(recordingSvc)
+
+	return webhookHandler, playHandler, recordingHandler
 }

@@ -58,6 +58,8 @@ func provideRouterConfig(cfg *config.Config) *router.Config {
 		MaxFileSizeMB:             cfg.Storage.MaxFileSizeMB,
 		LocalUploadDir:            cfg.Storage.Local.UploadDir,
 		LocalPublicURL:            cfg.Storage.Local.PublicURL,
+		ZLMAPIURL:                 cfg.ZLM.APIURL,
+		ZLMSecret:                 cfg.ZLM.Secret,
 	}
 }
 
@@ -71,6 +73,10 @@ func provideHTTPServer(r *router.Router, cfg *config.Config) *http.Server {
 	}
 }
 
-func provideAsynqMux(db *gorm.DB) *asynq.ServeMux {
-	return router.NewAsynqMux(db)
+func provideAsynqMux(db *gorm.DB, cfg *router.Config) *asynq.ServeMux {
+	return router.NewAsynqMux(db, cfg)
+}
+
+func provideAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
+	return router.NewAsynqScheduler(rdb)
 }

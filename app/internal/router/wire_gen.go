@@ -67,7 +67,8 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	deviceRepository := repository.NewDeviceRepository(db)
 	client := task.NewClient(rdb)
-	deviceHandler := provideDeviceHandler(deviceRepository, cache, client)
+	zlmClient := provideZLMClient(cfg)
+	deviceHandler := provideDeviceHandler(deviceRepository, cache, client, zlmClient)
 	deviceGroupRepository := repository.NewDeviceGroupRepository(db)
 	deviceGroupHandler := provideDeviceGroupHandler(deviceGroupRepository)
 	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler)
@@ -85,7 +86,7 @@ var serviceSet = wire.NewSet(
 	provideFileService,
 	provideAuthService,
 	provideBrandService,
-	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService, task.NewClient,
+	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService, task.NewClient, provideZLMClient,
 )
 
 var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceHandler,

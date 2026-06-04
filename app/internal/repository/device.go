@@ -144,6 +144,16 @@ func (r *DeviceRepository) ListByGroupID(ctx context.Context, groupID string) ([
 	return items, err
 }
 
+// ListEnabled 查询所有已启用且非 disabled 状态的设备
+// 用于定时状态检查任务
+func (r *DeviceRepository) ListEnabled(ctx context.Context) ([]model.Device, error) {
+	var items []model.Device
+	err := r.db.WithContext(ctx).
+		Where("enabled = ? AND status != ?", true, model.DeviceStatusDisabled).
+		Find(&items).Error
+	return items, err
+}
+
 // DeviceGroupRepository 处理 DeviceGroup 设备分组模型的数据持久化操作
 type DeviceGroupRepository struct {
 	db *gorm.DB

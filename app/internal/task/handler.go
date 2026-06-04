@@ -22,12 +22,16 @@ const (
 
 // Handler 包含了后台异步任务处理所需的依赖项
 type Handler struct {
-	mailSvc *service.MailService // 邮件服务依赖，用于处理与邮件相关的任务
+	mailSvc           *service.MailService        // 邮件服务依赖
+	deviceStatusHandler *DeviceStatusHandler // 设备状态检查处理器
 }
 
 // NewHandler 创建并返回一个任务处理 Handler 实例
-func NewHandler(mailSvc *service.MailService) *Handler {
-	return &Handler{mailSvc: mailSvc}
+func NewHandler(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler) *Handler {
+	return &Handler{
+		mailSvc:           mailSvc,
+		deviceStatusHandler: deviceStatusHandler,
+	}
 }
 
 // RegisterHandlers 将所有具体的任务处理函数注册到 Asynq 的路由多路复用器 (Mux) 中
@@ -35,6 +39,11 @@ func (h *Handler) RegisterHandlers(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeEmailDelivery, h.handleEmailDelivery)
 	mux.HandleFunc(TypeEmailSync, h.handleEmailSync)
 	mux.HandleFunc(TypeDataExport, handleDataExport)
+
+	// 注册设备状态检查处理器
+	if h.deviceStatusHandler != nil {
+		h.deviceStatusHandler.RegisterHandlers(mux)
+	}
 }
 
 // handleEmailDelivery 处理邮件发送任务，解析载荷并调用邮件服务发送邮件

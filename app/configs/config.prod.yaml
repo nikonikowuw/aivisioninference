@@ -81,3 +81,7 @@ proxy:
 
 rate_limit:
   requests_per_minute: 60
+
+zlm:
+  api_url: "http://localhost:80"
+  secret: "035c73f7-bb6b-4889-a715-d9eb2d1925cc"

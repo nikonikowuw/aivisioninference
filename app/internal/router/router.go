@@ -19,6 +19,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
+	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/task"
 )
 
@@ -44,6 +45,8 @@ type Config struct {
 	MaxFileSizeMB             int64
 	LocalUploadDir            string
 	LocalPublicURL            string
+	ZLMAPIURL                 string
+	ZLMSecret                 string
 }
 
 // New creates a new Router with all dependencies wired.
@@ -253,6 +256,19 @@ func (r *Router) setupRoutes() {
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
 
+	// Media streaming (ZLM webhooks - internal, no auth)
+	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler := provideMediaServices(r.db, r.config)
+	// Register ZLM webhooks at root level with secret validation
+	zlmGroup := r.engine.Group("")
+	zlmGroup.Use(middleware.ZLMWebhookAuth(r.config.ZLMSecret))
+	mediaWebhookHandler.RegisterRoutes(zlmGroup)
+
+	// Media playback API (under /api/v1/media)
+	mediaPlayGroup := v1.Group("/media")
+	mediaPlayGroup.Use(middleware.Auth(r.jwtManager))
+	mediaPlayHandler.RegisterRoutes(mediaPlayGroup)
+	mediaRecordingHandler.RegisterRoutes(mediaPlayGroup)
+
 	// Swagger UI (non-production only)
 	if r.config.AppEnv != "prod" {
 		r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -289,7 +305,17 @@ func NewAsynqServer(rdb *redis.Client) *asynq.Server {
 	return task.NewServer(rdb)
 }
 
+// NewAsynqScheduler creates an Asynq scheduler for periodic task scheduling.
+func NewAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
+	return task.NewScheduler(rdb)
+}
+
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
-func NewAsynqMux(db *gorm.DB) *asynq.ServeMux {
-	return task.NewMux(provideMailServiceForAsynq(db))
+func NewAsynqMux(db *gorm.DB, cfg *Config) *asynq.ServeMux {
+	// 创建设备状态处理器
+	deviceRepo := repository.NewDeviceRepository(db)
+	zlmClient := provideZLMClient(cfg)
+	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient)
+
+	return task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler)
 }

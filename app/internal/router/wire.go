@@ -52,6 +52,7 @@ var serviceSet = wire.NewSet(
 	service.NewEmailVerificationService,
 	service.NewFeedbackService,
 	task.NewClient,
+	provideZLMClient,
 )
 
 var handlerSet = wire.NewSet(

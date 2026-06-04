@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/config"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/database"
 	"github.com/niko-admin/niko-admin/internal/pkg/hash"
 )
@@ -97,10 +99,8 @@ func main() {
 		log.Fatalf("auto migrate: %v", err)
 	}
 
-		// Production should use a scheduled task to auto-create future partitions.
 	// Use tryExec instead of mustExec because smart_records may not be
 	// a partitioned table if it was created by GORM AutoMigrate.
-	// In that case, drop and recreate it as partitioned, or skip partitions.
 	for _, sql := range []string{
 		"CREATE TABLE IF NOT EXISTS smart_records_202606 PARTITION OF smart_records FOR VALUES FROM ('2026-06-01') TO ('2026-07-01')",
 		"CREATE TABLE IF NOT EXISTS smart_records_202607 PARTITION OF smart_records FOR VALUES FROM ('2026-07-01') TO ('2026-08-01')",
@@ -125,7 +125,7 @@ func main() {
 	}
 
 	// Seed default data.
-	if err := seedData(db, cfg.Seed); err != nil {
+	if err := seedData(db, cfg.Seed, cfg.Redis); err != nil {
 		log.Fatalf("seed data: %v", err)
 	}
 
@@ -277,7 +277,7 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 }
 
 // seedData inserts the default admin user, role, and permissions if they do not exist.
-func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
+func seedData(db *gorm.DB, seedCfg config.SeedConfig, redisCfg config.RedisConfig) error {
 	// Ensure root user exists.
 	var rootCount int64
 	if err := db.Model(&model.User{}).Where("username = ?", "root").Count(&rootCount).Error; err != nil {
@@ -369,6 +369,24 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig) error {
 		return fmt.Errorf("sync permissions: %w", err)
 	}
 
+	// Invalidate menu tree cache in Redis.
+	if rdb, err := cache.New(redisCfg.Host, redisCfg.Port, redisCfg.Password, redisCfg.DB); err == nil {
+		defer rdb.Close()
+		ctx := context.Background()
+		iter := rdb.Scan(ctx, 0, "perm:menu_tree:*", 0).Iterator()
+		var count int
+		for iter.Next(ctx) {
+			if delErr := rdb.Del(ctx, iter.Val()).Err(); delErr == nil {
+				count++
+			}
+		}
+		if count > 0 {
+			log.Printf("Invalidated %d menu tree cache entries in Redis", count)
+		}
+	} else {
+		log.Printf("Redis not available, skip cache invalidation: %v", err)
+	}
+
 	log.Printf("Default data seeded successfully")
 	return nil
 }
@@ -430,6 +448,21 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "device-group:edit", Name: "编辑分组", Path: "/api/v1/device-groups/*", Method: "PUT"},
 					{Code: "device-group:delete", Name: "删除分组", Path: "/api/v1/device-groups/*", Method: "DELETE"},
 					{Code: "device-group:view", Name: "查看分组", Path: "/api/v1/device-groups/*", Method: "GET"},
+				}},
+			},
+		},
+		{
+			Name: "媒体预览", Code: "media-management", Path: "/media-management", Icon: "MdLiveTv",
+			Children: []childMenuDef{
+				{Name: "实时预览", Code: "live-view", Path: "/media/live", Icon: "MdViewStream", Buttons: []buttonInfo{
+					{Code: "media:play", Name: "获取播放地址", Path: "/api/v1/media/play", Method: "GET"},
+					{Code: "media:snapshot", Name: "获取截图", Path: "/api/v1/media/snapshot", Method: "GET"},
+				}},
+				{Name: "录像回放", Code: "recordings", Path: "/media/recordings", Icon: "MdVideoLibrary", Buttons: []buttonInfo{
+					{Code: "recording:list", Name: "录像列表", Path: "/api/v1/media/recordings", Method: "GET"},
+					{Code: "recording:playback", Name: "录像回放", Path: "/api/v1/media/recordings/*/playback", Method: "POST"},
+					{Code: "recording:start", Name: "开始录像", Path: "/api/v1/media/recordings/start", Method: "POST"},
+					{Code: "recording:stop", Name: "停止录像", Path: "/api/v1/media/recordings/stop", Method: "POST"},
 				}},
 			},
 		},

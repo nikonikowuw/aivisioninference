@@ -26,10 +26,28 @@ func NewServer(rdb *redis.Client) *asynq.Server {
 	})
 }
 
+// NewScheduler 创建并配置一个新的 Asynq Scheduler 用于定时任务调度
+func NewScheduler(rdb *redis.Client) *asynq.Scheduler {
+	opts := rdb.Options()
+	return asynq.NewScheduler(asynq.RedisClientOpt{
+		Addr:     opts.Addr,
+		Password: opts.Password,
+		DB:       opts.DB,
+	}, &asynq.SchedulerOpts{
+		Location: time.Local,
+	})
+}
+
+// RegisterPeriodicTasks 注册所有定时任务到调度器
+func RegisterPeriodicTasks(scheduler *asynq.Scheduler) {
+	// 每 5 分钟检查一次设备状态
+	scheduler.Register("*/5 * * * *", asynq.NewTask(TypeDeviceStatusCheck, nil))
+}
+
 // NewMux 创建并返回一个新的 Asynq ServeMux，并在此 Mux 上注册所有任务处理 Handler
-func NewMux(mailSvc *service.MailService) *asynq.ServeMux {
+func NewMux(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 	// 初始化 Handler 并注册其路由
-	NewHandler(mailSvc).RegisterHandlers(mux)
+	NewHandler(mailSvc, deviceStatusHandler).RegisterHandlers(mux)
 	return mux
 }

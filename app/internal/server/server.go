@@ -19,11 +19,12 @@ import (
 
 // App 聚合应用启动所需的所有依赖。
 type App struct {
-	Loggers     *applog.Logger
-	HTTPServer  *http.Server
-	AsynqServer *asynq.Server
-	AsynqMux    *asynq.ServeMux
-	Hub         *ws.Hub
+	Loggers        *applog.Logger
+	HTTPServer     *http.Server
+	AsynqServer    *asynq.Server
+	AsynqMux       *asynq.ServeMux
+	AsynqScheduler *asynq.Scheduler
+	Hub            *ws.Hub
 }
 
 // Run 启动各个服务器组件并等待退出信号。
@@ -43,6 +44,14 @@ func (a *App) Run() {
 		zap.L().Info("starting asynq server")
 		if err := a.AsynqServer.Run(a.AsynqMux); err != nil {
 			zap.L().Error("asynq server error", zap.Error(err))
+		}
+	}()
+
+	// 启动 Asynq 定时任务调度器
+	go func() {
+		zap.L().Info("starting asynq scheduler")
+		if err := a.AsynqScheduler.Run(); err != nil {
+			zap.L().Error("asynq scheduler error", zap.Error(err))
 		}
 	}()
 
@@ -66,6 +75,10 @@ func (a *App) Run() {
 
 	if err := a.HTTPServer.Shutdown(ctx); err != nil {
 		zap.L().Error("server forced shutdown", zap.Error(err))
+	}
+	// 停止定时任务调度器
+	if a.AsynqScheduler != nil {
+		a.AsynqScheduler.Shutdown()
 	}
 	a.AsynqServer.Shutdown()
 	zap.L().Info("server exited")

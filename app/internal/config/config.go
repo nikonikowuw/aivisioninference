@@ -22,6 +22,7 @@ type Config struct {
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
 	Seed      SeedConfig      `mapstructure:"seed"`
 	Proxy     ProxyConfig     `mapstructure:"proxy"`
+	ZLM       ZLMConfig       `mapstructure:"zlm"`
 }
 
 // AppConfig holds application-level settings.
@@ -129,6 +130,12 @@ type SeedConfig struct {
 // ProxyConfig holds trusted proxy settings for secure header validation.
 type ProxyConfig struct {
 	TrustedProxies []string `mapstructure:"trusted_proxies"`
+}
+
+// ZLMConfig holds ZLMediaKit connection settings.
+type ZLMConfig struct {
+	APIURL string `mapstructure:"api_url"`
+	Secret string `mapstructure:"secret"`
 }
 
 // Load reads configuration from files and environment variables.
@@ -277,6 +284,10 @@ func setDefaults(v *viper.Viper) {
 	// Rate Limit
 	v.SetDefault("rate_limit.requests_per_minute", 60)
 
+	// ZLM
+	v.SetDefault("zlm.api_url", "http://localhost:80")
+	v.SetDefault("zlm.secret", "") // 必须通过环境变量 NIKO_ZLM_SECRET 设置
+
 	// Seed
 	v.SetDefault("seed.username", "admin")
 	v.SetDefault("seed.password", "admin123")
@@ -329,6 +340,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Seed.RootPassword == "root123456" {
 		return fmt.Errorf("seed.root_password must not use default value in production")
+	}
+	if c.ZLM.Secret == "" {
+		return fmt.Errorf("zlm.secret must be configured via NIKO_ZLM_SECRET environment variable")
 	}
 
 	return nil

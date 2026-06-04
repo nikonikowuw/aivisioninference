@@ -10,6 +10,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 )
 
 // MockDeviceRepo is a mock of deviceRepo interface
@@ -103,11 +104,32 @@ func (m *MockTaskClient) Enqueue(ctx context.Context, taskType string, payload i
 	return args.Error(0)
 }
 
+// MockZLMClient is a mock of zlmClient interface
+type MockZLMClient struct {
+	mock.Mock
+}
+
+func (m *MockZLMClient) AddStreamProxy(ctx context.Context, req zlm.AddStreamProxyRequest) (string, error) {
+	args := m.Called(ctx, req)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockZLMClient) CloseStream(ctx context.Context, req zlm.CloseStreamRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+func (m *MockZLMClient) IsMediaOnline(ctx context.Context, schema, vhost, app, stream string) (bool, error) {
+	args := m.Called(ctx, schema, vhost, app, stream)
+	return args.Bool(0), args.Error(1)
+}
+
 func TestDeviceService_Integration_Workflow(t *testing.T) {
 	mockRepo := new(MockDeviceRepo)
 	mockCache := new(MockCache)
 	mockTask := new(MockTaskClient)
-	svc := NewDeviceService(mockRepo, mockCache, mockTask)
+	mockZLM := new(MockZLMClient)
+	svc := NewDeviceService(mockRepo, mockCache, mockTask, mockZLM)
 
 	ctx := context.Background()
 

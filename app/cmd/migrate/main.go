@@ -28,8 +28,11 @@ func main() {
 		log.Fatalf("connect database: %v", err)
 	}
 
+	mustExec(db, "CREATE EXTENSION IF NOT EXISTS vector")
+
 	// Auto migrate all models.
 	if err := db.AutoMigrate(
+		// Scaffold models (unchanged).
 		&model.User{},
 		&model.Role{},
 		&model.Permission{},
@@ -44,32 +47,74 @@ func main() {
 		&model.Feedback{},
 		&model.UserRole{},
 		&model.RolePermission{},
+
+		// AIVisionInference: Person Management.
+		&model.PersonGroup{},
+		&model.Person{},
+		&model.PersonGroupMember{},
+		&model.PersonTag{},
+		&model.PersonTagRelation{},
+		&model.PersonEmbedding{},
+		&model.ImportTask{},
+
+		// AIVisionInference: Device Management.
+		&model.DeviceGroup{},
+		&model.Device{},
+		&model.DeviceGroupMember{},
+		&model.GB28181Device{},
+
+		// AIVisionInference: Algorithm Package Management.
+		&model.CategoryCode{},
+		&model.AlgorithmPackage{},
+		&model.AlgorithmLabelMap{},
+
+		// AIVisionInference: Inference Task Management.
+		&model.InferTask{},
+		&model.InferTaskAlgorithm{},
+		&model.InferTaskStatusHistory{},
+
+		// AIVisionInference: Smart Records (partition parent table).
+		&model.SmartRecord{},
+
+		// AIVisionInference: Media Stream Mapping.
+		&model.MediaStream{},
+
+		// AIVisionInference: Storage Spaces.
+		&model.StorageSpace{},
+		&model.StorageCleanupLog{},
+
+		// AIVisionInference: Webhook.
+		&model.WebhookConfig{},
+		&model.WebhookPushLog{},
+
+		// AIVisionInference: System Config & Async Tasks.
+		&model.AISystemConfig{},
+		&model.AIAsyncTask{},
+
+		// AIVisionInference: Device License (MVP+).
+		&model.DeviceLicense{},
 	); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}
 
-	// Partial unique index: only one root user allowed.
-	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_root ON users (is_root) WHERE is_root = true").Error; err != nil {
-		log.Fatalf("create unique root index: %v", err)
+		// Production should use a scheduled task to auto-create future partitions.
+	for _, sql := range []string{
+		"CREATE TABLE IF NOT EXISTS smart_records_202606 PARTITION OF smart_records FOR VALUES FROM ('2026-06-01') TO ('2026-07-01')",
+		"CREATE TABLE IF NOT EXISTS smart_records_202607 PARTITION OF smart_records FOR VALUES FROM ('2026-07-01') TO ('2026-08-01')",
+		"CREATE TABLE IF NOT EXISTS smart_records_default PARTITION OF smart_records FOR VALUES FROM (MINVALUE) TO ('2026-06-01')",
+	} {
+		mustExec(db, sql)
 	}
-	if err := db.Exec(rootUsernameConstraintSQL()).Error; err != nil {
-		log.Fatalf("create root username constraint: %v", err)
-	}
-	if err := db.Exec(ensureAuditLogSummaryColumnsSQL()).Error; err != nil {
-		log.Fatalf("ensure audit summary columns: %v", err)
-	}
-	if err := db.Exec(dropAuditLogActionColumnSQL()).Error; err != nil {
-		log.Fatalf("drop audit log action column: %v", err)
-	}
-	if err := db.Exec(migrateAuditLogResultSummarySQL()).Error; err != nil {
-		log.Fatalf("migrate audit log result summary: %v", err)
-	}
-	if err := db.Exec(addAuditLogActionTypeColumnSQL()).Error; err != nil {
-		log.Fatalf("add audit log action type column: %v", err)
-	}
-	if err := db.Exec(addFileMD5ColumnSQL()).Error; err != nil {
-		log.Fatalf("add file md5 column: %v", err)
-	}
+
+	mustExec(db, "CREATE INDEX IF NOT EXISTS idx_person_embeddings_vector ON person_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
+
+	mustExec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_root ON users (is_root) WHERE is_root = true")
+	mustExec(db, rootUsernameConstraintSQL())
+	mustExec(db, ensureAuditLogSummaryColumnsSQL())
+	mustExec(db, dropAuditLogActionColumnSQL())
+	mustExec(db, migrateAuditLogResultSummarySQL())
+	mustExec(db, addAuditLogActionTypeColumnSQL())
+	mustExec(db, addFileMD5ColumnSQL())
 
 	// Migrate existing menus to multi-level structure.
 	if err := migrateMultiLevelMenu(db); err != nil {
@@ -82,6 +127,18 @@ func main() {
 	}
 
 	log.Println("Migration completed successfully")
+}
+
+// mustExec 执行 SQL 语句，失败时终止程序。
+func mustExec(db *gorm.DB, sql string) {
+	if err := db.Exec(sql).Error; err != nil {
+		log.Fatalf("migrate: %s: %v", sql[:min(len(sql), 60)], err)
+	}
+}
+
+// shouldCreateSeedAdmin 判断是否需要在用户名和邮箱均不存在时创建默认管理员。
+func shouldCreateSeedAdmin(adminUsernameExists, adminEmailExists bool) bool {
+	return !adminUsernameExists && !adminEmailExists
 }
 
 // addFileMD5ColumnSQL 返回文件 MD5 字段及索引的幂等迁移语句。
@@ -158,9 +215,7 @@ func addAuditLogActionTypeColumnSQL() string {
 		ADD COLUMN IF NOT EXISTS action_type varchar(128);`
 }
 
-func shouldCreateSeedAdmin(adminUsernameExists, adminEmailExists bool) bool {
-	return !adminUsernameExists && !adminEmailExists
-}
+
 
 // migrateMultiLevelMenu 将已有的平铺菜单迁移为两级结构。
 // 幂等操作：已存在的父菜单不会重复创建，子菜单的 ParentID 仅在为空时更新。

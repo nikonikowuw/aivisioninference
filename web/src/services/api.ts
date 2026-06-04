@@ -686,3 +686,77 @@ export const feedbackApi = {
 export const dashboardApi = {
   stats: () => request<DashboardStats>('/dashboard/stats'),
 };
+
+// Device types
+export interface Device {
+  id: string;
+  device_name: string;
+  access_type: string;
+  rtsp_url?: string;
+  gb28181_device_id?: string;
+  gb28181_channel_id?: string;
+  username?: string;
+  manufacturer?: string;
+  model?: string;
+  firmware_version?: string;
+  status: string;
+  enabled: boolean;
+  latitude?: number;
+  longitude?: number;
+  location_desc?: string;
+  last_online_at?: string;
+  last_offline_at?: string;
+  last_error_code?: string;
+  last_error_message?: string;
+  external_key?: string;
+  remark?: string;
+  version: number;
+  groups?: DeviceGroup[];
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceGroup {
+  id: string;
+  group_name: string;
+  description?: string;
+  parent_id?: string;
+  sort_order: number;
+  device_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceTestResult {
+  success: boolean;
+  message: string;
+  tested_at: string;
+}
+
+type DeviceListParams = CrudListParams & { status?: string; access_type?: string; group_id?: string };
+
+export const devicesApi = {
+  ...crud<Device, DeviceListParams>('devices'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/devices/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportCsv: (params?: DeviceListParams) =>
+    downloadFile(`/devices/export${buildQuery(params || {})}`, 'devices.csv'),
+  importCsv: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<BatchResult>('/devices/import', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  test: (id: string) =>
+    request<DeviceTestResult>(`/devices/${id}/test`, { method: 'POST' }),
+};
+
+export const deviceGroupsApi = {
+  ...crud<DeviceGroup>('device-groups'),
+};

@@ -13,22 +13,47 @@ export const adminRoutes: RouteConfig[] = [
   {
     id: 'dashboard',
     path: '/default',
-    i18nKey: 'layout.sidebar.dashboard',
+    i18nKey: 'menu:dashboard',
     icon: 'MdHome',
     component: () => import('../views/admin/default'),
     layout: '/admin',
   },
   {
+    id: 'device-management',
+    path: '/device-management',
+    i18nKey: 'menu:device-management',
+    icon: 'MdVideocam',
+    layout: '/admin',
+    children: [
+      {
+        id: 'devices',
+        path: '/devices',
+        i18nKey: 'menu:devices',
+        icon: 'MdVideocam',
+        component: () => import('../views/admin/devices'),
+        layout: '/admin',
+      },
+      {
+        id: 'device-groups',
+        path: '/devices/groups',
+        i18nKey: 'menu:device-groups',
+        icon: 'MdFolder',
+        component: () => import('../views/admin/devices/DeviceGroups'),
+        layout: '/admin',
+      },
+    ],
+  },
+  {
     id: 'user-management',
     path: '/user-management',
-    i18nKey: 'layout.sidebar.userManagement',
+    i18nKey: 'menu:user-management',
     icon: 'MdPeople',
     layout: '/admin',
     children: [
       {
         id: 'users',
         path: '/users',
-        i18nKey: 'layout.sidebar.users',
+        i18nKey: 'menu:users',
         icon: 'MdPerson',
         component: () => import('../views/admin/users'),
         layout: '/admin',
@@ -36,7 +61,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'roles',
         path: '/roles',
-        i18nKey: 'layout.sidebar.roles',
+        i18nKey: 'menu:roles',
         icon: 'MdSecurity',
         component: () => import('../views/admin/roles'),
         layout: '/admin',
@@ -44,7 +69,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'permissions',
         path: '/permissions',
-        i18nKey: 'layout.sidebar.permissions',
+        i18nKey: 'menu:permissions',
         icon: 'MdVpnKey',
         component: () => import('../views/admin/permissions'),
         layout: '/admin',
@@ -54,14 +79,14 @@ export const adminRoutes: RouteConfig[] = [
   {
     id: 'system-management',
     path: '/system-management',
-    i18nKey: 'layout.sidebar.systemManagement',
+    i18nKey: 'menu:system-management',
     icon: 'MdSettings',
     layout: '/admin',
     children: [
       {
         id: 'files',
         path: '/files',
-        i18nKey: 'layout.sidebar.files',
+        i18nKey: 'menu:files',
         icon: 'MdFolder',
         component: () => import('../views/admin/files'),
         layout: '/admin',
@@ -69,7 +94,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'audit-logs',
         path: '/audit-logs',
-        i18nKey: 'layout.sidebar.auditLogs',
+        i18nKey: 'menu:audit-logs',
         icon: 'MdHistory',
         component: () => import('../views/admin/audit-logs'),
         layout: '/admin',
@@ -77,7 +102,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'tasks',
         path: '/tasks',
-        i18nKey: 'layout.sidebar.tasks',
+        i18nKey: 'menu:tasks',
         icon: 'MdAssignment',
         component: () => import('../views/admin/tasks'),
         layout: '/admin',
@@ -85,7 +110,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'brand-config',
         path: '/brand-config',
-        i18nKey: 'layout.sidebar.brandConfig',
+        i18nKey: 'menu:brand-config',
         icon: 'MdPalette',
         component: () => import('../views/admin/brand-config'),
         layout: '/admin',
@@ -93,7 +118,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'mail-config',
         path: '/mail-config',
-        i18nKey: 'layout.sidebar.mailConfig',
+        i18nKey: 'menu:mail-config',
         icon: 'MdEmail',
         component: () => import('../views/admin/mail-config'),
         layout: '/admin',
@@ -101,7 +126,7 @@ export const adminRoutes: RouteConfig[] = [
       {
         id: 'feedback',
         path: '/feedback',
-        i18nKey: 'layout.sidebar.feedback',
+        i18nKey: 'menu:feedback',
         icon: 'MdFeedback',
         component: () => import('../views/admin/feedback'),
         layout: '/admin',

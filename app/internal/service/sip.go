@@ -35,12 +35,19 @@ func NewSIPService(
 
 var gb28181DeviceIDRegex = regexp.MustCompile(`^\d{20}$`)
 
+func (s *SIPService) ValidateDeviceCode(deviceID string) error {
+	if !gb28181DeviceIDRegex.MatchString(deviceID) {
+		return errors.New(errors.ErrBadRequest, fmt.Sprintf("invalid GB28181 device code format: %s", deviceID))
+	}
+	return nil
+}
+
 // HandleRegister validates a device SIP registration request.
 // Returns error if registration should be rejected.
 func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP string, port int) error {
 	// 1. Validate 20-digit GB28181 device code format
-	if !gb28181DeviceIDRegex.MatchString(deviceID) {
-		return errors.New(errors.ErrBadRequest, fmt.Sprintf("invalid GB28181 device code format: %s", deviceID))
+	if err := s.ValidateDeviceCode(deviceID); err != nil {
+		return err
 	}
 
 	// 2. Find the device in database
@@ -119,8 +126,8 @@ func (s *SIPService) CheckHeartbeatTimeout(ctx context.Context, timeout time.Dur
 // sn: the SIP message sequence number from the query.
 func (s *SIPService) BuildCatalogueResponse(ctx context.Context, deviceID, sn string) (string, error) {
 	// Validate device code
-	if !gb28181DeviceIDRegex.MatchString(deviceID) {
-		return "", errors.New(errors.ErrBadRequest, fmt.Sprintf("invalid device code format: %s", deviceID))
+	if err := s.ValidateDeviceCode(deviceID); err != nil {
+		return "", err
 	}
 
 	// Find the device

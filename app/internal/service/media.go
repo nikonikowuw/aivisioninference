@@ -21,6 +21,7 @@ type MediaService struct {
 	zlmClient       *zlm.Client
 	mediaStreamRepo *repository.MediaStreamRepository
 	deviceRepo      *repository.DeviceRepository
+	zlmBaseURL      string
 	zlmSecret       string
 }
 
@@ -29,12 +30,14 @@ func NewMediaService(
 	zlmClient *zlm.Client,
 	mediaStreamRepo *repository.MediaStreamRepository,
 	deviceRepo *repository.DeviceRepository,
+	zlmBaseURL string,
 	zlmSecret string,
 ) *MediaService {
 	return &MediaService{
 		zlmClient:       zlmClient,
 		mediaStreamRepo: mediaStreamRepo,
 		deviceRepo:      deviceRepo,
+		zlmBaseURL:      zlmBaseURL,
 		zlmSecret:       zlmSecret,
 	}
 }
@@ -99,18 +102,15 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 	// Generate signed token
 	token := s.GeneratePlayToken(stream, "anonymous", 30*time.Minute)
 
-	// Build ZLM base URL
-	zlmHost := "localhost"
-
 	switch protocol {
 	case "webrtc":
-		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", zlmHost, app, stream, token), nil
+		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", s.zlmBaseURL, app, stream, token), nil
 	case "flv":
-		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", zlmHost, app, stream, token), nil
+		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", s.zlmBaseURL, app, stream, token), nil
 	case "hls":
-		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", zlmHost, app, stream, token), nil
+		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", s.zlmBaseURL, app, stream, token), nil
 	default: // auto
-		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", zlmHost, app, stream, token), nil
+		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", s.zlmBaseURL, app, stream, token), nil
 	}
 }
 
@@ -136,7 +136,7 @@ func (s *MediaService) GetSnapshot(ctx context.Context, deviceID string) ([]byte
 		url = device.RtspURL
 	} else {
 		// For GB28181, use the ZLM stream URL
-		url = fmt.Sprintf("rtsp://localhost:554/live/%s", deviceID)
+		url = fmt.Sprintf("rtsp://%s:554/live/%s", s.zlmBaseURL, deviceID)
 	}
 
 	imgData, err := s.zlmClient.GetSnap(ctx, zlm.GetSnapRequest{

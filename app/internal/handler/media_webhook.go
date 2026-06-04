@@ -47,6 +47,14 @@ func successWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, WebhookRsp{Code: 0, Msg: "success"})
 }
 
+func (h *MediaWebhookHandler) bindJSON(c *gin.Context, req interface{}) bool {
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+		return false
+	}
+	return true
+}
+
 // OnRegister handles SIP device registration.
 func (h *MediaWebhookHandler) OnRegister(c *gin.Context) {
 	var req struct {
@@ -54,8 +62,7 @@ func (h *MediaWebhookHandler) OnRegister(c *gin.Context) {
 		RemoteIP string `json:"remote_ip"`
 		Port     int    `json:"port"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 
@@ -78,8 +85,7 @@ func (h *MediaWebhookHandler) OnPublish(c *gin.Context) {
 		Vhost  string `json:"vhost"`
 		Schema string `json:"schema"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 
@@ -98,8 +104,7 @@ func (h *MediaWebhookHandler) OnPlay(c *gin.Context) {
 		Stream string `json:"stream"`
 		Params string `json:"params"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 
@@ -123,8 +128,7 @@ func (h *MediaWebhookHandler) OnStreamChanged(c *gin.Context) {
 		Schema string `json:"schema"`
 		Status int    `json:"status"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 
@@ -143,8 +147,7 @@ func (h *MediaWebhookHandler) OnStreamNotFound(c *gin.Context) {
 		Vhost  string `json:"vhost"`
 		Schema string `json:"schema"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 
@@ -166,8 +169,7 @@ func (h *MediaWebhookHandler) OnRecordMP4(c *gin.Context) {
 		StartTime int64  `json:"start_time"`
 		EndTime   int64  `json:"end_time"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 
@@ -183,8 +185,7 @@ func (h *MediaWebhookHandler) OnServerStarted(c *gin.Context) {
 	var req struct {
 		Version string `json:"version"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "invalid params"})
+	if !h.bindJSON(c, &req) {
 		return
 	}
 

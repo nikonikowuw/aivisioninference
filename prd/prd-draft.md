@@ -182,14 +182,14 @@ AIVisionInference 不直接与旷视、英特灵达的大型完整方案做全�
 
 **参考来源**
 
-- 旷视魔方智能分析盒：https://www.megvii.com/products/hardware/Intelligent_analysis_Unit
-- 旷视魔方智能体分析盒：https://www.megvii.com/solutions/Empowered_by_PANGU_Open_API
-- 旷视盘古 AIoT 视图综合应用平台：https://www.megvii.com/products/software/megvii_pangu
-- 旷视天枢城市智能感知 AI 中台：https://www.megvii.com/products/software/megvii_wanxiang
-- 英特灵达产品中心：https://intellindust.com/product.html
-- 英特灵达智能边缘微服务器：https://www.intellindust.cn/product/8/7.html
-- 英特灵达智能 AI 监测管理平台：https://www.intellindust.cn/product/9/10.html
-- 英特灵达视频大数据平台：https://www.intellindust.cn/product/9/11.html
+- 旷视魔方智能分析盒：<https://www.megvii.com/products/hardware/Intelligent_analysis_Unit>
+- 旷视魔方智能体分析盒：<https://www.megvii.com/solutions/Empowered_by_PANGU_Open_API>
+- 旷视盘古 AIoT 视图综合应用平台：<https://www.megvii.com/products/software/megvii_pangu>
+- 旷视天枢城市智能感知 AI 中台：<https://www.megvii.com/products/software/megvii_wanxiang>
+- 英特灵达产品中心：<https://intellindust.com/product.html>
+- 英特灵达智能边缘微服务器：<https://www.intellindust.cn/product/8/7.html>
+- 英特灵达智能 AI 监测管理平台：<https://www.intellindust.cn/product/9/10.html>
+- 英特灵达视频大数据平台：<https://www.intellindust.cn/product/9/11.html>
 
 ---
 
@@ -1690,16 +1690,16 @@ Webhook 请求体：固定包含 `deviceSn`、`cameraCode`、`captureTime`、`sn
 
 - **核心目标**：实现数据从推理结果到业务动作的自动化流转、路由与转换。
 - **数据流转 (Data Flow)**：
-    - 支持基于 Go Channel 的高性能异步处理流水线，确保规则执行不阻塞主推理业务。
-    - 具备背压控制机制，当 Sink 端处理缓慢时，支持丢弃旧数据或扩大缓冲区。
+  - 支持基于 Go Channel 的高性能异步处理流水线，确保规则执行不阻塞主推理业务。
+  - 具备背压控制机制，当 Sink 端处理缓慢时，支持丢弃旧数据或扩大缓冲区。
 - **消息路由 (Message Routing)**：
-    - 支持一入多出，单条推理结果可同时路由至告警记录、Webhook 推送、WebSocket 实时预览等多个目的地。
-    - 支持基于目标类别、置信度、ROI 归属等条件的动态路由。
-    - 具备去重机制，防止针对同一目标的持续告警产生“告警风暴”。
+  - 支持一入多出，单条推理结果可同时路由至告警记录、Webhook 推送、WebSocket 实时预览等多个目的地。
+  - 支持基于目标类别、置信度、ROI 归属等条件的动态路由。
+  - 具备去重机制，防止针对同一目标的持续告警产生“告警风暴”。
 - **数据转换 (Data Transformation)**：
-    - 支持 JSONPath 提取推理结果中的特定字段。
-    - 支持 Golang Template 渲染，将原始元数据映射为人类可读的通知文案。
-    - 支持简单的逻辑表达式判断（如 `confidence > 0.8 && label == 'fire'`）。
+  - 支持 JSONPath 提取推理结果中的特定字段。
+  - 支持 Golang Template 渲染，将原始元数据映射为人类可读的通知文案。
+  - 支持简单的逻辑表达式判断（如 `confidence > 0.8 && label == 'fire'`）。
 
 ### 6.11 角色权限管理模块
 
@@ -1936,7 +1936,7 @@ graph TD
     B1[Device & Task Manager]
     B2[Event Router & Dispatcher]
     end
-    
+
     subgraph C++ Inference Engine
     D1[Stream Worker & Puller]
     D2[NPU Runtime & Algo Manager]
@@ -1944,6 +1944,7 @@ graph TD
 ```
 
 **流程说明**:
+
 1. **Admin/API 层**: 用户或外部服务通过 REST API 下发配置和任务。
 2. **Go Management Plane (控制面)**: 协调设备接入、任务调度、事件路由。通过 UDS 与数据面通信。
 3. **ZLMediaKit (媒体服务)**: 统一处理视频流的接入和转码分发。
@@ -1968,7 +1969,7 @@ sequenceDiagram
     D-->>Z: 推送 RTP 视频流
     Z->>Z: 协议转换 (RTP -> RTSP/FLV)
     Z-->>G: Webhook: on_publish (流已就绪)
-    
+
     par 流转至前端
         G-->>U: 返回 HTTP-FLV 播放地址
         U->>Z: 拉取 FLV 流展示
@@ -2003,7 +2004,7 @@ sequenceDiagram
     participant Go as Go Management Plane
     participant SHM as Shared Memory Pool
     participant Cpp as C++ Inference Engine
-    
+
     Go->>SHM: 申请内存并写入解码帧数据 (YUV/RGB)
     Go->>Cpp: 发送 UDS 控制信令 (FrameMeta + SHM fd)
     Cpp->>SHM: 通过 fd 读取对应内存段
@@ -2014,10 +2015,10 @@ sequenceDiagram
 
 - **控制面通信**：Go 与 C++ 通过 UDS (Unix Domain Socket) 进行双向信令交互。
 - **数据面通信 (零拷贝实现)**：
-    - 系统创建共享内存池 (Shared Memory Pool)，由 Go 写入解码后的 YUV/RGB 像素数据，C++ 直接读取内存指针进行推理。
-    - 任务初始化时，Go 后端通过 UDS 传递共享内存的句柄 (file descriptor) 给 C++。
-    - 每个视频帧配备一个 `FrameMeta` 头部，包含 `frame_id`、`timestamp`、`width`、`height`、`stride` 等关键信息。
-    - 这种方案将单机环境下的视频帧传递延迟降低至微秒级，且不消耗额外的 CPU 拷贝开销。
+  - 系统创建共享内存池 (Shared Memory Pool)，由 Go 写入解码后的 YUV/RGB 像素数据，C++ 直接读取内存指针进行推理。
+  - 任务初始化时，Go 后端通过 UDS 传递共享内存的句柄 (file descriptor) 给 C++。
+  - 每个视频帧配备一个 `FrameMeta` 头部，包含 `frame_id`、`timestamp`、`width`、`height`、`stride` 等关键信息。
+  - 这种方案将单机环境下的视频帧传递延迟降低至微秒级，且不消耗额外的 CPU 拷贝开销。
 - **信令封装**：采用 Protobuf Envelope + JSON Payload。控制命令使用 Protobuf，算法参数和推理结果使用 JSON 字符串。
 - **同步机制**：使用信号量 (Semaphore) 或原子变量协调读写锁，确保数据一致性。
 
@@ -2124,25 +2125,27 @@ MVP 阶段由平台内置维护 `category_code` 预定义类别表，前端展�
 ### 8.7 推理数据交互规范 (Inference I/O Specification)
 
 #### 8.7.1 推理输入 (Inputs)
+
 - **图像数据**：存放在共享内存中的原始像素矩阵（通常为 BGR 或 YUV420p）。
 - **任务上下文 (Task Context)**：
-    - `algorithm_type`: 指定运行的检测/识别模型。
-    - `confidence_threshold`: 置信度过滤阈值。
-    - `roi_polygons`: 归一化坐标定义的检测区域。
-    - `dynamic_params`: 针对特定算法的运行时调整参数。
+  - `algorithm_type`: 指定运行的检测/识别模型。
+  - `confidence_threshold`: 置信度过滤阈值。
+  - `roi_polygons`: 归一化坐标定义的检测区域。
+  - `dynamic_params`: 针对特定算法的运行时调整参数。
 
 #### 8.7.2 推理输出 (Outputs)
+
 - **原始元数据 (Raw Meta)**：
-    - `bbox`: 目标的像素级坐标 `[x_min, y_min, x_max, y_max]`。
-    - `category_code`: 平台预定义的五位数字类别编码。
-    - `score`: 模型置信度 (0.0 - 1.0)。
+  - `bbox`: 目标的像素级坐标 `[x_min, y_min, x_max, y_max]`。
+  - `category_code`: 平台预定义的五位数字类别编码。
+  - `score`: 模型置信度 (0.0 - 1.0)。
 - **高级业务数据 (Business Data)**：
-    - `face_vector`: 512 维特征向量（仅限人脸识别任务）。
-    - `plate_number`: 识别出的字符字符串（仅限车牌识别任务）。
-    - `track_id`: 目标跟踪 ID，用于轨迹分析。
+  - `face_vector`: 512 维特征向量（仅限人脸识别任务）。
+  - `plate_number`: 识别出的字符字符串（仅限车牌识别任务）。
+  - `track_id`: 目标跟踪 ID，用于轨迹分析。
 - **状态标记**：
-    - `in_roi`: 布尔值，标记中心点是否落在 ROI 区域内。
-    - `alarm_triggered`: 是否触发了预设的业务规则。
+  - `in_roi`: 布尔值，标记中心点是否落在 ROI 区域内。
+  - `alarm_triggered`: 是否触发了预设的业务规则。
 
 ### 8.8 规则引擎与数据流转核心规范 (Data Flow Specification)
 
@@ -2169,6 +2172,7 @@ graph TD
 ```
 
 **流程说明**:
+
 1. **接收层**: Go 进程从 UDS 获取 C++ 的推理结果，附加设备元数据。
 2. **规则分发器**: 数据分叉。一路直接推送到 WebSocket 供前端画框；另一路进入规则过滤链。
 3. **过滤器执行器**: 在内存中判断算法目标是否在业务布防规则内。
@@ -2180,6 +2184,7 @@ graph TD
 
 1. **统一的数据包裹 (Event Envelope)**
    所有在 Go Channel 中流转的数据必须封装为统一的 Event 对象，隔离底层 C++ 的 JSON 差异：
+
    ```go
    type InferenceEvent struct {
        EventID     string      // 全局唯一事件 ID

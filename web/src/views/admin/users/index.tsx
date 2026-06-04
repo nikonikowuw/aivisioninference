@@ -1,52 +1,49 @@
+import { AddIcon, DeleteIcon, DownloadIcon, EditIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
-  Flex,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Text,
-  useColorModeValue,
-  IconButton,
-  useToast,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  FormControl,
-  FormLabel,
-  FormHelperText,
-  Input,
-  Select,
-  useDisclosure,
-  HStack,
-  Badge,
-  Spinner,
   Center,
   Checkbox,
   CheckboxGroup,
+  Flex,
+  FormControl,
+  FormLabel,
+  HStack,
+  IconButton,
+  Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
   Radio,
   RadioGroup,
+  Spinner,
   Stack,
   Switch,
+  Table,
+  Tbody,
+  Td,
+  Text,
+  Th,
+  Thead,
+  Tr,
+  useColorModeValue,
+  useDisclosure,
+  useToast
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, DownloadIcon, EditIcon } from '@chakra-ui/icons';
-import { useTranslation } from 'react-i18next';
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { usersApi, rolesApi, type User, type Role, type BatchItemResult } from 'services/api';
-import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import AvatarUploader from 'components/avatar-upload/AvatarUploader';
+import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useAuth } from 'contexts/AuthContext';
-import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
+import { usePagination } from 'hooks/usePagination';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { rolesApi, usersApi, type BatchItemResult, type Role, type User } from 'services/api';
 import { parseOptionalNumber } from 'utils/convert';
 
 const MAX_CSV_IMPORT_SIZE = 10 * 1024 * 1024;
@@ -329,9 +326,9 @@ export default function Users() {
         <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
           <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
           <HStack spacing={2}>
-            <Button size="sm" onClick={() => setBatchAction('enable')}>{t('actions.enable')}</Button>
-            <Button size="sm" onClick={() => setBatchAction('disable')}>{t('actions.disable')}</Button>
-            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.delete')}</Button>
+            <Button size="sm" onClick={() => setBatchAction('enable')}>{t('batch.enable')}</Button>
+            <Button size="sm" onClick={() => setBatchAction('disable')}>{t('batch.disable')}</Button>
+            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('batch.delete')}</Button>
           </HStack>
         </Flex>
       )}

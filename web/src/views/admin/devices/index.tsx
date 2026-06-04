@@ -329,7 +329,7 @@ export default function Devices() {
         >
           <Text fontSize="sm" color={textColor}>{tCommon('batch.selected', { count: selectedIds.length })}</Text>
           <HStack spacing={2}>
-            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.delete')}</Button>
+            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.batchDelete')}</Button>
           </HStack>
         </Flex>
       )}

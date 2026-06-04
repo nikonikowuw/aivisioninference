@@ -1,13 +1,13 @@
-import { Badge, Box, Button, Center, Checkbox, Flex, HStack, Spinner, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
-import { useDateFormat } from 'hooks/useDateFormat';
 import { DownloadIcon } from '@chakra-ui/icons';
-import { useEffect, useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { auditLogsApi, type AuditLog } from 'services/api';
+import { Badge, Box, Button, Center, Checkbox, Flex, Spinner, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
-import { usePagination } from 'hooks/usePagination';
+import { useDateFormat } from 'hooks/useDateFormat';
 import { useFilter } from 'hooks/useFilter';
+import { usePagination } from 'hooks/usePagination';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { auditLogsApi, type AuditLog } from 'services/api';
 
 const methodColorMap = {
   GET: 'green',
@@ -35,12 +35,12 @@ export default function AuditLogs() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const fetchLogs = useCallback((p: number, ps: number) => auditLogsApi.list({
-      page: p,
-      page_size: ps,
-      sort: 'created_at',
-      order: 'desc',
-      ...filters,
-    }), [filters]);
+    page: p,
+    page_size: ps,
+    sort: 'created_at',
+    order: 'desc',
+    ...filters,
+  }), [filters]);
 
   const {
     list: logs,

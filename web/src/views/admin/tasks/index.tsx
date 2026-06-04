@@ -197,7 +197,7 @@ export default function Tasks() {
         <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
           <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
           <HStack spacing={2}>
-            <Button size="sm" colorScheme="red" onClick={() => setIsBatchConfirmOpen(true)}>{t('actions.cancel')}</Button>
+            <Button size="sm" colorScheme="red" onClick={() => setIsBatchConfirmOpen(true)}>{t('batch.cancel')}</Button>
           </HStack>
         </Flex>
       )}
@@ -278,7 +278,7 @@ export default function Tasks() {
         isOpen={isBatchConfirmOpen}
         onClose={() => setIsBatchConfirmOpen(false)}
         onConfirm={handleBatchCancel}
-        title={t('actions.cancel')}
+        title={t('batch.cancel')}
         message={t('message.batchCancelConfirm', { count: selectedIds.length })}
         confirmText={t('message.confirmCancel')}
         isLoading={isBatching}

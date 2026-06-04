@@ -186,7 +186,7 @@ export default function Files() {
         <Flex mb={4} p={3} bg={bgCard} border="1px solid" borderColor={borderColor} borderRadius="12px" justify="space-between" align="center">
           <Text fontSize="sm" color={textColor}>{t('batch.selected', { count: selectedIds.length })}</Text>
           <HStack spacing={2}>
-            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('actions.delete')}</Button>
+            <Button size="sm" colorScheme="red" onClick={() => setBatchAction('delete')}>{t('batch.delete')}</Button>
           </HStack>
         </Flex>
       )}
@@ -254,7 +254,7 @@ export default function Files() {
         isOpen={batchAction !== null}
         onClose={() => setBatchAction(null)}
         onConfirm={handleBatchConfirm}
-        title={t('actions.delete')}
+        title={t('batch.delete')}
         message={t('message.batchDeleteConfirm', { count: selectedIds.length })}
         isLoading={isBatching}
       />

@@ -352,6 +352,7 @@ AIVisionInference 定义了严格的算法包规范，这是与所有竞品的**
 | 热更新引用计数 | ✅ 版本目录隔离 + dlclose 延迟 | ❌ 各厂商均缺失 |
 
 **竞争力说明**: 标准化算法包规范使得：
+
 - **算法研发团队**可以一次开发，部署到任意 AIVisionInference 设备的任意硬件平台。
 - **运维团队**无需了解算法内部实现细节。
 - **生态扩展**潜力大，可吸引第三方算法开发者。
@@ -456,10 +457,10 @@ AIVisionInference 的管理后台模块完整度远超开源竞品，对标企�
 
 ## 六、参考资料
 
-- EasyAIoT Edge: https://gitee.com/volara/easyaiot-edge
-- 华为 OceanStor IVS3800: https://e.huawei.com/cn/products/storage/scale-out-storage/oceanstor-ivs3800ac-v2
-- 海康 AI 开放平台: https://ai.hikvision.com/
-- NVIDIA Metropolis: https://developer.nvidia.cn/metropolis-microservices
-- 阿里云 VIAS: https://www.huaweicloud.com/product/vias.html (华为) / https://www.aliyun.com/product/linkvisual (阿里)
-- 百度智能边缘 BIE: https://intl.cloud.baidu.com/doc/BIE/
-- 云从谛格 AI 定义小站: https://www.cloudwalk.cn/product/index2/id/16
+- EasyAIoT Edge: <https://gitee.com/volara/easyaiot-edge>
+- 华为 OceanStor IVS3800: <https://e.huawei.com/cn/products/storage/scale-out-storage/oceanstor-ivs3800ac-v2>
+- 海康 AI 开放平台: <https://ai.hikvision.com/>
+- NVIDIA Metropolis: <https://developer.nvidia.cn/metropolis-microservices>
+- 阿里云 VIAS: <https://www.aliyun.com/product/vias> / Link Visual: <https://www.aliyun.com/product/linkvisual>
+- 百度智能边缘 BIE: <https://intl.cloud.baidu.com/doc/BIE/>
+- 云从谛格 AI 定义小站: <https://www.cloudwalk.cn/product/index2/id/16>

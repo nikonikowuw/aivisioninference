@@ -24,6 +24,7 @@ app/docs/swagger.yaml
 .env.local
 .env.*.local
 app/.env
+app/configs/*.local.yaml
 
 # === IDE ===
 .idea/
@@ -56,6 +57,8 @@ web/.cache/
 web/tsconfig.tsbuildinfo
 web/.env.local
 web/.env.*.local
+# 使用 pnpm 作为包管理器，忽略 npm 的 lock 文件
+web/package-lock.json
 
 # === Docker ===
 docker-compose.override.yml
@@ -65,6 +68,16 @@ docker-compose.override.yml
 *.db
 *.sqlite
 
+# === ZLMediaKit (本地流媒体服务器) ===
+zlm/
+
+# === AI 工具配置 ===
+.claude/
+.pi/
+.opencode/
+
+# === 项目文档/提案 ===
+openspec/**
+
 # === local ===
 *.local.*
-openspec/**

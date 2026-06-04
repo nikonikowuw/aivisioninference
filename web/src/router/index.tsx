@@ -22,6 +22,9 @@ import {
   MdFeedback,
   MdHelpOutline,
   MdVideocam,
+  MdLiveTv,
+  MdViewStream,
+  MdVideoLibrary,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -42,6 +45,9 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdFeedback,
   MdHelpOutline,
   MdVideocam,
+  MdLiveTv,
+  MdViewStream,
+  MdVideoLibrary,
 };
 
 // 菜单 code 到组件的映射
@@ -49,6 +55,8 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'dashboard': () => import('../views/admin/default'),
   'devices': () => import('../views/admin/devices'),
   'device-groups': () => import('../views/admin/devices/DeviceGroups'),
+  'live-view': () => import('../views/admin/media/MediaDashboard'),
+  'recordings': () => import('../views/admin/media/RecordingsView'),
   'users': () => import('../views/admin/users'),
   'roles': () => import('../views/admin/roles'),
   'permissions': () => import('../views/admin/permissions'),

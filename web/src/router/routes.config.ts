@@ -44,6 +44,31 @@ export const adminRoutes: RouteConfig[] = [
     ],
   },
   {
+    id: 'media-management',
+    path: '/media-management',
+    i18nKey: 'menu:media-management',
+    icon: 'MdLiveTv',
+    layout: '/admin',
+    children: [
+      {
+        id: 'live-view',
+        path: '/media/live',
+        i18nKey: 'menu:live-view',
+        icon: 'MdViewStream',
+        component: () => import('../views/admin/media/MediaDashboard'),
+        layout: '/admin',
+      },
+      {
+        id: 'recordings',
+        path: '/media/recordings',
+        i18nKey: 'menu:recordings',
+        icon: 'MdVideoLibrary',
+        component: () => import('../views/admin/media/RecordingsView'),
+        layout: '/admin',
+      },
+    ],
+  },
+  {
     id: 'user-management',
     path: '/user-management',
     i18nKey: 'menu:user-management',

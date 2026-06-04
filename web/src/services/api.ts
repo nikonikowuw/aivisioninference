@@ -100,7 +100,7 @@ interface ApiResponse<T = unknown> {
 }
 
 function isApiResponseLike(value: unknown): value is ApiResponse<unknown> {
-  return typeof value === 'object' && value !== null && typeof (value as { code?: unknown }).code === 'number';
+  return typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>)?.code === 'number';
 }
 
 function isJsonResponse(response: Response): boolean {
@@ -164,7 +164,7 @@ async function parseOptionalApiResponse(response: Response): Promise<ApiResponse
   }
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {

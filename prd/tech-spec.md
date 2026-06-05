@@ -2,7 +2,6 @@
 
 > 本文档为 AIVisionInference PRD 的技术详细规格附件。
 
-
 ### Architecture Overview
 
 AIVisionInference 采用控制面与数据面分离架构。
@@ -85,13 +84,14 @@ Hardware Backend: RK MPP / RKNN, DVPP / CANN, FFmpeg / ONNX Runtime
   - 告警事件通过 RESTful POST 推送至第三方平台。
   - 支持自定义请求头、指数退避重试和基于 `event_id` 的幂等去重。
 
-
 ### Internationalization (i18n) Architecture
+
 - **后端机制**: Go 端通过请求头 `Accept-Language` 确定当前语言。所有业务错误返回预定义的 `error_code` 和对应的 `message_key`。底层错误（如数据库、系统调用）必须被封装，不得直接抛给前端。
 - **字典管理**: 翻译字典（JSON/YAML）统一定义在 Go 后端和前端代码中。后端根据字典将 `message_key` 翻译为目标语言的 `message` 返回。
 - **前端适配**: 前端使用 `i18next` 或 `vue-i18n` 进行界面静态文本翻译。对于后端返回的动态错误信息，优先展示 `message`，若为空则前端基于 `message_key` 兜底翻译。
 
 ### Edge Cases & Boundary Conditions
+
 - **系统时间回退**: 当 NTP 同步导致系统时间发生回退时，可能影响智能记录的时间戳顺序或触发定时任务异常。系统应在时间回退时记录高风险审计日志，并在生成 `event_id` 时采用不完全依赖时间的 UUIDv4 机制，避免主键冲突。
 - **并发操作与数据竞争**: 多个管理员同时修改同一任务或设备配置时，系统应通过数据库的乐观锁（如 `updated_at` 或 `version` 字段）防止丢失更新 (Lost Update)。
 - **Token 刷新策略**: 前端应在 JWT Token 即将过期前（如提前 5 分钟）自动调用刷新接口获取新 Token，避免用户在填写长表单（如任务配置）时因过期被强制登出。
@@ -102,11 +102,13 @@ Hardware Backend: RK MPP / RKNN, DVPP / CANN, FFmpeg / ONNX Runtime
 Go 与 C++ 之间需要保证强类型、低延迟和流式双向通信。为避免嵌入式设备（如 RK3576 / Ascend）引入庞大的 gRPC 依赖，并实现极客级别的零拷贝，系统采用 **Raw UDS (Unix Domain Socket) + Length-Prefixed Protobuf + SCM_RIGHTS (FD 传递)** 的通信架构。
 
 #### 1. 通信通道分离
+
 1. **Control Channel (控制通道)**: 处理 `StartTask`、`StopTask`、`Heartbeat` 等控制信令。
-3. **Data/Event Channel (数据通道)**: C++ 通过 UDS 持续向 Go 推送结构化的推理结果 (`InferenceResult`) 和系统事件 (`SystemEvent`)。
-4. **Zero-Copy Shared Memory (单图零拷贝)**: 针对单图推理，Go 端通过 `memfd_create` 创建匿名内存写入图片，通过 UDS 外带数据 (SCM_RIGHTS) 传递 File Descriptor (FD) 给 C++。C++ 直接 `mmap` 读取内存进行推理，完全消除 Socket 缓冲区拷贝。
+2. **Data/Event Channel (数据通道)**: C++ 通过 UDS 持续向 Go 推送结构化的推理结果 (`InferenceResult`) 和系统事件 (`SystemEvent`)。
+3. **Zero-Copy Shared Memory (单图零拷贝)**: 针对单图推理，Go 端通过 `memfd_create` 创建匿名内存写入图片，通过 UDS 外带数据 (SCM_RIGHTS) 传递 File Descriptor (FD) 给 C++。C++ 直接 `mmap` 读取内存进行推理，完全消除 Socket 缓冲区拷贝。
 
 #### 3. 协议帧格式 (Wire Format)
+
 数据在 UDS 字节流中的格式为：
 `[ 4 Bytes Length (Big-Endian) ] + [ Protobuf 二进制数据 (IpcEnvelope) ]`
 
@@ -127,21 +129,21 @@ message IpcEnvelope {
         CMD_START_TASK = 2;
         CMD_STOP_TASK = 3;
         CMD_INFER_SINGLE_IMAGE = 4; // 单图推理请求 (附带 FD)
-        
+
         // 事件推送 (C++ -> Go)
         EVT_INFERENCE_RESULT = 10;
         EVT_SYSTEM_EVENT = 11;
-        
+
         // 统一响应 (C++ -> Go)
-        ACK_RESPONSE = 20; 
+        ACK_RESPONSE = 20;
     }
-    
+
     MsgType type = 1;
     uint64 sequence_id = 2; // 请求序号，Go端生成，C++ ACK时原样返回，用于请求-响应匹配
     bytes payload = 3;      // 具体的业务载荷(序列化后的具体Request/Response/Event)
-    
+
     // 附加信息：如果当前消息携带了 FD，这里记录该 FD 对应的数据大小
-    int64 fd_payload_size = 4; 
+    int64 fd_payload_size = 4;
 }
 
 // ------------------------------------------
@@ -164,7 +166,7 @@ message AlgoConfig {
     string algo_name = 1;
     string so_path = 2;                 // 动态库绝对路径
     string params_json = 3;             // 动态运行参数(由algo_meta.yaml定义)
-    
+
     // 区域与越界线配置 (归一化坐标 0.0~1.0)
     repeated Region roi_regions = 4;
     repeated Region mark_regions = 5;
@@ -208,10 +210,10 @@ message Object {
     string class_name = 2;
     float confidence = 3;
     int32 track_id = 4;
-    
+
     float bbox_x = 5; float bbox_y = 6;
     float bbox_w = 7; float bbox_h = 8;
-    
+
     string extra_data_json = 9; // 算法自定义额外输出
 }
 
@@ -225,6 +227,7 @@ message SystemEvent {
 ```
 
 #### 5. 零拷贝与资源管理约束
+
 - **单图推理共享内存**: Go 端通过 `memfd_create(MFD_CLOEXEC)` 创建匿名内存，利用 `unix.Sendmsg` 发送带有 `SCM_RIGHTS` 标志的控制报文。C++ 端通过 `recvmsg` 提取 FD，利用 `mmap(PROT_READ, MAP_PRIVATE)` 直接读取数据。
 - **FD 泄漏监控**: 由于 FD 指向的是匿名内存，C++ 端如果发生未捕获异常或忘记 `close(fd)`，将导致严重的物理内存泄漏（OOM）。C++ 侧必须使用 RAII 模式严格管理 `fd` 的 `close` 与内存的 `munmap`。
 - **粘包处理**: UDS 面向字节流，C++ 端读取时必须先严格 `recv` 4 字节 Header，解析出 Protobuf payload 长度，再循环读取直至满帧，防止 TCP 粘包/半包问题。注意 FD (辅助数据) 通常仅依附在携带帧起始数据的第一个报文中。
@@ -911,4 +914,3 @@ C++ 算法包只返回核心推理结果数组。若模型输出为类别索引�
 | **前端过载 (Browser OOM)** | 浏览器开启 9 宫格预览，且每秒上百个告警 BBox 推送。 | 1. 前端 WebSocket 接收 JSON 结果时应有帧率限制（如最大 15FPS 渲染）；<br>2. 队列积压时主动丢帧，只渲染最新帧；<br>3. Canvas 绘制必须使用 `requestAnimationFrame`，防止标签堆叠导致内存泄漏。 |
 
 ---
-

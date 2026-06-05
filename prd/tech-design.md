@@ -48,24 +48,24 @@ graph TD
     AdminWeb <--> API
     BizSys <--> API
     RuleEngine --> Webhook
-    
+
     API <--> DeviceMgr
     API <--> AlgoMgr
     API <--> TaskSched
-    
+
     DeviceMgr <--> SIPServer
     SIPServer <--> ZLM
     DeviceMgr --> ZLM : HTTP API / WebHook
-    
+
     TaskSched <--> UDS : Protobuf 信令
     UDS <--> CPPEngine
     RuleEngine <--> UDS : JSON 结果接收
-    
+
     ZLM --> WorkerPool : RTSP/RTP 流
     WorkerPool --> Decoder
     Decoder --> Runtime
     Runtime <--> AlgoLoader
-    
+
     Go控制面 --> PG
     Go控制面 --> Redis
     Go控制面 --> Storage
@@ -176,6 +176,7 @@ void destroy_detector(void* detector);
 - `11001`: 车牌
 
 C++ 推理输出 JSON 示例：
+
 ```json
 [
   {

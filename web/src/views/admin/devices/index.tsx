@@ -345,6 +345,7 @@ export default function Devices() {
                 <Th pe="10px" w="48px">
                   <Checkbox isChecked={isAllSelected} isIndeterminate={isIndeterminate} onChange={toggleAll} />
                 </Th>
+                <Th>{t('fields.id')}</Th>
                 <Th>{t('fields.deviceName')}</Th>
                 <Th>{t('fields.accessType')}</Th>
                 <Th>{t('fields.status')}</Th>
@@ -355,15 +356,16 @@ export default function Devices() {
             </Thead>
             <Tbody>
               {pageLoading ? (
-                <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                <Tr><Td colSpan={8}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : devices.length === 0 ? (
-                <Tr><Td colSpan={7}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
+                <Tr><Td colSpan={8}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
               ) : (
                 devices.map((device) => (
                   <Tr key={device.id}>
                     <Td pe="10px">
                       <Checkbox isChecked={selectedIds.includes(device.id)} onChange={() => toggleOne(device.id)} />
                     </Td>
+                    <Td><Text fontSize="sm" color={textColor} fontFamily="mono">{device.id.slice(0, 8)}</Text></Td>
                     <Td>
                       <HStack>
                         <Icon as={MdVideocam} color="brand.500" />

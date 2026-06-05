@@ -1,6 +1,7 @@
 export const devices = {
   title: 'Manajemen Perangkat',
   fields: {
+    id: 'ID',
     deviceName: 'Nama Perangkat',
     accessType: 'Tipe Akses',
     rtspUrl: 'RTSP URL',

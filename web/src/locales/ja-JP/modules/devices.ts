@@ -1,6 +1,7 @@
 export const devices = {
   title: 'デバイス管理',
   fields: {
+    id: 'ID',
     deviceName: 'デバイス名',
     accessType: 'アクセスタイプ',
     rtspUrl: 'RTSP URL',

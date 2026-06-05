@@ -3,6 +3,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -142,6 +143,29 @@ func (r *DeviceRepository) ListByGroupID(ctx context.Context, groupID string) ([
 		Preload("Groups").
 		Find(&items).Error
 	return items, err
+}
+
+// ReplaceGroups 替换设备所属分组（先删后插）
+func (r *DeviceRepository) ReplaceGroups(ctx context.Context, deviceID string, groupIDs []string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 删除旧关联
+		if err := tx.Where("device_id = ?", deviceID).Delete(&model.DeviceGroupMember{}).Error; err != nil {
+			return err
+		}
+		// 插入新关联
+		if len(groupIDs) == 0 {
+			return nil
+		}
+		members := make([]model.DeviceGroupMember, 0, len(groupIDs))
+		for _, gid := range groupIDs {
+			members = append(members, model.DeviceGroupMember{
+				DeviceID:  deviceID,
+				GroupID:   gid,
+				CreatedAt: time.Now(),
+			})
+		}
+		return tx.Create(&members).Error
+	})
 }
 
 // ListEnabled 查询所有已启用且非 disabled 状态的设备

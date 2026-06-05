@@ -71,6 +71,11 @@ func (m *MockDeviceRepo) ListByGroupID(ctx context.Context, groupID string) ([]m
 	return args.Get(0).([]model.Device), args.Error(1)
 }
 
+func (m *MockDeviceRepo) ReplaceGroups(ctx context.Context, deviceID string, groupIDs []string) error {
+	args := m.Called(ctx, deviceID, groupIDs)
+	return args.Error(0)
+}
+
 // MockCache is a mock of cache interface
 type MockCache struct {
 	mock.Mock
@@ -148,6 +153,16 @@ func TestDeviceService_Integration_Workflow(t *testing.T) {
 			d.ID = "generated-id"
 		})
 
+		// Create 后重新加载设备（含分组）
+		mockRepo.On("FindByID", ctx, "generated-id").Return(&model.Device{
+			BaseModel:  model.BaseModel{ID: "generated-id"},
+			DeviceName: req.DeviceName,
+			AccessType: req.AccessType,
+			RtspURL:    req.RtspURL,
+			Status:     model.DeviceStatusUnknown,
+			Enabled:    true,
+		}, nil)
+
 		// 验证缓存被设置
 		mockCache.On("Set", ctx, mock.AnythingOfType("string"), mock.Anything, 24*time.Hour).Return(nil)
 		// 验证探测任务被排队
@@ -179,6 +194,14 @@ func TestDeviceService_Integration_Workflow(t *testing.T) {
 		mockRepo.On("Update", ctx, mock.MatchedBy(func(d *model.Device) bool {
 			return d.ID == deviceID && d.Status == status
 		})).Return(nil)
+
+		// Update 后重新加载设备（含分组）
+		mockRepo.On("FindByID", ctx, deviceID).Return(&model.Device{
+			BaseModel:  model.BaseModel{ID: deviceID},
+			DeviceName: "Test Device",
+			Status:     status,
+			Enabled:    true,
+		}, nil)
 
 		// 验证状态变更时更新缓存
 		mockCache.On("Set", ctx, mock.MatchedBy(func(k string) bool {

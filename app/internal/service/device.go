@@ -32,6 +32,7 @@ type deviceRepo interface {
 	Delete(ctx context.Context, id string) error
 	BatchDelete(ctx context.Context, ids []string) error
 	ListByGroupID(ctx context.Context, groupID string) ([]model.Device, error)
+	ReplaceGroups(ctx context.Context, deviceID string, groupIDs []string) error
 }
 
 // zlmClient ZLM API 客户端接口
@@ -172,6 +173,16 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 同步设备分组关联
+	if len(req.GroupIDs) > 0 {
+		if err := s.deviceRepo.ReplaceGroups(ctx, item.ID, req.GroupIDs); err != nil {
+			zap.L().Error("sync device groups failed", zap.Error(err))
+		}
+	}
+
+	// 重新加载分组信息以返回完整数据
+	item, _ = s.deviceRepo.FindByID(ctx, item.ID)
+
 	// 1. 缓存初始状态
 	statusData, _ := json.Marshal(item.Status)
 	_ = s.cache.Set(ctx, s.getStatusCacheKey(item.ID), statusData, 24*time.Hour)
@@ -258,6 +269,16 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 		zap.L().Error("update device failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
+
+	// 同步设备分组关联（显式传入空数组也视为清空）
+	if req.GroupIDs != nil {
+		if err := s.deviceRepo.ReplaceGroups(ctx, item.ID, req.GroupIDs); err != nil {
+			zap.L().Error("sync device groups failed", zap.Error(err))
+		}
+	}
+
+	// 重新加载分组信息以返回完整数据
+	item, _ = s.deviceRepo.FindByID(ctx, item.ID)
 
 	// 1. 如果状态发生变更，同步更新缓存
 	if req.Status != "" {

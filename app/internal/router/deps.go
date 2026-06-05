@@ -151,7 +151,7 @@ func provideMediaServices(db *gorm.DB, cfg *Config) (*handler.MediaWebhookHandle
 	recordingRepo := repository.NewRecordingRepository(db)
 
 	sipSvc := service.NewSIPService(deviceRepo, gbDeviceRepo, mediaStreamRepo)
-	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, cfg.ZLMSecret)
+	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, cfg.ZLMAPIURL, cfg.ZLMSecret)
 	recordingSvc := service.NewRecordingService(recordingRepo, zlmClient)
 
 	webhookHandler := handler.NewMediaWebhookHandler(mediaSvc, sipSvc)

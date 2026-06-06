@@ -52,6 +52,20 @@ const (
 	ErrNotFound         = 40001
 	ErrFeedbackNotFound = 40002
 
+	// System management errors (10xxx).
+	ErrCleanupRunning         = 10030
+	ErrCleanupDisabled        = 10031
+	ErrTimeSyncFailed         = 10032
+	ErrInvalidTimezone        = 10033
+	ErrTimezoneFileNotFound   = 10034
+	ErrSetTimeFailed          = 10035
+	ErrTimeOutOfRange         = 10036
+	ErrNetworkConfigFailed    = 10037
+	ErrNetworkRollbackFailed  = 10038
+	ErrNetworkConfirmFailed   = 10039
+	ErrWebhookPushFailed      = 10040
+	ErrNotImplemented         = 10041
+
 	// Server errors (5xxxx).
 	ErrInternal = 50001
 )

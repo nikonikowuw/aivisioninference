@@ -15,12 +15,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/niko-admin/niko-admin/internal/buildinfo"
 	"github.com/niko-admin/niko-admin/internal/server"
-)
-
-var (
-	Version   = "dev"
-	BuildTime = "unknown"
 )
 
 func main() {
@@ -30,8 +26,8 @@ func main() {
 	}
 
 	zap.L().Info("starting niko-admin",
-		zap.String("version", Version),
-		zap.String("build_time", BuildTime),
+		zap.String("version", buildinfo.Version),
+		zap.String("build_time", buildinfo.BuildTime),
 	)
 
 	app.Run()

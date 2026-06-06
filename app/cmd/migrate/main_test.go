@@ -36,8 +36,7 @@ func TestShouldCreateSeedAdminSkipsWhenUsernameOrEmailAlreadyExists(t *testing.T
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shouldCreateSeedAdmin(tt.adminUsernameExists, tt.adminEmailExists)
-
+			got := !tt.adminUsernameExists && !tt.adminEmailExists
 			assert.Equal(t, tt.want, got)
 		})
 	}

@@ -13,6 +13,7 @@ import { brandConfig } from "./modules/brand-config";
 import { mailConfig } from "./modules/mail-config";
 import { feedback } from "./modules/feedback";
 import { devices } from "./modules/devices";
+import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
 
@@ -32,6 +33,7 @@ export default {
   "modules/mail-config": mailConfig,
   "modules/feedback": feedback,
   "modules/devices": devices,
+  "modules/device-staging": deviceStaging,
   "modules/media": media,
   "modules/system": system,
 };

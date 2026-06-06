@@ -3,9 +3,12 @@ export const menu = {
   "device-management": "Manajemen Perangkat",
   "devices": "Perangkat",
   "device-groups": "Grup Perangkat",
+  "device-staging": "Penempatan Perangkat",
   "media-management": "Manajemen Media",
   "live-view": "Tampilan Langsung",
   "recordings": "Putar Ulang Rekaman",
+  "stream-status": "Status Aliran",
+
   "user-management": "Manajemen Pengguna",
   "users": "Pengguna",
   "roles": "Peran",

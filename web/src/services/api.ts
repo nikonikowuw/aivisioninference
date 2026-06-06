@@ -190,10 +190,11 @@ export async function request<T>(
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
-  const entries = Object.entries(params).filter(
-    ([, v]) => v !== undefined && v !== '',
-  );
-  return entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)]))}` : '';
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') sp.set(k, String(v));
+  }
+  return sp.toString() ? `?${sp}` : '';
 }
 
 function filenameFromContentDisposition(header: string | null): string | null {
@@ -674,6 +675,46 @@ export const mailConfigApi = {
   syncIMAP: () => request<{ synced: number }>('/system/mail-config/sync-imap', { method: 'POST' }),
 };
 
+// Stream types
+export interface ConsumerInfo {
+  reason: string;
+  ref_at: string;
+  metadata?: Record<string, string>;
+  last_alive: string;
+}
+
+export interface StreamState {
+  device_id: string;
+  app: string;
+  stream: string;
+  vhost: string;
+  schema: string;
+  ref_count: number;
+  status: string; // inactive, pulling, active, error
+  source_url: string;
+  retry_count: number;
+  retry_at?: string;
+  started_at?: string;
+  consumers?: Record<string, ConsumerInfo>;
+  play_url_rtsp?: string;
+  play_url_rtmp?: string;
+  play_url_flv?: string;
+  play_url_webrtc?: string;
+  play_url_hls?: string;
+}
+
+export const mediaApi = {
+  listStreams: () => request<StreamState[]>('/media/streams'),
+  getPlayUrl: (params: { device_id: string; protocol?: string; stream_type?: string }) => {
+    const query = buildQuery(params);
+    return request<{ url: string; protocol: string; stream_type: string; expires: number }>(`/media/play${query}`);
+  },
+  stopPlay: (deviceId: string) =>
+    request(`/media/stop?device_id=${deviceId}`, { method: 'POST' }),
+  getSnapshot: (deviceId: string) => `${API_BASE}/media/snapshot?device_id=${deviceId}&token=${getAccessToken()}`,
+};
+
+
 export const feedbackApi = {
   list: (params?: FeedbackListParams) => {
     const query = buildQuery(params || {});
@@ -774,4 +815,58 @@ export const devicesApi = {
 
 export const deviceGroupsApi = {
   ...crud<DeviceGroup>('device-groups'),
+};
+
+// DiscoveredDevice types
+export interface DiscoveredDevice {
+  id: string;
+  source: string; // onvif/gb28181/nvr/scan
+  device_name: string;
+  device_ip: string;
+  device_mac: string;
+  manufacturer: string;
+  model: string;
+  firmware_version: string;
+  access_type: string; // rtsp/gb28181/nvr_channel
+  access_url: string;
+  gb28181_code: string;
+  nvr_device_id?: string;
+  extra_info?: Record<string, unknown>;
+  status: string; // pending/imported/ignored/expired
+  imported_at?: string;
+  ignored_at?: string;
+  matched_device_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiscoveredDeviceListParams extends CrudListParams {
+  source?: string;
+  status?: string;
+}
+
+export const deviceStagingApi = {
+  list: (params?: DiscoveredDeviceListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<DiscoveredDevice>>(`/device-staging${query}`);
+  },
+  import: (id: string) =>
+    request(`/device-staging/${id}/import`, { method: 'POST' }),
+  ignore: (id: string) =>
+    request(`/device-staging/${id}/ignore`, { method: 'POST' }),
+  batchImport: (ids: string[]) =>
+    request('/device-staging/batch-import', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  batchIgnore: (ids: string[]) =>
+    request('/device-staging/batch-ignore', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  scanONVIF: (networkInterface?: string) =>
+    request('/device-staging/scan-onvif', {
+      method: 'POST',
+      body: JSON.stringify({ interface: networkInterface || 'eth0' }),
+    }),
 };

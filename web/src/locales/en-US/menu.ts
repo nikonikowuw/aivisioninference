@@ -6,6 +6,8 @@ export const menu = {
   "recordings": "Recordings",
   "live-view": "Live View",
   "device-groups": "Device Groups",
+  "device-staging": "Device Staging",
+  "stream-status": "Stream Status",
   "user-management": "User Management",
   "users": "Users",
   "roles": "Roles",

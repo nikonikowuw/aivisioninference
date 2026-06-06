@@ -41,6 +41,14 @@ export const adminRoutes: RouteConfig[] = [
         component: () => import('../views/admin/devices/DeviceGroups'),
         layout: '/admin',
       },
+      {
+        id: 'device-staging',
+        path: '/devices/staging',
+        i18nKey: 'menu:device-staging',
+        icon: 'MdOutlineDeviceHub',
+        component: () => import('../views/admin/devices/device-staging'),
+        layout: '/admin',
+      },
     ],
   },
   {
@@ -56,6 +64,14 @@ export const adminRoutes: RouteConfig[] = [
         i18nKey: 'menu:live-view',
         icon: 'MdViewStream',
         component: () => import('../views/admin/media/MediaDashboard'),
+        layout: '/admin',
+      },
+      {
+        id: 'stream-status',
+        path: '/media/streams',
+        i18nKey: 'menu:stream-status',
+        icon: 'MdTimeline',
+        component: () => import('../views/admin/media/stream-status'),
         layout: '/admin',
       },
       {

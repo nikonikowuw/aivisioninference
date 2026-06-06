@@ -25,6 +25,8 @@ import {
   MdLiveTv,
   MdViewStream,
   MdVideoLibrary,
+  MdOutlineDeviceHub,
+  MdTimeline,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -48,6 +50,8 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdLiveTv,
   MdViewStream,
   MdVideoLibrary,
+  MdOutlineDeviceHub,
+  MdTimeline,
 };
 
 // 菜单 code 到组件的映射
@@ -55,7 +59,9 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'dashboard': () => import('../views/admin/default'),
   'devices': () => import('../views/admin/devices'),
   'device-groups': () => import('../views/admin/devices/DeviceGroups'),
+  'device-staging': () => import('../views/admin/devices/device-staging'),
   'live-view': () => import('../views/admin/media/MediaDashboard'),
+  'stream-status': () => import('../views/admin/media/stream-status'),
   'recordings': () => import('../views/admin/media/RecordingsView'),
   'users': () => import('../views/admin/users'),
   'roles': () => import('../views/admin/roles'),

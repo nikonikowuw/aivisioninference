@@ -3,9 +3,12 @@ export const menu = {
   "device-management": "장치 관리",
   "devices": "장치",
   "device-groups": "장치 그룹",
+  "device-staging": "장치 대기 중",
   "media-management": "미디어 관리",
   "live-view": "라이브 뷰",
   "recordings": "녹화 재생",
+  "stream-status": "스트림 상태",
+
   "user-management": "사용자 관리",
   "users": "사용자",
   "roles": "역할",

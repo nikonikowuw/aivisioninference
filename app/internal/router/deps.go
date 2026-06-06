@@ -45,6 +45,8 @@ type RouteDeps struct {
 	StreamManager        *service.StreamManager
 	LicenseHandler       *handler.LicenseHandler
 	LicenseService       *service.LicenseService
+	AIVisionTaskHandler    *handler.AIVisionTaskHandler
+	AITimeScheduleHandler  *handler.AITimeScheduleHandler
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -171,6 +173,8 @@ func newRouteDeps(
 	streamManager *service.StreamManager,
 	licenseHandler *handler.LicenseHandler,
 	licenseService *service.LicenseService,
+	aiVisionTaskHandler *handler.AIVisionTaskHandler,
+	aiTimeScheduleHandler *handler.AITimeScheduleHandler,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:            permCache,
@@ -194,6 +198,8 @@ func newRouteDeps(
 		StreamManager:        streamManager,
 		LicenseHandler:       licenseHandler,
 		LicenseService:       licenseService,
+		AIVisionTaskHandler:    aiVisionTaskHandler,
+		AITimeScheduleHandler:  aiTimeScheduleHandler,
 	}
 }
 
@@ -204,14 +210,38 @@ func provideMailServiceForAsynq(db *gorm.DB) *service.MailService {
 	return service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
 }
 
-func provideLicenseHandler(licenseRepo *repository.LicenseRepository, db *gorm.DB) (*handler.LicenseHandler, *service.LicenseService) {
-	licenseSvc := service.NewLicenseService(licenseRepo, db)
-	licenseHandler := handler.NewLicenseHandler(licenseSvc)
-	return licenseHandler, licenseSvc
+func provideLicenseHandler(licenseSvc *service.LicenseService) *handler.LicenseHandler {
+	return handler.NewLicenseHandler(licenseSvc)
+}
+
+func provideLicenseService(licenseRepo *repository.LicenseRepository, db *gorm.DB) *service.LicenseService {
+	return service.NewLicenseService(licenseRepo, db)
+}
+
+func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
+	svc := service.NewAIVisionTaskService(repo, scheduleRepo, sipSvc, streamManager)
+	return handler.NewAIVisionTaskHandler(svc)
+}
+
+func provideAIVisionTaskService(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *service.AIVisionTaskService {
+	return service.NewAIVisionTaskService(repo, scheduleRepo, sipSvc, streamManager)
+}
+
+func provideAITimeScheduleHandler(repo *repository.AITimeScheduleRepository) *handler.AITimeScheduleHandler {
+	svc := service.NewAITimeScheduleService(repo)
+	return handler.NewAITimeScheduleHandler(svc)
 }
 
 func provideZLMClient(cfg *Config) *zlm.Client {
 	return zlm.NewClient(cfg.ZLMAPIURL, cfg.ZLMSecret, zap.L())
+}
+
+// defaultPort 返回端口值，若为 0 则返回默认值。
+func defaultPort(val, defaultVal int) int {
+	if val == 0 {
+		return defaultVal
+	}
+	return val
 }
 
 func provideSIPServiceWithZLM(
@@ -221,28 +251,19 @@ func provideSIPServiceWithZLM(
 	zlmClient *zlm.Client,
 	streamManager *service.StreamManager,
 	cfg *Config,
+	taskClient *task.Client,
 ) *service.SIPService {
 	zlmBaseIP := cfg.ZLMExternalIP
 	if zlmBaseIP == "" {
-		// 从 ZLMAPIURL 提取 host
 		zlmBaseIP = cfg.ZLMAPIURL
-	}
-	rtmpPort := cfg.ZLMRTMPPort
-	if rtmpPort == 0 {
-		rtmpPort = 1935
-	}
-	rtspPort := cfg.ZLMRTSPPort
-	if rtspPort == 0 {
-		rtspPort = 554
-	}
-	httpPort := cfg.ZLMHTTPPort
-	if httpPort == 0 {
-		httpPort = 80
 	}
 	return service.NewSIPServiceWithZLM(
 		deviceRepo, gbDeviceRepo, mediaStreamRepo,
 		zlmClient, streamManager, zlmBaseIP,
-		rtmpPort, rtspPort, httpPort,
+		defaultPort(cfg.ZLMRTMPPort, 1935),
+		defaultPort(cfg.ZLMRTSPPort, 554),
+		defaultPort(cfg.ZLMHTTPPort, 80),
+		taskClient,
 	)
 }
 

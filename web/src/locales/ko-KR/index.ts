@@ -17,6 +17,8 @@ import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
 import { license } from "./modules/license";
+import { aiTasks } from "./modules/ai-tasks";
+import { aiTimeSchedules } from "./modules/ai-time-schedules";
 
 export default {
   common,
@@ -38,4 +40,6 @@ export default {
   "modules/media": media,
   "modules/system": system,
   "modules/license": license,
+  "modules/ai-tasks": aiTasks,
+  "modules/ai-time-schedules": aiTimeSchedules,
 };

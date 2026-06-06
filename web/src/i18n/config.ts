@@ -40,6 +40,8 @@ export const NAMESPACES = [
   'modules/audit-logs',
   'modules/tasks',
   'modules/license',
+  'modules/ai-tasks',
+  'modules/ai-time-schedules',
 ] as const;
 
 export type Namespace = typeof NAMESPACES[number];

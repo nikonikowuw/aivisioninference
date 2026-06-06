@@ -1,14 +1,13 @@
 export const menu = {
   "dashboard": "Dasbor",
   "device-management": "Manajemen Perangkat",
-  "devices": "Perangkat",
+  "devices": "Daftar Perangkat",
   "device-groups": "Grup Perangkat",
-  "device-staging": "Penempatan Perangkat",
+  "device-staging": "Perangkat Menunggu",
   "media-management": "Manajemen Media",
   "live-view": "Tampilan Langsung",
   "recordings": "Putar Ulang Rekaman",
-  "stream-status": "Status Aliran",
-
+  "stream-status": "Status Stream",
   "user-management": "Manajemen Pengguna",
   "users": "Pengguna",
   "roles": "Peran",
@@ -16,13 +15,15 @@ export const menu = {
   "system-management": "Manajemen Sistem",
   "license-management": "Manajemen Lisensi",
   "license": "Lisensi Algoritma",
-  "files": "File",
+  "files": "Berkas",
   "audit-logs": "Log Audit",
   "tasks": "Tugas",
   "brand-config": "Konfigurasi Merek",
   "mail-config": "Konfigurasi Email",
-  "feedback": "Umpan Balik Pengguna",
+  "feedback": "Umpan Balik",
   "system-config": "Konfigurasi Sistem",
+  "aivision": "AI Inferensi Visual",
+  "ai-time-schedules": "Jadwal Waktu",
+  "aivisiontasks": "Tugas Inferensi",
 } as const;
-
 export default menu;

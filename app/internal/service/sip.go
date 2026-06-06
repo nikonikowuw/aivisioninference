@@ -26,6 +26,7 @@ type SIPService struct {
 	mediaStreamRepo *repository.MediaStreamRepository
 	discoverySvc    *DeviceDiscoveryService
 	smartRecordRepo *repository.SmartRecordRepository
+	taskClient      taskClient
 
 	// GB28181 ZLM 集成字段
 	zlmClient     *zlm.Client
@@ -58,6 +59,7 @@ func NewSIPServiceWithZLM(
 	streamManager *StreamManager,
 	zlmBaseIP string,
 	rtmpPort, rtspPort, httpPort int,
+	taskClient taskClient,
 ) *SIPService {
 	return &SIPService{
 		deviceRepo:      deviceRepo,
@@ -69,6 +71,7 @@ func NewSIPServiceWithZLM(
 		rtmpPort:        rtmpPort,
 		rtspPort:        rtspPort,
 		httpPort:        httpPort,
+		taskClient:      taskClient,
 	}
 }
 
@@ -414,6 +417,36 @@ func (s *SIPService) SyncCatalogChannels(ctx context.Context, nvrDeviceCode stri
 	return nil
 }
 
+type alarmDispatchPayload struct {
+	SmartRecordID string `json:"smart_record_id"`
+	DeviceID      string `json:"device_id"`
+	DeviceName    string `json:"device_name"`
+	AlgorithmName string `json:"algorithm_name"`
+	AlarmType     string `json:"alarm_type"`
+	AlarmLevel    string `json:"alarm_level"`
+	CaptureTime   string `json:"capture_time"`
+	SnapshotURL   string `json:"snapshot_url"`
+	RawResult     string `json:"raw_result,omitempty"`
+}
+
+// enqueueAlarmDispatch 派发告警处理任务到队列
+func (s *SIPService) enqueueAlarmDispatch(ctx context.Context, record *model.SmartRecord, alarm AlarmInfo) {
+	payload := alarmDispatchPayload{
+		SmartRecordID: record.RecordID,
+		DeviceID:      alarm.DeviceID,
+		DeviceName:    record.DeviceName,
+		AlarmType:     record.AlarmType,
+		AlarmLevel:    record.AlarmLevel,
+		CaptureTime:   record.CaptureTime.Format(time.RFC3339),
+		SnapshotURL:   record.SnapshotImageURL,
+		RawResult:     string(record.RawResult),
+	}
+	if err := s.taskClient.Enqueue(ctx, "alarm:dispatch", payload); err != nil {
+		zap.L().Error("failed to enqueue alarm dispatch task",
+			zap.String("record_id", record.RecordID), zap.Error(err))
+	}
+}
+
 // HandleAlarm 处理设备告警上报
 func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 	if alarm.DeviceID == "" {
@@ -449,11 +482,19 @@ func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 		"alarm_time":  alarm.AlarmTime,
 	})
 	record.RawResult = datatypes.JSON(rawJSON)
-	if s.smartRecordRepo != nil {
-		if err := s.smartRecordRepo.Create(ctx, record); err != nil {
-			zap.L().Warn("save GB28181 alarm to smart_records failed",
-				zap.String("device_id", alarm.DeviceID), zap.Error(err))
-		}
+	if s.smartRecordRepo == nil {
+		return nil
+	}
+
+	if err := s.smartRecordRepo.Create(ctx, record); err != nil {
+		zap.L().Warn("save GB28181 alarm to smart_records failed",
+			zap.String("device_id", alarm.DeviceID), zap.Error(err))
+		return nil
+	}
+
+	// 入库成功后派发告警任务
+	if s.taskClient != nil {
+		s.enqueueAlarmDispatch(ctx, record, alarm)
 	}
 	return nil
 }

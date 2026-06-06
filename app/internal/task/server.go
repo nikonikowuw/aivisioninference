@@ -43,12 +43,13 @@ func RegisterPeriodicTasks(scheduler *asynq.Scheduler) {
 	// 每 5 分钟检查一次设备状态
 	scheduler.Register("*/5 * * * *", asynq.NewTask(TypeDeviceStatusCheck, nil))
 	// 存储清理任务由 StorageScheduler 动态管理，不在此注册
+	scheduler.Register("*/5 * * * *", asynq.NewTask(TypeAIVisionTaskPatrol, nil))
 }
 
 // NewMux 创建并返回一个新的 Asynq ServeMux，并在此 Mux 上注册所有任务处理 Handler
-func NewMux(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler, cronCleanupHandler *CronCleanupHandler, thresholdCleanupHandler *ThresholdCleanupHandler) *asynq.ServeMux {
+func NewMux(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler, cronCleanupHandler *CronCleanupHandler, thresholdCleanupHandler *ThresholdCleanupHandler, aiVisionTaskSvc *service.AIVisionTaskService) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
-	NewHandler(mailSvc, deviceStatusHandler).RegisterHandlers(mux)
+	NewHandler(mailSvc, deviceStatusHandler, aiVisionTaskSvc).RegisterHandlers(mux)
 	cronCleanupHandler.RegisterHandlers(mux)
 	thresholdCleanupHandler.RegisterHandlers(mux)
 	return mux

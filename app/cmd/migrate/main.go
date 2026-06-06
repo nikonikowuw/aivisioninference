@@ -485,6 +485,26 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "device-group:delete", Name: "删除分组", Path: "/api/v1/device-groups/*", Method: "DELETE"},
 					{Code: "device-group:view", Name: "查看分组", Path: "/api/v1/device-groups/*", Method: "GET"},
 				}},
+				// GB28181 菜单项
+				{Name: "GB28181设备", Code: "gb28181-devices", Path: "/gb28181/devices", Icon: "MdDeviceHub", Buttons: []buttonInfo{
+					{Code: "gb28181:list", Name: "设备列表", Path: "/api/v1/gb28181/devices", Method: "GET"},
+					{Code: "gb28181:view", Name: "设备详情", Path: "/api/v1/gb28181/devices/*", Method: "GET"},
+					{Code: "gb28181:edit", Name: "编辑设备", Path: "/api/v1/gb28181/devices/*", Method: "PUT"},
+					{Code: "gb28181:delete", Name: "删除设备", Path: "/api/v1/gb28181/devices/*", Method: "DELETE"},
+					{Code: "gb28181:catalog", Name: "触发目录查询", Path: "/api/v1/gb28181/devices/*/catalog", Method: "POST"},
+				}},
+				{Name: "GB28181通道", Code: "gb28181-channels", Path: "/gb28181/channels", Icon: "MdViewList", Buttons: []buttonInfo{
+					{Code: "gb28181-channel:list", Name: "通道列表", Path: "/api/v1/gb28181/devices/*/channels", Method: "GET"},
+				}},
+				{Name: "GB28181预览", Code: "gb28181-live", Path: "/gb28181/live", Icon: "MdOndemandVideo", Buttons: []buttonInfo{
+					{Code: "gb28181-live:start", Name: "启动预览", Path: "/api/v1/media/gb28181/live/start", Method: "POST"},
+					{Code: "gb28181-live:stop", Name: "停止预览", Path: "/api/v1/media/gb28181/live/stop", Method: "POST"},
+				}},
+				{Name: "GB28181回放", Code: "gb28181-playback", Path: "/gb28181/playback", Icon: "MdPlayCircleOutline", Buttons: []buttonInfo{
+					{Code: "gb28181-playback:start", Name: "启动回放", Path: "/api/v1/media/gb28181/playback/start", Method: "POST"},
+					{Code: "gb28181-playback:stop", Name: "停止回放", Path: "/api/v1/media/gb28181/playback/stop", Method: "POST"},
+					{Code: "gb28181-playback:control", Name: "回放控制", Path: "/api/v1/media/gb28181/playback/control", Method: "POST"},
+				}},
 			},
 		},
 		{
@@ -595,6 +615,11 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "feedback:batch-status", Name: "批量更新反馈状态", Path: "/api/v1/feedback/batch-status", Method: "PUT"},
 					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
 				}},
+				// 告警记录菜单
+				{Name: "告警记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive", Buttons: []buttonInfo{
+					{Code: "smart-records:view", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
+					{Code: "smart-records:export", Name: "导出告警记录", Path: "/api/v1/smart-records/export", Method: "GET"},
+				}},
 				{Name: "系统配置", Code: "system-config", Path: "/system/config", Icon: "MdSettings", Buttons: []buttonInfo{
 					// 运行状态 Tab
 					{Code: "system:status:view", Name: "查看运行状态", Path: "/api/v1/system/status/realtime", Method: "GET"},
@@ -624,9 +649,46 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "system:storage:edit", Name: "编辑存储配置", Path: "/api/v1/system/storage/config", Method: "PUT"},
 					{Code: "system:storage:cleanup-logs", Name: "查看清理日志", Path: "/api/v1/system/storage/cleanup-logs", Method: "GET"},
 					{Code: "system:storage:cleanup", Name: "手动触发清理", Path: "/api/v1/system/storage/cleanup/run", Method: "POST"},
+					// GB28181 配置 Tab
+					{Code: "system:gb28181:view", Name: "查看GB28181配置", Path: "/api/v1/system/gb28181/config", Method: "GET"},
 				}},
 			},
 		},
+	}
+}
+
+// defaultGB28181MenuList 返回 GB28181 相关子菜单定义。
+func defaultGB28181MenuList() []childMenuDef {
+	return []childMenuDef{
+		{Name: "GB28181设备", Code: "gb28181-devices", Path: "/gb28181/devices", Icon: "MdDeviceHub", Buttons: []buttonInfo{
+			{Code: "gb28181:list", Name: "设备列表", Path: "/api/v1/gb28181/devices", Method: "GET"},
+			{Code: "gb28181:view", Name: "设备详情", Path: "/api/v1/gb28181/devices/*", Method: "GET"},
+			{Code: "gb28181:edit", Name: "编辑设备", Path: "/api/v1/gb28181/devices/*", Method: "PUT"},
+			{Code: "gb28181:delete", Name: "删除设备", Path: "/api/v1/gb28181/devices/*", Method: "DELETE"},
+			{Code: "gb28181:catalog", Name: "触发目录查询", Path: "/api/v1/gb28181/devices/*/catalog", Method: "POST"},
+		}},
+		{Name: "GB28181通道", Code: "gb28181-channels", Path: "/gb28181/channels", Icon: "MdViewList", Buttons: []buttonInfo{
+			{Code: "gb28181-channel:list", Name: "通道列表", Path: "/api/v1/gb28181/devices/*/channels", Method: "GET"},
+		}},
+		{Name: "GB28181预览", Code: "gb28181-live", Path: "/gb28181/live", Icon: "MdOndemandVideo", Buttons: []buttonInfo{
+			{Code: "gb28181-live:start", Name: "启动预览", Path: "/api/v1/media/gb28181/live/start", Method: "POST"},
+			{Code: "gb28181-live:stop", Name: "停止预览", Path: "/api/v1/media/gb28181/live/stop", Method: "POST"},
+		}},
+		{Name: "GB28181回放", Code: "gb28181-playback", Path: "/gb28181/playback", Icon: "MdPlayCircleOutline", Buttons: []buttonInfo{
+			{Code: "gb28181-playback:start", Name: "启动回放", Path: "/api/v1/media/gb28181/playback/start", Method: "POST"},
+			{Code: "gb28181-playback:stop", Name: "停止回放", Path: "/api/v1/media/gb28181/playback/stop", Method: "POST"},
+			{Code: "gb28181-playback:control", Name: "回放控制", Path: "/api/v1/media/gb28181/playback/control", Method: "POST"},
+		}},
+	}
+}
+
+// defaultSmartRecordsMenuList 返回告警记录子菜单定义。
+func defaultSmartRecordsMenuList() []childMenuDef {
+	return []childMenuDef{
+		{Name: "告警记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive", Buttons: []buttonInfo{
+			{Code: "smart-records:view", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
+			{Code: "smart-records:export", Name: "导出告警记录", Path: "/api/v1/smart-records/export", Method: "GET"},
+		}},
 	}
 }
 

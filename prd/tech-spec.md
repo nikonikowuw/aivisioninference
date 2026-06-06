@@ -46,7 +46,7 @@ Hardware Backend: RK MPP / RKNN, DVPP / CANN, FFmpeg / ONNX Runtime
   - 管理设备、分组、算法包、任务、人员、智能记录和存储策略。
   - 内置或集成 GB28181 SIP 服务端，支持国标设备注册、心跳、目录同步和点播控制。
   - 作为 ZLM 客户端调用 ZLM HTTP API，接收 ZLM WebHook 回调，并向前端签发可播放 URL。
-  - 通过 UDS 向 C++ 发送控制命令，并接收结构化推理结果。
+  - 通过 TCP 向 C++ 发送控制命令，并接收结构化推理结果。
   - 将事件写入数据库、推送前端 WebSocket、触发 Webhook 上报。
 
 - **C++ Inference Engine**:
@@ -97,20 +97,20 @@ Hardware Backend: RK MPP / RKNN, DVPP / CANN, FFmpeg / ONNX Runtime
 - **Token 刷新策略**: 前端应在 JWT Token 即将过期前（如提前 5 分钟）自动调用刷新接口获取新 Token，避免用户在填写长表单（如任务配置）时因过期被强制登出。
 - **进程级 OOM 恢复**: 若 C++ 推理引擎因模型内存泄漏导致 OOM 被系统 Kill，Go 端进程管理模块应在 3 秒内自动拉起新的 C++ 进程，并自动重新下发所有处于 `running` 状态的任务，实现业务自愈。
 
-### Protobuf Message Definition & IPC
+### FlatBuffers Message Definition & IPC
 
-Go 与 C++ 之间需要保证强类型、低延迟和流式双向通信。为避免嵌入式设备（如 RK3576 / Ascend）引入庞大的 gRPC 依赖，并实现极客级别的零拷贝，系统采用 **Raw UDS (Unix Domain Socket) + Length-Prefixed Protobuf + SCM_RIGHTS (FD 传递)** 的通信架构。
+Go 与 C++ 之间需要保证强类型、低延迟和流式双向通信。为避免嵌入式设备（如 RK3576 / Ascend）引入庞大的 gRPC 依赖，并支持跨机分布式部署，系统采用 **Raw TCP Socket + Length-Prefixed FlatBuffers** 的轻量级集群通信架构。
 
 #### 1. 通信通道分离
 
 1. **Control Channel (控制通道)**: 处理 `StartTask`、`StopTask`、`Heartbeat` 等控制信令。
-2. **Data/Event Channel (数据通道)**: C++ 通过 UDS 持续向 Go 推送结构化的推理结果 (`InferenceResult`) 和系统事件 (`SystemEvent`)。
-3. **Zero-Copy Shared Memory (单图零拷贝)**: 针对单图推理，Go 端通过 `memfd_create` 创建匿名内存写入图片，通过 UDS 外带数据 (SCM_RIGHTS) 传递 File Descriptor (FD) 给 C++。C++ 直接 `mmap` 读取内存进行推理，完全消除 Socket 缓冲区拷贝。
+2. **Data/Event Channel (数据通道)**: C++ 通过 TCP 持续向 Go 推送结构化的推理结果 (`InferenceResult`) 和系统事件 (`SystemEvent`)。
+3. **单图 API 传输**: 针对单图推理，Go 端直接将图像编码并封装在 FlatBuffers 消息中通过 TCP 传给 C++。由于不需要传递文件描述符 (FD)，系统完美支持 Go 和 C++ 跑在不同的物理机上。
 
 #### 3. 协议帧格式 (Wire Format)
 
-数据在 UDS 字节流中的格式为：
-`[ 4 Bytes Length (Big-Endian) ] + [ Protobuf 二进制数据 (IpcEnvelope) ]`
+数据在 TCP 字节流中的格式为：
+`[ 4 Bytes Length (Big-Endian) ] + [ FlatBuffers 二进制数据 (IpcEnvelope) ]`
 
 #### 4. 核心 Protobuf 定义 (`inference.proto`)
 
@@ -230,7 +230,7 @@ message SystemEvent {
 
 - **单图推理共享内存**: Go 端通过 `memfd_create(MFD_CLOEXEC)` 创建匿名内存，利用 `unix.Sendmsg` 发送带有 `SCM_RIGHTS` 标志的控制报文。C++ 端通过 `recvmsg` 提取 FD，利用 `mmap(PROT_READ, MAP_PRIVATE)` 直接读取数据。
 - **FD 泄漏监控**: 由于 FD 指向的是匿名内存，C++ 端如果发生未捕获异常或忘记 `close(fd)`，将导致严重的物理内存泄漏（OOM）。C++ 侧必须使用 RAII 模式严格管理 `fd` 的 `close` 与内存的 `munmap`。
-- **粘包处理**: UDS 面向字节流，C++ 端读取时必须先严格 `recv` 4 字节 Header，解析出 Protobuf payload 长度，再循环读取直至满帧，防止 TCP 粘包/半包问题。注意 FD (辅助数据) 通常仅依附在携带帧起始数据的第一个报文中。
+- **粘包处理**: TCP 面向字节流，C++ 和 Go 端读取时必须先严格 `recv` 4 字节 Header，解析出 FlatBuffers payload 长度，再循环读取直至满帧，防止 TCP 粘包/半包问题。
 - **媒体流架构**: RTSP/GB28181 流的字节不通过 Go 端转发，而是由 C++ 推理引擎内嵌的 client 直接到媒体源或内部 ZLM 拉流，彻底实现控制面与数据面分离。
 
 ### ROI, MARK & LINE Configuration
@@ -542,6 +542,11 @@ C ABI 约束：
 - `destroy_detector` 销毁 `NikoNikoDetector` 实例并释放模型、显存/NPU 资源、线程和句柄。
 - C++ 推理服务必须通过 `dlopen` / `dlsym` 加载上述 C ABI 符号，不直接依赖 C++ 类 ABI。
 - 算法内部异常必须在 C ABI 边界内捕获，转换为明确错误结果或空指针返回，不得让异常跨 `.so` 边界传播。
+- **架构约束**：废除多进程沙箱，采用**单进程多线程极简架构**加载 `.so` 库。
+- **质量左移（CI/CD 卡点）**：所有自研算法包必须在 CI/CD 流水线中通过开启 Sanitizers (ASan/LSan/TSan/UBSan) 的自动化测试。重点拦截：
+  - 内存泄漏（`destroy_detector` 返回后仍有未释放内存）。
+  - 野线程残留（算法后台线程未 `join` 即退出）。
+  - 内存越界与未定义行为。
 
 #### Upload Self-check
 
@@ -868,7 +873,7 @@ C++ 算法包只返回核心推理结果数组。若模型输出为类别索引�
   - 算法动态库运行在 C++ 推理进程内，需通过进程级隔离降低崩溃对 Go 管理端影响。
   - C++ 推理进程异常退出后，Go 端应记录错误并自动重启 C++ 进程。
   - **双向心跳监控 (Heartbeat)**：Go 与 C++ 之间必须实现轻量级 Ping-Pong 心跳协议。若 Go 端连续超时未收到 C++ 的心跳响应，需判定 C++ 进程死锁或假死，应主动触发 Kill 操作并执行崩溃恢复流程。
-  - Go 端维护任务状态持久化视图，C++ 进程重启后，Go 端自动将当前 `running` 状态的任务通过 UDS 重新下发 `StartStream` 命令，完成任务自动恢复。
+  - Go 端维护任务状态持久化视图，C++ 节点宕机重启后，Go 端自动将当前调度到该节点且为 `running` 状态的任务通过 TCP 重新下发 `StartStream` 命令，完成任务自动恢复。
   - C++ 进程崩溃时正在推理中的结果直接丢失，不补偿重推，由业务侧根据断流感知自行处理。
 - **Internationalization**:
   - 返回给前端展示的错误消息必须支持 i18n，不直接暴露底层原始错误。
@@ -883,7 +888,7 @@ C++ 算法包只返回核心推理结果数组。若模型输出为类别索引�
 
 | 异常组件 | 触发边界/场景 | 爆炸半径与现象 | 系统自愈与降级策略 |
 | :--- | :--- | :--- | :--- |
-| **C++ 推理引擎崩溃** | 某算法 `.so` 内存泄漏 / 数组越界导致 Segfault | 所有正在运行的 AI 任务中断，但不影响 Go 管理端和流媒体播放。 | 1. Go 端探活（如 UDS ping 超时）检测到引擎下线；<br>2. Go 端自动拉起新的 C++ 引擎进程（最大重试次数配置，如防雪崩 3次/分钟）；<br>3. Go 端重新下发所有 `running` 状态的任务配置。 |
+| **C++ 推理引擎崩溃** | 某算法 `.so` 内存泄漏 / 数组越界导致 Segfault | 所有正在运行的 AI 任务中断，但不影响 Go 管理端和流媒体播放。 | 1. Go 端探活（如 TCP ping 超时）检测到边缘推理节点下线；<br>2. 系统告警，或依赖外部守护进程拉起新的 C++ 引擎；<br>3. 节点重连后，Go 端重新下发分配给该节点的所有 `running` 状态任务。 |
 | **ZLMediaKit 崩溃** | 并发过载 / FLV 封装库异常导致进程退出 | 实时预览画面卡住，RTSP 拉流中断。 | 1. 守护进程（Supervisor / systemd / 容器探测）秒级拉起 ZLM；<br>2. Go 端接收到 ZLM 重启事件后，自动将挂载在 ZLM 的流及相关任务置为重连状态。 |
 | **Go 管理端重启** | 升级部署 / OOM 被 kill / 系统断电重启 | API 无法访问，GB28181 信令断开。 | 1. Go 重启后，**必须从数据库恢复状态，不得丢失已配置任务**；<br>2. 重新建立与 ZLM 的通信，检测丢失的流；<br>3. 向 C++ 推理引擎全量下发任务状态（或如果 C++ 也重启，则重新拉起全链路）。 |
 | **算法动态库 (`.so`) 卡死** | 模型 `infer()` 死循环 / 厂商 Runtime (如 RKNN) GPU 驱动挂起 | 某个任务长达数秒没有推理结果返回（不 Crash 但 Hung）。 | C++ 引擎内部应设置单帧推理 Watchdog。若 `infer()` 调用阻塞超过阈值（如 `2000ms`），强制终止该线程或该任务句柄，并向 Go 上报 `TaskHung` 异常事件，释放 NPU 资源。 |

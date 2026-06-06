@@ -29,9 +29,9 @@ graph TD
         ZLM[ZLMediaKit]
     end
 
-    subgraph 数据面 (C++ 推理引擎)
+    subgraph 数据面 (分布式 C++ 推理节点 1..N)
         CPPEngine[C++ Inference Engine]
-        UDS[UDS IPC / 共享内存]
+        TCP[Raw TCP Socket IPC]
         WorkerPool[Stream Worker Pool]
         Decoder[HW Decoder Adapter]
         Runtime[NPU Runtime Adapter]
@@ -57,9 +57,9 @@ graph TD
     SIPServer <--> ZLM
     DeviceMgr --> ZLM : HTTP API / WebHook
 
-    TaskSched <--> UDS : Protobuf 信令
-    UDS <--> CPPEngine
-    RuleEngine <--> UDS : JSON 结果接收
+    TaskSched <--> TCP : FlatBuffers 信令
+    TCP <--> CPPEngine
+    RuleEngine <--> TCP : FlatBuffers 结果接收
 
     ZLM --> WorkerPool : RTSP/RTP 流
     WorkerPool --> Decoder
@@ -97,10 +97,10 @@ graph TD
 
 Go 与 C++ 作为独立进程运行，以保证 C++ 算法崩溃时不会导致整个管理节点宕机。
 
-- **控制信令与结果回传**：采用 **Raw UDS (Unix Domain Socket) + Length-Prefixed Protobuf** 进行双向通信。控制指令（启动、停止）和心跳采用 Protobuf 序列化，算法推理结果采用 JSON 格式以便 Go 端灵活解析。
+- **控制信令与结果回传**：采用 **Raw TCP Socket + Length-Prefixed FlatBuffers** 进行双向通信。控制指令（启动、停止）、心跳和算法推理结果全部采用 FlatBuffers 序列化，支持跨机房或跨局域网调度多台 C++ 边缘节点。
 - **单图零拷贝 (Zero-Copy for Images)**：
   - Go 端通过 `memfd_create` 创建匿名共享内存并写入图片数据。
-  - 通过 UDS 的外带数据 (`SCM_RIGHTS`) 将 File Descriptor (FD) 传递给 C++。
+  - 采用极简设计，取消 UDS 的文件描述符传递，单图推理直接将图像的 Base64 编码封装入 TCP 载荷。
   - C++ 端 `mmap` 该 FD 直接读取内存进行推理，消除了进程间的内存拷贝开销。
   - C++ 侧采用 RAII 模式严格管理 FD 和 mmap 内存的释放，防止 OOM。
 
@@ -112,8 +112,8 @@ Go 与 C++ 作为独立进程运行，以保证 C++ 算法崩溃时不会导致�
   必须包含 `algo_meta.yaml`（元数据）、`nikoniko_detector.so`（入口动态库）、`testimage.jpg`（自检图）、`label_map.json`（类别映射）。
 - **C ABI 隔离**：
   C++ 不直接暴露类给主程序，而是导出 `create_detector`、`detector_infer`、`detector_free_result`、`destroy_detector` 四个纯 C 函数。主程序通过 `dlopen` 动态加载，避免了 C++ ABI 兼容性问题。
-- **上传即自检**：
-  算法上传后，Go 端通过 UDS 触发 C++ 创建沙箱实例进行一次完整推理。只有完成加载、推理且返回 JSON 格式符合 Schema 的算法版本才能进入可用状态。
+- **极致单进程多线程与自检机制**：
+  废弃了复杂的跨进程沙箱隔离，改为采用**单进程多线程**的高性能极简架构。算法必须在 CI/CD 流水线中通过 ASan/LSan/TSan 的自动化拦截左移测试。算法上传后，Go 端通过 TCP 触发某个 C++ 节点主进程直接 `dlopen` 加载并进行一次完整推理自检。只有完成加载、推理且返回 JSON 格式符合 Schema 的算法版本才能进入可用状态。
 - **热更新与引用计数**：
   不同算法版本解压至独立目录，各自持有 `dlopen` 句柄。新版本发布后，新增任务使用新版本；旧版本受引用计数保护，直到最后一个关联任务停止时才执行 `dlclose`，实现零停机热更新。
 
@@ -121,7 +121,7 @@ Go 与 C++ 作为独立进程运行，以保证 C++ 算法崩溃时不会导致�
 
 为了避免后端慢 IO（存图、写库、网络推送）阻塞前置推理流，系统设计了异步数据流水线：
 
-`Source (C++ UDS) -> Dispatcher (WebSocket) -> Filter (规则过滤) -> Deduplicator (去重) -> Transformer -> Sink (Webhook/DB)`
+`Source (C++ TCP) -> Dispatcher (WebSocket) -> Filter (规则过滤) -> Deduplicator (去重) -> Transformer -> Sink (Webhook/DB)`
 
 1. **Source**: C++ 吐出的原始 JSON 推理结果，附加时间戳和任务元数据。
 2. **Dispatcher**: 无论是否产生告警，直接旁路分发一份数据至 WebSocket，供前端绘制 AI Overlay。

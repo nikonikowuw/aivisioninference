@@ -32,7 +32,7 @@
 | LINE | 越界线配置，用于越线、方向判断或区域越界检测。 |
 | Algorithm Package | 算法包，以压缩包形式交付和上传，解压后需包含算法代码/运行库、模型文件、`algo_meta.yaml`、`testimage.jpg`、`label_map.json` 等标准文件。 |
 | category_code | 平台统一类别编码，必须为 integer 类型五位数字。 |
-| UDS | Unix Domain Socket，用于 Go 管理端与 C++ 推理引擎之间的本机 IPC 通信。 |
+| UDS | *[已废弃]* Unix Domain Socket。系统现已全面升级为 **Raw TCP Socket**，支持跨机器的分布式部署。 |
 | pgvector | PostgreSQL 向量插件，用于存储和检索人脸 Embedding。 |
 
 ---
@@ -116,7 +116,7 @@ AIVisionInference 旨在构建一套高性能、可扩展、可运维的边缘�
 
 **对 AIVisionInference 的启示**
 
-- 必须强化“算法包标准化交付 + 热更新 + 沙箱隔离”的开放能力，区别于闭环算法平台。
+- 必须强化“算法包标准化交付 + 自动化测试卡点 + 不停机热更新”的能力，打造高性能闭环算法平台。
 - 必须把低成本 RK3576 单机多路并发、HTTP-FLV 预览、GB28181/RTSP 同时接入作为 MVP 硬指标。
 - 后续可参考其多模态/零样本方向，但 MVP 优先保障稳定、低延迟和可运维。
 
@@ -160,11 +160,11 @@ AIVisionInference 旨在构建一套高性能、可扩展、可运维的边缘�
 | 维度 | 旷视 MEGVII | 英特灵达 Intellindust | AIVisionInference 机会点 |
 |---|---|---|---|
 | 产品形态 | 边缘分析盒 + AIoT 平台 + 城市 AI 中台 | 边缘一体机 + AI 视频平台 + 行业方案 | 以轻量边缘推理系统切入，支持私有化和低成本硬件部署。 |
-| 算法生态 | 自研算法强，算法数量多，平台闭环明显 | 行业算法丰富，强调定制和软硬件一体 | 建立开放算法包规范，支持第三方 `.zip/.tar.gz` 算法包、自检、热更新和沙箱隔离。 |
+| 算法生态 | 自研算法强，算法数量多，平台闭环明显 | 行业算法丰富，强调定制和软硬件一体 | 算法闭环自研，支持 `.zip/.tar.gz` 标准算法包、CI/CD 自动化拦截与不停机热更新。 |
 | 视频接入 | 支持视频资源接入与平台化管理 | 支持多路视频接入和智能分析 | MVP 同时支持 RTSP 与 GB28181，并通过 ZLM 统一输出 HTTP-FLV。 |
 | 边缘性能 | 高端产品公开强调较高算力和多路分析 | 一体机公开强调多路接入、低功耗和易维护 | 明确 RK3576 4GB + RKNN Runtime 2.3 的性能基线和 12 路 1080P 指标。 |
 | 开放性 | 更偏完整解决方案和自有平台生态 | 更偏行业整机方案与项目交付 | 提供 Go API、UDS 协议、标准 Output Schema、ROI/MARK/LINE 配置和可扩展算法包。 |
-| 运维能力 | 平台化运维能力成熟 | 部署和远程升级能力突出 | 强化任务状态、心跳恢复、算法沙箱、存储清理、Webhook 和审计。 |
+| 运维能力 | 平台化运维能力成熟 | 部署和远程升级能力突出 | 强化任务状态、心跳恢复、异常自动拉起、存储清理、Webhook 和审计。 |
 | 差异化方向 | 大模型、零样本、多场景治理 | 暗光成像、行业算法、边缘一体机 | 聚焦开放、轻量、低成本、可控、可二次开发的边缘推理底座。 |
 
 #### 4.4.4 产品定位结论
@@ -178,7 +178,7 @@ AIVisionInference 不直接与旷视、英特灵达的大型完整方案做全�
 1. **开放算法包**：压缩包交付、标准目录、自检、类别映射、动态参数 Schema、版本管理和热更新。
 2. **低成本硬件适配**：以 RK3576 4GB 设备作为明确 MVP 性能目标。
 3. **控制面 / 数据面分离**：Go 管理端负责业务编排，C++ 推理引擎负责高性能推理。
-4. **算法沙箱隔离**：降低第三方 `.so` 崩溃对主流程影响。
+4. **极致单进程多线程**：废弃低效 IPC 多进程沙箱，通过 CI/CD 左移拦截劣质代码，实现性能与资源占用的最优化。
 5. **标准区域配置**：ROI / MARK / LINE 统一归一化坐标和任务下发协议。
 6. **浏览器预览友好**：通过 ZLM 默认 HTTP-FLV 输出，前端 Canvas Overlay 展示结果。
 7. **可二次开发**：API、Webhook、Output Schema 和算法包规范明确，便于集成第三方业务系统。
@@ -841,7 +841,7 @@ graph TD
     B --> C[解压并校验目录结构]
     C --> D{必需文件存在?}
     D -->|否| E[拒绝上传, 删除临时文件]
-    D -->|是| F[启动自检沙箱进程]
+    D -->|是| F[主进程直接加载 .so 进行自检]
     F --> G[加载 .so, 读取元数据, 试运行]
     G --> H{自检通过?}
     H -->|否| E
@@ -2302,10 +2302,10 @@ Webhook 请求体：固定包含 `deviceSn`、`cameraCode`、`captureTime`、`sn
 
 ### 7.2 稳定性需求
 
-- C++ 推理进程需要拆分为主控进程和算法沙箱进程。
-- 算法动态库在算法沙箱进程中加载和执行，降低第三方算法崩溃、死锁或资源泄漏对主控进程和 Go 管理端的影响。
-- 算法沙箱进程崩溃后，C++ 主控进程和 Go 端记录错误并按任务状态执行恢复。
-- C++ 推理主控进程崩溃后，Go 端记录错误并自动重启。
+- 采用**单进程多线程**的高性能极简架构，彻底废除跨进程沙箱。
+- **CI/CD 左移拦截**：由于算法生态为闭环自研，算法动态库 (`.so`) 必须在构建阶段通过严格的 Sanitizers (ASan/LSan/TSan) 自动化流水线测试，拦截内存泄漏和野线程残留，方可打包上传。
+- 算法动态库 (`.so`) 在主进程中直接 `dlopen` 加载运行。通过统一 C ABI 合约、严格的引用计数控制 `dlclose`，实现不停机热更新。
+- C++ 推理主进程崩溃后，Go 端记录错误并自动重启。
 - Go 与 C++ 必须实现 Ping-Pong 心跳。
 - Go 连续超时未收到 C++ 心跳响应时，判定 C++ 进程死锁或假死，主动 Kill 并执行恢复流程。
 - Go 持久化任务运行态，C++ 重启后自动恢复当前 `running` 任务。
@@ -2423,32 +2423,33 @@ sequenceDiagram
 | C++ Engine IPC | Go 与 C++ 通过 UDS 通信，只传递轻量控制协议和 JSON 结果。 |
 | Third-party Webhook | 告警事件 POST 推送，支持自定义头、指数退避和幂等去重。 |
 
-### 8.3 IPC 与共享内存设计 (SHM-based Zero-copy)
+### 8.3 IPC 与单图零拷贝设计 (SHM-based Zero-copy)
 
-#### 功能流程：零拷贝内存交互
+#### 功能流程：控制信令与数据分离交互
 
 ```mermaid
 sequenceDiagram
     participant Go as Go Management Plane
     participant SHM as Shared Memory Pool
     participant Cpp as C++ Inference Engine
+    participant ZLM as ZLMediaKit
 
-    Go->>SHM: 申请内存并写入解码帧数据 (YUV/RGB)
-    Go->>Cpp: 发送 UDS 控制信令 (FrameMeta + SHM fd)
-    Cpp->>SHM: 通过 fd 读取对应内存段
-    Cpp->>Cpp: NPU 推理 & 坐标映射处理
-    Cpp->>Go: 发送 UDS 结果 (JSON 推理结果)
-    Go->>SHM: 释放该帧内存片段
+    Go->>Cpp: 发送 TCP 控制信令 (开启任务/启动流)
+    Cpp->>ZLM: 内部直连拉流 (RTSP/GB28181)
+    Cpp->>Cpp: 硬件解码 (VPU) & NPU 推理 (无 IPC 开销)
+    Cpp->>Go: 发送 TCP 结果 (FlatBuffers/JSON 推理结果)
+    
+    %% 单图API推理的场景
+    Go-->>Cpp: [仅单图API推理] 发送包含 Base64 图片的 TCP 帧
+    Cpp-->>Cpp: [仅单图API推理] 提取数据并推理
 ```
 
-- **控制面通信**：Go 与 C++ 通过 UDS (Unix Domain Socket) 进行双向信令交互。
-- **数据面通信 (零拷贝实现)**：
-  - 系统创建共享内存池 (Shared Memory Pool)，由 Go 写入解码后的 YUV/RGB 像素数据，C++ 直接读取内存指针进行推理。
-  - 任务初始化时，Go 后端通过 UDS 传递共享内存的句柄 (file descriptor) 给 C++。
-  - 每个视频帧配备一个 `FrameMeta` 头部，包含 `frame_id`、`timestamp`、`width`、`height`、`stride` 等关键信息。
-  - 这种方案将单机环境下的视频帧传递延迟降低至微秒级，且不消耗额外的 CPU 拷贝开销。
-- **信令封装**：采用 Protobuf Envelope + JSON Payload。控制命令使用 Protobuf，算法参数和推理结果使用 JSON 字符串。
-- **同步机制**：使用信号量 (Semaphore) 或原子变量协调读写锁，确保数据一致性。
+- **控制面通信**：Go 与 C++ 通过 Raw TCP Socket 进行双向信令交互，包含心跳、配置更新与结果上报。这使得 C++ 推理节点可被独立部署到多台边缘设备上，形成 `1个管理大脑 + N个推理节点` 的分布式集群。
+- **数据面通信 (视频流)**：
+  - 视频拉流、解码与推理**全部在 C++ 主进程内闭环完成**，无需经过 Go 端或 IPC 机制中转视频帧。极大降低了系统复杂度和 CPU 开销。
+- **数据面通信 (单图推理与上传自检)**：
+  - 对于业务端发起的单张图片抓拍推理，Go 端直接将图片转为 Base64 或封装在 FlatBuffers 中通过 TCP 发送给 C++，彻底摆脱 UDS 句柄传递对同一台宿主机的绑定限制。
+- **信令封装**：采用 FlatBuffers Envelope + JSON Payload。控制命令使用 FlatBuffers，算法参数和推理结果使用 JSON 字符串。
 
 ### 8.4 算法包标准
 
@@ -2583,7 +2584,7 @@ MVP 阶段由平台内置维护 `category_code` 预定义类别表，前端展�
 
 ```mermaid
 graph TD
-    A[C++ 推理端] -->|1. Raw JSON 结果通过 UDS 发送| B[Go 接收层 Source]
+    A[分布式 C++ 推理端] -->|1. Raw FlatBuffers 结果通过 TCP 发送| B[Go 接收层 Source]
     B -->|2. 附加 Timestamp, DeviceID, TaskID| C[规则分发器 Dispatcher]
     C -->|3. 直接推送实时画面 Overlay| D[WebSocket Sink]
     C -->|进入告警判断流水线| E[过滤器执行器 Filter]
@@ -2601,7 +2602,7 @@ graph TD
 
 **流程说明**:
 
-1. **接收层**: Go 进程从 UDS 获取 C++ 的推理结果，附加设备元数据。
+1. **接收层**: Go 进程从 TCP 连接获取各 C++ 节点的推理结果，附加设备元数据。
 2. **规则分发器**: 数据分叉。一路直接推送到 WebSocket 供前端画框；另一路进入规则过滤链。
 3. **过滤器执行器**: 在内存中判断算法目标是否在业务布防规则内。
 4. **去重器**: 根据设定的防抖窗口，过滤高频重复告警。
@@ -2660,7 +2661,7 @@ graph TD
 - **并发控制**：实现 GB28181 点播任务启动队列，限制任务启动频率（如每秒最多启动 2 个点播）。
 - **重连退避**：实现流断开后的指数退避重连策略（5s, 10s, 20s...），防止频繁 Invite 导致信令栈崩溃。
 - 完成 GB28181 基础能力：注册、心跳、目录查询和 Invite 点播。
-- C++ 推理引擎完成 UDS 通信、ZLM 本地流拉取、FFmpeg/OpenCV 软解和 Mock 算法调用。
+- C++ 推理引擎完成 TCP 通信、ZLM 本地流拉取、FFmpeg/OpenCV 软解和 Mock 算法调用。
 - 跑通 `Device Ingest -> ZLM -> C++ Decode -> Infer -> Result -> Go Event Router -> Preview Overlay` 主链路。
 - 管理后台完成设备管理、算法包管理、任务配置、实时预览和基础智能记录页面。
 
@@ -2729,7 +2730,7 @@ graph TD
 | 人脸检索 Top-K | 默认返回 Top-K `5`。 |
 | 智能记录保留策略 | 默认只保留当天数据。 |
 | 前端实时播放默认协议 | 默认优先使用 HTTP-FLV。 |
-| C++ 推理进程架构 | 需要拆分为主控进程和算法沙箱进程。 |
+| C++ 推理进程架构 | 采用单进程多线程架构，废弃跨进程沙箱隔离。 |
 
 ### 12.2 仍待确认问题
 

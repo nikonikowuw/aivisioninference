@@ -18,21 +18,38 @@ type inferTaskRepo interface {
 	UpdateStatus(ctx context.Context, id, status, errorCode, errorMessage string) error
 }
 
+// LicenseChecker 授权校验抽象接口（供 InferTaskService 使用）
+type LicenseChecker interface {
+	CheckAlgorithmAuth(ctx context.Context, algoName string) error
+	CheckStreamLimit(ctx context.Context, currentRunningStreams int) error
+}
+
 // InferTaskService 推理任务管理
 type InferTaskService struct {
 	repo          inferTaskRepo
 	streamManager *StreamManager
+	licenseChecker LicenseChecker // 可选，为 nil 时跳过授权校验
 }
 
-func NewInferTaskService(repo inferTaskRepo, streamManager *StreamManager) *InferTaskService {
+func NewInferTaskService(repo inferTaskRepo, streamManager *StreamManager, licenseChecker LicenseChecker) *InferTaskService {
 	return &InferTaskService{
 		repo:          repo,
 		streamManager: streamManager,
+		licenseChecker: licenseChecker,
 	}
 }
 
 // Create 创建推理任务并启动流
-func (s *InferTaskService) Create(ctx context.Context, taskName, deviceID, streamURL string) (*model.InferTask, error) {
+func (s *InferTaskService) Create(ctx context.Context, taskName, deviceID, streamURL string, algorithmNames []string) (*model.InferTask, error) {
+	// 0. 授权校验（如果 LicenseChecker 已注入）
+	if s.licenseChecker != nil {
+		for _, algoName := range algorithmNames {
+			if err := s.licenseChecker.CheckAlgorithmAuth(ctx, algoName); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// 1. 检查设备是否已有活跃推理任务
 	existing, _ := s.repo.FindByDeviceID(ctx, deviceID)
 	if existing != nil && existing.Status == model.InferTaskStatusRunning {

@@ -59,9 +59,9 @@ type Config struct {
 	GB28181PlaybackMaxSec int           `yaml:"gb28181_playback_max_sec" mapstructure:"gb28181_playback_max_sec"`
 	GB28181StreamTimeout  time.Duration `yaml:"gb28181_stream_timeout" mapstructure:"gb28181_stream_timeout"`
 	// ZLM 端口配置（可被 docker 端口映射覆盖）
-	ZLMRTMPPort   int    `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
-	ZLMRTSPPort   int    `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
-	ZLMHTTPPort   int    `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
+	ZLMRTMPPort int `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
+	ZLMRTSPPort int `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
+	ZLMHTTPPort int `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
 	// ZLM 实际对外 IP（设备推流目标地址，默认从 ZLMAPIURL 解析）
 	ZLMExternalIP string `yaml:"zlm_external_ip" mapstructure:"zlm_external_ip"`
 }
@@ -212,6 +212,15 @@ func (r *Router) setupRoutes() {
 		tasks.GET("/:id", middleware.RBAC(rbacCache, r.db), taskHandler.GetByID)
 		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
 	}
+
+	// AIVisionTasks
+	RegisterAIVisionTaskRoutes(authorized, deps.AIVisionTaskHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
+
+	// AI Time Schedules (reusable time configurations for AI tasks)
+	RegisterAITimeScheduleRoutes(authorized, deps.AITimeScheduleHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
+
+	// Algorithm packages (read-only for AI task form selection)
+	RegisterAlgorithmPackageReadRoutes(authorized, r.db, middleware.RBAC(rbacCache, r.db))
 
 	// System brand configuration
 	brandHandler := deps.BrandHandler
@@ -367,5 +376,15 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	cronCleanupHandler := task.NewCronCleanupHandler(storageSvc)
 	thresholdCleanupHandler := task.NewThresholdCleanupHandler(storageSvc)
 
-	return task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler)
+	// Since we are wiring up AIVisionTaskService manually here for the background worker:
+	aiTaskRepo := repository.NewAIVisionTaskRepository(db)
+	aiScheduleRepo := repository.NewAITimeScheduleRepository(db)
+	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
+	mediaStreamRepo := repository.NewMediaStreamRepository(db)
+	streamManager := provideStreamManager(deviceRepo, mediaStreamRepo)
+	// 由于 Asynq worker 自身消费任务队列，这里传入 nil taskClient 避免循环依赖（worker 内的 SIPService 不需要再派发任务）。
+	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, zlmClient, streamManager, cfg, nil)
+	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, sipSvc, streamManager)
+
+	return task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 }

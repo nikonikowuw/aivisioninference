@@ -22,6 +22,9 @@ export const menu = {
   "mail-config": "邮件配置",
   "feedback": "用户反馈",
   "system-config": "系统配置",
+  "aivision": "AI视觉推理",
+  "ai-time-schedules": "时间配置",
+  "aivisiontasks": "推理任务",
 } as const;
 
 export default menu;

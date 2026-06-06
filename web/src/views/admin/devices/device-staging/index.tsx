@@ -269,14 +269,13 @@ export default function DeviceStaging() {
     onDetailOpen();
   };
 
-  const { pageIds, selectedOnPage, isAllSelected, isIndeterminate } = useMemo(() => {
+  const { pageIds, isAllSelected, isIndeterminate } = useMemo(() => {
     const ids = devices.map((d) => d.id);
-    const selected = ids.filter((id) => selectedIds.includes(id));
+    const selectedCount = ids.filter((id) => selectedIds.includes(id)).length;
     return {
       pageIds: ids,
-      selectedOnPage: selected,
-      isAllSelected: ids.length > 0 && selected.length === ids.length,
-      isIndeterminate: selected.length > 0 && selected.length < ids.length,
+      isAllSelected: ids.length > 0 && selectedCount === ids.length,
+      isIndeterminate: selectedCount > 0 && selectedCount < ids.length,
     };
   }, [devices, selectedIds]);
 
@@ -492,8 +491,8 @@ export default function DeviceStaging() {
                 total={total}
                 page={page}
                 pageSize={pageSize}
-                onChangePage={changePage}
-                onChangePageSize={changePageSize}
+                onChange={changePage}
+                onPageSizeChange={changePageSize}
               />
             </>
           )}

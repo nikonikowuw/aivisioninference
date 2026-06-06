@@ -8,6 +8,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from 'contexts/AuthContext';
+import AIVisionTasks from 'views/admin/ai-tasks';
+import AITimeSchedules from 'views/admin/ai-time-schedules';
 import {
   generateRoutesFromMenus,
   generateSidebarRoutesFromMenus,
@@ -66,10 +68,6 @@ export default function Dashboard(props: { [x: string]: any }) {
     document.documentElement.dir = 'ltr';
   }, []);
 
-  const getRoute = () => {
-    return location.pathname !== '/admin/full-screen-maps';
-  };
-
   const { onOpen } = useDisclosure();
 
   const sidebarWidth = collapsed ? '80px' : '260px';
@@ -110,26 +108,32 @@ export default function Dashboard(props: { [x: string]: any }) {
             </Box>
           </Portal>
 
-          {getRoute() && (
+          {location.pathname !== '/admin/full-screen-maps' && (
             <Box
               mx='auto'
               p={{ base: '20px', md: '30px' }}
               pe='20px'
               minH='100vh'
               pt='50px'>
-              {dynamicRoutes.length === 0 ? (
-                <Text color={noAccessColor} textAlign="center" mt="40px">
-                  {t('noAccess')}
-                </Text>
-              ) : (
-                <Routes>
-                  {dynamicRoutes}
-                  <Route
-                    path='/'
-                    element={<Navigate to='/admin/default' replace />}
-                  />
-                </Routes>
-              )}
+              <Routes>
+                {dynamicRoutes}
+                {/* AI 任务页兜底路由：避免菜单缓存/权限未刷新时直达 /admin/ai-tasks 出现空白 */}
+                <Route path='ai-tasks' element={<AIVisionTasks />} />
+                {/* AI 时间配置兜底路由 */}
+                <Route path='ai-time-schedules' element={<AITimeSchedules />} />
+                <Route
+                  path='/'
+                  element={<Navigate to='/admin/default' replace />}
+                />
+                <Route
+                  path='*'
+                  element={(
+                    <Text color={noAccessColor} textAlign="center" mt="40px">
+                      {t('noAccess')}
+                    </Text>
+                  )}
+                />
+              </Routes>
             </Box>
           )}
         </Box>

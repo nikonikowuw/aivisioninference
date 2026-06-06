@@ -18,19 +18,22 @@ const (
 	TypeEmailDelivery = "email:delivery" // 邮件投递任务
 	TypeEmailSync     = "email:sync"     // IMAP 邮件同步任务
 	TypeDataExport    = "data:export"    // 数据导出任务
+	TypeAIVisionTaskPatrol = "aivisiontask:patrol" // AI 视觉任务巡检
 )
 
 // Handler 包含了后台异步任务处理所需的依赖项
 type Handler struct {
 	mailSvc           *service.MailService        // 邮件服务依赖
 	deviceStatusHandler *DeviceStatusHandler // 设备状态检查处理器
+	aiVisionTaskSvc   *service.AIVisionTaskService
 }
 
 // NewHandler 创建并返回一个任务处理 Handler 实例
-func NewHandler(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler) *Handler {
+func NewHandler(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler, aiVisionTaskSvc *service.AIVisionTaskService) *Handler {
 	return &Handler{
 		mailSvc:           mailSvc,
 		deviceStatusHandler: deviceStatusHandler,
+		aiVisionTaskSvc:   aiVisionTaskSvc,
 	}
 }
 
@@ -39,6 +42,7 @@ func (h *Handler) RegisterHandlers(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeEmailDelivery, h.handleEmailDelivery)
 	mux.HandleFunc(TypeEmailSync, h.handleEmailSync)
 	mux.HandleFunc(TypeDataExport, handleDataExport)
+	mux.HandleFunc(TypeAIVisionTaskPatrol, h.handleAIVisionTaskPatrol)
 
 	// 注册设备状态检查处理器
 	if h.deviceStatusHandler != nil {

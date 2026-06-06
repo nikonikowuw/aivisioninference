@@ -13,3 +13,5 @@ export { default as roles } from './roles';
 export { default as system } from './system';
 export { default as tasks } from './tasks';
 export { default as users } from './users';
+export { default as aiTasks } from './ai-tasks';
+export { default as aiTimeSchedules } from './ai-time-schedules';

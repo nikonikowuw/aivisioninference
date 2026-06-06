@@ -111,6 +111,8 @@ func main() {
 		// AIVisionInference: System Config & Async Tasks.
 		&model.AISystemConfig{},
 		&model.AIAsyncTask{},
+		&model.AIVisionTask{},
+		&model.AITimeSchedule{},
 
 		// AIVisionInference: Device License (MVP+).
 		&model.DeviceLicense{},
@@ -548,6 +550,24 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "license:active", Name: "查看当前授权", Path: "/api/v1/license/active", Method: "GET"},
 					{Code: "license:list", Name: "授权列表", Path: "/api/v1/license", Method: "GET"},
 					{Code: "license:check", Name: "校验算法授权", Path: "/api/v1/license/check", Method: "GET"},
+				}},
+			},
+		},
+		{
+			Name: "AI视觉推理", Code: "aivision", Path: "/aivision", Icon: "MdRemoveRedEye",
+			Children: []childMenuDef{
+				{Name: "时间配置", Code: "ai-time-schedules", Path: "/ai-time-schedules", Icon: "MdTimeline", Buttons: []buttonInfo{
+					{Code: "ai-time-schedules:list", Name: "时间配置列表", Path: "/api/v1/ai-time-schedules", Method: "GET"},
+					{Code: "ai-time-schedules:create", Name: "创建时间配置", Path: "/api/v1/ai-time-schedules", Method: "POST"},
+					{Code: "ai-time-schedules:edit", Name: "编辑时间配置", Path: "/api/v1/ai-time-schedules/*", Method: "PUT"},
+					{Code: "ai-time-schedules:delete", Name: "删除时间配置", Path: "/api/v1/ai-time-schedules/*", Method: "DELETE"},
+				}},
+				{Name: "推理任务", Code: "aivisiontasks", Path: "/ai-tasks", Icon: "MdAssignment", Buttons: []buttonInfo{
+					{Code: "aivisiontasks:list", Name: "任务列表", Path: "/api/v1/aivisiontasks", Method: "GET"},
+					{Code: "aivisiontasks:create", Name: "创建任务", Path: "/api/v1/aivisiontasks", Method: "POST"},
+					{Code: "aivisiontasks:edit", Name: "编辑任务", Path: "/api/v1/aivisiontasks/*", Method: "PUT"},
+					{Code: "aivisiontasks:delete", Name: "删除任务", Path: "/api/v1/aivisiontasks/*", Method: "DELETE"},
+					{Code: "aivisiontasks:check-conflict", Name: "检查冲突", Path: "/api/v1/aivisiontasks/check-conflict", Method: "POST"},
 				}},
 			},
 		},

@@ -350,6 +350,113 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface AITimeSchedule {
+  id: string;
+  name: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  time_windows: { start: string; end: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type AITimeScheduleListParams = CrudListParams & { keyword?: string };
+
+export interface AIVisionTask {
+  id: string;
+  name: string;
+  status: string; // draft, ready, running, error
+  schedule_id: string;
+  device_channel_id: string;
+  algo_package_id: string;
+  target_node_id: string;
+  start_date: string;
+  end_date: string;
+  time_windows: { start: string; end: string }[];
+  ai_params?: Record<string, any>;
+  roi_regions?: ROIRegion[];
+  mark_regions?: MarkRegion[];
+  line_regions?: LineRegion[];
+  error_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// 区域定义（ROI 和标记区域结构相同）
+export interface Region {
+  id: string;
+  type: 'polygon' | 'rect';
+  points?: number[][];
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  label?: string;
+}
+
+export type ROIRegion = Region;
+export type MarkRegion = Region;
+
+export interface LineRegion {
+  id: string;
+  start: [number, number];
+  end: [number, number];
+  direction: 'in' | 'out' | 'both';
+  label?: string;
+}
+
+export interface CreateAIVisionTaskRequest {
+  name: string;
+  schedule_id: string;
+  device_channel_id: string;
+  algo_package_id: string;
+  target_node_id: string;
+  ai_params?: Record<string, any>;
+  roi_regions?: ROIRegion[];
+  mark_regions?: MarkRegion[];
+  line_regions?: LineRegion[];
+}
+
+export interface UpdateAIVisionTaskRequest {
+  name: string;
+  status?: string;
+  schedule_id: string;
+  device_channel_id: string;
+  algo_package_id: string;
+  target_node_id: string;
+  ai_params?: Record<string, any>;
+  roi_regions?: ROIRegion[];
+  mark_regions?: MarkRegion[];
+  line_regions?: LineRegion[];
+  error_reason?: string;
+}
+
+export interface CheckConflictRequest {
+  target_node_id: string;
+  start_date: string;
+  end_date: string;
+  time_windows: { start: string; end: string }[];
+  exclude_task_id?: string;
+}
+
+export type AIVisionTaskListParams = CrudListParams & { keyword?: string };
+
+export interface AlgorithmPackage {
+  id: string;
+  algorithm_name: string;
+  algorithm_alias?: string;
+  version: string;
+  description?: string;
+  domain?: string;
+  status: string;
+  ai_params_schema?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AlgorithmPackageListParams = CrudListParams & { keyword?: string; status?: string };
+
 export interface Task {
   id: string;
   type: string;
@@ -627,6 +734,24 @@ export const tasksApi = {
   cancel: (id: string) => request<Task>(`/tasks/${id}/cancel`, { method: 'POST' }),
 };
 
+export const aiTimeSchedulesApi = {
+  ...crud<AITimeSchedule, AITimeScheduleListParams>('ai-time-schedules'),
+  listAll: () => request<AITimeSchedule[]>('/ai-time-schedules/all'),
+};
+
+export const aiVisionTasksApi = {
+  ...crud<AIVisionTask, AIVisionTaskListParams>('ai-tasks'),
+  checkConflict: (data: CheckConflictRequest) =>
+    request<void>('/ai-tasks/check-conflict', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+export const algoPackagesApi = {
+  ...crud<AlgorithmPackage, AlgorithmPackageListParams>('algorithmpackages'),
+};
+
 export const brandConfigApi = {
   get: () => request<BrandConfig>('/system/brand-config'),
   save: (data: Pick<BrandConfig, 'system_name' | 'logo_url'>) =>
@@ -767,6 +892,7 @@ export interface Device {
   external_key?: string;
   remark?: string;
   version: number;
+  parent_nvr_id?: string;
   groups?: DeviceGroup[];
   created_by?: string;
   created_at: string;
@@ -895,13 +1021,7 @@ export interface LicenseInfo {
   updated_at: string;
 }
 
-export interface LicenseListParams {
-  page?: number;
-  page_size?: number;
-  keyword?: string;
-  status?: string;
-  [key: string]: string | number | undefined;
-}
+export type LicenseListParams = CrudListParams & { status?: string };
 
 export const licenseApi = {
   getFingerprint: () =>
@@ -915,7 +1035,7 @@ export const licenseApi = {
     });
   },
   getActive: () =>
-    request<LicenseInfo>('/license/active'),
+    request<LicenseInfo | null>('/license/active'),
   list: (params?: LicenseListParams) => {
     const query = buildQuery(params || {});
     return request<PaginatedData<LicenseInfo>>(`/license${query}`);

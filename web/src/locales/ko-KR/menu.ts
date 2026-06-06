@@ -15,6 +15,7 @@ export const menu = {
   "permissions": "권한",
   "system-management": "시스템 관리",
   "files": "파일",
+  "algorithm-packages": "알고리즘 패키지",
   "audit-logs": "감사 로그",
   "tasks": "작업",
   "brand-config": "브랜드 설정",

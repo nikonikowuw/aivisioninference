@@ -6,6 +6,7 @@ import { dashboard } from "./modules/dashboard";
 import { users } from "./modules/users";
 import { roles } from "./modules/roles";
 import { permissions } from "./modules/permissions";
+import { algorithmpackage } from "./modules/algorithmpackage";
 import { files } from "./modules/files";
 import { auditLogs } from "./modules/audit-logs";
 import { tasks } from "./modules/tasks";
@@ -27,6 +28,7 @@ export default {
   "modules/roles": roles,
   "modules/permissions": permissions,
   "modules/files": files,
+  "modules/algorithmpackage": algorithmpackage,
   "modules/audit-logs": auditLogs,
   "modules/tasks": tasks,
   "modules/brand-config": brandConfig,

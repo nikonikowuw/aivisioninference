@@ -15,6 +15,7 @@ export const menu = {
   "permissions": "Izin",
   "system-management": "Manajemen Sistem",
   "files": "File",
+  "algorithm-packages": "Paket Algoritma",
   "audit-logs": "Log Audit",
   "tasks": "Tugas",
   "brand-config": "Konfigurasi Merek",

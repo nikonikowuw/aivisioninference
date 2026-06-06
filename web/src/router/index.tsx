@@ -27,6 +27,7 @@ import {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
+  MdExtension,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -52,6 +53,7 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
+  MdExtension,
 };
 
 // 菜单 code 到组件的映射
@@ -67,6 +69,7 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'roles': () => import('../views/admin/roles'),
   'permissions': () => import('../views/admin/permissions'),
   'files': () => import('../views/admin/files'),
+  'algorithm-packages': () => import('../views/admin/algorithmpackage'),
   'audit-logs': () => import('../views/admin/audit-logs'),
   'tasks': () => import('../views/admin/tasks'),
   'brand-config': () => import('../views/admin/brand-config'),

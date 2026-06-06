@@ -7,6 +7,7 @@ import { brandConfig } from "./modules/brand-config";
 import { dashboard } from "./modules/dashboard";
 import { feedback } from "./modules/feedback";
 import { files } from "./modules/files";
+import { algorithmpackage } from "./modules/algorithmpackage";
 import { mailConfig } from "./modules/mail-config";
 import { permissions } from "./modules/permissions";
 import { roles } from "./modules/roles";
@@ -27,6 +28,7 @@ export default {
   "modules/roles": roles,
   "modules/permissions": permissions,
   "modules/files": files,
+  "modules/algorithmpackage": algorithmpackage,
   "modules/audit-logs": auditLogs,
   "modules/tasks": tasks,
   "modules/brand-config": brandConfig,

@@ -15,6 +15,7 @@ export const menu = {
   "permissions": "権限",
   "system-management": "システム管理",
   "files": "ファイル",
+  "algorithm-packages": "アルゴリズムパッケージ",
   "audit-logs": "操作ログ",
   "tasks": "タスク",
   "brand-config": "ブランド設定",

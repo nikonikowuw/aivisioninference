@@ -16,6 +16,7 @@ import { devices } from "./modules/devices";
 import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
+import { algorithmpackage } from "./modules/algorithmpackage";
 
 export default {
   common,
@@ -27,6 +28,7 @@ export default {
   "modules/roles": roles,
   "modules/permissions": permissions,
   "modules/files": files,
+  "modules/algorithmpackage": algorithmpackage,
   "modules/audit-logs": auditLogs,
   "modules/tasks": tasks,
   "modules/brand-config": brandConfig,

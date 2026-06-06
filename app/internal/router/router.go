@@ -318,6 +318,18 @@ func (r *Router) setupRoutes() {
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
 
+	// Smart Records
+	if deps.SmartRecordHandler != nil {
+		smartRecords := authorized.Group("/smart-records")
+		{
+			smartRecords.GET("", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.List)
+			smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportCSV)
+			smartRecords.GET("/category-codes", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ListCategoryCodes)
+			smartRecords.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.BatchDelete)
+			smartRecords.POST("/export-selected", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportSelectedCSV)
+		}
+	}
+
 	// Media streaming (ZLM webhooks - internal, no auth)
 	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager)
 	// Register ZLM webhooks at root level with secret validation
@@ -398,7 +410,8 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	aiScheduleRepo := repository.NewAITimeScheduleRepository(db)
 	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
-	streamManager := provideStreamManager(deviceRepo, mediaStreamRepo)
+	engineClient := provideEngineClient(cfg)
+	streamManager := provideStreamManager(engineClient, deviceRepo, mediaStreamRepo)
 	// 由于 Asynq worker 自身消费任务队列，这里传入 nil taskClient 避免循环依赖（worker 内的 SIPService 不需要再派发任务）。
 	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, zlmClient, streamManager, cfg, nil)
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, sipSvc, streamManager)

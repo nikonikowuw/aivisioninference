@@ -153,3 +153,20 @@ func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs [
 		Find(&items).Error
 	return items, err
 }
+
+// FindCodesByRoleIDs 根据角色 ID 查询其拥有的全部权限编码。
+func (r *PermissionRepository) FindCodesByRoleIDs(ctx context.Context, roleIDs []string) ([]string, error) {
+	if len(roleIDs) == 0 {
+		return nil, nil
+	}
+	var codes []string
+	err := r.db.WithContext(ctx).
+		Table("permissions").
+		Distinct("permissions.code").
+		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
+		Where("role_permissions.role_id IN ?", roleIDs).
+		Where("permissions.code <> ''").
+		Order("permissions.code ASC").
+		Pluck("permissions.code", &codes).Error
+	return codes, err
+}

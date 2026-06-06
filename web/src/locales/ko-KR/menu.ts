@@ -1,13 +1,15 @@
 export const menu = {
   "dashboard": "대시보드",
   "device-management": "장치 관리",
-  "devices": "장치 목록",
+  "devices": "장치",
   "device-groups": "장치 그룹",
-  "device-staging": "장치 대기",
+  "device-staging": "장치 대기 중",
   "media-management": "미디어 관리",
-  "live-view": "실시간 보기",
+  "live-view": "라이브 뷰",
   "recordings": "녹화 재생",
   "stream-status": "스트림 상태",
+  "smart-records": "스마트 레코드",
+
   "user-management": "사용자 관리",
   "users": "사용자",
   "roles": "역할",
@@ -16,15 +18,12 @@ export const menu = {
   "license-management": "라이선스 관리",
   "license": "알고리즘 라이선스",
   "files": "파일",
-  "algorithm-packages": "알고리즘 패키지",
   "audit-logs": "감사 로그",
-  "tasks": "태스크",
+  "tasks": "작업",
   "brand-config": "브랜드 설정",
   "mail-config": "메일 설정",
-  "feedback": "피드백",
+  "feedback": "사용자 피드백",
   "system-config": "시스템 설정",
-  "aivision": "AI 시각 추론",
-  "ai-time-schedules": "시간 설정",
-  "aivisiontasks": "추론 태스크",
 } as const;
+
 export default menu;

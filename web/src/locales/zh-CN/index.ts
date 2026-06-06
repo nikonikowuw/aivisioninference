@@ -17,9 +17,7 @@ import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
 import { license } from "./modules/license";
-import { aiTasks } from "./modules/ai-tasks";
-import { aiTimeSchedules } from "./modules/ai-time-schedules";
-import { algorithmpackage } from "./modules/algorithmpackage";
+import smartRecords from "./modules/smart-records";
 
 export default {
   common,
@@ -31,7 +29,6 @@ export default {
   "modules/roles": roles,
   "modules/permissions": permissions,
   "modules/files": files,
-  "modules/algorithmpackage": algorithmpackage,
   "modules/audit-logs": auditLogs,
   "modules/tasks": tasks,
   "modules/brand-config": brandConfig,
@@ -42,6 +39,5 @@ export default {
   "modules/media": media,
   "modules/system": system,
   "modules/license": license,
-  "modules/ai-tasks": aiTasks,
-  "modules/ai-time-schedules": aiTimeSchedules,
+  "modules/smart-records": smartRecords,
 };

@@ -1,0 +1,65 @@
+export const smartRecords = {
+  title: "智能记录",
+  subtitle: "统一检索识别记录、告警记录和抓拍记录",
+  tabs: {
+    recognition: "识别记录",
+    alarm: "告警记录",
+    capture: "抓拍记录",
+  },
+  filters: {
+    deviceName: "设备",
+    devicePlaceholder: "选择设备",
+    allDevices: "全部设备",
+    taskName: "任务",
+    taskPlaceholder: "选择任务",
+    allTasks: "全部任务",
+    alarmType: "告警类型",
+    alarmLevel: "告警级别",
+    categoryCode: "类别",
+    allCategories: "全部类别",
+    minConfidence: "最低置信度",
+    minSimilarity: "最低相似度",
+  },
+  table: {
+    snapshot: "抓拍图",
+    target: "目标抠图",
+    deviceName: "设备名称",
+    captureTime: "抓拍时间",
+    person: "人员姓名",
+    personImage: "人脸底库图",
+    similarity: "相似度",
+    alarmType: "告警类型",
+    alarmLevel: "告警级别",
+    status: "处理状态",
+    category: "类别",
+    confidence: "置信度",
+    taskName: "任务名称",
+  },
+  alarmLevel: {
+    critical: "严重",
+    high: "高",
+    medium: "中",
+    low: "低",
+  },
+  alarmType: {
+    intrusion: "区域入侵",
+    cross_line: "越线告警",
+    region: "区域告警",
+    unknown: "未知告警",
+  },
+  status: {
+    unhandled: "未处理",
+  },
+  actions: {
+    batchDelete: "批量删除",
+  },
+  message: {
+    batchDeleteConfirm: "确定要删除选中的 {{count}} 条记录吗？",
+  },
+  empty: {
+    noData: "暂无智能记录",
+    noPermission: "暂无智能记录查看权限",
+  },
+} as const;
+
+export default smartRecords;

@@ -27,8 +27,7 @@ import {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
-  MdRemoveRedEye,
-  MdExtension,
+  MdNotificationsActive,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -54,8 +53,7 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
-  MdRemoveRedEye,
-  MdExtension,
+  MdNotificationsActive,
 };
 
 // 菜单 code 到组件的映射
@@ -67,11 +65,11 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'live-view': () => import('../views/admin/media/MediaDashboard'),
   'stream-status': () => import('../views/admin/media/stream-status'),
   'recordings': () => import('../views/admin/media/RecordingsView'),
+  'smart-records': () => import('../views/admin/smart-records'),
   'users': () => import('../views/admin/users'),
   'roles': () => import('../views/admin/roles'),
   'permissions': () => import('../views/admin/permissions'),
   'files': () => import('../views/admin/files'),
-  'algorithm-packages': () => import('../views/admin/algorithmpackage'),
   'audit-logs': () => import('../views/admin/audit-logs'),
   'tasks': () => import('../views/admin/tasks'),
   'brand-config': () => import('../views/admin/brand-config'),
@@ -79,8 +77,6 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'feedback': () => import('../views/admin/feedback'),
   'system-config': () => import('../views/admin/system/SystemConfig'),
   'license': () => import('../views/admin/license'),
-  'aivisiontasks': () => import('../views/admin/ai-tasks'),
-  'ai-time-schedules': () => import('../views/admin/ai-time-schedules'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();

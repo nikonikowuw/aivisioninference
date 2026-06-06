@@ -24,24 +24,25 @@ import (
 
 // RouteDeps 聚合路由注册阶段需要的 Handler、Service 与缓存依赖。
 type RouteDeps struct {
-	RBACCache          cache.Cache
-	AuditService       *service.AuditService
-	AuthHandler        *handler.AuthHandler
-	WSHandler          *handler.WSHandler
-	UserHandler        *handler.UserHandler
-	RoleHandler        *handler.RoleHandler
-	PermissionHandler  *handler.PermissionHandler
-	FileHandler        *handler.FileHandler
-	AuditHandler       *handler.AuditHandler
-	TaskHandler        *handler.TaskHandler
-	BrandHandler       *handler.BrandHandler
-	MailHandler        *handler.MailHandler
-	FeedbackHandler    *handler.FeedbackHandler
-	DashboardHandler   *handler.DashboardHandler
+	RBACCache            cache.Cache
+	AuditService         *service.AuditService
+	AuthHandler          *handler.AuthHandler
+	WSHandler            *handler.WSHandler
+	UserHandler          *handler.UserHandler
+	RoleHandler          *handler.RoleHandler
+	PermissionHandler    *handler.PermissionHandler
+	FileHandler          *handler.FileHandler
+	AuditHandler         *handler.AuditHandler
+	TaskHandler          *handler.TaskHandler
+	BrandHandler         *handler.BrandHandler
+	MailHandler          *handler.MailHandler
+	FeedbackHandler      *handler.FeedbackHandler
+	DashboardHandler     *handler.DashboardHandler
 	DeviceHandler        *handler.DeviceHandler
 	DeviceGroupHandler   *handler.DeviceGroupHandler
 	DeviceStagingHandler *handler.DeviceStagingHandler
 	SystemHandler        *handler.SystemHandler
+	SmartRecordHandler   *handler.SmartRecordHandler
 	StreamManager        *service.StreamManager
 	LicenseHandler          *handler.LicenseHandler
 	LicenseService          *service.LicenseService
@@ -170,6 +171,7 @@ func newRouteDeps(
 	deviceGroupHandler *handler.DeviceGroupHandler,
 	deviceStagingHandler *handler.DeviceStagingHandler,
 	systemHandler *handler.SystemHandler,
+	smartRecordHandler *handler.SmartRecordHandler,
 	streamManager *service.StreamManager,
 	licenseHandler *handler.LicenseHandler,
 	licenseService *service.LicenseService,
@@ -184,7 +186,7 @@ func newRouteDeps(
 		WSHandler:            wsHandler,
 		UserHandler:          userHandler,
 		RoleHandler:          roleHandler,
-		PermissionHandler:     permHandler,
+		PermissionHandler:    permHandler,
 		FileHandler:          fileHandler,
 		AuditHandler:         auditHandler,
 		TaskHandler:          taskHandler,
@@ -196,6 +198,7 @@ func newRouteDeps(
 		DeviceGroupHandler:   deviceGroupHandler,
 		DeviceStagingHandler: deviceStagingHandler,
 		SystemHandler:        systemHandler,
+		SmartRecordHandler:   smartRecordHandler,
 		StreamManager:        streamManager,
 		LicenseHandler:          licenseHandler,
 		LicenseService:          licenseService,

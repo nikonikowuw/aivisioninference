@@ -8,6 +8,7 @@ export const menu = {
   "live-view": "实时预览",
   "recordings": "录像回放",
   "stream-status": "流状态看板",
+  "smart-records": "智能记录",
   "user-management": "用户管理",
   "users": "用户",
   "roles": "角色",

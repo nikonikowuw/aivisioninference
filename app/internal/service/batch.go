@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	maxBatchIDs      = 100
-	maxCSVExportRows = 10000
-	maxCSVImportRows = 10000
+	maxBatchIDs       = 100
+	maxCSVExportRows  = 10000
+	maxCSVImportRows  = 10000
+	maxExportSelected = 10000
 )
 
 // newBatchResult 创建一个批量操作的初始结果，Items 按 ids 顺序预分配。

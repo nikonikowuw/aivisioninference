@@ -8,8 +8,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from 'contexts/AuthContext';
-import AIVisionTasks from 'views/admin/ai-tasks';
-import AITimeSchedules from 'views/admin/ai-time-schedules';
+import { hasAnyPermission } from 'utils/permission';
 import {
   generateRoutesFromMenus,
   generateSidebarRoutesFromMenus,
@@ -25,9 +24,34 @@ export default function Dashboard(props: { [x: string]: any }) {
   const location = useLocation();
   const noAccessColor = useColorModeValue('gray.500', 'gray.400');
 
+  const menus = useMemo(() => {
+    const rawMenus = user?.menus || [];
+    const permissionCodes = user?.permission_codes || [];
+    const canViewSmartRecords = hasAnyPermission(permissionCodes, [
+      'records:recognition:list',
+      'records:alarm:list',
+      'records:capture:list',
+    ]);
+    const hasSmartRecordsMenu = rawMenus.some((menu) => menu.code === 'smart-records');
+    if (!canViewSmartRecords) {
+      return rawMenus.filter((menu) => menu.code !== 'smart-records');
+    }
+    if (hasSmartRecordsMenu) return rawMenus;
+    return [
+      ...rawMenus,
+      {
+        id: 'smart-records',
+        name: t('menu:smart-records'),
+        code: 'smart-records',
+        path: '/smart-records',
+        icon: 'MdNotificationsActive',
+        sort_order: 35,
+      },
+    ];
+  }, [user?.menus, user?.permission_codes, t]);
+
   const menusFingerprint = useMemo(() => {
-    const menus = user?.menus;
-    if (!menus || menus.length === 0) {
+    if (menus.length === 0) {
       return '';
     }
     const walk = (items: typeof menus): string => {
@@ -36,9 +60,7 @@ export default function Dashboard(props: { [x: string]: any }) {
         .join(',');
     };
     return walk(menus);
-  }, [user?.menus]);
-
-  const menus = user?.menus || [];
+  }, [menus]);
 
   // 从用户菜单生成侧边栏路由
   const sidebarRoutes = useMemo(() => {
@@ -67,6 +89,10 @@ export default function Dashboard(props: { [x: string]: any }) {
   useEffect(() => {
     document.documentElement.dir = 'ltr';
   }, []);
+
+  const getRoute = () => {
+    return location.pathname !== '/admin/full-screen-maps';
+  };
 
   const { onOpen } = useDisclosure();
 
@@ -108,32 +134,26 @@ export default function Dashboard(props: { [x: string]: any }) {
             </Box>
           </Portal>
 
-          {location.pathname !== '/admin/full-screen-maps' && (
+          {getRoute() && (
             <Box
               mx='auto'
               p={{ base: '20px', md: '30px' }}
               pe='20px'
               minH='100vh'
               pt='50px'>
-              <Routes>
-                {dynamicRoutes}
-                {/* AI 任务页兜底路由：避免菜单缓存/权限未刷新时直达 /admin/ai-tasks 出现空白 */}
-                <Route path='ai-tasks' element={<AIVisionTasks />} />
-                {/* AI 时间配置兜底路由 */}
-                <Route path='ai-time-schedules' element={<AITimeSchedules />} />
-                <Route
-                  path='/'
-                  element={<Navigate to='/admin/default' replace />}
-                />
-                <Route
-                  path='*'
-                  element={(
-                    <Text color={noAccessColor} textAlign="center" mt="40px">
-                      {t('noAccess')}
-                    </Text>
-                  )}
-                />
-              </Routes>
+              {dynamicRoutes.length === 0 ? (
+                <Text color={noAccessColor} textAlign="center" mt="40px">
+                  {t('noAccess')}
+                </Text>
+              ) : (
+                <Routes>
+                  {dynamicRoutes}
+                  <Route
+                    path='/'
+                    element={<Navigate to='/admin/default' replace />}
+                  />
+                </Routes>
+              )}
             </Box>
           )}
         </Box>

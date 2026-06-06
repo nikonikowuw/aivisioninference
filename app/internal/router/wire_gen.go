@@ -93,13 +93,16 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	algorithmOptions := provideAlgorithmOptions(cfg)
 	algorithmPackageService := service.NewAlgorithmPackageService(algorithmPackageRepository, algorithmOptions, rdb, engineClient)
 	algorithmPackageHandler := handler.NewAlgorithmPackageHandler(algorithmPackageService)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager, licenseHandler, licenseService, aiVisionTaskHandler, aiTimeScheduleHandler, algorithmPackageHandler)
+	smartRecordRepository := repository.NewSmartRecordRepository(db)
+	smartRecordService := service.NewSmartRecordService(smartRecordRepository)
+	smartRecordHandler := handler.NewSmartRecordHandler(smartRecordService)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, smartRecordHandler, streamManager, licenseHandler, licenseService, aiVisionTaskHandler, aiTimeScheduleHandler, algorithmPackageHandler)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository, repository.NewAIVisionTaskRepository, repository.NewAITimeScheduleRepository, repository.NewGB28181DeviceRepository, repository.NewAlgorithmPackageRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewSmartRecordRepository, repository.NewLicenseRepository, repository.NewAIVisionTaskRepository, repository.NewAITimeScheduleRepository, repository.NewGB28181DeviceRepository, repository.NewAlgorithmPackageRepository)
 
 var serviceSet = wire.NewSet(
 	provideAvatarStorage,
@@ -108,7 +111,7 @@ var serviceSet = wire.NewSet(
 	provideFileService,
 	provideAuthService,
 	provideBrandService,
-	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService, task.NewClient, provideZLMClient,
+	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService, service.NewSmartRecordService, task.NewClient, provideZLMClient,
 	provideStreamManager,
 	provideDeviceStagingService,
 	provideDeviceDiscoveryService,
@@ -120,7 +123,7 @@ var serviceSet = wire.NewSet(
 	provideAlgorithmOptions, service.NewAlgorithmPackageService,
 )
 
-var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceStagingHandler,
+var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, handler.NewSmartRecordHandler, provideDeviceStagingHandler,
 	provideDeviceHandler,
 	provideDeviceGroupHandler,
 	provideLicenseHandler,

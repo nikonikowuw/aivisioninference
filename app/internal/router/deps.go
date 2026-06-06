@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -24,20 +25,20 @@ import (
 
 // RouteDeps 聚合路由注册阶段需要的 Handler、Service 与缓存依赖。
 type RouteDeps struct {
-	RBACCache          cache.Cache
-	AuditService       *service.AuditService
-	AuthHandler        *handler.AuthHandler
-	WSHandler          *handler.WSHandler
-	UserHandler        *handler.UserHandler
-	RoleHandler        *handler.RoleHandler
-	PermissionHandler  *handler.PermissionHandler
-	FileHandler        *handler.FileHandler
-	AuditHandler       *handler.AuditHandler
-	TaskHandler        *handler.TaskHandler
-	BrandHandler       *handler.BrandHandler
-	MailHandler        *handler.MailHandler
-	FeedbackHandler    *handler.FeedbackHandler
-	DashboardHandler   *handler.DashboardHandler
+	RBACCache            cache.Cache
+	AuditService         *service.AuditService
+	AuthHandler          *handler.AuthHandler
+	WSHandler            *handler.WSHandler
+	UserHandler          *handler.UserHandler
+	RoleHandler          *handler.RoleHandler
+	PermissionHandler    *handler.PermissionHandler
+	FileHandler          *handler.FileHandler
+	AuditHandler         *handler.AuditHandler
+	TaskHandler          *handler.TaskHandler
+	BrandHandler         *handler.BrandHandler
+	MailHandler          *handler.MailHandler
+	FeedbackHandler      *handler.FeedbackHandler
+	DashboardHandler     *handler.DashboardHandler
 	DeviceHandler        *handler.DeviceHandler
 	DeviceGroupHandler   *handler.DeviceGroupHandler
 	DeviceStagingHandler *handler.DeviceStagingHandler
@@ -45,6 +46,25 @@ type RouteDeps struct {
 	StreamManager        *service.StreamManager
 	LicenseHandler       *handler.LicenseHandler
 	LicenseService       *service.LicenseService
+	PersonHandler        *handler.PersonHandler
+}
+
+func provideFileStorage(cfg *Config) (storage.Storage, error) {
+	// 根据配置中的 StorageType 一键切换后端
+	switch strings.ToLower(cfg.StorageType) {
+	case "oss", "minio", "s3":
+		zap.L().Info("using OSS/MinIO as file storage", zap.String("endpoint", cfg.OSSEndpoint), zap.String("bucket", cfg.OSSBucket))
+		return storage.NewOSSStorage(
+			cfg.OSSEndpoint,
+			cfg.OSSAccessKey,
+			cfg.OSSSecretKey,
+			cfg.OSSBucket,
+			cfg.OSSUseSSL,
+		)
+	default:
+		zap.L().Info("using local filesystem as file storage", zap.String("dir", cfg.LocalUploadDir))
+		return storage.NewLocalStorage(cfg.LocalUploadDir, cfg.LocalPublicURL)
+	}
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -171,6 +191,7 @@ func newRouteDeps(
 	streamManager *service.StreamManager,
 	licenseHandler *handler.LicenseHandler,
 	licenseService *service.LicenseService,
+	personHandler *handler.PersonHandler,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:            permCache,
@@ -194,6 +215,7 @@ func newRouteDeps(
 		StreamManager:        streamManager,
 		LicenseHandler:       licenseHandler,
 		LicenseService:       licenseService,
+		PersonHandler:        personHandler,
 	}
 }
 
@@ -204,10 +226,13 @@ func provideMailServiceForAsynq(db *gorm.DB) *service.MailService {
 	return service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
 }
 
-func provideLicenseHandler(licenseRepo *repository.LicenseRepository, db *gorm.DB) (*handler.LicenseHandler, *service.LicenseService) {
+func provideLicenseHandler(licenseRepo *repository.LicenseRepository, db *gorm.DB) *handler.LicenseHandler {
 	licenseSvc := service.NewLicenseService(licenseRepo, db)
-	licenseHandler := handler.NewLicenseHandler(licenseSvc)
-	return licenseHandler, licenseSvc
+	return handler.NewLicenseHandler(licenseSvc)
+}
+
+func provideLicenseService(licenseRepo *repository.LicenseRepository, db *gorm.DB) *service.LicenseService {
+	return service.NewLicenseService(licenseRepo, db)
 }
 
 func provideZLMClient(cfg *Config) *zlm.Client {
@@ -268,4 +293,15 @@ func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.Strea
 	stagingHandler := handler.NewDeviceStagingHandler(stagingSvc, discoverySvc)
 
 	return webhookHandler, playHandler, recordingHandler, stagingHandler
+}
+
+func providePersonHandler(
+	personRepo *repository.PersonRepository,
+	groupRepo *repository.PersonGroupRepository,
+	importTaskRepo *repository.ImportTaskRepository,
+	fileStorage storage.Storage,
+	taskClient *task.Client,
+) *handler.PersonHandler {
+	personSvc := service.NewPersonService(personRepo, groupRepo, importTaskRepo, fileStorage, taskClient)
+	return handler.NewPersonHandler(personSvc)
 }

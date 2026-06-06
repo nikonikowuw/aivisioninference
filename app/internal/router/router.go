@@ -48,6 +48,14 @@ type Config struct {
 	MaxFileSizeMB             int64
 	LocalUploadDir            string
 	LocalPublicURL            string
+	// Storage 存储配置
+	StorageType               string `yaml:"storage_type" mapstructure:"storage_type"` // "local" 或 "oss"
+	OSSEndpoint               string `yaml:"oss_endpoint" mapstructure:"oss_endpoint"`
+	OSSAccessKey              string `yaml:"oss_access_key" mapstructure:"oss_access_key"`
+	OSSSecretKey              string `yaml:"oss_secret_key" mapstructure:"oss_secret_key"`
+	OSSBucket                 string `yaml:"oss_bucket" mapstructure:"oss_bucket"`
+	OSSUseSSL                 bool   `yaml:"oss_use_ssl" mapstructure:"oss_use_ssl"`
+	OSSDomain                 string `yaml:"oss_domain" mapstructure:"oss_domain"`
 	ZLMAPIURL                 string
 	ZLMSecret                 string
 	// GB28181 GB/T 28181 配置
@@ -327,10 +335,12 @@ func (r *Router) setupRoutes() {
 	})
 
 	// Static file serving for uploaded files
+	// 允许前端直接访问 uploads 目录下的所有资源（包括 persons/ 和 avatars/）
 	uploads := r.engine.Group("/uploads")
+	uploads.Use(middleware.CORS(r.config.AllowOrigins)) // 确保图片支持跨域访问
 	uploads.Use(func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("Content-Security-Policy", "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'none'; script-src 'none'")
+		c.Header("Cache-Control", "public, max-age=31536000") // 开启浏览器缓存
 		c.Next()
 	})
 	uploads.Static("", "uploads")
@@ -338,6 +348,47 @@ func (r *Router) setupRoutes() {
 	// Frontend static files (SPA)
 	r.engine.Static("/assets", "./web/dist/assets")
 	r.engine.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
+
+	// Persons
+	personHandler := deps.PersonHandler
+
+	personsImage := authorized.Group("/persons/image")
+	{
+		personsImage.GET("/:filename", personHandler.ViewImage)
+	}
+	
+	persons := authorized.Group("/persons")
+	{
+		persons.GET("", middleware.RBAC(rbacCache, r.db), personHandler.List)
+		persons.POST("", middleware.RBAC(rbacCache, r.db), personHandler.Create)
+		persons.GET("/export", middleware.RBAC(rbacCache, r.db), personHandler.ExportExcel)
+		persons.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), personHandler.BatchDelete)
+		persons.POST("/batch-toggle", middleware.RBAC(rbacCache, r.db), personHandler.BatchToggle)
+		persons.POST("/batch-retry-embedding", middleware.RBAC(rbacCache, r.db), personHandler.BatchRetryEmbedding)
+		persons.GET("/:id", middleware.RBAC(rbacCache, r.db), personHandler.GetByID)
+		persons.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.Update)
+		persons.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.Delete)
+		persons.POST("/:id/retry-embedding", middleware.RBAC(rbacCache, r.db), personHandler.RetryEmbedding)
+	}
+
+	// Person Groups
+	personGroups := authorized.Group("/person-groups")
+	{
+		personGroups.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListGroups)
+		personGroups.POST("", middleware.RBAC(rbacCache, r.db), personHandler.CreateGroup)
+		personGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.UpdateGroup)
+		personGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteGroup)
+	}
+
+	// Person Import Tasks
+	personImports := authorized.Group("/person-import-tasks")
+	{
+		personImports.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListImportTasks)
+		personImports.POST("", middleware.RBAC(rbacCache, r.db), personHandler.Import)
+		personImports.POST("/by-url", middleware.RBAC(rbacCache, r.db), personHandler.ImportByURL)
+		personImports.GET("/:id", middleware.RBAC(rbacCache, r.db), personHandler.GetImportTask)
+	}
+
 	r.engine.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api") {
 			response.Err(c, apperrors.New(apperrors.ErrNotFound, "资源不存在"))
@@ -367,5 +418,21 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	cronCleanupHandler := task.NewCronCleanupHandler(storageSvc)
 	thresholdCleanupHandler := task.NewThresholdCleanupHandler(storageSvc)
 
-	return task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler)
+	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler)
+
+	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
+	// 并跳过注册，避免后续任务运行时再崩溃。
+	avatarStorage, err := provideAvatarStorage(cfg)
+	if err != nil {
+		zap.L().Error("init avatar storage failed, person task handlers skipped", zap.Error(err))
+		return mux
+	}
+	personRepo := repository.NewPersonRepository(db)
+	embeddingRepo := repository.NewPersonEmbeddingRepository(db)
+	importTaskRepo := repository.NewImportTaskRepository(db)
+	taskClient := task.NewClient(rdb)
+	task.NewPersonEmbeddingHandler(personRepo, embeddingRepo).RegisterHandlers(mux)
+	task.NewPersonImportHandler(personRepo, embeddingRepo, importTaskRepo, avatarStorage, taskClient).RegisterHandlers(mux)
+
+	return mux
 }

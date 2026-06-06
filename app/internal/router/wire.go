@@ -36,9 +36,14 @@ var repositorySet = wire.NewSet(
 	repository.NewMediaStreamRepository,
 	repository.NewDiscoveredDeviceRepository,
 	repository.NewLicenseRepository,
+	repository.NewPersonRepository,
+	repository.NewPersonGroupRepository,
+	repository.NewPersonEmbeddingRepository,
+	repository.NewImportTaskRepository,
 )
 
 var serviceSet = wire.NewSet(
+	provideFileStorage,
 	provideAvatarStorage,
 	providePermissionCache,
 	provideFileOptions,
@@ -61,6 +66,7 @@ var serviceSet = wire.NewSet(
 	provideDeviceStagingService,
 	provideDeviceDiscoveryService,
 	provideSystemHandler,
+	provideLicenseService,
 )
 
 var handlerSet = wire.NewSet(
@@ -80,6 +86,7 @@ var handlerSet = wire.NewSet(
 	provideDeviceHandler,
 	provideDeviceGroupHandler,
 	provideLicenseHandler,
+	providePersonHandler,
 )
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。

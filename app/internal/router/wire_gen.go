@@ -80,16 +80,26 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	deviceStagingHandler := provideDeviceStagingHandler(deviceStagingService, deviceDiscoveryService)
 	systemHandler := provideSystemHandler(db, rdb, cfg, scheduler)
 	licenseRepository := repository.NewLicenseRepository(db)
-	licenseHandler, licenseService := provideLicenseHandler(licenseRepository, db)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager, licenseHandler, licenseService)
+	licenseHandler := provideLicenseHandler(licenseRepository, db)
+	licenseService := provideLicenseService(licenseRepository, db)
+	personRepository := repository.NewPersonRepository(db)
+	personGroupRepository := repository.NewPersonGroupRepository(db)
+	importTaskRepository := repository.NewImportTaskRepository(db)
+	storage, err := provideFileStorage(cfg)
+	if err != nil {
+		return nil, err
+	}
+	personHandler := providePersonHandler(personRepository, personGroupRepository, importTaskRepository, storage, client)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager, licenseHandler, licenseService, personHandler)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository, repository.NewPersonRepository, repository.NewPersonGroupRepository, repository.NewPersonEmbeddingRepository, repository.NewImportTaskRepository)
 
 var serviceSet = wire.NewSet(
+	provideFileStorage,
 	provideAvatarStorage,
 	providePermissionCache,
 	provideFileOptions,
@@ -101,10 +111,12 @@ var serviceSet = wire.NewSet(
 	provideDeviceStagingService,
 	provideDeviceDiscoveryService,
 	provideSystemHandler,
-	provideLicenseHandler,
+	provideLicenseService,
 )
 
 var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceStagingHandler,
 	provideDeviceHandler,
 	provideDeviceGroupHandler,
+	provideLicenseHandler,
+	providePersonHandler,
 )

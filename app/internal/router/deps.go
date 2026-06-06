@@ -43,6 +43,7 @@ type RouteDeps struct {
 	DeviceStagingHandler *handler.DeviceStagingHandler
 	SystemHandler        *handler.SystemHandler
 	StreamManager        *service.StreamManager
+	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -86,8 +87,7 @@ func provideWSHandler(hub *ws.Hub, jwtManager *jwt.Manager, cfg *Config) *handle
 	return handler.NewWSHandler(hub, jwtManager, cfg.AllowOrigins)
 }
 
-func provideStreamManager(deviceRepo *repository.DeviceRepository, mediaStreamRepo *repository.MediaStreamRepository) *service.StreamManager {
-	engineClient := &service.MockEngineClient{}
+func provideStreamManager(engineClient service.EngineClient, deviceRepo *repository.DeviceRepository, mediaStreamRepo *repository.MediaStreamRepository) *service.StreamManager {
 	sm := service.NewStreamManager(engineClient, deviceRepo, mediaStreamRepo, zap.L())
 	sm.StartBackgroundTasks(context.Background())
 	return sm
@@ -167,6 +167,7 @@ func newRouteDeps(
 	deviceStagingHandler *handler.DeviceStagingHandler,
 	systemHandler *handler.SystemHandler,
 	streamManager *service.StreamManager,
+	algorithmPackageHandler *handler.AlgorithmPackageHandler,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:            permCache,
@@ -188,6 +189,7 @@ func newRouteDeps(
 		DeviceStagingHandler: deviceStagingHandler,
 		SystemHandler:        systemHandler,
 		StreamManager:        streamManager,
+		AlgorithmPackageHandler: algorithmPackageHandler,
 	}
 }
 
@@ -256,4 +258,20 @@ func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.Strea
 	stagingHandler := handler.NewDeviceStagingHandler(stagingSvc, discoverySvc)
 
 	return webhookHandler, playHandler, recordingHandler, stagingHandler
+}
+
+func provideEngineClient(cfg *Config) service.EngineClient {
+	timeout := time.Duration(cfg.EngineTimeoutSec) * time.Second
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	return service.NewIPCEngineClient(cfg.EngineSocketPath, timeout, zap.L())
+}
+
+func provideAlgorithmOptions(cfg *Config) service.AlgorithmOptions {
+	return service.AlgorithmOptions{
+		MaxAlgoFileSizeBytes: int64(cfg.MaxAlgoFileSizeMB) << 20,
+		LocalUploadDir:       cfg.LocalUploadDir,
+		PublicURL:            cfg.LocalPublicURL,
+	}
 }

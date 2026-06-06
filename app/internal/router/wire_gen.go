@@ -69,8 +69,9 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	deviceRepository := repository.NewDeviceRepository(db)
 	client := task.NewClient(rdb)
 	zlmClient := provideZLMClient(cfg)
+	engineClient := provideEngineClient(cfg)
 	mediaStreamRepository := repository.NewMediaStreamRepository(db)
-	streamManager := provideStreamManager(deviceRepository, mediaStreamRepository)
+	streamManager := provideStreamManager(engineClient, deviceRepository, mediaStreamRepository)
 	deviceHandler := provideDeviceHandler(deviceRepository, cache, client, zlmClient, streamManager)
 	deviceGroupRepository := repository.NewDeviceGroupRepository(db)
 	deviceGroupHandler := provideDeviceGroupHandler(deviceGroupRepository)
@@ -79,13 +80,17 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	deviceDiscoveryService := provideDeviceDiscoveryService(deviceStagingService)
 	deviceStagingHandler := provideDeviceStagingHandler(deviceStagingService, deviceDiscoveryService)
 	systemHandler := provideSystemHandler(db, rdb, cfg, scheduler)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager)
+	algorithmPackageRepository := repository.NewAlgorithmPackageRepository(db)
+	algorithmOptions := provideAlgorithmOptions(cfg)
+	algorithmPackageService := service.NewAlgorithmPackageService(algorithmPackageRepository, algorithmOptions, rdb, engineClient)
+	algorithmPackageHandler := handler.NewAlgorithmPackageHandler(algorithmPackageService)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager, algorithmPackageHandler)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewAlgorithmPackageRepository)
 
 var serviceSet = wire.NewSet(
 	provideAvatarStorage,
@@ -99,9 +104,11 @@ var serviceSet = wire.NewSet(
 	provideDeviceStagingService,
 	provideDeviceDiscoveryService,
 	provideSystemHandler,
+	provideEngineClient,
+	provideAlgorithmOptions, service.NewAlgorithmPackageService,
 )
 
 var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceStagingHandler,
 	provideDeviceHandler,
-	provideDeviceGroupHandler,
+	provideDeviceGroupHandler, handler.NewAlgorithmPackageHandler,
 )

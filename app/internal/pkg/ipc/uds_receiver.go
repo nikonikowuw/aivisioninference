@@ -20,12 +20,13 @@ type SignalType uint16
 
 const (
 	// Go → C++ 指令 (0x0100 - 0x01FF)
-	SignalStartStream       SignalType = 0x0100
-	SignalStopStream        SignalType = 0x0101
-	SignalUpdateAlgoConfig  SignalType = 0x0102
+	SignalStartStream        SignalType = 0x0100
+	SignalStopStream         SignalType = 0x0101
+	SignalUpdateAlgoConfig   SignalType = 0x0102
 	SignalUpdateStreamConfig SignalType = 0x0103
-	SignalHeartbeat         SignalType = 0x0104
-	SignalShutdown          SignalType = 0x01FF
+	SignalHeartbeat          SignalType = 0x0104
+	SignalStartSelfCheck     SignalType = 0x0105
+	SignalShutdown           SignalType = 0x01FF
 
 	// C++ → Go 结果 (0x0200 - 0x02FF)
 	SignalInferenceResult   SignalType = 0x0200
@@ -61,16 +62,12 @@ type UDSReceiver struct {
 	mu         sync.RWMutex
 	handlers   map[SignalType][]MessageHandler
 
-	running        atomic.Bool
-	reconnectCount atomic.Int64
-	sequenceID     atomic.Uint64
+	running    atomic.Bool
+	sequenceID atomic.Uint64
 
 	// 心跳监控
 	lastHeartbeat time.Time
 	hbMu          sync.RWMutex
-
-	// 缓冲区
-	readBuffer []byte
 
 	// 日志
 	logger *zap.Logger
@@ -81,7 +78,6 @@ type UDSReceiverConfig struct {
 	SocketPath       string
 	ReconnectDelay   time.Duration
 	MaxReconnectWait time.Duration
-	ReadBufferSize   int
 }
 
 // DefaultUDSReceiverConfig 默认配置
@@ -90,7 +86,6 @@ func DefaultUDSReceiverConfig(socketPath string) UDSReceiverConfig {
 		SocketPath:       socketPath,
 		ReconnectDelay:   1 * time.Second,
 		MaxReconnectWait: 30 * time.Second,
-		ReadBufferSize:   65536,
 	}
 }
 
@@ -99,7 +94,6 @@ func NewUDSReceiver(cfg UDSReceiverConfig) *UDSReceiver {
 	return &UDSReceiver{
 		socketPath: cfg.SocketPath,
 		handlers:   make(map[SignalType][]MessageHandler),
-		readBuffer: make([]byte, cfg.ReadBufferSize),
 		logger:     zap.L().With(zap.String("component", "uds_receiver")),
 	}
 }
@@ -220,34 +214,28 @@ func (r *UDSReceiver) readLoop() {
 			return
 		}
 
-		// 读取消息头 (10 字节: 2 SignalType + 8 SequenceID)
-		header := make([]byte, 10)
+		// 读取消息头 (8 字节: 4 SignalType LE + 4 PayloadLen LE)
+		// 对齐 C++ IPCServer::SendResponse 线缆格式
+		header := make([]byte, 8)
 		if _, err := io.ReadFull(conn, header); err != nil {
 			r.logger.Warn("UDS read header failed", zap.Error(err))
 			r.reconnect()
 			return
 		}
 
-		signalType := SignalType(binary.BigEndian.Uint16(header[0:2]))
-		seqID := binary.BigEndian.Uint64(header[2:10])
-
-		// 读取载荷长度 (4 字节小端) + 载荷内容
-		var payload []byte
-		lenBuf := make([]byte, 4)
-		if _, err := io.ReadFull(conn, lenBuf); err != nil {
-			r.logger.Warn("UDS read payload length failed", zap.Error(err))
-			r.reconnect()
+		signalType := SignalType(binary.LittleEndian.Uint32(header[0:4]))
+		payloadLen := binary.LittleEndian.Uint32(header[4:8])
+		const maxPayloadSize = 16 * 1024 * 1024 // 16MB 上限
+		if payloadLen > maxPayloadSize {
+			r.logger.Error("UDS payload too large",
+				zap.Uint32("payload_len", payloadLen))
+			r.Disconnect()
 			return
 		}
-		payloadLen := binary.LittleEndian.Uint32(lenBuf)
+
+		var payload []byte
+		seqID := uint64(0) // 新格式无 sequence_id，默认 0
 		if payloadLen > 0 {
-			const maxPayloadSize = 16 * 1024 * 1024 // 16MB 上限
-			if payloadLen > maxPayloadSize {
-				r.logger.Error("UDS payload too large",
-					zap.Uint32("payload_len", payloadLen))
-				r.Disconnect()
-				return
-			}
 			payload = make([]byte, payloadLen)
 			if _, err := io.ReadFull(conn, payload); err != nil {
 				r.logger.Warn("UDS read payload failed", zap.Error(err))
@@ -301,8 +289,6 @@ func (r *UDSReceiver) dispatch(msg *Message) {
 
 // reconnect 重连逻辑
 func (r *UDSReceiver) reconnect() {
-	r.reconnectCount.Add(1)
-
 	delay := 1 * time.Second
 	for r.running.Load() {
 		r.logger.Info("attempting to reconnect to C++ engine",

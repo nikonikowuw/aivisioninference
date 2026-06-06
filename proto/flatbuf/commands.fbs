@@ -117,6 +117,14 @@ table StreamStatusCmd {
     device_id: string; // 若为空则查询所有
 }
 
+/// 启动自检指令 (SignalType.StartSelfCheck)
+table StartSelfCheckCmd {
+    download_url: string (required);
+    token: string (required);
+    algorithm_name: string (required);
+    version: string (required);
+}
+
 root_type StartStreamCmd;
 root_type StopStreamCmd;
 root_type UpdateAlgoConfigCmd;
@@ -128,3 +136,4 @@ root_type StreamStopCmd;
 root_type StreamPlaybackStartCmd;
 root_type StreamPlaybackStopCmd;
 root_type StreamStatusCmd;
+root_type StartSelfCheckCmd;

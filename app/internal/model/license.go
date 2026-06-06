@@ -15,7 +15,7 @@ type DeviceLicense struct {
 	BaseModel
 	DeviceSN     string     `gorm:"type:varchar(128);not null;index" json:"device_sn"`
 	LicenseKey   string     `gorm:"type:text;not null" json:"-"`
-	Algorithms   []string   `gorm:"type:text[]" json:"algorithms,omitempty"`
+	Algorithms   []string   `gorm:"type:jsonb;serializer:json" json:"algorithms,omitempty"`
 	MaxConcurrent int       `gorm:"default:1" json:"max_concurrent"`
 	MaxVersions  int        `gorm:"default:1" json:"max_versions"`
 	IssuedAt     time.Time  `json:"issued_at"`

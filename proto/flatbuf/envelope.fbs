@@ -16,6 +16,7 @@ enum SignalType:ushort {
     UpdateAlgoConfig = 0x0102,
     UpdateStreamConfig = 0x0103,
     Heartbeat = 0x0104,
+    StartSelfCheck = 0x0105,
     Shutdown = 0x01FF,
 
     // C++ → Go 结果 (0x0200 - 0x02FF)

@@ -65,6 +65,7 @@ const (
 	ErrNetworkConfirmFailed   = 10039
 	ErrWebhookPushFailed      = 10040
 	ErrNotImplemented         = 10041
+	ErrTooManyRequests        = 10042
 
 	// Server errors (5xxxx).
 	ErrInternal = 50001

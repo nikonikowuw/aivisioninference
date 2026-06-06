@@ -28,6 +28,8 @@ storage:
   driver: local
   chunk_size: 5      # MB
   max_file_size: 100 # MB
+  max_algo_file_size: 1024 # MB
+  max_upload_concurrency: 2
   local:
     upload_dir: ./uploads
     public_url: /uploads
@@ -85,3 +87,7 @@ rate_limit:
 zlm:
   api_url: "http://localhost:80"
   secret: "035c73f7-bb6b-4889-a715-d9eb2d1925cc"
+
+engine:
+  socket_path: /tmp/aivision_ipc.sock
+  timeout_sec: 5

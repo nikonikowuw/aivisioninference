@@ -26,6 +26,7 @@ func InitializeApp() (*App, error) {
 		router.New,
 		provideHTTPServer,
 		router.NewAsynqServer,
+		router.NewAsynqScheduler,
 		provideAsynqMux,
 		wire.Struct(new(App), "*"),
 	)

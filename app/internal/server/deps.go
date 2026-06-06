@@ -56,10 +56,14 @@ func provideRouterConfig(cfg *config.Config) *router.Config {
 		PermissionTreeRedisEnable: true,
 		ChunkSizeMB:               cfg.Storage.ChunkSizeMB,
 		MaxFileSizeMB:             cfg.Storage.MaxFileSizeMB,
+		MaxAlgoFileSizeMB:         cfg.Storage.MaxAlgoFileSizeMB,
+		MaxUploadConcurrency:      cfg.Storage.MaxUploadConcurrency,
 		LocalUploadDir:            cfg.Storage.Local.UploadDir,
 		LocalPublicURL:            cfg.Storage.Local.PublicURL,
 		ZLMAPIURL:                 cfg.ZLM.APIURL,
 		ZLMSecret:                 cfg.ZLM.Secret,
+		EngineSocketPath:          cfg.Engine.SocketPath,
+		EngineTimeoutSec:          cfg.Engine.TimeoutSec,
 	}
 }
 

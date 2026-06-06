@@ -33,13 +33,18 @@ func NewIPCEngineClient(socketPath string, timeout time.Duration, logger *zap.Lo
 }
 
 func (c *IPCEngineClient) sendCommand(ctx context.Context, cmdType uint32, payload []byte) ([]byte, error) {
-	conn, err := net.DialTimeout("unix", c.socketPath, c.timeout)
+	return c.sendCommandWithTimeout(ctx, cmdType, payload, c.timeout)
+}
+
+// sendCommandWithTimeout 发送 IPC 命令并等待响应，使用自定义超时（用于长时间操作如自检）。
+func (c *IPCEngineClient) sendCommandWithTimeout(_ context.Context, cmdType uint32, payload []byte, timeout time.Duration) ([]byte, error) {
+	conn, err := net.DialTimeout("unix", c.socketPath, timeout)
 	if err != nil {
 		return nil, fmt.Errorf("dial uds: %w", err)
 	}
 	defer conn.Close()
 
-	_ = conn.SetDeadline(time.Now().Add(c.timeout))
+	_ = conn.SetDeadline(time.Now().Add(timeout))
 
 	// 信封格式：[4字节命令类型][4字节payload长度][payload]
 	header := make([]byte, 8)
@@ -165,4 +170,29 @@ func (c *IPCEngineClient) GetStreamStatus(ctx context.Context, deviceID string) 
 		DeviceID: deviceID,
 		Status:   "unknown",
 	}, nil
+}
+
+// StartSelfCheck 发送 StartSelfCheck 指令给 C++ 引擎，并同步等待返回自检结果
+func (c *IPCEngineClient) StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error {
+	c.logger.Info("IPC: StartSelfCheck", zap.String("algo_name", algoName), zap.String("version", version))
+
+	// 构建 FlatBuffers payload
+	fbData := ipc.StartSelfCheckCmdToFlatBuffers(downloadURL, token, algoName, version)
+
+	// 206 = StartSelfCheck — 使用较长超时，引擎需要下载+解压+dlopen+自检
+	resp, err := c.sendCommandWithTimeout(ctx, 206, fbData, 5*time.Minute)
+	if err != nil {
+		return fmt.Errorf("发送自检命令失败: %w", err)
+	}
+
+	result := ipc.FlatBuffersToAlgoLoadResult(resp)
+	if result == nil {
+		return fmt.Errorf("引擎未返回自检结果")
+	}
+
+	if !result.Success {
+		return fmt.Errorf("算法自检失败: %s (错误码: %s)", result.ErrorMessage, result.ErrorCode)
+	}
+
+	return nil
 }

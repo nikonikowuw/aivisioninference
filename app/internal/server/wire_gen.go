@@ -10,7 +10,6 @@ import (
 	"github.com/niko-admin/niko-admin/internal/config"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/router"
-	"github.com/niko-admin/niko-admin/internal/task"
 )
 
 // Injectors from wire.go:
@@ -34,9 +33,7 @@ func InitializeApp() (*App, error) {
 	hub := ws.NewHub()
 	routerConfig := provideRouterConfig(configConfig)
 	zapLogger := provideAccessLogger(logger)
-	scheduler := provideAsynqScheduler(client)
-	// 注册定时任务
-	task.RegisterPeriodicTasks(scheduler)
+	scheduler := router.NewAsynqScheduler(client)
 	routerRouter := router.New(db, client, manager, hub, routerConfig, zapLogger, scheduler)
 	server := provideHTTPServer(routerRouter, configConfig)
 	asynqServer := router.NewAsynqServer(client)

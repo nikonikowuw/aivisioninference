@@ -24,6 +24,8 @@ export const common = {
   status: {
     active: "正常",
     inactive: "禁用",
+    enabled: "启用",
+    disabled: "禁用",
     pending: "等待中",
     running: "运行中",
     completed: "已完成",
@@ -209,6 +211,10 @@ export const common = {
   cancel: "取消",
   save: "保存",
   minutes: "分钟",
+  empty: {
+    title: "暂无数据",
+    description: "没有找到符合条件的记录",
+  },
 } as const;
 
 export default common;

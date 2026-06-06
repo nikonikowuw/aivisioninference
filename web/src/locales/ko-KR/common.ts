@@ -196,6 +196,10 @@ export const common = {
   cancel: "취소",
   save: "저장",
   minutes: "분",
+  empty: {
+    title: "데이터 없음",
+    description: "조건에 맞는 기록을 찾을 수 없습니다",
+  },
 } as const;
 
 export default common;

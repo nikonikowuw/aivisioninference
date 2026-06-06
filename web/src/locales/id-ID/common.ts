@@ -200,6 +200,10 @@ export const common = {
   cancel: "Batal",
   save: "Simpan",
   minutes: "menit",
+  empty: {
+    title: "Tidak Ada Data",
+    description: "Tidak ada catatan yang ditemukan sesuai kriteria Anda",
+  },
 } as const;
 
 export default common;

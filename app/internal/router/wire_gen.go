@@ -80,14 +80,22 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	deviceStagingHandler := provideDeviceStagingHandler(deviceStagingService, deviceDiscoveryService)
 	systemHandler := provideSystemHandler(db, rdb, cfg, scheduler)
 	licenseRepository := repository.NewLicenseRepository(db)
-	licenseHandler, licenseService := provideLicenseHandler(licenseRepository, db)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager, licenseHandler, licenseService)
+	licenseService := service.NewLicenseService(licenseRepository, db)
+	licenseHandler := provideLicenseHandler(licenseService)
+	gb28181DeviceRepository := repository.NewGB28181DeviceRepository(db)
+	smartRecordRepository := repository.NewSmartRecordRepository(db)
+	sipService := provideSIPServiceWithZLM(deviceRepository, gb28181DeviceRepository, mediaStreamRepository, smartRecordRepository, client, zlmClient, streamManager, cfg, cache, hub)
+	gb28181Handler := provideGB28181Handler(sipService, cache, hub)
+	mediaGB28181Handler := provideMediaGB28181Handler(sipService)
+	smartRecordHandler := provideSmartRecordHandler(smartRecordRepository)
+	gb28181ConfigHandler := provideGB28181ConfigHandler(zlmClient)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager, licenseHandler, licenseService, gb28181Handler, mediaGB28181Handler, smartRecordHandler, gb28181ConfigHandler, sipService)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository, repository.NewGB28181DeviceRepository, repository.NewSmartRecordRepository)
 
 var serviceSet = wire.NewSet(
 	provideAvatarStorage,
@@ -100,11 +108,15 @@ var serviceSet = wire.NewSet(
 	provideStreamManager,
 	provideDeviceStagingService,
 	provideDeviceDiscoveryService,
-	provideSystemHandler,
-	provideLicenseHandler,
+	provideSystemHandler, service.NewLicenseService, provideSIPServiceWithZLM,
 )
 
 var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceStagingHandler,
 	provideDeviceHandler,
 	provideDeviceGroupHandler,
+	provideLicenseHandler,
+	provideGB28181Handler,
+	provideMediaGB28181Handler,
+	provideSmartRecordHandler,
+	provideGB28181ConfigHandler,
 )

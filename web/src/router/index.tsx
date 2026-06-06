@@ -27,6 +27,9 @@ import {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
+  MdFace,
+  MdLabel,
+  MdFileUpload,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -52,6 +55,9 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
+  MdFace,
+  MdLabel,
+  MdUpload: MdFileUpload,
 };
 
 // 菜单 code 到组件的映射
@@ -74,6 +80,8 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'feedback': () => import('../views/admin/feedback'),
   'system-config': () => import('../views/admin/system/SystemConfig'),
   'license': () => import('../views/admin/license'),
+  'persons': () => import('../views/admin/persons'),
+  'person-groups': () => import('../views/admin/persons/groups'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();

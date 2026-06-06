@@ -85,6 +85,31 @@ export const adminRoutes: RouteConfig[] = [
     ],
   },
   {
+    id: 'person-management',
+    path: '/person-management',
+    i18nKey: 'menu:person-management',
+    icon: 'MdFace',
+    layout: '/admin',
+    children: [
+      {
+        id: 'persons',
+        path: '/persons',
+        i18nKey: 'menu:persons',
+        icon: 'MdFace',
+        component: () => import('../views/admin/persons'),
+        layout: '/admin',
+      },
+      {
+        id: 'person-groups',
+        path: '/person-groups',
+        i18nKey: 'menu:person-groups',
+        icon: 'MdFolder',
+        component: () => import('../views/admin/persons/groups'),
+        layout: '/admin',
+      },
+    ],
+  },
+  {
     id: 'user-management',
     path: '/user-management',
     i18nKey: 'menu:user-management',

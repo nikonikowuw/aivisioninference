@@ -56,6 +56,12 @@ namespace aivision
             /// 注册指令 Handler
             void RegisterHandler(uint16_t signal_type, CommandHandler handler);
 
+            /// 获取当前线程正在处理的客户端 fd (线程局部变量)
+            static int GetActiveClientFd();
+
+            /// 发送同步响应到指定的客户端 fd
+            bool SendResponse(int client_fd, uint32_t resp_type, const uint8_t *payload, size_t payload_len);
+
             /// 发送结果消息到 Go 侧
             bool SendMessage(uint16_t signal_type,
                              flatbuffers::FlatBufferBuilder &fbb);

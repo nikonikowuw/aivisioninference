@@ -109,6 +109,34 @@ namespace aivision
             unlink(config_.socket_path.c_str());
         }
 
+        static thread_local int t_active_client_fd = -1;
+
+        int IPCServer::GetActiveClientFd()
+        {
+            return t_active_client_fd;
+        }
+
+        bool IPCServer::SendResponse(int client_fd, uint32_t resp_type, const uint8_t *payload, size_t payload_len)
+        {
+            if (client_fd < 0) return false;
+            uint8_t header[8];
+            std::memcpy(header, &resp_type, sizeof(uint32_t));
+            std::memcpy(header + 4, &payload_len, sizeof(uint32_t));
+
+            if (write(client_fd, header, 8) != 8)
+            {
+                return false;
+            }
+            if (payload_len > 0 && payload)
+            {
+                if (write(client_fd, payload, payload_len) != static_cast<ssize_t>(payload_len))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         void IPCServer::RegisterHandler(uint16_t signal_type, CommandHandler handler)
         {
             std::lock_guard<std::mutex> lock(handlers_mutex_);
@@ -163,6 +191,7 @@ namespace aivision
 
         void IPCServer::HandleClient(int client_fd)
         {
+            t_active_client_fd = client_fd;
             auto buffer = std::make_unique<uint8_t[]>(config_.recv_buffer_size);
 
             while (running_.load())
@@ -176,6 +205,7 @@ namespace aivision
             }
 
             close(client_fd);
+            t_active_client_fd = -1;
 
             // 从客户端列表移除
             std::lock_guard<std::mutex> lock(clients_mutex_);
@@ -186,11 +216,10 @@ namespace aivision
             }
         }
 
-        bool IPCServer::ProcessMessage(int client_fd, uint8_t *buffer, size_t size)
+        bool IPCServer::ProcessMessage(int /*client_fd*/, uint8_t *buffer, size_t size)
         {
-            // 最小消息大小: 4 字节头 (2字节 signal_type + 2字节 reserved)
-            // + 8 字节 sequence_id = 12 字节
-            constexpr size_t kMinMessageSize = 12;
+            // 信封格式：[4字节命令类型][4字节payload长度][payload]
+            constexpr size_t kMinMessageSize = 8;
 
             if (!buffer || size < kMinMessageSize)
             {
@@ -199,36 +228,41 @@ namespace aivision
                 return false;
             }
 
-            // 解析消息头
-            uint16_t signal_type = 0;
-            std::memcpy(&signal_type, buffer, sizeof(uint16_t));
+            uint32_t cmd_type = 0;
+            std::memcpy(&cmd_type, buffer, sizeof(uint32_t));
 
-            uint64_t sequence_id = 0;
-            std::memcpy(&sequence_id, buffer + 4, sizeof(uint64_t));
+            uint32_t payload_len = 0;
+            std::memcpy(&payload_len, buffer + 4, sizeof(uint32_t));
 
-            // payload 指向消息头之后的数据
+            if (size < kMinMessageSize + payload_len)
+            {
+                std::cerr << "[IPC] Incomplete message: size=" << size
+                          << ", expected=" << kMinMessageSize + payload_len << std::endl;
+                return false;
+            }
+
             const uint8_t *payload = buffer + kMinMessageSize;
-            size_t payload_size = size - kMinMessageSize;
+            size_t payload_size = payload_len;
 
             // 查找并分发到注册的 Handler
             std::lock_guard<std::mutex> lock(handlers_mutex_);
-            auto it = handlers_.find(signal_type);
+            auto it = handlers_.find(cmd_type);
             if (it != handlers_.end())
             {
                 try
                 {
-                    it->second(payload, payload_size, sequence_id);
+                    it->second(payload, payload_size, 0);
                 }
                 catch (const std::exception &e)
                 {
-                    std::cerr << "[IPC] Handler exception for signal_type="
-                              << signal_type << ": " << e.what() << std::endl;
+                    std::cerr << "[IPC] Handler exception for cmd_type="
+                              << cmd_type << ": " << e.what() << std::endl;
                     return false;
                 }
             }
             else
             {
-                std::cerr << "[IPC] No handler for signal_type=" << signal_type << std::endl;
+                std::cerr << "[IPC] No handler for cmd_type=" << cmd_type << std::endl;
             }
 
             return true;

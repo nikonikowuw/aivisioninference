@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+if(APPLE)
+    execute_process(COMMAND xcrun --sdk macosx --show-sdk-path OUTPUT_VARIABLE MACOSX_SDK_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    include_directories(SYSTEM "${MACOSX_SDK_PATH}/usr/include/c++/v1")
+endif()
+
 # ============================================================
 # 依赖
 # ============================================================
@@ -14,6 +19,9 @@ find_package(Flatbuffers REQUIRED)
 
 # Threads
 find_package(Threads REQUIRED)
+
+# CURL
+find_package(CURL REQUIRED)
 
 # ============================================================
 # 源文件
@@ -82,11 +90,15 @@ target_include_directories(aivision-engine PRIVATE
 )
 
 target_link_libraries(aivision-engine PRIVATE
-    ${FLATBUFFERS_LIBRARIES}
+    flatbuffers::flatbuffers
     Threads::Threads
     dl
-    rt
+    ${CURL_LIBRARIES}
 )
+
+if(NOT APPLE)
+    target_link_libraries(aivision-engine PRIVATE rt)
+endif()
 
 # ============================================================
 # 安装

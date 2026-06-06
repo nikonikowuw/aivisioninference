@@ -126,6 +126,9 @@ namespace aivision
         /// 处理 StreamPlaybackStop 指令
         void HandleStreamPlaybackStop(const uint8_t *payload, size_t size, uint64_t seq);
 
+        /// 处理 StartSelfCheck 指令
+        void HandleStartSelfCheck(const uint8_t *payload, size_t size, uint64_t seq);
+
         EngineConfig config_;
         std::atomic<bool> running_{false};
         std::atomic<bool> initialized_{false};

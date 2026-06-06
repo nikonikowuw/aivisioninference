@@ -97,3 +97,15 @@ namespace aivision
 
     } // namespace algo
 } // namespace aivision
+
+#include <cstdlib>
+
+extern "C" {
+    void algo_free_result(infer_result_t *result) {
+        if (result && result->result_json) {
+            std::free(result->result_json);
+            result->result_json = nullptr;
+            result->result_json_len = 0;
+        }
+    }
+}

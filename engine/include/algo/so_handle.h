@@ -12,6 +12,7 @@
 #include <string>
 #include <functional>
 #include <vector>
+#include <dlfcn.h>
 
 #include "abi_contract.h"
 

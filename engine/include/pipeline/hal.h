@@ -98,7 +98,7 @@ namespace aivision
         class HALManager
         {
         public:
-            HALManager() = default;
+            HALManager() : pipeline_(nullptr, nullptr) {}
             ~HALManager() = default;
 
             /// 加载指定平台的流水线动态库

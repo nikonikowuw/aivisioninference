@@ -1,6 +1,8 @@
 // AlgoManager 实现
 #include "algo/algo_manager.h"
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 namespace aivision
 {

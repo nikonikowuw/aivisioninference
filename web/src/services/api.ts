@@ -870,3 +870,56 @@ export const deviceStagingApi = {
       body: JSON.stringify({ interface: networkInterface || 'eth0' }),
     }),
 };
+
+export interface FingerprintResponse {
+  device_sn: string;
+  fingerprint: string;
+  hash_algorithm: string;
+}
+
+export interface LicenseInfo {
+  id: string;
+  license_id: string;
+  license_type: string;
+  device_sn: string;
+  device_fingerprint: string;
+  algorithms: string[];
+  max_streams: number;
+  features: string[];
+  not_before: string;
+  not_after: string | null;
+  expire_action: string;
+  status: string;
+  remaining_days: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LicenseListParams {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  status?: string;
+  [key: string]: string | number | undefined;
+}
+
+export const licenseApi = {
+  getFingerprint: () =>
+    request<FingerprintResponse>('/license/fingerprint'),
+  upload: async (file: File): Promise<LicenseInfo> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<LicenseInfo>('/license/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  getActive: () =>
+    request<LicenseInfo>('/license/active'),
+  list: (params?: LicenseListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<LicenseInfo>>(`/license${query}`);
+  },
+  check: (algorithm: string) =>
+    request<{ authorized: boolean; algorithm: string }>(`/license/check${buildQuery({ algorithm })}`),
+};

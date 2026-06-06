@@ -118,6 +118,23 @@ export const adminRoutes: RouteConfig[] = [
     ],
   },
   {
+    id: 'license-management',
+    path: '/license-management',
+    i18nKey: 'menu:license-management',
+    icon: 'MdVpnKey',
+    layout: '/admin',
+    children: [
+      {
+        id: 'license',
+        path: '/license-management/license',
+        i18nKey: 'menu:license',
+        icon: 'MdVpnKey',
+        component: () => import('../views/admin/license'),
+        layout: '/admin',
+      },
+    ],
+  },
+  {
     id: 'system-management',
     path: '/system-management',
     i18nKey: 'menu:system-management',

@@ -85,6 +85,14 @@ export const adminRoutes: RouteConfig[] = [
     ],
   },
   {
+    id: 'smart-records',
+    path: '/smart-records',
+    i18nKey: 'menu:smart-records',
+    icon: 'MdNotificationsActive',
+    component: () => import('../views/admin/smart-records'),
+    layout: '/admin',
+  },
+  {
     id: 'user-management',
     path: '/user-management',
     i18nKey: 'menu:user-management',

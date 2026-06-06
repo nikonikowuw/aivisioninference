@@ -251,8 +251,6 @@ func addAuditLogActionTypeColumnSQL() string {
 		ADD COLUMN IF NOT EXISTS action_type varchar(128);`
 }
 
-
-
 // migrateMultiLevelMenu 将已有的平铺菜单迁移为两级结构。
 // 幂等操作：已存在的父菜单不会重复创建，子菜单的 ParentID 仅在为空时更新。
 // 保持现有角色绑定不变。
@@ -504,6 +502,19 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "recording:stop", Name: "停止录像", Path: "/api/v1/media/recordings/stop", Method: "POST"},
 				}},
 			},
+		},
+		{
+			Name: "智能记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive",
+			Buttons: []buttonInfo{
+				{Code: "records:recognition:list", Name: "查看识别记录", Path: "/api/v1/smart-records", Method: "GET"},
+				{Code: "records:alarm:list", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
+				{Code: "records:capture:list", Name: "查看抓拍记录", Path: "/api/v1/smart-records", Method: "GET"},
+				{Code: "records:export", Name: "导出智能记录", Path: "/api/v1/smart-records/export", Method: "GET"},
+				{Code: "records:batch-delete", Name: "批量删除智能记录", Path: "/api/v1/smart-records/batch-delete", Method: "POST"},
+				{Code: "records:export-selected", Name: "导出选定智能记录", Path: "/api/v1/smart-records/export-selected", Method: "POST"},
+				{Code: "records:category-codes:list", Name: "查看类别编码", Path: "/api/v1/smart-records/category-codes", Method: "GET"},
+			},
+			Children: nil,
 		},
 		{
 			Name: "用户管理", Code: "user-management", Path: "/user-management", Icon: "MdPeople",

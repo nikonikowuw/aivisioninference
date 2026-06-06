@@ -17,6 +17,7 @@ import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
 import { license } from "./modules/license";
+import smartRecords from "./modules/smart-records";
 
 export default {
   common,
@@ -38,4 +39,5 @@ export default {
   "modules/media": media,
   "modules/system": system,
   "modules/license": license,
+  "modules/smart-records": smartRecords,
 };

@@ -8,6 +8,7 @@ export const menu = {
   "live-view": "Tampilan Langsung",
   "recordings": "Putar Ulang Rekaman",
   "stream-status": "Status Aliran",
+  "smart-records": "Rekaman Cerdas",
 
   "user-management": "Manajemen Pengguna",
   "users": "Pengguna",

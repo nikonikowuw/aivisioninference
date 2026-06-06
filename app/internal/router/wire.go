@@ -35,6 +35,7 @@ var repositorySet = wire.NewSet(
 	repository.NewDeviceGroupRepository,
 	repository.NewMediaStreamRepository,
 	repository.NewDiscoveredDeviceRepository,
+	repository.NewSmartRecordRepository,
 	repository.NewLicenseRepository,
 )
 
@@ -55,6 +56,7 @@ var serviceSet = wire.NewSet(
 	service.NewMailService,
 	service.NewEmailVerificationService,
 	service.NewFeedbackService,
+	service.NewSmartRecordService,
 	task.NewClient,
 	provideZLMClient,
 	provideStreamManager,
@@ -76,6 +78,7 @@ var handlerSet = wire.NewSet(
 	handler.NewMailHandler,
 	handler.NewFeedbackHandler,
 	handler.NewDashboardHandler,
+	handler.NewSmartRecordHandler,
 	provideDeviceStagingHandler,
 	provideDeviceHandler,
 	provideDeviceGroupHandler,

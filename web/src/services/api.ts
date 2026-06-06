@@ -211,9 +211,8 @@ function sanitizeDownloadFilename(filename: string): string {
   return cleaned || 'download.csv';
 }
 
-async function downloadFile(path: string, filename: string): Promise<void> {
-  const headers = authHeaders({ Accept: 'text/csv, application/octet-stream, application/json' });
-  const response = await fetchApi(path, { headers });
+/** 处理文件下载响应：校验错误、创建 Blob 并触发浏览器下载 */
+async function handleDownloadResponse(response: Response, filename: string): Promise<void> {
   redirectOnUnauthorized(response);
 
   const json = await parseOptionalApiResponse(response.clone());
@@ -238,6 +237,22 @@ async function downloadFile(path: string, filename: string): Promise<void> {
     link.remove();
     window.URL.revokeObjectURL(url);
   }
+}
+
+async function downloadFile(path: string, filename: string): Promise<void> {
+  const headers = authHeaders({ Accept: 'text/csv, application/octet-stream, application/json' });
+  const response = await fetchApi(path, { headers });
+  return handleDownloadResponse(response, filename);
+}
+
+/** POST 下载文件（用于带 body 的导出场景） */
+async function downloadFilePost(path: string, filename: string, body: unknown): Promise<void> {
+  const headers = authHeaders({
+    Accept: 'text/csv, application/octet-stream, application/json',
+    'Content-Type': 'application/json',
+  });
+  const response = await fetchApi(path, { headers, method: 'POST', body: JSON.stringify(body) });
+  return handleDownloadResponse(response, filename);
 }
 
 // Auth
@@ -293,6 +308,7 @@ export interface User {
   status: number;
   roles: Role[];
   menus: Menu[];
+  permission_codes: string[];
   created_at: string;
   updated_at: string;
 }
@@ -359,6 +375,55 @@ export interface Task {
   error: string;
   created_at: string;
   updated_at: string;
+}
+
+export type SmartRecordType = 'recognition' | 'alarm' | 'capture';
+
+export interface SmartRecord {
+  record_id: string;
+  record_type: SmartRecordType;
+  capture_time: string;
+  task_id?: string | null;
+  task_name?: string;
+  device_id?: string | null;
+  device_name?: string;
+  algorithm_name?: string;
+  algorithm_version?: string;
+  category_code?: number | null;
+  category_name?: string;
+  confidence?: number | null;
+  person_record_id?: string | null;
+  person_name?: string;
+  similarity?: number | null;
+  identity_id?: string;
+  alarm_type?: string;
+  alarm_level?: string;
+  alarm_major?: string;
+  snapshot_image_url?: string;
+  target_crop_url?: string;
+  background_image_url?: string;
+  person_image_url?: string;
+  raw_result?: unknown;
+  created_at: string;
+}
+
+export interface SmartRecordListParams extends CrudListParams {
+  type?: SmartRecordType;
+  device_id?: string;
+  task_id?: string;
+  device_name?: string;
+  task_name?: string;
+  alarm_type?: string;
+  alarm_level?: string;
+  person_name?: string;
+  business_tag?: string;
+  category_code?: string | number;
+  min_confidence?: string | number;
+  max_confidence?: string | number;
+  min_similarity?: string | number;
+  max_similarity?: string | number;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface BrandConfig {
@@ -627,6 +692,27 @@ export const tasksApi = {
   cancel: (id: string) => request<Task>(`/tasks/${id}/cancel`, { method: 'POST' }),
 };
 
+export const smartRecordsApi = {
+  list: (params?: SmartRecordListParams) =>
+    request<PaginatedData<SmartRecord>>(`/smart-records${buildQuery(params || {})}`),
+  exportCsv: (params?: SmartRecordListParams) =>
+    downloadFile(`/smart-records/export${buildQuery(params || {})}`, 'smart-records.csv'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/smart-records/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportSelected: (ids: string[]) =>
+    downloadFilePost('/smart-records/export-selected', 'smart-records-selected.csv', { ids }),
+  listCategoryCodes: () =>
+    request<CategoryCodeOption[]>('/smart-records/category-codes'),
+};
+
+export interface CategoryCodeOption {
+  value: number;
+  label: string;
+}
+
 export const brandConfigApi = {
   get: () => request<BrandConfig>('/system/brand-config'),
   save: (data: Pick<BrandConfig, 'system_name' | 'logo_url'>) =>
@@ -713,7 +799,6 @@ export const mediaApi = {
     request(`/media/stop?device_id=${deviceId}`, { method: 'POST' }),
   getSnapshot: (deviceId: string) => `${API_BASE}/media/snapshot?device_id=${deviceId}&token=${getAccessToken()}`,
 };
-
 
 export const feedbackApi = {
   list: (params?: FeedbackListParams) => {

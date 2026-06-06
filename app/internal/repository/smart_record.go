@@ -5,7 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
 // SmartRecordRepository handles SmartRecord persistence.
@@ -31,4 +33,107 @@ func (r *SmartRecordRepository) FindByID(ctx context.Context, id string) (*model
 		return nil, err
 	}
 	return &record, nil
+}
+
+// baseQuery 构建智能记录的基础查询：应用筛选条件、关联表 JOIN 和额外过滤。
+// 智能记录使用复合主键 (record_id, capture_time)，没有 id 列，
+// 因此不能使用 scopes.OrderByDefault()（会生成 "ORDER BY id DESC" 报错）。
+// 调用方需自行添加排序、分页或 LIMIT。
+func (r *SmartRecordRepository) baseQuery(ctx context.Context, req dto.SmartRecordListRequest) *gorm.DB {
+	query := r.db.WithContext(ctx).Table("smart_records").Scopes(req.FilterScopes()...)
+	query = r.joinRelations(query)
+	query = r.applyExtraFilters(query, req)
+	return query
+}
+
+// applyRecordSort 显式双字段排序：capture_time DESC 为默认主排序，created_at DESC 作为稳定 tiebreaker。
+func applyRecordSort(query *gorm.DB, req dto.SmartRecordListRequest) *gorm.DB {
+	return query.Scopes(scopes.OrderBy(req.Sort, req.Order, model.SmartRecord{}.SortableFields()...)).
+		Order("smart_records.capture_time DESC").
+		Order("smart_records.created_at DESC")
+}
+
+// List 分页查询智能记录。
+func (r *SmartRecordRepository) List(ctx context.Context, req dto.SmartRecordListRequest) ([]model.SmartRecord, int64, error) {
+	var items []model.SmartRecord
+	var total int64
+
+	query := r.baseQuery(ctx, req)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := applyRecordSort(query, req).
+		Scopes(scopes.Paginate(req.GetPage(), req.GetPageSize())).
+		Find(&items).Error
+	return items, total, err
+}
+
+// ListForExport 返回符合筛选条件的智能记录，用于导出。
+func (r *SmartRecordRepository) ListForExport(ctx context.Context, req dto.SmartRecordListRequest, limit int) ([]model.SmartRecord, error) {
+	var items []model.SmartRecord
+
+	err := applyRecordSort(r.baseQuery(ctx, req), req).
+		Limit(limit).
+		Find(&items).Error
+	return items, err
+}
+
+// BatchDelete 批量删除智能记录（硬删除，因为 smart_records 是分区表无软删除）。
+func (r *SmartRecordRepository) BatchDelete(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Where("record_id IN ?", ids).Delete(&model.SmartRecord{}).Error
+}
+
+// FindByIDs 根据 ID 列表查询智能记录（含底库图 JOIN）。
+func (r *SmartRecordRepository) FindByIDs(ctx context.Context, ids []string) ([]model.SmartRecord, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var items []model.SmartRecord
+	query := r.db.WithContext(ctx).Table("smart_records").Where("smart_records.record_id IN ?", ids)
+	query = r.joinRelations(query)
+	err := query.Find(&items).Error
+	return items, err
+}
+
+// ListCategoryCodes 返回所有启用的类别编码，用于前端下拉选择。
+func (r *SmartRecordRepository) ListCategoryCodes(ctx context.Context) ([]model.CategoryCode, error) {
+	var items []model.CategoryCode
+	err := r.db.WithContext(ctx).Where("enabled = ?", true).Order("category_code ASC").Find(&items).Error
+	return items, err
+}
+
+// joinRelations 将 persons 和 category_codes 表 LEFT JOIN 到查询中，用于获取底库人脸图 URL 和类别显示名称。
+// 注意：两张关联表均有索引（persons.id, category_codes.category_code），当前性能可接受。
+// 若 smart_records 数据量增长至千万级，应考虑预计算或缓存。
+func (r *SmartRecordRepository) joinRelations(query *gorm.DB) *gorm.DB {
+	return query.
+		Select(`smart_records.*,
+			COALESCE(p.image_url, '') AS person_image_url,
+			COALESCE(cc.display_name, '') AS category_name`).
+		Joins("LEFT JOIN persons p ON p.id = smart_records.person_record_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN category_codes cc ON cc.category_code = smart_records.category_code")
+}
+
+func (r *SmartRecordRepository) applyExtraFilters(query *gorm.DB, req dto.SmartRecordListRequest) *gorm.DB {
+	if req.MinConfidence != nil {
+		query = query.Where("confidence >= ?", *req.MinConfidence)
+	}
+	if req.MaxConfidence != nil {
+		query = query.Where("confidence <= ?", *req.MaxConfidence)
+	}
+	if req.MinSimilarity != nil {
+		query = query.Where("similarity >= ?", *req.MinSimilarity)
+	}
+	if req.MaxSimilarity != nil {
+		query = query.Where("similarity <= ?", *req.MaxSimilarity)
+	}
+	if req.BusinessTag != "" {
+		query = query.Where("? = ANY(business_tags)", req.BusinessTag)
+	}
+	return query
 }

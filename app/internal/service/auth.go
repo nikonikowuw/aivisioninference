@@ -29,16 +29,21 @@ import (
 	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
-// menuTreeCacheTTL 菜单树的 Redis 缓存过期时间。
+// menuTreeCacheTTL 菜单树与权限码的 Redis 缓存过期时间。
 const menuTreeCacheTTL = 10 * time.Minute
 
-// menuTreeCacheKey 根据角色 ID 列表生成菜单树的缓存键（按排序后的角色 ID 哈希）。
-func menuTreeCacheKey(roleIDs []string) string {
+// permCacheKey 根据角色 ID 列表生成缓存键（按排序后的角色 ID 哈希）。
+func permCacheKey(roleIDs []string, suffix string) string {
 	sorted := make([]string, len(roleIDs))
 	copy(sorted, roleIDs)
 	sort.Strings(sorted)
 	h := sha256.Sum256([]byte(strings.Join(sorted, ",")))
-	return fmt.Sprintf("perm:menu_tree:%x", h[:8])
+	return fmt.Sprintf("perm:%s:%x", suffix, h[:8])
+}
+
+// menuTreeCacheKey 根据角色 ID 列表生成菜单树的缓存键（按排序后的角色 ID 哈希）。
+func menuTreeCacheKey(roleIDs []string) string {
+	return permCacheKey(roleIDs, "menu_tree")
 }
 
 // AuthService 处理认证业务逻辑
@@ -89,6 +94,7 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
 	// 登录时构建完整菜单树，后续通过 Redis 缓存减少数据库查询。
 	menus := s.getMenuTree(ctx, roleIDs)
+	permissionCodes := s.getPermissionCodes(ctx, roleIDs)
 
 	accessToken, refreshToken, expiresIn, err := s.jwtManager.GenerateTokenPair(user.ID, user.Username, roleIDs, user.IsRoot)
 	if err != nil {
@@ -101,17 +107,18 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 		RefreshToken: refreshToken,
 		ExpiresIn:    expiresIn,
 		User: dto.UserInfo{
-			ID:            user.ID,
-			Username:      user.Username,
-			DisplayName:   user.DisplayName,
-			AvatarURL:     user.AvatarURL,
-			Email:         user.Email,
-			EmailVerified: user.EmailVerified,
-			Status:        user.Status,
-			Roles:         roleInfos,
-			Menus:         menus,
-			CreatedAt:     user.CreatedAt.Format(dto.DateTimeFormat),
-			UpdatedAt:     user.UpdatedAt.Format(dto.DateTimeFormat),
+			ID:              user.ID,
+			Username:        user.Username,
+			DisplayName:     user.DisplayName,
+			AvatarURL:       user.AvatarURL,
+			Email:           user.Email,
+			EmailVerified:   user.EmailVerified,
+			Status:          user.Status,
+			Roles:           roleInfos,
+			Menus:           menus,
+			PermissionCodes: permissionCodes,
+			CreatedAt:       user.CreatedAt.Format(dto.DateTimeFormat),
+			UpdatedAt:       user.UpdatedAt.Format(dto.DateTimeFormat),
 		},
 	}, nil
 }
@@ -141,19 +148,21 @@ func (s *AuthService) GetMe(ctx context.Context, userID string) (*dto.UserInfo, 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
 
 	menus := s.getMenuTree(ctx, roleIDs)
+	permissionCodes := s.getPermissionCodes(ctx, roleIDs)
 
 	return &dto.UserInfo{
-		ID:            user.ID,
-		Username:      user.Username,
-		DisplayName:   user.DisplayName,
-		AvatarURL:     user.AvatarURL,
-		Email:         user.Email,
-		EmailVerified: user.EmailVerified,
-		Status:        user.Status,
-		Roles:         roleInfos,
-		Menus:         menus,
-		CreatedAt:     user.CreatedAt.Format(dto.DateTimeFormat),
-		UpdatedAt:     user.UpdatedAt.Format(dto.DateTimeFormat),
+		ID:              user.ID,
+		Username:        user.Username,
+		DisplayName:     user.DisplayName,
+		AvatarURL:       user.AvatarURL,
+		Email:           user.Email,
+		EmailVerified:   user.EmailVerified,
+		Status:          user.Status,
+		Roles:           roleInfos,
+		Menus:           menus,
+		PermissionCodes: permissionCodes,
+		CreatedAt:       user.CreatedAt.Format(dto.DateTimeFormat),
+		UpdatedAt:       user.UpdatedAt.Format(dto.DateTimeFormat),
 	}, nil
 }
 
@@ -174,6 +183,46 @@ func toRoleInfosAndIDs(roles []model.Role) (infos []dto.RoleInfo, ids []string) 
 		})
 	}
 	return infos, ids
+}
+
+// getPermissionCodes 返回给定角色 ID 的全部权限编码，用于前端按钮和 Tab 级权限控制。
+// 使用 Redis 缓存减少数据库查询，TTL 与菜单树一致；查询失败时返回空切片以保证前端 fail-safe。
+func (s *AuthService) getPermissionCodes(ctx context.Context, roleIDs []string) []string {
+	if len(roleIDs) == 0 {
+		return []string{}
+	}
+
+	key := permCacheKey(roleIDs, "codes")
+
+	// 优先尝试 Redis 缓存
+	if s.rdb != nil {
+		if cached, err := s.rdb.Get(ctx, key).Bytes(); err == nil {
+			var codes []string
+			if json.Unmarshal(cached, &codes) == nil {
+				return codes
+			}
+		}
+	}
+
+	codes, err := s.permRepo.FindCodesByRoleIDs(ctx, roleIDs)
+	if err != nil {
+		zap.L().Error("find permission codes by role ids failed", zap.Error(err))
+		return []string{}
+	}
+	if codes == nil {
+		codes = []string{}
+	}
+
+	// 回写缓存（仅在有数据时写入，避免空值缓存击穿）
+	if s.rdb != nil && len(codes) > 0 {
+		if data, marshalErr := json.Marshal(codes); marshalErr == nil {
+			if setErr := s.rdb.Set(ctx, key, data, menuTreeCacheTTL).Err(); setErr != nil {
+				zap.L().Warn("set permission codes cache failed", zap.Error(setErr))
+			}
+		}
+	}
+
+	return codes
 }
 
 // getMenuTree 返回给定角色ID的菜单树，使用Redis缓存
@@ -513,10 +562,6 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 			}
 		}
 	}
-	if ext == ".jpeg" {
-		ext = ".jpg"
-	}
-
 	// 使用 UUID 命名存储文件，避免路径冲突和原文件名信息泄露。
 	storageName := uuid.New().String() + ext
 	storagePath := avatarPathPrefix + "/" + storageName

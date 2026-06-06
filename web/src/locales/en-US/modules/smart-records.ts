@@ -1,0 +1,65 @@
+export const smartRecords = {
+  title: "Smart Records",
+  subtitle: "Search recognition, alarm, and capture records in one place",
+  tabs: {
+    recognition: "Recognition",
+    alarm: "Alarm",
+    capture: "Capture",
+  },
+  filters: {
+    deviceName: "Device",
+    devicePlaceholder: "Select device",
+    allDevices: "All Devices",
+    taskName: "Task",
+    taskPlaceholder: "Select task",
+    allTasks: "All Tasks",
+    alarmType: "Alarm Type",
+    alarmLevel: "Alarm Level",
+    categoryCode: "Category",
+    allCategories: "All Categories",
+    minConfidence: "Min Confidence",
+    minSimilarity: "Min Similarity",
+  },
+  table: {
+    snapshot: "Snapshot",
+    target: "Target Crop",
+    deviceName: "Device",
+    captureTime: "Capture Time",
+    person: "Person",
+    personImage: "Face Library Image",
+    similarity: "Similarity",
+    alarmType: "Alarm Type",
+    alarmLevel: "Alarm Level",
+    status: "Status",
+    category: "Category",
+    confidence: "Confidence",
+    taskName: "Task",
+  },
+  alarmLevel: {
+    critical: "Critical",
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+  },
+  alarmType: {
+    intrusion: "Intrusion",
+    cross_line: "Cross Line",
+    region: "Region",
+    unknown: "Unknown",
+  },
+  status: {
+    unhandled: "Unhandled",
+  },
+  actions: {
+    batchDelete: "Batch Delete",
+  },
+  message: {
+    batchDeleteConfirm: "Are you sure you want to delete {{count}} selected records?",
+  },
+  empty: {
+    noData: "No smart records",
+    noPermission: "No permission to view smart records",
+  },
+} as const;
+
+export default smartRecords;

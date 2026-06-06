@@ -26,8 +26,15 @@ export interface SelectConfig {
   placeholder?: string;
 }
 
+export interface InputConfig {
+  name: string;
+  label: string;
+  placeholder?: string;
+}
+
 export interface SearchBarProps {
   keyword?: boolean;
+  inputs?: InputConfig[];
   selects?: SelectConfig[];
   dateRange?: boolean;
   onFilterChange: (key: string, value: string | undefined) => void;
@@ -41,6 +48,7 @@ export function SearchBar({
   onFilterChange,
   onReset,
   keyword = true,
+  inputs,
   selects,
   dateRange,
   onRefresh,
@@ -52,6 +60,13 @@ export function SearchBar({
   const handleKeywordChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onFilterChange('keyword', e.target.value || undefined);
+    },
+    [onFilterChange],
+  );
+
+  const handleInputChange = useCallback(
+    (name: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      onFilterChange(name, e.target.value || undefined);
     },
     [onFilterChange],
   );
@@ -110,6 +125,20 @@ export function SearchBar({
               {t('searchBar.search')}
             </Button>
           )}
+
+          {inputs?.map(input => (
+            <Box key={input.name} minW="150px">
+              <FormControl>
+                <FormLabel fontSize="sm" mb={0}>{input.label}</FormLabel>
+                <Input
+                  variant="main"
+                  placeholder={input.placeholder || input.label}
+                  value={filters[input.name] || ''}
+                  onChange={handleInputChange(input.name)}
+                />
+              </FormControl>
+            </Box>
+          ))}
 
           {selects?.map(select => (
             <Box key={select.name} minW="150px">

@@ -35,17 +35,18 @@ type Menu struct {
 
 // UserInfo contains basic user information returned after auth.
 type UserInfo struct {
-	ID            string     `json:"id"`
-	Username      string     `json:"username"`
-	DisplayName   string     `json:"display_name"`
-	AvatarURL     string     `json:"avatar_url"`
-	Email         string     `json:"email"`
-	EmailVerified bool       `json:"email_verified"`
-	Status        int        `json:"status"`
-	Roles         []RoleInfo `json:"roles"`
-	Menus         []Menu     `json:"menus"`
-	CreatedAt     string     `json:"created_at"`
-	UpdatedAt     string     `json:"updated_at"`
+	ID              string     `json:"id"`
+	Username        string     `json:"username"`
+	DisplayName     string     `json:"display_name"`
+	AvatarURL       string     `json:"avatar_url"`
+	Email           string     `json:"email"`
+	EmailVerified   bool       `json:"email_verified"`
+	Status          int        `json:"status"`
+	Roles           []RoleInfo `json:"roles"`
+	Menus           []Menu     `json:"menus"`
+	PermissionCodes []string   `json:"permission_codes"`
+	CreatedAt       string     `json:"created_at"`
+	UpdatedAt       string     `json:"updated_at"`
 }
 
 // RefreshResponse is the token refresh response.

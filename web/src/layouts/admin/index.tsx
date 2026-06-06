@@ -8,6 +8,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from 'contexts/AuthContext';
+import { hasAnyPermission } from 'utils/permission';
 import {
   generateRoutesFromMenus,
   generateSidebarRoutesFromMenus,
@@ -23,9 +24,34 @@ export default function Dashboard(props: { [x: string]: any }) {
   const location = useLocation();
   const noAccessColor = useColorModeValue('gray.500', 'gray.400');
 
+  const menus = useMemo(() => {
+    const rawMenus = user?.menus || [];
+    const permissionCodes = user?.permission_codes || [];
+    const canViewSmartRecords = hasAnyPermission(permissionCodes, [
+      'records:recognition:list',
+      'records:alarm:list',
+      'records:capture:list',
+    ]);
+    const hasSmartRecordsMenu = rawMenus.some((menu) => menu.code === 'smart-records');
+    if (!canViewSmartRecords) {
+      return rawMenus.filter((menu) => menu.code !== 'smart-records');
+    }
+    if (hasSmartRecordsMenu) return rawMenus;
+    return [
+      ...rawMenus,
+      {
+        id: 'smart-records',
+        name: t('menu:smart-records'),
+        code: 'smart-records',
+        path: '/smart-records',
+        icon: 'MdNotificationsActive',
+        sort_order: 35,
+      },
+    ];
+  }, [user?.menus, user?.permission_codes, t]);
+
   const menusFingerprint = useMemo(() => {
-    const menus = user?.menus;
-    if (!menus || menus.length === 0) {
+    if (menus.length === 0) {
       return '';
     }
     const walk = (items: typeof menus): string => {
@@ -34,9 +60,7 @@ export default function Dashboard(props: { [x: string]: any }) {
         .join(',');
     };
     return walk(menus);
-  }, [user?.menus]);
-
-  const menus = user?.menus || [];
+  }, [menus]);
 
   // 从用户菜单生成侧边栏路由
   const sidebarRoutes = useMemo(() => {

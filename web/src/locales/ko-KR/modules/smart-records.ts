@@ -1,0 +1,65 @@
+export const smartRecords = {
+  title: "스마트 레코드",
+  subtitle: "인식·알람·캡처 레코드 통합 검색",
+  tabs: {
+    recognition: "인식 레코드",
+    alarm: "알람 레코드",
+    capture: "캡처 레코드",
+  },
+  filters: {
+    deviceName: "장치",
+    devicePlaceholder: "장치 선택",
+    allDevices: "모든 장치",
+    taskName: "작업",
+    taskPlaceholder: "작업 선택",
+    allTasks: "모든 작업",
+    alarmType: "알람 유형",
+    alarmLevel: "알람 레벨",
+    categoryCode: "카테고리",
+    allCategories: "모든 카테고리",
+    minConfidence: "최소 신뢰도",
+    minSimilarity: "최소 유사도",
+  },
+  table: {
+    snapshot: "캡처 이미지",
+    target: "타겟 크롭",
+    deviceName: "장치명",
+    captureTime: "캡처 시간",
+    person: "인물명",
+    personImage: "얼굴 등록 이미지",
+    similarity: "유사도",
+    alarmType: "알람 유형",
+    alarmLevel: "알람 레벨",
+    status: "처리 상태",
+    category: "카테고리",
+    confidence: "신뢰도",
+    taskName: "작업명",
+  },
+  alarmLevel: {
+    critical: "심각",
+    high: "높음",
+    medium: "중간",
+    low: "낮음",
+  },
+  alarmType: {
+    intrusion: "영역 침입",
+    cross_line: "선 넘기 알람",
+    region: "영역 알람",
+    unknown: "알 수 없음",
+  },
+  status: {
+    unhandled: "미처리",
+  },
+  actions: {
+    batchDelete: "일괄 삭제",
+  },
+  message: {
+    batchDeleteConfirm: "선택한 {{count}}개의 레코드를 삭제하시겠습니까?",
+  },
+  empty: {
+    noData: "스마트 레코드가 없습니다",
+    noPermission: "스마트 레코드 조회 권한이 없습니다",
+  },
+} as const;
+
+export default smartRecords;

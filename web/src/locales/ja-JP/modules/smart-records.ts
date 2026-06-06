@@ -1,0 +1,65 @@
+export const smartRecords = {
+  title: "スマートレコード",
+  subtitle: "認識・アラーム・キャプチャレコードを一元検索",
+  tabs: {
+    recognition: "認識レコード",
+    alarm: "アラームレコード",
+    capture: "キャプチャレコード",
+  },
+  filters: {
+    deviceName: "デバイス",
+    devicePlaceholder: "デバイスを選択",
+    allDevices: "すべてのデバイス",
+    taskName: "タスク",
+    taskPlaceholder: "タスクを選択",
+    allTasks: "すべてのタスク",
+    alarmType: "アラーム種別",
+    alarmLevel: "アラームレベル",
+    categoryCode: "カテゴリ",
+    allCategories: "すべてのカテゴリ",
+    minConfidence: "最小信頼度",
+    minSimilarity: "最小類似度",
+  },
+  table: {
+    snapshot: "キャプチャ画像",
+    target: "トリミング画像",
+    deviceName: "デバイス名",
+    captureTime: "キャプチャ時間",
+    person: "人物名",
+    personImage: "顔登録画像",
+    similarity: "類似度",
+    alarmType: "アラーム種別",
+    alarmLevel: "アラームレベル",
+    status: "処理状態",
+    category: "カテゴリ",
+    confidence: "信頼度",
+    taskName: "タスク名",
+  },
+  alarmLevel: {
+    critical: "重大",
+    high: "高",
+    medium: "中",
+    low: "低",
+  },
+  alarmType: {
+    intrusion: "領域侵入",
+    cross_line: "越線アラーム",
+    region: "領域アラーム",
+    unknown: "不明",
+  },
+  status: {
+    unhandled: "未処理",
+  },
+  actions: {
+    batchDelete: "一括削除",
+  },
+  message: {
+    batchDeleteConfirm: "選択した {{count}} 件のレコードを削除してもよろしいですか？",
+  },
+  empty: {
+    noData: "スマートレコードがありません",
+    noPermission: "スマートレコードの閲覧権限がありません",
+  },
+} as const;
+
+export default smartRecords;

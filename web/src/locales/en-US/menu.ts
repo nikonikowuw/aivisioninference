@@ -8,6 +8,7 @@ export const menu = {
   "device-groups": "Device Groups",
   "device-staging": "Device Staging",
   "stream-status": "Stream Status",
+  "smart-records": "Smart Records",
   "user-management": "User Management",
   "users": "Users",
   "roles": "Roles",

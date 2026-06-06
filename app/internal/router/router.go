@@ -59,9 +59,9 @@ type Config struct {
 	GB28181PlaybackMaxSec int           `yaml:"gb28181_playback_max_sec" mapstructure:"gb28181_playback_max_sec"`
 	GB28181StreamTimeout  time.Duration `yaml:"gb28181_stream_timeout" mapstructure:"gb28181_stream_timeout"`
 	// ZLM 端口配置（可被 docker 端口映射覆盖）
-	ZLMRTMPPort   int    `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
-	ZLMRTSPPort   int    `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
-	ZLMHTTPPort   int    `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
+	ZLMRTMPPort int `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
+	ZLMRTSPPort int `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
+	ZLMHTTPPort int `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
 	// ZLM 实际对外 IP（设备推流目标地址，默认从 ZLMAPIURL 解析）
 	ZLMExternalIP string `yaml:"zlm_external_ip" mapstructure:"zlm_external_ip"`
 }
@@ -291,6 +291,18 @@ func (r *Router) setupRoutes() {
 	// Dashboard
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
+
+	// Smart Records
+	if deps.SmartRecordHandler != nil {
+		smartRecords := authorized.Group("/smart-records")
+		{
+			smartRecords.GET("", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.List)
+			smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportCSV)
+			smartRecords.GET("/category-codes", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ListCategoryCodes)
+			smartRecords.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.BatchDelete)
+			smartRecords.POST("/export-selected", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportSelectedCSV)
+		}
+	}
 
 	// Media streaming (ZLM webhooks - internal, no auth)
 	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager)

@@ -28,6 +28,8 @@ type SmartRecord struct {
 	AlgorithmName      string         `gorm:"type:varchar(128)" json:"algorithm_name,omitempty"`
 	AlgorithmVersion   string         `gorm:"type:varchar(32)" json:"algorithm_version,omitempty"`
 	CategoryCode       *int           `gorm:"index" json:"category_code,omitempty"`
+	// CategoryName 是类别编码对应的显示名称，通过 JOIN category_codes 表按 category_code 关联获取
+	CategoryName       string         `gorm:"->;type:varchar(128)" json:"category_name,omitempty"`
 	Confidence         *float64       `gorm:"type:numeric(5,4);check:confidence >= 0 AND confidence <= 1" json:"confidence,omitempty"`
 	PersonRecordID     *string        `gorm:"type:uuid" json:"person_record_id,omitempty"`
 	PersonName         string         `gorm:"type:varchar(128)" json:"person_name,omitempty"`
@@ -43,6 +45,8 @@ type SmartRecord struct {
 	SnapshotImageURL   string         `gorm:"type:varchar(512)" json:"snapshot_image_url,omitempty"`
 	TargetCropURL      string         `gorm:"type:varchar(512)" json:"target_crop_url,omitempty"`
 	BackgroundImageURL string         `gorm:"type:varchar(512)" json:"background_image_url,omitempty"`
+	// PersonImageURL 是底库人脸图，通过 JOIN persons 表按 person_record_id 关联获取，不在 smart_records 表中存储
+	PersonImageURL     string         `gorm:"->;type:varchar(512)" json:"person_image_url,omitempty"`
 	RawResult          datatypes.JSON `gorm:"type:jsonb" json:"raw_result,omitempty"`
 	CreatedAt          time.Time      `json:"created_at"`
 }

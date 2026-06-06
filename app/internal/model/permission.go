@@ -21,6 +21,7 @@ type Permission struct {
 	Type      string       `gorm:"type:varchar(20);not null" json:"type"`         // (menu/button)
 	Icon      string       `gorm:"type:varchar(64)" json:"icon"`                  // (仅对菜单有效)
 	ParentID  *string      `gorm:"type:uuid" json:"parent_id"`                    // (为 NULL 表示是一级菜单/根权限)
+	IsHidden  bool         `gorm:"default:false" json:"is_hidden"`                // 是否在侧边栏隐藏
 	SortOrder int          `gorm:"default:0" json:"sort_order"`                   // 数值越小越靠前
 	Children  []Permission `gorm:"foreignKey:ParentID" json:"children,omitempty"` // (GORM 一对多自关联)
 }

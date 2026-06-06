@@ -38,6 +38,14 @@ const (
 	ErrCSVWeakPassword       = 10023
 	ErrCSVInvalidEmail       = 10024
 
+	// Person management errors (1006x).
+	ErrPersonImageRequired   = 10060 // 请上传人脸图片
+	ErrPersonImageDuplicate  = 10061 // 图片已存在
+	ErrPersonCodeDuplicate   = 10062 // 人员编号已存在
+	ErrPersonStatusNoRetry   = 10063 // 当前状态无需重提
+	ErrArchiveRequired       = 10064 // 请上传压缩包
+	ErrArchiveUnsupported    = 10065 // 不支持的压缩包格式
+
 	// Auth errors (2xxxx).
 	ErrUnauthorized      = 20001
 	ErrTokenExpired      = 20002

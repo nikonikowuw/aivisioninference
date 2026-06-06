@@ -1,0 +1,15 @@
+export { default as auditLogs } from './audit-logs';
+export { default as brandConfig } from './brand-config';
+export { default as dashboard } from './dashboard';
+export { default as deviceStaging } from './device-staging';
+export { default as devices } from './devices';
+export { default as feedback } from './feedback';
+export { default as files } from './files';
+export { default as license } from './license';
+export { default as mailConfig } from './mail-config';
+export { default as media } from './media';
+export { default as permissions } from './permissions';
+export { default as roles } from './roles';
+export { default as system } from './system';
+export { default as tasks } from './tasks';
+export { default as users } from './users';

@@ -14,6 +14,8 @@ export const menu = {
   "roles": "Peran",
   "permissions": "Izin",
   "system-management": "Manajemen Sistem",
+  "license-management": "Manajemen Lisensi",
+  "license": "Lisensi Algoritma",
   "files": "File",
   "audit-logs": "Log Audit",
   "tasks": "Tugas",

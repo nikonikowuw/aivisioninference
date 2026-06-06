@@ -21,7 +21,7 @@ export const i18nConfig: I18nConfig = {
 export const LANGUAGE_STORAGE_KEY = 'niko-admin-language';
 
 // 调试模式（开发环境启用）
-export const DEBUG_I18N = false; // import.meta.env.DEV 会导致类型错误，暂时使用 false
+export const DEBUG_I18N = false;
 
 // 命名空间配置
 export const DEFAULT_NAMESPACE = 'common';
@@ -39,6 +39,7 @@ export const NAMESPACES = [
   'modules/files',
   'modules/audit-logs',
   'modules/tasks',
+  'modules/license',
 ] as const;
 
 export type Namespace = typeof NAMESPACES[number];

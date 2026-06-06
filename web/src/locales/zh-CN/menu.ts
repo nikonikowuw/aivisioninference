@@ -13,6 +13,8 @@ export const menu = {
   "roles": "角色",
   "permissions": "权限",
   "system-management": "系统管理",
+  "license-management": "授权管理",
+  "license": "算法授权",
   "files": "文件",
   "audit-logs": "审计日志",
   "tasks": "任务",

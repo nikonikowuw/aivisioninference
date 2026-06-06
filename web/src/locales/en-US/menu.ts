@@ -13,6 +13,8 @@ export const menu = {
   "roles": "Roles",
   "permissions": "Permissions",
   "system-management": "System Management",
+  "license-management": "License Management",
+  "license": "Algorithm License",
   "files": "Files",
   "audit-logs": "Audit Logs",
   "tasks": "Tasks",

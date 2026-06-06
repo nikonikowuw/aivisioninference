@@ -16,6 +16,7 @@ import { devices } from "./modules/devices";
 import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
+import { license } from "./modules/license";
 
 export default {
   common,
@@ -36,4 +37,5 @@ export default {
   "modules/device-staging": deviceStaging,
   "modules/media": media,
   "modules/system": system,
+  "modules/license": license,
 };

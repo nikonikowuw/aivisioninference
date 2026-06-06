@@ -14,6 +14,8 @@ export const menu = {
   "roles": "角色",
   "permissions": "權限",
   "system-management": "系統管理",
+  "license-management": "授權管理",
+  "license": "演算法授權",
   "files": "文件",
   "audit-logs": "審計日誌",
   "tasks": "任務",

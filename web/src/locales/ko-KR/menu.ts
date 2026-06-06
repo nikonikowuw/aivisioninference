@@ -14,6 +14,8 @@ export const menu = {
   "roles": "역할",
   "permissions": "권한",
   "system-management": "시스템 관리",
+  "license-management": "라이선스 관리",
+  "license": "알고리즘 라이선스",
   "files": "파일",
   "audit-logs": "감사 로그",
   "tasks": "작업",

@@ -14,6 +14,8 @@ export const menu = {
   "roles": "ロール",
   "permissions": "権限",
   "system-management": "システム管理",
+  "license-management": "ライセンス管理",
+  "license": "アルゴリズムライセンス",
   "files": "ファイル",
   "audit-logs": "操作ログ",
   "tasks": "タスク",

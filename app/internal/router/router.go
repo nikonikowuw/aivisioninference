@@ -276,6 +276,18 @@ func (r *Router) setupRoutes() {
 		systemRouter.RegisterRoutes(authorized)
 	}
 
+	// License Management
+	if deps.LicenseHandler != nil {
+		license := authorized.Group("/license")
+		{
+			license.GET("/fingerprint", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.GetFingerprint)
+			license.POST("/upload", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.Upload)
+			license.GET("/active", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.GetActive)
+			license.GET("/check", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.CheckAuth)
+			license.GET("", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.List)
+		}
+	}
+
 	// Dashboard
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)

@@ -43,6 +43,8 @@ type RouteDeps struct {
 	DeviceStagingHandler *handler.DeviceStagingHandler
 	SystemHandler        *handler.SystemHandler
 	StreamManager        *service.StreamManager
+	LicenseHandler       *handler.LicenseHandler
+	LicenseService       *service.LicenseService
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -167,6 +169,8 @@ func newRouteDeps(
 	deviceStagingHandler *handler.DeviceStagingHandler,
 	systemHandler *handler.SystemHandler,
 	streamManager *service.StreamManager,
+	licenseHandler *handler.LicenseHandler,
+	licenseService *service.LicenseService,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:            permCache,
@@ -188,6 +192,8 @@ func newRouteDeps(
 		DeviceStagingHandler: deviceStagingHandler,
 		SystemHandler:        systemHandler,
 		StreamManager:        streamManager,
+		LicenseHandler:       licenseHandler,
+		LicenseService:       licenseService,
 	}
 }
 
@@ -196,6 +202,12 @@ func provideMailServiceForAsynq(db *gorm.DB) *service.MailService {
 	inboundEmailRepo := repository.NewInboundEmailRepository(db)
 	feedbackRepo := repository.NewFeedbackRepository(db)
 	return service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
+}
+
+func provideLicenseHandler(licenseRepo *repository.LicenseRepository, db *gorm.DB) (*handler.LicenseHandler, *service.LicenseService) {
+	licenseSvc := service.NewLicenseService(licenseRepo, db)
+	licenseHandler := handler.NewLicenseHandler(licenseSvc)
+	return licenseHandler, licenseSvc
 }
 
 func provideZLMClient(cfg *Config) *zlm.Client {

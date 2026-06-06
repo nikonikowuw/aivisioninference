@@ -643,6 +643,21 @@ export const brandConfigApi = {
   },
 };
 
+export interface SystemInfo {
+  device_model: string;
+  deploy_location: string;
+  description?: string;
+}
+
+export const systemInfoApi = {
+  get: () => request<SystemInfo>('/system/info'),
+  save: (data: SystemInfo) =>
+    request<null>('/system/info', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
 export const mailConfigApi = {
   get: () => request<MailConfig>('/system/mail-config'),
   save: (data: Partial<MailConfig> & { smtp_password?: string; imap_password?: string }) =>

@@ -156,6 +156,14 @@ export const adminRoutes: RouteConfig[] = [
         component: () => import('../views/admin/feedback'),
         layout: '/admin',
       },
+      {
+        id: 'system-config',
+        path: '/system/config',
+        i18nKey: 'menu:system-config',
+        icon: 'MdSettings',
+        component: () => import('../views/admin/system/SystemConfig'),
+        layout: '/admin',
+      },
     ],
   },
 ];

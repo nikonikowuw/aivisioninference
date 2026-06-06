@@ -66,6 +66,7 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'brand-config': () => import('../views/admin/brand-config'),
   'mail-config': () => import('../views/admin/mail-config'),
   'feedback': () => import('../views/admin/feedback'),
+  'system-config': () => import('../views/admin/system/SystemConfig'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();

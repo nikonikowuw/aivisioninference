@@ -91,6 +91,30 @@ export const adminRoutes: RouteConfig[] = [
     icon: 'MdNotificationsActive',
     component: () => import('../views/admin/smart-records'),
     layout: '/admin',
+    id: 'person-management',
+    path: '/person-management',
+    i18nKey: 'menu:person-management',
+    icon: 'MdFace',
+    layout: '/admin',
+    children: [
+      {
+        id: 'persons',
+        path: '/persons',
+        i18nKey: 'menu:persons',
+        icon: 'MdFace',
+        component: () => import('../views/admin/persons'),
+        layout: '/admin',
+      },
+      {
+        id: 'person-groups',
+        path: '/person-groups',
+        i18nKey: 'menu:person-groups',
+        icon: 'MdFolder',
+        component: () => import('../views/admin/persons/groups'),
+        layout: '/admin',
+      },
+    ],
+
   },
   {
     id: 'user-management',

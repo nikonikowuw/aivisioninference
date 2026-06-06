@@ -24,6 +24,8 @@ export const common = {
   status: {
     active: "Active",
     inactive: "Inactive",
+    enabled: "Enabled",
+    disabled: "Disabled",
     pending: "Pending",
     running: "Running",
     completed: "Completed",
@@ -211,6 +213,10 @@ export const common = {
   cancel: "Cancel",
   save: "Save",
   minutes: "minutes",
+  empty: {
+    title: "No Data",
+    description: "No records found matching your criteria",
+  },
 } as const;
 
 export default common;

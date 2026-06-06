@@ -198,6 +198,10 @@ export const common = {
   cancel: "キャンセル",
   save: "保存",
   minutes: "分",
+  empty: {
+    title: "データがありません",
+    description: "条件に一致するレコードが見つかりませんでした",
+  },
 } as const;
 
 export default common;

@@ -29,6 +29,7 @@ type Menu struct {
 	Code      string `json:"code"`
 	Path      string `json:"path"`
 	Icon      string `json:"icon"`
+	Hidden    bool   `json:"hidden"`
 	SortOrder int    `json:"sort_order"`
 	Children  []Menu `json:"children,omitempty"`
 }

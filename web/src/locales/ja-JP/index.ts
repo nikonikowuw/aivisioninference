@@ -18,6 +18,8 @@ import media from "./modules/media";
 import system from "./modules/system";
 import { license } from "./modules/license";
 import smartRecords from "./modules/smart-records";
+import { persons } from "./modules/persons";
+
 
 export default {
   common,
@@ -40,4 +42,6 @@ export default {
   "modules/system": system,
   "modules/license": license,
   "modules/smart-records": smartRecords,
+  "modules/persons": persons,
+
 };

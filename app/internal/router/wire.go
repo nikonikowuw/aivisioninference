@@ -41,9 +41,14 @@ var repositorySet = wire.NewSet(
 	repository.NewAITimeScheduleRepository,
 	repository.NewGB28181DeviceRepository,
 	repository.NewAlgorithmPackageRepository,
+	repository.NewPersonRepository,
+	repository.NewPersonGroupRepository,
+	repository.NewPersonEmbeddingRepository,
+	repository.NewImportTaskRepository,
 )
 
 var serviceSet = wire.NewSet(
+	provideFileStorage,
 	provideAvatarStorage,
 	providePermissionCache,
 	provideFileOptions,
@@ -96,6 +101,7 @@ var handlerSet = wire.NewSet(
 	provideAIVisionTaskHandler,
 	provideAITimeScheduleHandler,
 	handler.NewAlgorithmPackageHandler,
+	providePersonHandler,
 )
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。

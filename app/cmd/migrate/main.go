@@ -67,8 +67,6 @@ func main() {
 		&model.PersonGroup{},
 		&model.Person{},
 		&model.PersonGroupMember{},
-		&model.PersonTag{},
-		&model.PersonTagRelation{},
 		&model.PersonEmbedding{},
 		&model.ImportTask{},
 
@@ -142,6 +140,10 @@ func main() {
 	mustExec(db, addGB28181ChannelCountColumnSQL())
 	mustExec(db, addGB28181LastCatalogAtColumnSQL())
 
+	// Person management: add embedding error fields
+	mustExec(db, addPersonEmbeddingErrorColumnsSQL())
+	mustExec(db, addPersonImageMD5UniqueIndexSQL())
+
 	// Migrate existing menus to multi-level structure.
 	if err := migrateMultiLevelMenu(db); err != nil {
 		log.Fatalf("migrate multi-level menu: %v", err)
@@ -184,6 +186,20 @@ func addGB28181ChannelCountColumnSQL() string {
 // addGB28181LastCatalogAtColumnSQL 添加 GB28181 设备最后目录同步时间字段。
 func addGB28181LastCatalogAtColumnSQL() string {
 	return `ALTER TABLE gb28181_devices ADD COLUMN IF NOT EXISTS last_catalog_at timestamptz;`
+}
+
+// addPersonEmbeddingErrorColumnsSQL 返回人员特征错误字段的幂等迁移语句。
+func addPersonEmbeddingErrorColumnsSQL() string {
+	return `
+ALTER TABLE persons ADD COLUMN IF NOT EXISTS embedding_error_code VARCHAR(64);
+ALTER TABLE persons ADD COLUMN IF NOT EXISTS embedding_error_message_key VARCHAR(128);
+ALTER TABLE persons ADD COLUMN IF NOT EXISTS embedding_retryable BOOLEAN DEFAULT FALSE;`
+}
+
+// addPersonImageMD5UniqueIndexSQL 为 image_md5 创建唯一索引（幂等）。
+func addPersonImageMD5UniqueIndexSQL() string {
+	return `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_image_md5_unique ON persons (image_md5);`
 }
 
 // rootUsernameConstraintSQL 返回 root 用户名一致性的幂等约束语句。
@@ -265,6 +281,7 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 			ChildCodes []string
 		}{
 			{Code: "user-management", Name: "用户管理", Icon: "MdPeople", ChildCodes: []string{"users", "roles", "permissions"}},
+			{Code: "person-management", Name: "人员管理", Icon: "MdFace", ChildCodes: []string{"persons", "person-groups"}},
 			{Code: "license-management", Name: "授权管理", Icon: "MdVpnKey", ChildCodes: []string{"license"}},
 			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks", "algorithm-packages"}},
 		}
@@ -455,6 +472,29 @@ func defaultMenuList() []parentMenuDef {
 				{Code: "dashboard:view", Name: "查看仪表盘", Path: "/api/v1/dashboard/stats", Method: "GET"},
 			},
 			Children: nil,
+		},
+		{
+			Name: "人员管理", Code: "person-management", Path: "/person-management", Icon: "MdFace",
+			Children: []childMenuDef{
+				{Name: "人员", Code: "persons", Path: "/persons", Icon: "MdFace", Buttons: []buttonInfo{
+					{Code: "person:list", Name: "人员列表", Path: "/api/v1/persons", Method: "GET"},
+					{Code: "person:create", Name: "创建人员", Path: "/api/v1/persons", Method: "POST"},
+					{Code: "person:export", Name: "导出人员", Path: "/api/v1/persons/export", Method: "GET"},
+					{Code: "person:batch-delete", Name: "批量删除", Path: "/api/v1/persons/batch-delete", Method: "POST"},
+					{Code: "person:batch-toggle", Name: "批量启禁用", Path: "/api/v1/persons/batch-toggle", Method: "POST"},
+					{Code: "person:batch-retry-embedding", Name: "批量重提特征", Path: "/api/v1/persons/batch-retry-embedding", Method: "POST"},
+					{Code: "person:edit", Name: "编辑人员", Path: "/api/v1/persons/*", Method: "PUT"},
+					{Code: "person:delete", Name: "删除人员", Path: "/api/v1/persons/*", Method: "DELETE"},
+					{Code: "person:view", Name: "查看人员", Path: "/api/v1/persons/*", Method: "GET"},
+					{Code: "person:retry-embedding", Name: "重提特征", Path: "/api/v1/persons/*/retry-embedding", Method: "POST"},
+				}},
+				{Name: "人员分组", Code: "person-groups", Path: "/person-groups", Icon: "MdFolder", Buttons: []buttonInfo{
+					{Code: "person-group:list", Name: "分组列表", Path: "/api/v1/person-groups", Method: "GET"},
+					{Code: "person-group:create", Name: "创建分组", Path: "/api/v1/person-groups", Method: "POST"},
+					{Code: "person-group:edit", Name: "编辑分组", Path: "/api/v1/person-groups/*", Method: "PUT"},
+					{Code: "person-group:delete", Name: "删除分组", Path: "/api/v1/person-groups/*", Method: "DELETE"},
+				}},
+			},
 		},
 		{
 			Name: "设备管理", Code: "device-management", Path: "/device-management", Icon: "MdVideocam",

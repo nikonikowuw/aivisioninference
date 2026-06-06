@@ -9,6 +9,7 @@ export { default as license } from './license';
 export { default as mailConfig } from './mail-config';
 export { default as media } from './media';
 export { default as permissions } from './permissions';
+export { default as persons } from './persons';
 export { default as roles } from './roles';
 export { default as system } from './system';
 export { default as tasks } from './tasks';

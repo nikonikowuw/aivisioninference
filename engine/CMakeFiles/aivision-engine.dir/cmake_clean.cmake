@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/aivision-engine.dir/src/algo/algo_instance.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/algo/algo_instance.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/algo/algo_manager.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/algo/algo_manager.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/algo/so_handle.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/algo/so_handle.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/engine.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/engine.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/ipc_server.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/ipc_server.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/main.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/main.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/monitor/metrics_reporter.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/monitor/metrics_reporter.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/encoder_stage.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/encoder_stage.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/hw_buffer.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/hw_buffer.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/inference_stage.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/inference_stage.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/pipeline.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/pipeline.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/pipeline_manager.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/pipeline_manager.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/ring_queue.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/ring_queue.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/rtsp_push_stage.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/rtsp_push_stage.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/snapshot.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/snapshot.cpp.o.d"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/worker_pool.cpp.o"
+  "CMakeFiles/aivision-engine.dir/src/pipeline/worker_pool.cpp.o.d"
+  "aivision-engine"
+  "aivision-engine.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/aivision-engine.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

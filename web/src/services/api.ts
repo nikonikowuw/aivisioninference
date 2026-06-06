@@ -78,6 +78,19 @@ function computeMD5(file: File): Promise<string> {
 const API_BASE = '/api/v1';
 const ACCESS_TOKEN_KEY = 'access_token';
 
+/**
+ * 转换后端返回的文件路径为可访问的完整 URL
+ */
+export function getFileUrl(path?: string): string {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  // 确保路径以 / 开头
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY);
 }
@@ -343,6 +356,7 @@ export interface FileItem {
   id: string;
   name: string;
   original_name: string;
+  path?: string;
   mime_type: string;
   size: number;
   created_at: string;
@@ -1008,3 +1022,223 @@ export const licenseApi = {
   check: (algorithm: string) =>
     request<{ authorized: boolean; algorithm: string }>(`/license/check${buildQuery({ algorithm })}`),
 };
+
+// Person Management
+export interface Person {
+  id: string;
+  person_code: string;
+  person_name: string;
+  gender: string;
+  phone?: string;
+  id_number?: string;
+  image_url: string;
+  image_md5?: string;
+  face_quality_score?: number;
+  embedding_status: string;
+  embedding_error_code?: string;
+  embedding_error_message_key?: string;
+  embedding_retryable: boolean;
+  enabled: boolean;
+  remark?: string;
+  groups?: PersonGroup[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonGroup {
+  id: string;
+  group_name: string;
+  description?: string;
+  parent_id?: string;
+  sort_order: number;
+  person_count: number;
+  children?: PersonGroup[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonImportTask {
+  id: string;
+  task_type: string;
+  file_name: string;
+  file_url?: string;
+  total_rows: number;
+  success_rows: number;
+  failed_rows: number;
+  fail_detail_url?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+type PersonListParams = CrudListParams & {
+  group_id?: string;
+  embedding_status?: string;
+  enabled?: string;
+  start_time?: string;
+  end_time?: string;
+};
+
+export const personsApi = {
+  list: (params?: PersonListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<Person>>(`/persons${query}`);
+  },
+  get: (id: string) => request<Person>(`/persons/${id}`),
+  /**
+   * 创建人员。支持两种模式：
+   * - FormData（传统 multipart 直传）
+   * - JSON body with image_url（分片上传后关联）
+   */
+  create: (data: FormData | Record<string, unknown>) => {
+    if (data instanceof FormData) {
+      return request<Person>('/persons', { method: 'POST', body: data });
+    }
+    return request<Person>('/persons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  /**
+   * 更新人员。支持两种模式：
+   * - FormData（传统 multipart 直传）
+   * - JSON body with image_url（分片上传后关联）
+   */
+  update: (id: string, data: FormData | Record<string, unknown>) => {
+    if (data instanceof FormData) {
+      return request<Person>(`/persons/${id}`, { method: 'PUT', body: data });
+    }
+    return request<Person>(`/persons/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  delete: (id: string) =>
+    request(`/persons/${id}`, { method: 'DELETE' }),
+  batchDelete: (ids: string[]) =>
+    request('/persons/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  batchToggle: (ids: string[], enabled: boolean) =>
+    request('/persons/batch-toggle', {
+      method: 'POST',
+      body: JSON.stringify({ ids, enabled }),
+    }),
+  retryEmbedding: (id: string) =>
+    request(`/persons/${id}/retry-embedding`, { method: 'POST' }),
+  batchRetryEmbedding: (ids: string[]) =>
+    request('/persons/batch-retry-embedding', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportExcel: (params?: PersonListParams) =>
+    downloadFile(`/persons/export${buildQuery(params || {})}`, 'persons.xlsx'),
+};
+
+export const personGroupsApi = {
+  list: () => request<PersonGroup[]>('/person-groups'),
+  create: (data: Partial<PersonGroup>) =>
+    request<PersonGroup>('/person-groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<PersonGroup>) =>
+    request<PersonGroup>(`/person-groups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request(`/person-groups/${id}`, { method: 'DELETE' }),
+};
+
+export const personImportsApi = {
+  list: (params?: CrudListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<PersonImportTask>>(`/person-import-tasks${query}`);
+  },
+  get: (id: string) => request<PersonImportTask>(`/person-import-tasks/${id}`),
+  create: (file: File, overwrite?: boolean) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (overwrite) formData.append('overwrite_on_duplicate', 'true');
+    return request<PersonImportTask>('/person-import-tasks', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  /**
+   * 通过已上传文件 URL 创建导入任务（分片上传后调用）。
+   */
+  createByUrl: (fileUrl: string, overwrite?: boolean) =>
+    request<PersonImportTask>('/person-import-tasks/by-url', {
+      method: 'POST',
+      body: JSON.stringify({ file_url: fileUrl, overwrite_on_duplicate: overwrite ?? false }),
+    }),
+};
+
+/**
+ * 并行分片上传文件，返回后端文件路径。
+ * 复用 /files/upload/init → /chunk → /complete 基础设施，
+ * 通过 Promise.all 实现多线程并行上传。
+ *
+ * @param file        待上传文件
+ * @param concurrency 并行上传分片数，默认 3
+ * @param onProgress  进度回调 (0-100)
+ * @returns 后端文件路径（如 uploads/2026/06/07/xxx.jpg）
+ */
+export async function chunkedUpload(
+  file: File,
+  concurrency = 3,
+  onProgress?: (pct: number) => void,
+): Promise<string> {
+  const chunkSize = 5 * 1024 * 1024; // 5MB
+  const totalChunks = Math.ceil(file.size / chunkSize) || 1;
+  const md5 = await computeMD5(file);
+
+  // 1. 初始化上传会话
+  const initRes = await request<{ upload_id: string }>('/files/upload/init', {
+    method: 'POST',
+    body: JSON.stringify({
+      file_name: file.name,
+      file_size: file.size,
+      md5,
+      total_chunks: totalChunks,
+    }),
+  });
+  const uploadId = initRes.upload_id;
+
+  // 2. 并行上传分片（分批 Promise.all 实现并发控制）
+  let completedChunks = 0;
+  const chunks = Array.from({ length: totalChunks }, (_, i) => i);
+
+  const uploadChunk = async (index: number) => {
+    const start = index * chunkSize;
+    const end = Math.min(start + chunkSize, file.size);
+    const chunk = file.slice(start, end);
+    const formData = new FormData();
+    formData.append('chunk', chunk);
+    formData.append('index', String(index));
+    await request(`/files/upload/${uploadId}/chunk`, {
+      method: 'POST',
+      body: formData,
+    });
+    completedChunks++;
+    onProgress?.(Math.round((completedChunks / totalChunks) * 100));
+  };
+
+  for (let i = 0; i < chunks.length; i += concurrency) {
+    const batch = chunks.slice(i, i + concurrency);
+    await Promise.all(batch.map(uploadChunk));
+  }
+
+  // 3. 合并分片并获取文件记录
+  const fileRecord = await request<FileItem>(`/files/upload/${uploadId}/complete`, {
+    method: 'POST',
+  });
+
+  // 返回文件存储路径
+  return fileRecord.path || `uploads/${fileRecord.name}`;
+}

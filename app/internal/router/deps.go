@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -49,6 +50,25 @@ type RouteDeps struct {
 	AIVisionTaskHandler     *handler.AIVisionTaskHandler
 	AITimeScheduleHandler   *handler.AITimeScheduleHandler
 	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
+	PersonHandler        *handler.PersonHandler
+}
+
+func provideFileStorage(cfg *Config) (storage.Storage, error) {
+	// 根据配置中的 StorageType 一键切换后端
+	switch strings.ToLower(cfg.StorageType) {
+	case "oss", "minio", "s3":
+		zap.L().Info("using OSS/MinIO as file storage", zap.String("endpoint", cfg.OSSEndpoint), zap.String("bucket", cfg.OSSBucket))
+		return storage.NewOSSStorage(
+			cfg.OSSEndpoint,
+			cfg.OSSAccessKey,
+			cfg.OSSSecretKey,
+			cfg.OSSBucket,
+			cfg.OSSUseSSL,
+		)
+	default:
+		zap.L().Info("using local filesystem as file storage", zap.String("dir", cfg.LocalUploadDir))
+		return storage.NewLocalStorage(cfg.LocalUploadDir, cfg.LocalPublicURL)
+	}
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -178,6 +198,7 @@ func newRouteDeps(
 	aiVisionTaskHandler *handler.AIVisionTaskHandler,
 	aiTimeScheduleHandler *handler.AITimeScheduleHandler,
 	algorithmPackageHandler *handler.AlgorithmPackageHandler,
+	personHandler *handler.PersonHandler,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:            permCache,
@@ -205,6 +226,7 @@ func newRouteDeps(
 		AIVisionTaskHandler:     aiVisionTaskHandler,
 		AITimeScheduleHandler:   aiTimeScheduleHandler,
 		AlgorithmPackageHandler: algorithmPackageHandler,
+		PersonHandler:        personHandler,
 	}
 }
 
@@ -215,7 +237,8 @@ func provideMailServiceForAsynq(db *gorm.DB) *service.MailService {
 	return service.NewMailService(mailConfigRepo, inboundEmailRepo, feedbackRepo)
 }
 
-func provideLicenseHandler(licenseSvc *service.LicenseService) *handler.LicenseHandler {
+func provideLicenseHandler(licenseRepo *repository.LicenseRepository, db *gorm.DB) *handler.LicenseHandler {
+	licenseSvc := service.NewLicenseService(licenseRepo, db)
 	return handler.NewLicenseHandler(licenseSvc)
 }
 
@@ -310,4 +333,15 @@ func provideAlgorithmOptions(cfg *Config) service.AlgorithmOptions {
 		LocalUploadDir:       cfg.LocalUploadDir,
 		PublicURL:            cfg.LocalPublicURL,
 	}
+}
+
+func providePersonHandler(
+	personRepo *repository.PersonRepository,
+	groupRepo *repository.PersonGroupRepository,
+	importTaskRepo *repository.ImportTaskRepository,
+	fileStorage storage.Storage,
+	taskClient *task.Client,
+) *handler.PersonHandler {
+	personSvc := service.NewPersonService(personRepo, groupRepo, importTaskRepo, fileStorage, taskClient)
+	return handler.NewPersonHandler(personSvc)
 }

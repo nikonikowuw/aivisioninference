@@ -3,10 +3,12 @@ package router
 import (
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/buildinfo"
 	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
@@ -20,22 +22,23 @@ import (
 
 // RouteDeps 聚合路由注册阶段需要的 Handler、Service 与缓存依赖。
 type RouteDeps struct {
-	RBACCache         cache.Cache
-	AuditService      *service.AuditService
-	AuthHandler       *handler.AuthHandler
-	WSHandler         *handler.WSHandler
-	UserHandler       *handler.UserHandler
-	RoleHandler       *handler.RoleHandler
-	PermissionHandler *handler.PermissionHandler
-	FileHandler       *handler.FileHandler
-	AuditHandler      *handler.AuditHandler
-	TaskHandler       *handler.TaskHandler
-	BrandHandler      *handler.BrandHandler
-	MailHandler       *handler.MailHandler
-	FeedbackHandler   *handler.FeedbackHandler
-	DashboardHandler  *handler.DashboardHandler
-	DeviceHandler     *handler.DeviceHandler
+	RBACCache          cache.Cache
+	AuditService       *service.AuditService
+	AuthHandler        *handler.AuthHandler
+	WSHandler          *handler.WSHandler
+	UserHandler        *handler.UserHandler
+	RoleHandler        *handler.RoleHandler
+	PermissionHandler  *handler.PermissionHandler
+	FileHandler        *handler.FileHandler
+	AuditHandler       *handler.AuditHandler
+	TaskHandler        *handler.TaskHandler
+	BrandHandler       *handler.BrandHandler
+	MailHandler        *handler.MailHandler
+	FeedbackHandler    *handler.FeedbackHandler
+	DashboardHandler   *handler.DashboardHandler
+	DeviceHandler      *handler.DeviceHandler
 	DeviceGroupHandler *handler.DeviceGroupHandler
+	SystemHandler      *handler.SystemHandler
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -94,6 +97,25 @@ func provideDeviceGroupHandler(groupRepo *repository.DeviceGroupRepository) *han
 	return handler.NewDeviceGroupHandler(groupSvc)
 }
 
+func provideSystemHandler(db *gorm.DB, rdb *redis.Client, cfg *Config, scheduler *asynq.Scheduler) *handler.SystemHandler {
+	systemSvc := service.NewSystemService(db, rdb, buildinfo.Version, cfg.ZLMAPIURL, "")
+	systemInfoSvc := service.NewSystemInfoService(db)
+	networkSvc := service.NewNetworkService(db)
+	timeConfigSvc := service.NewTimeConfigService(db)
+	webhookSvc := service.NewWebhookService(db)
+	storageSvc := service.NewStorageService(db, rdb)
+
+	var storageScheduler *task.StorageScheduler
+	if scheduler != nil {
+		storageScheduler = task.NewStorageScheduler(scheduler, storageSvc)
+		if err := storageScheduler.Init(); err != nil {
+			zap.L().Error("failed to init storage scheduler", zap.Error(err))
+		}
+	}
+
+	return handler.NewSystemHandler(systemSvc, systemInfoSvc, networkSvc, timeConfigSvc, webhookSvc, storageSvc, storageScheduler)
+}
+
 func newRouteDeps(
 	permCache cache.Cache,
 	auditSvc *service.AuditService,
@@ -111,6 +133,7 @@ func newRouteDeps(
 	dashboardHandler *handler.DashboardHandler,
 	deviceHandler *handler.DeviceHandler,
 	deviceGroupHandler *handler.DeviceGroupHandler,
+	systemHandler *handler.SystemHandler,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:         permCache,
@@ -129,6 +152,7 @@ func newRouteDeps(
 		DashboardHandler:   dashboardHandler,
 		DeviceHandler:      deviceHandler,
 		DeviceGroupHandler: deviceGroupHandler,
+		SystemHandler:      systemHandler,
 	}
 }
 

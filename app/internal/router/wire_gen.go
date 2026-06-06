@@ -8,6 +8,7 @@ package router
 
 import (
 	"github.com/google/wire"
+	"github.com/hibiken/asynq"
 	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
@@ -22,7 +23,7 @@ import (
 // Injectors from wire.go:
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。
-func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config) (*RouteDeps, error) {
+func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, scheduler *asynq.Scheduler) (*RouteDeps, error) {
 	cache := providePermissionCache(rdb, cfg)
 	auditRepository := repository.NewAuditRepository(db)
 	auditService := service.NewAuditService(auditRepository)
@@ -71,7 +72,8 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	deviceHandler := provideDeviceHandler(deviceRepository, cache, client, zlmClient)
 	deviceGroupRepository := repository.NewDeviceGroupRepository(db)
 	deviceGroupHandler := provideDeviceGroupHandler(deviceGroupRepository)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler)
+	systemHandler := provideSystemHandler(db, rdb, cfg, scheduler)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, systemHandler)
 	return routeDeps, nil
 }
 

@@ -34,13 +34,13 @@ func InitializeApp() (*App, error) {
 	hub := ws.NewHub()
 	routerConfig := provideRouterConfig(configConfig)
 	zapLogger := provideAccessLogger(logger)
-	routerRouter := router.New(db, client, manager, hub, routerConfig, zapLogger)
-	server := provideHTTPServer(routerRouter, configConfig)
-	asynqServer := router.NewAsynqServer(client)
-	serveMux := provideAsynqMux(db, routerConfig)
 	scheduler := provideAsynqScheduler(client)
 	// 注册定时任务
 	task.RegisterPeriodicTasks(scheduler)
+	routerRouter := router.New(db, client, manager, hub, routerConfig, zapLogger, scheduler)
+	server := provideHTTPServer(routerRouter, configConfig)
+	asynqServer := router.NewAsynqServer(client)
+	serveMux := provideAsynqMux(db, client, routerConfig)
 	app := &App{
 		Loggers:        logger,
 		HTTPServer:     server,

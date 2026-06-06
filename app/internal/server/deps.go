@@ -73,8 +73,8 @@ func provideHTTPServer(r *router.Router, cfg *config.Config) *http.Server {
 	}
 }
 
-func provideAsynqMux(db *gorm.DB, cfg *router.Config) *asynq.ServeMux {
-	return router.NewAsynqMux(db, cfg)
+func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config) *asynq.ServeMux {
+	return router.NewAsynqMux(db, rdb, cfg)
 }
 
 func provideAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {

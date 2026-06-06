@@ -42,12 +42,14 @@ func NewScheduler(rdb *redis.Client) *asynq.Scheduler {
 func RegisterPeriodicTasks(scheduler *asynq.Scheduler) {
 	// 每 5 分钟检查一次设备状态
 	scheduler.Register("*/5 * * * *", asynq.NewTask(TypeDeviceStatusCheck, nil))
+	// 存储清理任务由 StorageScheduler 动态管理，不在此注册
 }
 
 // NewMux 创建并返回一个新的 Asynq ServeMux，并在此 Mux 上注册所有任务处理 Handler
-func NewMux(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler) *asynq.ServeMux {
+func NewMux(mailSvc *service.MailService, deviceStatusHandler *DeviceStatusHandler, cronCleanupHandler *CronCleanupHandler, thresholdCleanupHandler *ThresholdCleanupHandler) *asynq.ServeMux {
 	mux := asynq.NewServeMux()
-	// 初始化 Handler 并注册其路由
 	NewHandler(mailSvc, deviceStatusHandler).RegisterHandlers(mux)
+	cronCleanupHandler.RegisterHandlers(mux)
+	thresholdCleanupHandler.RegisterHandlers(mux)
 	return mux
 }

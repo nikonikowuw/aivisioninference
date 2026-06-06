@@ -20,6 +20,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
+	"github.com/niko-admin/niko-admin/internal/service"
 	"github.com/niko-admin/niko-admin/internal/task"
 )
 
@@ -32,6 +33,7 @@ type Router struct {
 	hub          *ws.Hub
 	config       *Config
 	accessLogger *zap.Logger
+	scheduler    *asynq.Scheduler
 }
 
 // Config holds router-level configuration.
@@ -50,7 +52,7 @@ type Config struct {
 }
 
 // New creates a new Router with all dependencies wired.
-func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger) *Router {
+func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger, scheduler *asynq.Scheduler) *Router {
 	engine := gin.New()
 
 	httpx.TrustedProxies = cfg.TrustedProxies
@@ -63,6 +65,7 @@ func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, c
 		hub:          hub,
 		config:       cfg,
 		accessLogger: accessLogger,
+		scheduler:    scheduler,
 	}
 
 	r.setupMiddleware()
@@ -92,7 +95,7 @@ func (r *Router) setupMiddleware() {
 func (r *Router) setupRoutes() {
 	v1 := r.engine.Group("/api/v1")
 
-	deps, err := InitializeRouteDeps(r.db, r.rdb, r.jwtManager, r.hub, r.config)
+	deps, err := InitializeRouteDeps(r.db, r.rdb, r.jwtManager, r.hub, r.config, r.scheduler)
 	if err != nil {
 		zap.L().Fatal("initialize route dependencies failed", zap.Error(err))
 	}
@@ -252,6 +255,12 @@ func (r *Router) setupRoutes() {
 		deviceGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Delete)
 	}
 
+	// System Management
+	if deps.SystemHandler != nil {
+		systemRouter := NewSystemRouter(deps.SystemHandler, r.jwtManager, rbacCache)
+		systemRouter.RegisterRoutes(authorized)
+	}
+
 	// Dashboard
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
@@ -311,11 +320,14 @@ func NewAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
 }
 
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
-func NewAsynqMux(db *gorm.DB, cfg *Config) *asynq.ServeMux {
-	// 创建设备状态处理器
+func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	deviceRepo := repository.NewDeviceRepository(db)
 	zlmClient := provideZLMClient(cfg)
 	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient)
 
-	return task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler)
+	storageSvc := service.NewStorageService(db, rdb)
+	cronCleanupHandler := task.NewCronCleanupHandler(storageSvc)
+	thresholdCleanupHandler := task.NewThresholdCleanupHandler(storageSvc)
+
+	return task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler)
 }

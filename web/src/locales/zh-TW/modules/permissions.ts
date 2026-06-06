@@ -167,6 +167,29 @@ export const permissions = {
       "storage-cleanup": "執行手動清理",
     },
   },
-} as const;
+    "gb28181": {
+      "list": "設備列表",
+      "view": "設備詳情",
+      "edit": "編輯設備",
+      "delete": "刪除設備",
+      "catalog": "觸發目錄查詢",
+    },
+    "gb28181-channel": {
+      "list": "通道列表",
+    },
+    "gb28181-live": {
+      "start": "啟動預覽",
+      "stop": "停止預覽",
+    },
+    "gb28181-playback": {
+      "start": "啟動回放",
+      "stop": "停止回放",
+      "control": "回放控制",
+    },
+    "smart-records": {
+      "view": "查看告警記錄",
+      "export": "導出告警記錄",
+    },
+  } as const;
 
 export default permissions;

@@ -168,6 +168,29 @@ export const permissions = {
       "storage-cleanup": "Jalankan Pembersihan Manual",
     },
   },
-} as const;
+    "gb28181": {
+      "list": "Daftar Perangkat",
+      "view": "Detail Perangkat",
+      "edit": "Edit Perangkat",
+      "delete": "Hapus Perangkat",
+      "catalog": "Picu Kueri Katalog",
+    },
+    "gb28181-channel": {
+      "list": "Daftar Saluran",
+    },
+    "gb28181-live": {
+      "start": "Mulai Pratinjau",
+      "stop": "Hentikan Pratinjau",
+    },
+    "gb28181-playback": {
+      "start": "Mulai Putar Ulang",
+      "stop": "Hentikan Putar Ulang",
+      "control": "Kontrol Putar Ulang",
+    },
+    "smart-records": {
+      "view": "Lihat Catatan Alarm",
+      "export": "Ekspor Catatan Alarm",
+    },
+  } as const;
 
 export default permissions;

@@ -17,6 +17,8 @@ import { deviceStaging } from "./modules/device-staging";
 import media from "./modules/media";
 import system from "./modules/system";
 import { license } from "./modules/license";
+import { gb28181 } from "./modules/gb28181";
+import { smartRecords } from "./modules/smart-records";
 
 export default {
   common,
@@ -38,4 +40,6 @@ export default {
   "modules/media": media,
   "modules/system": system,
   "modules/license": license,
+  "modules/gb28181": gb28181,
+  "modules/smart-records": smartRecords,
 };

@@ -167,6 +167,29 @@ export const permissions = {
       "storage-cleanup": "手動クリーンアップを実行",
     },
   },
-} as const;
+    "gb28181": {
+      "list": "デバイス一覧",
+      "view": "デバイス詳細",
+      "edit": "デバイス編集",
+      "delete": "デバイス削除",
+      "catalog": "カタログクエリ開始",
+    },
+    "gb28181-channel": {
+      "list": "チャネル一覧",
+    },
+    "gb28181-live": {
+      "start": "プレビュー開始",
+      "stop": "プレビュー停止",
+    },
+    "gb28181-playback": {
+      "start": "再生開始",
+      "stop": "再生停止",
+      "control": "再生制御",
+    },
+    "smart-records": {
+      "view": "アラーム記録表示",
+      "export": "アラーム記録エクスポート",
+    },
+  } as const;
 
 export default permissions;

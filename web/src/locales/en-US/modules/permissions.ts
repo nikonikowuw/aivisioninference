@@ -168,6 +168,29 @@ export const permissions = {
       "storage-cleanup": "Run Manual Cleanup",
     },
   },
-} as const;
+    "gb28181": {
+      "list": "Device List",
+      "view": "Device Detail",
+      "edit": "Edit Device",
+      "delete": "Delete Device",
+      "catalog": "Trigger Catalog Query",
+    },
+    "gb28181-channel": {
+      "list": "Channel List",
+    },
+    "gb28181-live": {
+      "start": "Start Preview",
+      "stop": "Stop Preview",
+    },
+    "gb28181-playback": {
+      "start": "Start Playback",
+      "stop": "Stop Playback",
+      "control": "Playback Control",
+    },
+    "smart-records": {
+      "view": "View Alarm Records",
+      "export": "Export Alarm Records",
+    },
+  } as const;
 
 export default permissions;

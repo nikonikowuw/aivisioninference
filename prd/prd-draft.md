@@ -5,9 +5,9 @@
 | 项目 | 内容 |
 |---|---|
 | 产品名称 | AIVisionInference 边缘视觉推理系统 |
-| 文档版本 | V0.1 Draft |
+| 文档版本 | V0.2 Draft |
 | 创建日期 | 2026-06-04 |
-| 当前状态 | 草稿 / 待评审 |
+| 当前状态 | 进行中 / 持续更新 |
 | 来源文档 | `docs/prd.md` |
 
 ## 2. 修订历史
@@ -15,6 +15,7 @@
 | 版本 | 修订内容 | 修订时间 | 修订人 |
 |---|---|---|---|
 | V0.1 | 基于 `docs/prd.md` 生成 PRD 草稿 | 2026-06-04 | 待定 |
+| V0.2 | 基于 openspec/specs 全量规范综合更新：新增媒体录制（6.8）、设备发现暂存（6.9）、流管理器（6.10）模块；补充系统管理细节（存储双模式清理、多网卡配置、Webhook 标签路由）；更新版本路线图 | 2026-06-06 | AI Agent |
 
 ## 3. 名词解释
 
@@ -75,6 +76,8 @@ AIVisionInference 旨在构建一套高性能、可扩展、可运维的边缘�
 | 稳定性 | 连续运行 `>= 72h` 无崩溃；内存增长不超过稳定基线 `10%`。 |
 | 推理延迟 | 单路视频从解码帧进入推理到 Go 端收到结构化结果的 P95 延迟 `<= 200ms`。 |
 | IPC 开销 | Go 与 C++ 单次控制信令及 JSON 结果通信 P95 开销 `<= 5ms`。 |
+| Pipeline 性能 | 支持运行时动态增删 Stage (推理、编码、推流)，动态操作对已有推理分支的影响 `<= 10ms`。 |
+| 编码推流 | 支持 MPP 硬件编码与 RTSP (RTP over TCP) 推送，断线重连 P95 `<= 15s`。 |
 | 热更新 | 算法动态库热更新期间旧任务不中断；启用状态切换 P95 `< 100ms`，不包含模型加载与 Runtime 初始化。 |
 | 管理能力 | 后台覆盖用户、人员、设备、算法包、任务、实时预览、智能记录、存储配置、系统配置等模块。 |
 | 前端性能 | 列表页面渲染 P95 延迟 `<= 300ms`。 |
@@ -209,16 +212,18 @@ AIVisionInference 不直接与旷视、英特灵达的大型完整方案做全�
 
 #### 用户故事 1：视频流任务接入与生命周期管理
 
-作为业务后端服务，我希望通过 API 传入 RTSP 地址或选择已注册 GB28181 设备，并配置多个算法及其动态参数，使边缘设备能够完成统一接入、解码、推理和结构化结果回传。
+作为业务后端服务，我希望通过 API 传入 RTSP 地址或选择已注册 GB28181 设备，并配置多个算法及其动态参数，同时能按需动态启停编码推流（播放预览），使边缘设备能够完成统一接入、解码、推理和结构化结果回传。
 
 **验收标准**：
 
-- Go 端提供 `StartStream`、`StopStream`、`GetStreamStatus` API。
-- `StartStream` 支持 RTSP URL 直连和 GB28181 设备 ID。
+- Go 端提供 `StartStream`、`StopStream`、`GetStreamStatus`、`StreamPlaybackStart`、`StreamPlaybackStop` API。
+- `StartStream` 支持配置 `enable_infer` (推理) 和 `enable_playback` (播放) 独立开关。
+- 支持在不重启推理任务的情况下，动态开启或关闭该流的硬件编码与 RTSP 推流分支。
 - 系统具备资源准入控制，达到算力或并发上限时拒绝启动并返回明确错误码。
 - 每个任务具备唯一 `task_id`，状态至少包括 `pending`、`running`、`reconnecting`、`stopped`、`failed`。
 - 源流断开后自动重连或重新点播，默认重试间隔 `5s`，连续失败 `>= 3` 次后进入失败或重连状态。
 - C++ 从 ZLM 暴露的本地 RTSP/RTP 流读取推理输入，并自动选择 Rockchip MPP、Huawei DVPP 或 FFmpeg 降级解码。
+- C++ 引擎支持基于 Pipeline Stage 架构的动态扩展：解码 -> 环形队列 -> (推理 Stage) + (编码 Stage -> 推流 Stage)。
 - Go 端可在 `<= 1s` 内查询任务状态和最近错误。
 
 #### 用户故事 2：算法包标准化交付与动态参数配置
@@ -1380,13 +1385,421 @@ stateDiagram-v2
 - 人脸图片、人员身份信息和相似度结果属于敏感数据，需按角色控制展示。
 - 越权访问必须在 Gin 中间件层和查询条件层双重拦截。
 
-### 6.8 存储配置模块
 
-存储配置是 **系统管理模块（6.9）** 下的一个子功能 Tab。详见 [6.9 系统管理模块 - 存储配置 Tab](#)。
+### 6.8 媒体录制管理模块
 
-核心能力：配置存储阈值上限、清理周期和智能记录保留策略，自动清理最旧的抓拍图、告警图和关联数据库分区，保障边缘设备长期无人值守运行。
+#### 用户场景
 
-### 6.9 系统管理模块
+**场景1: 管理员为摄像头配置全天录制计划**
+
+- **用户**: 边缘运维工程师
+- **背景**: 某重要出入口摄像机需要 24 小时不间断录制视频，用于事后追溯。
+- **目标**: 配置全天录制计划，ZLM 按计划自动录制 MP4 分段文件。
+- **行为**:
+  1. 运维工程师进入录制管理页面，选择目标设备。
+  2. 创建录制计划，选择"全天录制"模式，设置分段时长（默认 30 分钟）。
+  3. 保存后系统调用 ZLM `startRecord` API 开始录制。
+- **结果**: 设备视频流被持续录制为 MP4 文件，可在录像查询页面检索和回放。
+- **痛点**: 如果没有录制计划管理，运维人员需要手动调用 ZLM API 或依赖第三方 NVR 录制，增加运维复杂度。
+
+**场景2: 按时段配置录制计划**
+
+- **用户**: 平台管理员
+- **背景**: 工厂仅需在工作时间（08:00-20:00）录制视频，非工作时间停止录制以节省存储。
+- **目标**: 配置按天/按周的定时录制规则。
+- **行为**:
+  1. 管理员创建录制计划，选择"时段录制"模式。
+  2. 设置生效时间段 08:00-20:00，选择按周重复（周一至周五）。
+  3. 保存后系统按计划自动启停录制。
+- **结果**: 录制资源按需分配，存储空间得到有效利用。
+- **痛点**: 全天录制会占用大量存储空间，对于非关键时段的录制需求造成浪费。
+
+**场景3: 用户查询并回放历史录像**
+
+- **用户**: 业务查看人员
+- **背景**: 安保人员需要回看某设备在特定时间段的录像。
+- **目标**: 按设备和时间范围检索录像，并在浏览器中回放。
+- **行为**:
+  1. 用户进入录像查询页面，选择设备和时间范围。
+  2. 系统返回匹配的录像列表，包含时间、时长、文件大小。
+  3. 用户点击"回放"按钮，系统通过 ZLM 将录像文件转为播放流。
+- **结果**: 用户在浏览器中直接回放历史录像，无需下载文件。
+- **痛点**: 如果没有统一的录像查询和回放功能，用户需要登录服务器查找文件或使用第三方播放器。
+
+**场景4: 告警事件触发录像片段标记**
+
+- **用户**: 业务查看人员
+- **背景**: 某次区域入侵告警发生后，用户需要快速定位告警前后的录像片段。
+- **目标**: 告警记录自动关联对应的录像文件，支持一键跳转回放。
+- **行为**:
+  1. 用户在告警记录详情页点击"查看录像"。
+  2. 系统自动定位到告警时间点前后的录像片段。
+  3. 用户在回放界面查看事件发生过程。
+- **结果**: 告警事件与录像片段双向关联，提升事件追溯效率。
+- **痛点**: 告警记录和录像分离存储时，用户需要手动查找对应时间段的录像。
+
+#### 字段要求
+
+**录制计划字段**
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---:|---:|---|
+| `plan_id` | UUID/String | 是 | 录制计划 ID |
+| `device_id` | UUID/String | 是 | 关联设备 |
+| `plan_type` | Enum | 是 | `all_day`（全天录制）、`period`（时段录制） |
+| `schedule_type` | Enum | 是 | `daily`（按天）、`weekly`（按周） |
+| `time_periods` | Array | 条件必填 | 时段录制时配置，如 `[{"start":"08:00","end":"20:00"}]` |
+| `weekdays` | Array | 条件必填 | 按周录制时配置，如 `[1,2,3,4,5]` 表示周一至周五 |
+| `segment_duration_minutes` | Integer | 是 | 录像分段时长，默认 `30` 分钟 |
+| `enabled` | Boolean | 是 | 是否启用 |
+| `created_by` | String | 是 | 创建人 |
+
+**录像记录字段**
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---:|---:|---|
+| `recording_id` | UUID/String | 是 | 录像记录 ID |
+| `device_id` | UUID/String | 是 | 关联设备 |
+| `plan_id` | UUID/String | 否 | 关联录制计划 |
+| `start_time` | DateTime | 是 | 录像开始时间 |
+| `end_time` | DateTime | 是 | 录像结束时间 |
+| `duration_seconds` | Integer | 是 | 录像时长（秒） |
+| `file_path` | String | 是 | 录像文件存储路径 |
+| `file_size_bytes` | Integer | 是 | 文件大小 |
+| `storage_type` | Enum | 是 | `local`、`oss` |
+| `play_url` | String | 否 | 回放地址，由系统动态生成 |
+| `event_ids` | Array | 否 | 关联的告警事件 ID 列表 |
+| `status` | Enum | 是 | `recording`、`completed`、`failed` |
+
+#### 录制与回放规则
+
+- 录制计划变更后，系统必须自动调用 ZLM `startRecord` / `stopRecord` API 生效。
+- ZLM 录制完成 MP4 文件后，通过 `on_record_mp4` Webhook 回调通知 Go 后端。
+- Go 后端解析回调数据，将录像信息写入 `media_recordings` 表。
+- 录像文件路径支持本地存储和 OSS 对象存储。
+- 录像回放通过 ZLM 的 `addStreamProxy` 能力将录像文件代理为播放协议，或直接返回 MP4 文件 HTTP 下载地址。
+- 录像查询支持按设备 ID、时间范围、页码分页查询。
+- 告警事件可通过 `event_ids` 字段关联录像片段。
+
+#### 异常场景
+
+| 异常情况 | 触发条件 | 处理方式 | 用户提示 |
+|----------|----------|----------|----------|
+| 录制启动失败 | ZLM API 调用失败或流未就绪 | 重试 3 次后记录失败 | 录制启动失败，请检查设备流状态 |
+| 存储空间不足 | 录制写入时磁盘空间不足 | 停止录制并触发存储告警 | 存储空间不足，录制已暂停 |
+| 录像文件损坏 | 录制过程中流断开导致文件不完整 | 标记为 `failed`，保留已录制部分 | 录像文件可能不完整 |
+| 回放流生成失败 | ZLM 无法代理录像文件 | 返回下载地址作为降级方案 | 在线回放失败，请下载后播放 |
+| 时间范围无录像 | 查询时间范围内无录制数据 | 返回空结果 | 该时间段无可用录像 |
+| 录制计划冲突 | 同一设备存在多个启用的录制计划 | 阻止保存，提示去重 | 该设备已有启用的录制计划 |
+
+#### 验收标准
+
+- 支持创建、编辑、删除、启用、禁用录制计划。
+- 支持全天录制和时段录制两种模式。
+- 支持按天/按周的定时录制规则。
+- 录制计划变更后自动调用 ZLM API 生效。
+- 支持通过 `on_record_mp4` Webhook 接收录制完成回调并入库。
+- 支持按设备、时间范围、分页查询录像列表。
+- 支持通过 ZLM 代理回放录像文件。
+- 支持告警事件与录像片段关联。
+- 存储空间不足时自动停止录制并触发告警。
+- 录制计划、录像查询、回放操作必须写入审计日志。
+
+#### 指标要求
+
+| 指标 | 目标值 | 说明 |
+|---|---:|---|
+| 录制计划保存 P95 | `<= 300ms` | 不含 ZLM API 调用 |
+| 录像列表查询 P95 | `<= 500ms` | 默认分页和时间范围筛选 |
+| 回放首帧时间 P95 | `<= 3s` | 从点击回放到画面显示 |
+| 单次导出上限 | `100` 个录像文件 | 超出需分批导出 |
+
+#### 权限与安全要求
+
+- `recording:plan:list`: 查看录制计划列表。
+- `recording:plan:create`: 创建录制计划。
+- `recording:plan:update`: 编辑录制计划。
+- `recording:plan:delete`: 删除录制计划。
+- `recording:list`: 查看录像列表。
+- `recording:play`: 回放录像。
+- `recording:export`: 导出录像文件。
+
+---
+
+### 6.9 设备发现暂存模块
+
+#### 用户场景
+
+**场景1: ONVIF 扫描发现新设备**
+
+- **用户**: 边缘运维工程师
+- **背景**: 项目现场新增了一批支持 ONVIF 协议的 IPC 摄像机，需要快速发现并接入。
+- **目标**: 通过 IP 段扫描自动发现 ONVIF 设备，将结果暂存后批量导入。
+- **行为**:
+  1. 运维工程师进入"设备待接入"页面，选择"ONVIF 扫描"。
+  2. 输入 IP 段范围和 ONVIF 端口，点击"开始扫描"。
+  3. 系统扫描该 IP 段中响应 ONVIF Probe 的设备，将结果写入 `discovered_devices` 暂存表。
+  4. 运维工程师在暂存列表中查看发现结果，勾选需要导入的设备。
+  5. 点击"导入到设备管理"，系统将选中设备批量导入到正式 `devices` 表。
+- **结果**: 几十台 IPC 摄像机的接入从数小时缩短至几分钟。
+- **痛点**: 逐一手工录入设备信息费时费力，且容易因笔误导致设备不通。
+
+**场景2: GB28181 设备自动注册发现**
+
+- **用户**: 边缘运维工程师
+- **背景**: GB28181 设备通过 SIP 注册自动上报到平台，需要将新设备自动纳入暂存区。
+- **目标**: 系统自动将 GB28181 注册的新设备写入暂存区，管理员审核后导入。
+- **行为**:
+  1. GB28181 设备通过 SIP REGISTER 注册到平台。
+  2. 系统检查该设备是否已存在于 `devices` 表。
+  3. 若不存在，自动写入 `discovered_devices` 暂存表，`source=gb28181`，`status=pending`。
+  4. 管理员在"设备待接入"页面审核并导入。
+- **结果**: GB28181 设备无需手动录入，自动发现并等待审核。
+- **痛点**: 如果所有 GB28181 设备都自动导入正式表，可能会误导入测试设备或非目标设备。
+
+**场景3: NVR 通道批量发现**
+
+- **用户**: 边缘运维工程师
+- **背景**: 某台 NVR 下挂了 16 路 IPC 通道，需要批量发现并导入。
+- **目标**: 对已注册的 NVR 设备发起目录查询，获取子通道列表并暂存。
+- **行为**:
+  1. 运维工程师在设备列表中选择目标 NVR，点击"查询通道"。
+  2. 系统向 NVR 发送 GB28181 CatalogQuery 请求。
+  3. 获取到子通道列表后，逐条写入 `discovered_devices` 暂存表，`source=nvr_catalog`。
+  4. 运维工程师在暂存列表中选择需要导入的通道，批量导入。
+- **结果**: NVR 下的所有通道被快速发现和导入。
+- **痛点**: 手动录入 NVR 通道需要逐条输入国标编码，效率低且容易遗漏。
+
+**场景4: 设备去重与更新**
+
+- **用户**: 边缘运维工程师
+- **背景**: 多次扫描可能发现同一台设备（基于 MAC 地址或同网段 IP 匹配）。
+- **目标**: 系统自动去重，避免暂存表中出现重复记录。
+- **行为**:
+  1. 系统在写入 `discovered_devices` 前，检查是否已存在相同 `device_mac` 或同网段 IP 的记录。
+  2. 若已存在，更新 `extra_info`、`discovered_at` 等字段，不创建新记录。
+  3. 若该设备已被导入（`status=imported`），仅更新元信息，保持 `status=imported`。
+- **结果**: 暂存表保持干净，无重复记录。
+- **痛点**: 如果不去重，多次扫描后暂存表会堆积大量重复记录，增加审核工作量。
+
+#### 字段要求
+
+**暂存设备字段**
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---:|---:|---|
+| `discovered_id` | UUID/String | 是 | 暂存记录 ID |
+| `source` | Enum | 是 | 发现来源：`onvif`、`gb28181`、`nvr_catalog`、`manual_scan` |
+| `device_name` | String | 否 | 设备名称（发现时自动填充） |
+| `device_mac` | String | 否 | 设备 MAC 地址，用于去重 |
+| `ip_address` | String | 否 | 设备 IP 地址 |
+| `rtsp_url` | String | 否 | RTSP 地址（ONVIF 发现时获取） |
+| `gb28181_device_id` | String | 否 | GB28181 国标编码 |
+| `onvif_profile` | Object | 否 | ONVIF Profile 信息（分辨率、编码格式等） |
+| `nvr_device_id` | String | 否 | 父 NVR 设备 ID（NVR 通道发现时） |
+| `extra_info` | Object | 否 | 额外发现信息（厂商、型号、固件版本等） |
+| `status` | Enum | 是 | `pending`（待审核）、`imported`（已导入）、`ignored`（已忽略） |
+| `discovered_at` | DateTime | 是 | 发现时间 |
+| `imported_at` | DateTime | 否 | 导入时间 |
+| `imported_device_id` | String | 否 | 导入后关联的正式设备 ID |
+
+#### 设备发现与去重规则
+
+- ONVIF 扫描：通过 IP 段发送 ONVIF Probe 请求，获取设备的 IP、MAC、RTSP 地址和 Profile 信息。
+- GB28181 注册：通过 SIP REGISTER 事件自动写入暂存表，`source=gb28181`。
+- NVR 通道：通过 GB28181 CatalogQuery 获取子通道列表，`source=nvr_catalog`，`nvr_device_id` 指向父设备。
+- 去重规则：基于 `device_mac` 或同网段 IP 匹配，已存在则更新，不创建重复记录。
+- 已导入设备再次被发现时：更新 `extra_info` 和 `discovered_at`，保持 `status=imported`。
+- 批量导入时：按用户选择的记录逐条导入到 `devices` 表，支持预校验和失败明细。
+- 忽略操作：用户可将不需要的发现记录标记为 `ignored`，不再展示。
+
+#### 异常场景
+
+| 异常情况 | 触发条件 | 处理方式 | 用户提示 |
+|----------|----------|----------|----------|
+| 扫描超时 | IP 段范围过大导致扫描时间过长 | 限制单次扫描 IP 数量（如 254 个以内） | 扫描范围过大，请缩小 IP 段范围 |
+| 设备已导入 | 暂存记录对应的设备已存在于 `devices` 表 | 标记为 `imported`，不允许重复导入 | 设备已导入，请勿重复操作 |
+| GB28181 编码冲突 | 新发现的 GB28181 设备编码与已有设备冲突 | 阻止导入，提示冲突 | 国标编码与已有设备冲突 |
+| 导入部分失败 | 批量导入中个别设备导入失败 | 记录失败项，继续执行剩余导入 | 批量导入完成，X 台失败（详情可查看） |
+| NVR 通道查询失败 | NVR 不支持 CatalogQuery 或网络不可达 | 记录错误原因 | NVR 通道查询失败，请检查设备状态 |
+| ONVIF 鉴权失败 | 设备 ONVIF 服务需要认证但未提供凭据 | 记录设备但标记鉴权失败 | 设备需要 ONVIF 认证，请配置凭据后重试 |
+
+#### 验收标准
+
+- 支持 ONVIF IP 段扫描发现设备。
+- 支持 GB28181 注册自动写入暂存区。
+- 支持 NVR CatalogQuery 通道发现。
+- 支持基于 MAC 或 IP 的自动去重。
+- 支持"设备待接入"页面展示暂存列表，支持筛选、查看详情、忽略和批量导入。
+- 支持批量导入到正式设备表，支持预校验和失败明细。
+- 已导入设备再次被发现时更新元信息但不改变状态。
+- 设备发现、导入、忽略操作必须写入审计日志。
+
+#### 指标要求
+
+| 指标 | 目标值 | 说明 |
+|---|---:|---|
+| ONVIF 扫描速度 | `<= 60s` / 254 个 IP | 局域网环境 |
+| 暂存列表查询 P95 | `<= 300ms` | 默认分页和筛选 |
+| 批量导入速度 | `>= 100` 台/分钟 | 不含设备连通性测试 |
+| 去重判断 P95 | `<= 10ms` | 单条记录去重判断 |
+
+#### 权限与安全要求
+
+- `device:staging:list`: 查看暂存设备列表。
+- `device:staging:scan`: 触发设备扫描。
+- `device:staging:import`: 批量导入设备。
+- `device:staging:ignore`: 忽略发现记录。
+
+---
+
+### 6.10 流管理器模块
+
+#### 用户场景
+
+**场景1: 多消费者共享同一路视频流**
+
+- **用户**: 系统内部
+- **背景**: 同一设备的视频流可能同时被实时预览、AI 推理和录像三个功能消费。如果每个消费者独立拉流，会造成带宽和资源浪费。
+- **目标**: 通过引用计数机制，多个消费者共享同一路流，最后一个消费者释放时才关闭流。
+- **行为**:
+  1. 用户请求实时预览某设备，StreamManager 调用 Acquire(deviceID, reason="play")。
+  2. 该设备当前无活跃流，StreamManager 调用 ZLM addStreamProxy 创建拉流代理，refcount=1。
+  3. 该设备的推理任务启动，StreamManager 调用 Acquire(deviceID, reason="infer")，仅递增 refcount=2，不重复拉流。
+  4. 用户关闭预览，StreamManager 调用 Release(deviceID, reason="play")，refcount=1，流保持活跃。
+  5. 推理任务停止，StreamManager 调用 Release(deviceID, reason="infer")，refcount=0，调用 ZLM closeStream 关闭流。
+- **结果**: 同一路流被多个消费者复用，资源得到最优利用。
+- **痛点**: 如果每个消费者独立拉流，会导致 ZLM 创建大量重复的流代理，消耗设备带宽和 NPU 解码资源。
+
+**场景2: 流异常断开后自动恢复**
+
+- **用户**: 系统内部
+- **背景**: 设备网络闪断导致 ZLM 流断开，需要自动恢复。
+- **目标**: StreamManager 检测到流断开后，根据引用计数决定是否自动重连。
+- **行为**:
+  1. ZLM 触发 on_stream_changed 回调，流状态变为 inactive。
+  2. StreamManager 检查该流的 refcount，发现 refcount > 0（仍有消费者）。
+  3. StreamManager 启动指数退避重连（5s、10s、20s），最多重试 3 次。
+  4. 重连成功后恢复流状态，通知所有消费者流已恢复。
+  5. 若重连失败且 refcount > 0，标记流为 error 状态并通知消费者。
+- **结果**: 流断开后自动恢复，消费者无需感知底层重连过程。
+- **痛点**: 如果没有统一的流管理器，每个消费者各自处理重连逻辑，容易出现重连风暴或状态不一致。
+
+**场景3: ZLM 健康巡检与流状态同步**
+
+- **用户**: 系统内部
+- **背景**: ZLM 进程重启后，之前创建的流代理会丢失，但 StreamManager 内存中的引用计数仍存在。
+- **目标**: StreamManager 定期巡检 ZLM 活跃流列表，与内存状态同步。
+- **行为**:
+  1. StreamManager 每 30 秒调用 ZLM getMediaList 获取活跃流列表。
+  2. 对比内存中的流状态，发现某个流在 ZLM 中不存在但 refcount > 0。
+  3. StreamManager 自动重新调用 addStreamProxy 恢复该流。
+  4. 若恢复失败，标记流为 error 状态并通知消费者。
+- **结果**: ZLM 重启后流自动恢复，无需人工干预。
+- **痛点**: ZLM 重启后如果不巡检，所有流会静默丢失，直到用户手动刷新页面才发现。
+
+#### 核心设计
+
+**引用计数模型**
+
+Acquire(deviceID, reason) -> refcount++
+Release(deviceID, reason) -> refcount--
+当 refcount == 0 时调用 ZLM closeStream 释放流
+
+**流状态机**
+
+Active <-> Idle 通过 Acquire/Release 切换
+Active -> Error: 流断开且重连失败
+Error -> Active: 重连成功
+Error -> Idle: Release (refcount 0)
+
+**MediaStream 表作为流历史档案**
+
+MediaStream 表记录流的全生命周期历史，不维护实时状态。实时状态由 StreamManager 内存维护。
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---:|---:|---|
+| stream_id | UUID/String | 是 | 流记录 ID |
+| device_id | UUID/String | 是 | 关联设备 |
+| zlm_app | String | 是 | ZLM 应用名 |
+| zlm_stream | String | 是 | ZLM 流标识 |
+| zlm_vhost | String | 是 | ZLM 虚拟主机 |
+| zlm_schema | String | 是 | 播放协议（http-flv、webrtc 等） |
+| play_url_http_flv | String | 否 | HTTP-FLV 播放地址 |
+| play_url_webrtc | String | 否 | WebRTC 播放地址 |
+| play_url_ws_flv | String | 否 | WS-FLV 播放地址 |
+| play_url_hls | String | 否 | HLS 播放地址 |
+| started_at | DateTime | 是 | 流创建时间 |
+| stopped_at | DateTime | 否 | 流关闭时间 |
+| status | Enum | 是 | active、inactive、error |
+
+#### 异常场景
+
+| 异常情况 | 触发条件 | 处理方式 | 用户提示 |
+|----------|----------|----------|----------|
+| AddStreamProxy 失败 | ZLM API 调用失败或源流不可达 | 返回错误，不递增 refcount | 流创建失败，请检查设备状态 |
+| CloseStream 失败 | ZLM API 调用失败 | 记录错误，仍标记为 inactive | 流关闭失败，已标记为非活跃 |
+| 巡检发现流丢失 | ZLM 重启后流代理丢失 | 自动重新拉流恢复 | 检测到流丢失，正在自动恢复 |
+| 重连失败 | 源流持续不可达 | 标记为 error 状态，通知消费者 | 流重连失败，请检查设备网络 |
+| Acquire 并发冲突 | 多个消费者同时 Acquire 同一设备 | 使用互斥锁保护 refcount 操作 | 无（内部处理） |
+
+#### 验收标准
+
+- StreamManager 必须基于引用计数管理所有 ZLM 拉流操作。
+- 多个消费者可同时引用同一路流，仅最后一个消费者 Release 时关闭流。
+- 流异常断开后，若 refcount > 0，必须自动重连（指数退避，最多 3 次）。
+- StreamManager 必须定期巡检 ZLM 活跃流列表，自动恢复丢失的流。
+- MediaStream 表必须记录流的全生命周期历史。
+- 流状态变更必须通过 WebSocket 推送给前端。
+- 流创建、关闭、重连、巡检异常必须写入审计日志。
+
+#### 指标要求
+
+| 指标 | 目标值 | 说明 |
+|---|---:|---|
+| Acquire 操作 P95 | <= 100ms | 已有流时仅递增 refcount |
+| Acquire 操作（新建流） P95 | <= 5s | 含 ZLM AddStreamProxy 调用 |
+| Release 操作 P95 | <= 100ms | 不含 ZLM CloseStream 调用 |
+| 巡检周期 | 默认 30s | 可配置 |
+| 重连成功 P95 | <= 30s | 含指数退避等待时间 |
+
+
+### 6.11 存储配置模块
+
+存储配置是 **系统管理模块（6.12）** 下的一个子功能 Tab。详见 [6.12 系统管理模块 - 存储配置 Tab](#)。
+
+核心能力：配置存储阈值上限、清理周期和智能记录保留策略，自动清理最旧的抓拍图、告警图和关联历史分区记录，保障边缘设备长期无人值守运行。
+
+#### 清理模式
+
+系统必须支持 `cron` 和 `threshold` 两种互斥清理模式，通过 `cleanup_mode` 字段切换，同一时间只有一种模式生效。
+
+| 模式 | 说明 | 触发条件 |
+|---|---|---|
+| `cron` | 定时清理 | 按 `cron_expression` 定义的调度周期执行清理 |
+| `threshold` | 阈值清理 | 按 `threshold_check_cron` 频率检查磁盘使用量，达到阈值时触发清理 |
+
+模式切换时必须重建调度器。
+
+#### 清理白名单
+
+清理范围必须严格限制，以下数据**禁止清理**：
+
+- 人员底库原图、Embedding
+- 算法包文件
+- 审计日志
+- 系统配置
+
+可清理对象：识别记录抓拍图、告警图、目标抠图及关联历史分区记录。
+
+#### 数据库分区清理规则
+
+- 智能记录表必须按时间分区。
+- 清理时必须使用 `DROP PARTITION` 操作，禁止逐行 `DELETE`。
+- 不得删除当前写入分区。
+- 清理操作必须记录审计日志，包含清理时间、清理记录数、释放空间。
+
+### 6.12 系统管理模块
 
 系统管理作为后台一级菜单，承载运行状态、系统配置、网络配置、时间配置、告警上报和存储配置等运维能力，采用 Tab 组织页面内容，一个功能模块对应一个 Tab。
 
@@ -1489,11 +1902,16 @@ stateDiagram-v2
 
 #### 网络 IP 配置要求
 
+系统必须使用 Go 原生 `netlink` 库（`github.com/vishvananda/netlink`）直接操作内核管理网络，禁止依赖特定网络管理工具（如 NetworkManager、ifupdown）。
+
+系统必须支持同时查看和配置多个网络接口，自动识别当前连接使用的网卡（通过默认路由出接口标记 `is_current=true`）。
+
 网卡配置字段：
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---:|---:|---|
 | `interface_name` | String | 是 | 网卡名称，如 `eth0` |
+| `is_current` | Boolean | 是 | 是否为当前连接网卡 |
 | `config_mode` | Enum | 是 | `dhcp` 或 `static` |
 | `ip_address` | String | 条件必填 | 静态模式下必填 |
 | `cidr_prefix` | Integer | 条件必填 | 静态模式下必填，如 `24` |
@@ -1501,6 +1919,8 @@ stateDiagram-v2
 | `dns_servers` | Array | 否 | DNS 服务器列表 |
 
 配置规则：DHCP 模式下系统自动获取 IP；静态模式必须校验 IP、网关、DNS 和 CIDR 合法性；应用前展示旧配置与新配置差异并要求二次确认。
+
+回滚机制：系统必须支持配置失败自动回滚。应用前备份所有受影响网卡配置，按顺序应用（非当前连接网卡优先，当前网卡最后）。若某个网卡配置失败，必须回滚所有已应用的配置。
 
 #### 时间配置要求
 
@@ -1521,10 +1941,15 @@ stateDiagram-v2
 | `name` | String | 是 | Webhook 名称 |
 | `url` | String | 是 | HTTPS URL |
 | `enabled` | Boolean | 是 | 是否启用 |
+| `tags` | Array | 否 | 标签列表，用于规则引擎按标签匹配推送目标 |
 | `headers` | Object | 否 | 自定义请求头，敏感 Header 加密存储 |
 | `timeout_seconds` | Integer | 是 | 请求超时，默认 `5s` |
 | `max_retries` | Integer | 是 | 最大重试次数，默认 `3` |
 | `backoff_intervals` | Array | 是 | 默认 `[5s, 15s, 30s]` |
+
+标签路由模式：每个 Webhook 可配置标签列表（如 `["alarm", "fire", "intrusion"]`），规则引擎产生告警事件时按标签匹配推送目标，实现告警分类推送。
+
+推送日志：系统必须记录每次 Webhook 推送的请求和响应信息，包含时间、状态、响应码、耗时、失败原因和重试次数。
 
 Webhook 请求体：固定包含 `deviceSn`、`cameraCode`、`captureTime`、`snapshotImagePath`、`alarmMajor`、`backgroundImagePath`、`alarmType`。
 
@@ -1635,7 +2060,7 @@ Webhook 请求体：固定包含 `deviceSn`、`cameraCode`、`captureTime`、`sn
 - 指标采集错误不得暴露系统敏感路径或密钥。
 - 越权访问必须在 Gin 中间件层拦截。
 
-### 6.10 规则引擎模块
+### 6.13 规则引擎模块
 
 #### 用户场景
 
@@ -1701,7 +2126,7 @@ Webhook 请求体：固定包含 `deviceSn`、`cameraCode`、`captureTime`、`sn
   - 支持 Golang Template 渲染，将原始元数据映射为人类可读的通知文案。
   - 支持简单的逻辑表达式判断（如 `confidence > 0.8 && label == 'fire'`）。
 
-### 6.11 角色权限管理模块
+### 6.14 角色权限管理模块
 
 #### 功能目标
 
@@ -1761,7 +2186,7 @@ Webhook 请求体：固定包含 `deviceSn`、`cameraCode`、`captureTime`、`sn
 - 删除角色前需校验是否有用户绑定，若有则阻止删除并提示转移用户。
 - 角色权限修改后，相关用户的后续 API 请求应立即按新权限生效（或在 Token 刷新后生效）。
 
-### 6.12 授权管理模块（License Management）
+### 6.15 授权管理模块（License Management）
 
 #### 功能目标
 
@@ -1926,10 +2351,10 @@ graph TD
     A[Admin Web / Business API] -->|HTTP/REST| B(Go Management Plane)
     B -->|REST/WS| C(ZLMediaKit Media Service)
     C -->|RTSP/GB28181 Ingest| C
-    B -->|UDS / Protobuf| D(C++ Inference Engine)
+    B -->|UDS / FlatBuffers| D(C++ Inference Engine)
     C -->|RTSP/RTP Stream| D
     D -->|Hardware APIs| E[RK MPP / RKNN / FFmpeg]
-    D -->|UDS / JSON| B
+    D -->|UDS / FlatBuffers| B
     B -->|Webhook| F[Third-party Platforms]
 
     subgraph Go Management Plane
@@ -1938,9 +2363,12 @@ graph TD
     end
 
     subgraph C++ Inference Engine
-    D1[Stream Worker & Puller]
+    D1[Pipeline Manager & Stage Logic]
     D2[NPU Runtime & Algo Manager]
+    D3[Hardware Encoder & RTSP Pusher]
     end
+    
+    D3 -->|RTSP Push| C
 ```
 
 **流程说明**:
@@ -2250,6 +2678,13 @@ graph TD
 - 完成存储阈值清理和 Webhook 告警上报。
 - 完成审计日志、系统配置和运行状态监控。
 - 完善异常重连、失败重试、任务批量操作和数据导出。
+
+### v1.3：媒体录制与设备发现
+
+- 完成媒体录制管理：录制计划、录像回调、录像查询与回放。
+- 完成设备发现暂存：ONVIF 扫描、GB28181 注册发现、NVR 通道发现、批量导入。
+- 完成流管理器：基于引用计数的流生命周期管理、自动重连、ZLM 健康巡检。
+- 完成系统管理增强：存储双模式清理（cron/threshold）、多网卡配置回滚、Webhook 标签路由。
 
 ### v2.0：硬件生态扩展
 

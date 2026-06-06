@@ -841,12 +841,14 @@ graph TD
     B --> C[解压并校验目录结构]
     C --> D{必需文件存在?}
     D -->|否| E[拒绝上传, 删除临时文件]
-    D -->|是| F[主进程直接加载 .so 进行自检]
-    F --> G[加载 .so, 读取元数据, 试运行]
+    D -->|是| F1[Go 端将其重新打包为标准 .tar]
+    F1 --> F2[生成带 Token 的内部下载 URL]
+    F2 --> F3[通过 TCP 通知 C++ 节点下载并自检]
+    F3 --> G[C++ 节点下载、解压、dlopen 试运行]
     G --> H{自检通过?}
     H -->|否| E
-    H -->|是| I[移动至版本控制目录]
-    I --> J[解析 yaml 入库并生效]
+    H -->|是| I[TCP 返回结果，Go 将算法元数据入库]
+    I --> J[状态置为已启用，同步全网节点]
 ```
 
 #### 用户场景
@@ -958,29 +960,29 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant U as 用户 (Frontend)
-    participant G as Go 管理端
-    participant S as 存储/临时目录
-    participant C as C++ 推理引擎 (Sandbox)
+    participant G as Go 管理端 (HTTP/TCP)
+    participant S as OSS/本地存储
+    participant C as 分布式 C++ 节点
 
-    U->>G: 上传算法包 (.zip/.tar.gz)
-    G->>S: 保存并解压至隔离临时目录
-    G->>G: 基础校验 (文件结构, algo_meta.yaml, 安全扫描)
+    U->>G: 上传算法包 (.zip)
+    G->>S: 存入临时区、解压、拦截恶意构造
+    G->>G: 验证目录结构，重打包为 .tar
     alt 基础校验失败
-        G-->>U: 返回错误 (文件缺失/目录穿越风险)
+        G-->>U: 返回错误 (缺少 .so / 恶意文件)
     else 基础校验通过
-        G->>C: 发起自检请求 (传入临时包路径)
-        Note over C: 加载 nikoniko_detector.so
-        Note over C: 加载模型与配置文件
-        C->>C: 读取 testimage.jpg 进行单次推理
-        C->>C: 校验输出 JSON 格式与类别映射
-        alt 推理/加载失败
-            C-->>G: 返回详细错误 (动态库崩溃/模型不兼容)
-            G-->>U: 展示自检失败报告
+        G->>G: 暴露临时内部 HTTP 下载服务 (附带 Token)
+        G->>C: [TCP] CmdStartSelfCheck (含下载 URL & Token)
+        C->>G: [HTTP Pull] 带 Token 拉取 .tar 并落盘解压
+        Note over C: dlopen 加载 nikoniko_detector.so
+        C->>C: 读取 testimage.jpg 单次推理
+        alt 崩溃或推理失败
+            C-->>G: [TCP] 返回自检失败错误码
+            G-->>U: 失败 (展示动态库崩溃详情)
         else 推理成功
-            C-->>G: 返回推理结果与资源占用报告
-            G->>S: 移动包至正式版本目录
-            G->>G: 算法元数据入库 (状态置为：已启用)
-            G-->>U: 返回上传成功 (V1.0.0 已就绪)
+            C-->>G: [TCP] 返回推理成功资源消耗报告
+            G->>S: .tar 落盘至正式版本库
+            G->>G: 写入 DB，状态置为可用
+            G-->>U: 上传成功，版本已就绪
         end
     end
 ```
@@ -2453,7 +2455,8 @@ sequenceDiagram
 
 ### 8.4 算法包标准
 
-算法包以压缩包形式交付和上传。平台只接收明确允许的压缩格式，例如 `.zip`、`.tar.gz`；单个算法包上传大小不得超过 `1GB`。上传耗时受网络、浏览器和服务端带宽影响，不计入算法自检超时。上传完成后，平台先解压到隔离临时目录，完成安全校验、自检推理和元数据入库后，再落盘到正式版本目录。
+算法包在前端以 `.zip` 形式上传。Go 管理端接收后，首先解压至隔离临时目录，完成安全扫描（防止目录穿越）、必需文件校验（`.so`, `yaml`, `testimage.jpg`）与解析。
+校验通过后，Go 管理端将文件**重新统一打包为标准的 `.tar` 格式**，并生成带有一次性过期 Token 的内部 HTTP 下载链接。随后通过 TCP 将链接下发给指定的 C++ 边缘节点。C++ 节点使用轻量级工具（如 libcurl + libtar）下载并落盘，执行 `dlopen` 自检推理。此设计避免了在资源受限的边缘节点上引入复杂的 Zip 解析库，同时彻底隔离了恶意构造压缩包的攻击面。
 
 算法包推荐结构：
 

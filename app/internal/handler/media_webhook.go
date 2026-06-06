@@ -44,6 +44,8 @@ func (h *MediaWebhookHandler) RegisterRoutes(r *gin.RouterGroup) {
 		g.POST("/on_record_mp4", h.OnRecordMP4)
 		g.POST("/on_server_started", h.OnServerStarted)
 		g.POST("/on_register", h.OnRegister)
+		g.POST("/on_catalog", h.OnCatalogResponse)
+		g.POST("/on_alarm", h.OnAlarm)
 	}
 }
 
@@ -85,16 +87,14 @@ func (h *MediaWebhookHandler) OnRegister(c *gin.Context) {
 			// 如果设备未预注册，记录到发现暂存区
 			zap.L().Warn("device not pre-registered, adding to staging", zap.String("device_id", req.DeviceID), zap.Error(err))
 
-			if h.stagingService != nil {
-				if stagingErr := h.stagingService.AddDiscovered(c.Request.Context(), &model.DiscoveredDevice{
-					Source:      model.SourceGB28181,
-					DeviceIP:    req.RemoteIP,
-					GB28181Code: req.DeviceID,
-					Status:      model.StatusPending,
-				}); stagingErr != nil {
-					zap.L().Error("failed to add discovered device to staging",
-						zap.String("device_id", req.DeviceID), zap.Error(stagingErr))
-				}
+			if stagingErr := h.stagingService.AddDiscovered(c.Request.Context(), &model.DiscoveredDevice{
+				Source:      model.SourceGB28181,
+				DeviceIP:    req.RemoteIP,
+				GB28181Code: req.DeviceID,
+				Status:      model.StatusPending,
+			}); stagingErr != nil {
+				zap.L().Error("failed to add discovered device to staging",
+					zap.String("device_id", req.DeviceID), zap.Error(stagingErr))
 			}
 		}
 	}
@@ -225,6 +225,82 @@ func (h *MediaWebhookHandler) OnServerStarted(c *gin.Context) {
 
 	// 恢复所有流
 	h.streamManager.RecoverOnServerStart(c.Request.Context())
+
+	successWebhook(c)
+}
+
+// OnCatalogResponse handles GB28181 device catalog response forwarded by ZLM.
+// ZLM 接收到设备的目录响应后会通过此 webhook 转发给 Go 控制面。
+func (h *MediaWebhookHandler) OnCatalogResponse(c *gin.Context) {
+	var req struct {
+		DeviceID  string `json:"device_id"`  // NVR 设备国标编码
+		XMLData   string `json:"xml"`        // 原始 MANSCDP XML
+		Channel   string `json:"channel"`     // 通道名（备用）
+	}
+	if !h.bindJSON(c, &req) {
+		return
+	}
+
+	zap.L().Info("ZLM on_catalog received", zap.String("device_id", req.DeviceID))
+
+	if h.sipService == nil || req.XMLData == "" {
+		successWebhook(c)
+		return
+	}
+
+	// 解析 MANSCDP 目录响应
+	channels, err := service.ParseCatalogueResponse(req.XMLData)
+	if err != nil {
+		zap.L().Warn("parse catalog response failed",
+			zap.String("device_id", req.DeviceID), zap.Error(err))
+		successWebhook(c)
+		return
+	}
+
+	// 同步到 Device 表
+	if err := h.sipService.SyncCatalogChannels(c.Request.Context(), req.DeviceID, channels); err != nil {
+		zap.L().Error("sync catalog channels failed",
+			zap.String("device_id", req.DeviceID), zap.Error(err))
+	}
+
+	successWebhook(c)
+}
+
+// OnAlarm handles GB28181 alarm notification forwarded by ZLM.
+func (h *MediaWebhookHandler) OnAlarm(c *gin.Context) {
+	var req struct {
+		DeviceID string `json:"device_id"`
+		XMLData  string `json:"xml"`
+	}
+	if !h.bindJSON(c, &req) {
+		return
+	}
+
+	zap.L().Info("ZLM on_alarm received", zap.String("device_id", req.DeviceID))
+
+	if h.sipService == nil || req.XMLData == "" {
+		successWebhook(c)
+		return
+	}
+
+	// 解析 MANSCDP 告警
+	alarm, err := service.ParseAlarmResponse(req.XMLData)
+	if err != nil {
+		zap.L().Warn("parse alarm response failed",
+			zap.String("device_id", req.DeviceID), zap.Error(err))
+		successWebhook(c)
+		return
+	}
+	// DeviceID 可能来自 payload 或 XML 内部，优先使用 XML 中的
+	if alarm.DeviceID == "" {
+		alarm.DeviceID = req.DeviceID
+	}
+
+	// 处理告警（写入 smart_records + 推入 Asynq 告警分发队列）
+	if err := h.sipService.HandleAlarm(c.Request.Context(), *alarm); err != nil {
+		zap.L().Error("handle alarm failed",
+			zap.String("device_id", alarm.DeviceID), zap.Error(err))
+	}
 
 	successWebhook(c)
 }

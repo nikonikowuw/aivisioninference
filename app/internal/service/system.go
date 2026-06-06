@@ -12,6 +12,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/buildinfo"
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -24,14 +25,15 @@ const (
 
 // SystemService 系统管理服务
 type SystemService struct {
-	db               *gorm.DB
-	rdb              *redis.Client
-	version          string
-	metricsCollector *MetricsCollector
-	npuCollector         NPUCollector
-	serviceDetector      *ServiceStatusDetector
-	historyBuffer        *HistoryBuffer
-	engineMetricsStore   *EngineMetricsStore
+	db                  *gorm.DB
+	rdb                 *redis.Client
+	version             string
+	metricsCollector    *MetricsCollector
+	npuCollector        NPUCollector
+	serviceDetector     *ServiceStatusDetector
+	historyBuffer       *HistoryBuffer
+	engineMetricsStore  *EngineMetricsStore
+	zlmClient           ZLMAPI // ZLM API 抽象接口
 
 	// 缓存实时指标
 	mu            sync.RWMutex
@@ -90,6 +92,27 @@ func (s *SystemService) GetStreamsStatus() []ipc.StreamMetricsSnapshot {
 		return nil
 	}
 	return s.engineMetricsStore.GetAllStreamMetrics()
+}
+
+// GetSIPStatus 获取 ZLM GB28181 SIP 服务运行状态
+func (s *SystemService) GetSIPStatus() map[string]interface{} {
+	status := map[string]interface{}{
+		"enabled": false,
+		"status":  "unknown",
+	}
+	// 从 ZLM 客户端查询 RTP 服务器列表
+	if s.zlmClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if servers, err := s.zlmClient.ListRtpServer(ctx); err == nil {
+			status["rtp_servers"] = len(servers)
+			status["status"] = "running"
+		} else {
+			status["status"] = "error"
+			status["error"] = err.Error()
+		}
+	}
+	return status
 }
 
 // Close 停止采集协程，实现优雅关闭
@@ -188,6 +211,11 @@ func (s *SystemService) GetServiceStatus() (*ServiceStatusResponse, error) {
 // GetStatusHistory 获取历史数据
 func (s *SystemService) GetStatusHistory(metric string, duration time.Duration) ([]HistoryPoint, error) {
 	return s.historyBuffer.Get(metric, duration), nil
+}
+
+// ZLMAPI ZLM 客户端最小接口（避免循环依赖）
+type ZLMAPI interface {
+	ListRtpServer(ctx context.Context) ([]zlm.RtpServerInfo, error)
 }
 
 // ServiceStatusResponse 服务状态响应

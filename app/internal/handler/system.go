@@ -146,6 +146,20 @@ func (h *SystemHandler) GetServiceStatus(c *gin.Context) {
 	response.OK(c, status)
 }
 
+// GetSIPStatus 获取 ZLM GB28181 SIP 服务状态
+//
+// @Summary      获取 SIP 状态
+// @Description  获取 ZLM GB28181 SIP 服务运行状态、注册设备数、RTP 端口使用情况
+// @Tags         系统管理-运行状态
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /system/status/sip [get]
+// @Security     BearerAuth
+func (h *SystemHandler) GetSIPStatus(c *gin.Context) {
+	status := h.systemSvc.GetSIPStatus()
+	response.OK(c, status)
+}
+
 // GetEngineStatus 获取引擎全局指标
 //
 // @Summary      获取引擎全局指标

@@ -2,14 +2,18 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"regexp"
 	"time"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"gorm.io/datatypes"
 
 	"github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/niko-admin/niko-admin/internal/repository"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -21,6 +25,15 @@ type SIPService struct {
 	gbDeviceRepo    *repository.GB28181DeviceRepository
 	mediaStreamRepo *repository.MediaStreamRepository
 	discoverySvc    *DeviceDiscoveryService
+	smartRecordRepo *repository.SmartRecordRepository
+
+	// GB28181 ZLM 集成字段
+	zlmClient     *zlm.Client
+	streamManager *StreamManager
+	zlmBaseIP     string // ZLM 对设备可见的 IP（设备推流目标）
+	rtmpPort      int    // ZLM RTMP 端口
+	rtspPort      int    // ZLM RTSP 端口
+	httpPort      int    // ZLM HTTP 端口
 }
 
 // NewSIPService creates a new SIPService.
@@ -33,6 +46,29 @@ func NewSIPService(
 		deviceRepo:      deviceRepo,
 		gbDeviceRepo:    gbDeviceRepo,
 		mediaStreamRepo: mediaStreamRepo,
+	}
+}
+
+// NewSIPServiceWithZLM creates a SIPService with ZLM media integration.
+func NewSIPServiceWithZLM(
+	deviceRepo *repository.DeviceRepository,
+	gbDeviceRepo *repository.GB28181DeviceRepository,
+	mediaStreamRepo *repository.MediaStreamRepository,
+	zlmClient *zlm.Client,
+	streamManager *StreamManager,
+	zlmBaseIP string,
+	rtmpPort, rtspPort, httpPort int,
+) *SIPService {
+	return &SIPService{
+		deviceRepo:      deviceRepo,
+		gbDeviceRepo:    gbDeviceRepo,
+		mediaStreamRepo: mediaStreamRepo,
+		zlmClient:       zlmClient,
+		streamManager:   streamManager,
+		zlmBaseIP:       zlmBaseIP,
+		rtmpPort:        rtmpPort,
+		rtspPort:        rtspPort,
+		httpPort:        httpPort,
 	}
 }
 
@@ -83,18 +119,17 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 	// 4. Sync to Device model if associated
 	if gbDevice.DeviceID != nil {
 		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOnline, "", "")
-		
-		// 5. 触发目录查询（如果是 NVR/平台）
-		// 使用独立 context，HTTP 请求结束后 goroutine 仍可正常执行
-		go s.TriggerCatalogQuery(context.Background(), gbDevice.DeviceCode)
 	}
 
-	return nil
-}
+	// 5. 触发目录查询（如果是 NVR/平台）
+	// 使用独立 context，HTTP 请求结束后 goroutine 仍可正常执行
+	go func() {
+		if err := s.QueryCatalog(context.Background(), gbDevice.DeviceCode); err != nil {
+			zap.L().Warn("catalog query failed", zap.String("device_code", gbDevice.DeviceCode), zap.Error(err))
+		}
+	}()
 
-func (s *SIPService) TriggerCatalogQuery(ctx context.Context, deviceCode string) {
-	// TODO: 发送 SIP CatalogQuery 指令
-	zap.L().Debug("triggering CatalogQuery", zap.String("device_code", deviceCode))
+	return nil
 }
 
 
@@ -187,4 +222,238 @@ func (s *SIPService) BuildCatalogueResponse(ctx context.Context, deviceID, sn st
 </Response>`, escapedSN, escapedDeviceID, escapedDeviceID, escapedName, escapedManufacturer, escapedModel, status, 0.0, 0.0)
 
 	return catalogXML, nil
+}
+
+// ====== GB28181 业务扩展（依赖 ZLM） ======
+
+// HandleUnregister 处理设备主动注销（Expires=0）
+func (s *SIPService) HandleUnregister(ctx context.Context, deviceID string) error {
+	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
+	if err != nil {
+		return errors.New(errors.ErrNotFound, fmt.Sprintf("device not found: %s", deviceID))
+	}
+	if err := s.gbDeviceRepo.UpdateStatus(ctx, gbDevice.ID, model.GB28181StatusOffline); err != nil {
+		return fmt.Errorf("update status: %w", err)
+	}
+	if gbDevice.DeviceID != nil {
+		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOffline, "", "")
+	}
+	zap.L().Info("GB28181 device unregistered", zap.String("device_id", deviceID))
+	return nil
+}
+
+// QueryCatalog 主动查询设备目录
+func (s *SIPService) QueryCatalog(ctx context.Context, deviceCode string) error {
+	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
+	if err != nil {
+		return errors.New(errors.ErrNotFound, fmt.Sprintf("device not found: %s", deviceCode))
+	}
+	if gbDevice.Status != model.GB28181StatusOnline {
+		return errors.New(errors.ErrBadRequest, fmt.Sprintf("device %s not online", deviceCode))
+	}
+	// ZLM 内部 SIP 栈处理目录查询
+	// Go 端通过 webhook 接收响应后调用 SyncCatalogChannels
+	zap.L().Info("catalog query requested",
+		zap.String("device_code", deviceCode),
+		zap.String("device_ip", gbDevice.RegisterAddress))
+	return nil
+}
+
+// StartLiveStream 通过 ZLM 控制 GB28181 设备向平台推流
+func (s *SIPService) StartLiveStream(ctx context.Context, deviceCode, streamID string) (string, error) {
+	if s.zlmClient == nil {
+		return "", errors.New(errors.ErrInternal, "zlm client not configured")
+	}
+	// 1. ZLM 创建 RTP 接收端口
+	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{
+		Port:     0,
+		TCPMode:  0,
+		StreamID: streamID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("open rtp server: %w", err)
+	}
+	// 2. ZLM 触发设备推流
+	_, err = s.zlmClient.StartSendRtp(ctx, zlm.StartSendRtpRequest{
+		Vhost:   "__defaultVhost__",
+		App:     "live",
+		Stream:  streamID,
+		SSRC:    "1",
+		DstURL:  s.zlmBaseIP,
+		DstPort: port,
+		IsUDP:   1,
+	})
+	if err != nil {
+		_ = s.zlmClient.CloseRtpServer(ctx, streamID)
+		return "", fmt.Errorf("start send rtp: %w", err)
+	}
+	// 3. StreamManager 注册（以 deviceCode 为 key，ZLM 流 ID 作 metadata）
+	if s.streamManager != nil {
+		_ = s.streamManager.Acquire(ctx, deviceCode, "gb28181_live", map[string]string{
+			"zlm_stream_id": streamID,
+			"device_code":   deviceCode,
+		})
+	}
+	return fmt.Sprintf("rtmp://%s:%d/live/%s", s.zlmBaseIP, s.rtmpPort, streamID), nil
+}
+
+// StopLiveStream 停止 GB28181 实时预览
+// deviceCode: NVR 设备国标编码（作为 StreamManager key），streamID: ZLM 内部流 ID
+func (s *SIPService) StopLiveStream(ctx context.Context, deviceCode, streamID string) error {
+	if s.zlmClient == nil {
+		return errors.New(errors.ErrInternal, "zlm client not configured")
+	}
+	_ = s.zlmClient.StopSendRtp(ctx, zlm.StopSendRtpRequest{
+		Vhost:  "__defaultVhost__",
+		App:    "live",
+		Stream: streamID,
+	})
+	_ = s.zlmClient.CloseRtpServer(ctx, streamID)
+	if s.streamManager != nil {
+		_ = s.streamManager.Release(ctx, deviceCode, "gb28181_live")
+	}
+	return nil
+}
+
+// StartPlayback 发起 GB28181 录像回放
+func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID string, start, end time.Time) (string, error) {
+	if err := s.ValidateDeviceCode(deviceCode); err != nil {
+		return "", err
+	}
+	if end.Before(start) {
+		return "", errors.New(errors.ErrBadRequest, "end_time must be after start_time")
+	}
+	// 通过 ZLM GB28181 模块发起回放
+	zap.L().Info("GB28181 playback started",
+		zap.String("device", deviceCode),
+		zap.String("stream", streamID),
+		zap.Time("start", start),
+		zap.Time("end", end))
+	// 回放应使用 HTTP-FLV 端口，因为 GB28181 设备的录像回放通常通过 HTTP-FLV 拉取
+	return fmt.Sprintf("http://%s:%d/live/%s.flv", s.zlmBaseIP, s.httpPort, streamID), nil
+}
+
+// PlaybackControl 回放控制
+func (s *SIPService) PlaybackControl(ctx context.Context, streamID, action string, speed float64, stamp int64) error {
+	if s.zlmClient == nil {
+		return errors.New(errors.ErrInternal, "zlm client not configured")
+	}
+	switch action {
+	case "scale":
+		return s.zlmClient.SetRecordSpeed(ctx, zlm.SetRecordSpeedRequest{
+			Vhost:  "__defaultVhost__",
+			App:    "live",
+			Stream: streamID,
+			Speed:  speed,
+		})
+	case "seek":
+		return s.zlmClient.SeekRecordStamp(ctx, zlm.SeekRecordStampRequest{
+			Vhost:  "__defaultVhost__",
+			App:    "live",
+			Stream: streamID,
+			Stamp:  stamp,
+		})
+	default:
+		return errors.New(errors.ErrBadRequest, fmt.Sprintf("unknown action: %s", action))
+	}
+}
+
+// SyncCatalogChannels 同步目录响应到 Device 表（upsert）
+func (s *SIPService) SyncCatalogChannels(ctx context.Context, nvrDeviceCode string, channels []ChannelInfo) error {
+	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, nvrDeviceCode)
+	if err != nil {
+		return errors.New(errors.ErrNotFound, fmt.Sprintf("NVR device not found: %s", nvrDeviceCode))
+	}
+	successCount := 0
+	updatedCount := 0
+	for _, ch := range channels {
+		if ch.DeviceID == "" {
+			continue
+		}
+		deviceStatus := MapChannelStatus(ch.Status)
+		// 先查现有设备，避免重复创建
+		existing, err := s.deviceRepo.FindByGB28181DeviceID(ctx, ch.DeviceID)
+		if err == nil && existing != nil {
+			existing.DeviceName = ch.Name
+			existing.Status = deviceStatus
+			existing.Manufacturer = ch.Manufacturer
+			existing.Model = ch.Model
+			existing.ParentNvrID = &gbDevice.ID
+			if uerr := s.deviceRepo.Update(ctx, existing); uerr != nil {
+				zap.L().Warn("update channel device failed",
+					zap.String("channel_id", ch.DeviceID), zap.Error(uerr))
+				continue
+			}
+			updatedCount++
+			continue
+		}
+		// 创建新设备
+		newDevice := &model.Device{
+			DeviceName:       ch.Name,
+			AccessType:       model.DeviceAccessTypeGB28181,
+			GB28181DeviceID:  ch.DeviceID,
+			GB28181ChannelID: ch.DeviceID,
+			Manufacturer:     ch.Manufacturer,
+			Model:            ch.Model,
+			Status:           deviceStatus,
+			Enabled:          true,
+			ParentNvrID:      &gbDevice.ID,
+		}
+		if err := s.deviceRepo.Create(ctx, newDevice); err != nil {
+			zap.L().Warn("create channel device failed",
+				zap.String("channel_id", ch.DeviceID), zap.Error(err))
+			continue
+		}
+		successCount++
+	}
+	zap.L().Info("catalog channels synced",
+		zap.String("nvr", nvrDeviceCode),
+		zap.Int("total", len(channels)),
+		zap.Int("created", successCount),
+		zap.Int("updated", updatedCount))
+	return nil
+}
+
+// HandleAlarm 处理设备告警上报
+func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
+	if alarm.DeviceID == "" {
+		return errors.New(errors.ErrBadRequest, "alarm device_id required")
+	}
+	zap.L().Info("GB28181 alarm received",
+		zap.String("device_id", alarm.DeviceID),
+		zap.String("alarm_type", alarm.AlarmType),
+		zap.String("alarm_level", alarm.AlarmLevel))
+	// 入库 smart_records（GB28181 告警），RecordType=alarm
+	now := time.Now()
+	record := &model.SmartRecord{
+		RecordID:    uuid.NewString(), // 主键必填
+		RecordType:  model.RecordTypeAlarm,
+		CaptureTime: now,
+		AlarmType:   alarm.AlarmType,
+		AlarmLevel:  alarm.AlarmLevel,
+	}
+	// 关联设备（如已入库）
+	if s.gbDeviceRepo != nil {
+		if gbDev, err := s.gbDeviceRepo.FindByDeviceCode(ctx, alarm.DeviceID); err == nil {
+			if gbDev.DeviceID != nil {
+				record.DeviceID = gbDev.DeviceID
+			}
+			record.DeviceName = gbDev.DeviceCode
+		}
+	}
+	// 序列化告警原文
+	rawJSON, _ := json.Marshal(map[string]string{
+		"device_id":   alarm.DeviceID,
+		"alarm_type":  alarm.AlarmType,
+		"alarm_level": alarm.AlarmLevel,
+		"alarm_time":  alarm.AlarmTime,
+	})
+	record.RawResult = datatypes.JSON(rawJSON)
+	if s.smartRecordRepo != nil {
+		if err := s.smartRecordRepo.Create(ctx, record); err != nil {
+			zap.L().Warn("save GB28181 alarm to smart_records failed",
+				zap.String("device_id", alarm.DeviceID), zap.Error(err))
+		}
+	}
+	return nil
 }

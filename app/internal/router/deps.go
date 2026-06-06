@@ -202,6 +202,38 @@ func provideZLMClient(cfg *Config) *zlm.Client {
 	return zlm.NewClient(cfg.ZLMAPIURL, cfg.ZLMSecret, zap.L())
 }
 
+func provideSIPServiceWithZLM(
+	deviceRepo *repository.DeviceRepository,
+	gbDeviceRepo *repository.GB28181DeviceRepository,
+	mediaStreamRepo *repository.MediaStreamRepository,
+	zlmClient *zlm.Client,
+	streamManager *service.StreamManager,
+	cfg *Config,
+) *service.SIPService {
+	zlmBaseIP := cfg.ZLMExternalIP
+	if zlmBaseIP == "" {
+		// 从 ZLMAPIURL 提取 host
+		zlmBaseIP = cfg.ZLMAPIURL
+	}
+	rtmpPort := cfg.ZLMRTMPPort
+	if rtmpPort == 0 {
+		rtmpPort = 1935
+	}
+	rtspPort := cfg.ZLMRTSPPort
+	if rtspPort == 0 {
+		rtspPort = 554
+	}
+	httpPort := cfg.ZLMHTTPPort
+	if httpPort == 0 {
+		httpPort = 80
+	}
+	return service.NewSIPServiceWithZLM(
+		deviceRepo, gbDeviceRepo, mediaStreamRepo,
+		zlmClient, streamManager, zlmBaseIP,
+		rtmpPort, rtspPort, httpPort,
+	)
+}
+
 func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.StreamManager) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler, *handler.DeviceStagingHandler) {
 	zlmClient := provideZLMClient(cfg)
 	deviceRepo := repository.NewDeviceRepository(db)

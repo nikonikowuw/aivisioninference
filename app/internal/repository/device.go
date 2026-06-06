@@ -99,6 +99,16 @@ func (r *DeviceRepository) FindByExternalKey(ctx context.Context, key string) (*
 	return &item, nil
 }
 
+// FindByGB28181DeviceID 根据 GB28181 设备编码查询设备
+func (r *DeviceRepository) FindByGB28181DeviceID(ctx context.Context, gbID string) (*model.Device, error) {
+	var item model.Device
+	err := r.db.WithContext(ctx).Where("gb28181_device_id = ?", gbID).First(&item).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 // ExistsByName 检查设备名称是否已存在（排除指定 ID）
 func (r *DeviceRepository) ExistsByName(ctx context.Context, name, excludeID string) (bool, error) {
 	var count int64

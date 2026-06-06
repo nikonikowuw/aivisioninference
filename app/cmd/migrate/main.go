@@ -124,6 +124,8 @@ func main() {
 	mustExec(db, migrateAuditLogResultSummarySQL())
 	mustExec(db, addAuditLogActionTypeColumnSQL())
 	mustExec(db, addFileMD5ColumnSQL())
+	mustExec(db, addGB28181ChannelCountColumnSQL())
+	mustExec(db, addGB28181LastCatalogAtColumnSQL())
 
 	// Migrate existing menus to multi-level structure.
 	if err := migrateMultiLevelMenu(db); err != nil {
@@ -157,6 +159,16 @@ func addFileMD5ColumnSQL() string {
 	return `
 	ALTER TABLE files ADD COLUMN IF NOT EXISTS md5 varchar(64);
 	CREATE INDEX IF NOT EXISTS idx_files_md5 ON files (md5);`
+}
+
+// addGB28181ChannelCountColumnSQL 添加 GB28181 设备通道数字段。
+func addGB28181ChannelCountColumnSQL() string {
+	return `ALTER TABLE gb28181_devices ADD COLUMN IF NOT EXISTS channel_count integer NOT NULL DEFAULT 0;`
+}
+
+// addGB28181LastCatalogAtColumnSQL 添加 GB28181 设备最后目录同步时间字段。
+func addGB28181LastCatalogAtColumnSQL() string {
+	return `ALTER TABLE gb28181_devices ADD COLUMN IF NOT EXISTS last_catalog_at timestamptz;`
 }
 
 // rootUsernameConstraintSQL 返回 root 用户名一致性的幂等约束语句。

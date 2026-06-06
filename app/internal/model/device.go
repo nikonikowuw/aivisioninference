@@ -99,6 +99,7 @@ type GB28181Device struct {
 	SipPassword       string     `gorm:"type:text" json:"-"`
 	LastRegisterAt    *time.Time `json:"last_register_at,omitempty"`
 	LastHeartbeatAt   *time.Time `json:"last_heartbeat_at,omitempty" gorm:"index"`
+	LastCatalogAt     *time.Time `json:"last_catalog_at,omitempty"`
 	HeartbeatInterval int        `gorm:"default:60" json:"heartbeat_interval"`
 	Status            string     `gorm:"type:varchar(16);default:offline;index" json:"status"`
 	ChannelCount      int        `gorm:"default:0" json:"channel_count"`

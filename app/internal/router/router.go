@@ -4,6 +4,7 @@ package router
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
@@ -49,6 +50,20 @@ type Config struct {
 	LocalPublicURL            string
 	ZLMAPIURL                 string
 	ZLMSecret                 string
+	// GB28181 GB/T 28181 配置
+	GB28181Enabled        bool          `yaml:"gb28181_enabled" mapstructure:"gb28181_enabled"`
+	GB28181Domain         string        `yaml:"gb28181_domain" mapstructure:"gb28181_domain"`
+	GB28181Password       string        `yaml:"gb28181_password" mapstructure:"gb28181_password"`
+	GB28181HeartbeatSec   int           `yaml:"gb28181_heartbeat_sec" mapstructure:"gb28181_heartbeat_sec"`
+	GB28181CatalogSyncSec int           `yaml:"gb28181_catalog_sync_sec" mapstructure:"gb28181_catalog_sync_sec"`
+	GB28181PlaybackMaxSec int           `yaml:"gb28181_playback_max_sec" mapstructure:"gb28181_playback_max_sec"`
+	GB28181StreamTimeout  time.Duration `yaml:"gb28181_stream_timeout" mapstructure:"gb28181_stream_timeout"`
+	// ZLM 端口配置（可被 docker 端口映射覆盖）
+	ZLMRTMPPort   int    `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
+	ZLMRTSPPort   int    `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
+	ZLMHTTPPort   int    `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
+	// ZLM 实际对外 IP（设备推流目标地址，默认从 ZLMAPIURL 解析）
+	ZLMExternalIP string `yaml:"zlm_external_ip" mapstructure:"zlm_external_ip"`
 }
 
 // New creates a new Router with all dependencies wired.

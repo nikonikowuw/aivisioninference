@@ -248,6 +248,7 @@ func buildMenuNodes(perms []model.Permission) map[string]*menuNode {
 				Code:      perm.Code,
 				Path:      perm.Path,
 				Icon:      perm.Icon,
+				Hidden:    perm.IsHidden,
 				SortOrder: perm.SortOrder,
 			},
 		}

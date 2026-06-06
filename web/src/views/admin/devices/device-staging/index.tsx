@@ -492,8 +492,8 @@ export default function DeviceStaging() {
                 total={total}
                 page={page}
                 pageSize={pageSize}
-                onChangePage={changePage}
-                onChangePageSize={changePageSize}
+                onChange={changePage}
+                onPageSizeChange={changePageSize}
               />
             </>
           )}

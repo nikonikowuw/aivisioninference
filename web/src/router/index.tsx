@@ -27,6 +27,11 @@ import {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
+  MdDeviceHub,
+  MdViewList,
+  MdOndemandVideo,
+  MdPlayCircleOutline,
+  MdNotificationsActive,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -52,6 +57,11 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdVideoLibrary,
   MdOutlineDeviceHub,
   MdTimeline,
+  MdDeviceHub,
+  MdViewList,
+  MdOndemandVideo,
+  MdPlayCircleOutline,
+  MdNotificationsActive,
 };
 
 // 菜单 code 到组件的映射
@@ -74,6 +84,11 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'feedback': () => import('../views/admin/feedback'),
   'system-config': () => import('../views/admin/system/SystemConfig'),
   'license': () => import('../views/admin/license'),
+  'gb28181-devices': () => import('../views/admin/gb28181/DeviceList'),
+  'gb28181-channels': () => import('../views/admin/gb28181/ChannelList'),
+  'gb28181-live': () => import('../views/admin/gb28181/LiveView'),
+  'gb28181-playback': () => import('../views/admin/gb28181/PlaybackView'),
+  'smart-records': () => import('../views/admin/gb28181/Alarms'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();

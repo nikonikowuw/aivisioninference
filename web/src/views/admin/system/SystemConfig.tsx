@@ -17,6 +17,7 @@ import {
   MdNotifications,
   MdStorage,
   MdWifi,
+  MdDeviceHub,
 } from 'react-icons/md';
 
 import NetworkConfigTab from './tabs/NetworkConfigTab';
@@ -25,6 +26,7 @@ import StorageConfigTab from './tabs/StorageConfigTab';
 import SystemInfoTab from './tabs/SystemInfoTab';
 import TimeConfigTab from './tabs/TimeConfigTab';
 import WebhookConfigTab from './tabs/WebhookConfigTab';
+import GB28181ConfigTab from './tabs/GB28181ConfigTab';
 
 export default function SystemConfig() {
   const { t } = useTranslation('modules/system');
@@ -89,6 +91,12 @@ export default function SystemConfig() {
                   <Text>{t('info.title', { defaultValue: '系统信息' })}</Text>
                 </Flex>
               </Tab>
+              <Tab>
+                <Flex align="center" gap={2}>
+                  <MdDeviceHub />
+                  <Text>GB28181</Text>
+                </Flex>
+              </Tab>
             </TabList>
 
             <TabPanels>
@@ -109,6 +117,9 @@ export default function SystemConfig() {
               </TabPanel>
               <TabPanel px={0}>
                 <SystemInfoTab />
+              </TabPanel>
+              <TabPanel px={0}>
+                <GB28181ConfigTab />
               </TabPanel>
             </TabPanels>
           </Tabs>

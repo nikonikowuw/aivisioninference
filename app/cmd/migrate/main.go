@@ -32,6 +32,19 @@ func main() {
 
 	mustExec(db, "CREATE EXTENSION IF NOT EXISTS vector")
 
+	// 手动迁移：device_licenses 表的 algorithms 字段从 text[] 转为 jsonb
+	// GORM AutoMigrate 无法自动完成此类型转换，需提前手动执行
+	tryExec(db, `DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name = 'device_licenses' AND column_name = 'algorithms' AND data_type = 'ARRAY'
+			) THEN
+				ALTER TABLE device_licenses ALTER COLUMN algorithms TYPE jsonb USING to_jsonb(algorithms);
+			END IF;
+		END
+	$$`)
+
 	// Auto migrate all models.
 	if err := db.AutoMigrate(
 		// Scaffold models (unchanged).
@@ -252,6 +265,7 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 			ChildCodes []string
 		}{
 			{Code: "user-management", Name: "用户管理", Icon: "MdPeople", ChildCodes: []string{"users", "roles", "permissions"}},
+			{Code: "license-management", Name: "授权管理", Icon: "MdVpnKey", ChildCodes: []string{"license"}},
 			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks"}},
 		}
 
@@ -522,6 +536,18 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "permission:edit", Name: "编辑权限", Path: "/api/v1/permissions/*", Method: "PUT"},
 					{Code: "permission:delete", Name: "删除权限", Path: "/api/v1/permissions/*", Method: "DELETE"},
 					{Code: "permission:view", Name: "查看权限", Path: "/api/v1/permissions/*", Method: "GET"},
+				}},
+			},
+		},
+		{
+			Name: "授权管理", Code: "license-management", Path: "/license-management", Icon: "MdVpnKey",
+			Children: []childMenuDef{
+				{Name: "算法授权", Code: "license", Path: "/license", Icon: "MdVpnKey", Buttons: []buttonInfo{
+					{Code: "license:fingerprint", Name: "查看设备指纹", Path: "/api/v1/license/fingerprint", Method: "GET"},
+					{Code: "license:upload", Name: "上传授权文件", Path: "/api/v1/license/upload", Method: "POST"},
+					{Code: "license:active", Name: "查看当前授权", Path: "/api/v1/license/active", Method: "GET"},
+					{Code: "license:list", Name: "授权列表", Path: "/api/v1/license", Method: "GET"},
+					{Code: "license:check", Name: "校验算法授权", Path: "/api/v1/license/check", Method: "GET"},
 				}},
 			},
 		},

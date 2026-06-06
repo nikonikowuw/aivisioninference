@@ -5,9 +5,10 @@
 | 项目 | 内容 |
 |---|---|
 | 产品名称 | AIVisionInference 边缘视觉推理系统 |
-| 文档版本 | V0.2 Draft |
+| 文档版本 | V0.3 Draft |
 | 创建日期 | 2026-06-04 |
 | 当前状态 | 进行中 / 持续更新 |
+| 来源文档 | `docs/prd.md` |
 
 ## 2. 修订历史
 
@@ -1528,7 +1529,6 @@ stateDiagram-v2
 - 人脸图片、人员身份信息和相似度结果属于敏感数据，需按角色控制展示。
 - 越权访问必须在 Gin 中间件层和查询条件层双重拦截。
 
-
 ### 6.8 媒体录制管理模块
 
 #### 用户场景
@@ -1905,7 +1905,6 @@ MediaStream 表记录流的全生命周期历史，不维护实时状态。实�
 | Release 操作 P95 | <= 100ms | 不含 ZLM CloseStream 调用 |
 | 巡检周期 | 默认 30s | 可配置 |
 | 重连成功 P95 | <= 30s | 含指数退避等待时间 |
-
 
 ### 6.11 存储配置模块
 
@@ -2510,7 +2509,7 @@ graph TD
     D2[NPU Runtime & Algo Manager]
     D3[Hardware Encoder & RTSP Pusher]
     end
-    
+
     D3 -->|RTSP Push| C
 ```
 
@@ -2581,7 +2580,7 @@ sequenceDiagram
     Cpp->>ZLM: 内部直连拉流 (RTSP/GB28181)
     Cpp->>Cpp: 硬件解码 (VPU) & NPU 推理 (无 IPC 开销)
     Cpp->>Go: 发送 TCP 结果 (FlatBuffers/JSON 推理结果)
-    
+
     %% 单图API推理的场景
     Go-->>Cpp: [仅单图API推理] 发送包含 Base64 图片的 TCP 帧
     Cpp-->>Cpp: [仅单图API推理] 提取数据并推理

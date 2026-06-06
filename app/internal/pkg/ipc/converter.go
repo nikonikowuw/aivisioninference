@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
+	flatbuffers "github.com/google/flatbuffers/go"
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
 
@@ -355,14 +356,25 @@ type AlgoLoadResultParams struct {
 	NPUMemoryBytes uint64
 }
 
-// FlatBuffersToAlgoLoadResult TODO: flatc 生成代码后实现。
+// FlatBuffersToAlgoLoadResult 从 FlatBuffers 字节数组反序列化算法自检结果。
 func FlatBuffersToAlgoLoadResult(fbData []byte) *AlgoLoadResultParams {
 	if len(fbData) == 0 {
 		return nil
 	}
 
-	zap.L().Debug("IPC: FlatBuffersToAlgoLoadResult 待 flatc 生成代码后实现")
-	return nil
+	msg := fbs.GetRootAsAlgoLoadResultMsg(fbData, 0)
+	return &AlgoLoadResultParams{
+		TaskID:         string(msg.TaskId()),
+		AlgoName:       string(msg.AlgoName()),
+		AlgoVersion:    string(msg.AlgoVersion()),
+		PackageID:      string(msg.PackageId()),
+		Success:        msg.Success(),
+		SelfCheck:      msg.SelfCheckStatus().String(),
+		ErrorCode:      string(msg.ErrorCode()),
+		ErrorMessage:   string(msg.ErrorMessage()),
+		LoadTimeMS:     msg.LoadTimeMs(),
+		NPUMemoryBytes: msg.NpuMemoryBytes(),
+	}
 }
 
 // ============================================================
@@ -413,4 +425,26 @@ func nanosToTime(nanos uint64) time.Time {
 	sec := int64(nanos / 1e9)
 	nsec := int64(nanos % 1e9)
 	return time.Unix(sec, nsec)
+}
+
+// StartSelfCheckCmdToFlatBuffers 将自检参数序列化为 FlatBuffers 格式。
+func StartSelfCheckCmdToFlatBuffers(downloadURL, token, algoName, version string) []byte {
+	builder := flatbuffers.NewBuilder(1024)
+
+	// 创建字符串偏移量
+	downloadURLOffset := builder.CreateString(downloadURL)
+	tokenOffset := builder.CreateString(token)
+	algoNameOffset := builder.CreateString(algoName)
+	versionOffset := builder.CreateString(version)
+
+	// 构建 StartSelfCheckCmd 对象
+	fbs.StartSelfCheckCmdStart(builder)
+	fbs.StartSelfCheckCmdAddDownloadUrl(builder, downloadURLOffset)
+	fbs.StartSelfCheckCmdAddToken(builder, tokenOffset)
+	fbs.StartSelfCheckCmdAddAlgorithmName(builder, algoNameOffset)
+	fbs.StartSelfCheckCmdAddVersion(builder, versionOffset)
+	offset := fbs.StartSelfCheckCmdEnd(builder)
+
+	builder.Finish(offset)
+	return builder.FinishedBytes()
 }

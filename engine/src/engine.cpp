@@ -1,6 +1,17 @@
 #include "engine.h"
 #include "pipeline/pipeline_manager.h"
 #include <iostream>
+#include <curl/curl.h>
+#include <filesystem>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <chrono>
+#include <algorithm>
+#include <regex>
+#include "proto/flatbuf/commands_generated.h"
+#include "proto/flatbuf/results_generated.h"
+#include "algo/so_handle.h"
 
 namespace aivision
 {
@@ -121,6 +132,7 @@ namespace aivision
         REGISTER_HANDLER(202, HandleStreamStop);
         REGISTER_HANDLER(203, HandleStreamPlaybackStart);
         REGISTER_HANDLER(204, HandleStreamPlaybackStop);
+        REGISTER_HANDLER(206, HandleStartSelfCheck);
 
 #undef REGISTER_HANDLER
     }
@@ -181,6 +193,270 @@ namespace aivision
         // TODO: 解析 FlatBuffers StreamPlaybackStopCmd
         // pipeline_mgr_->DisablePlayback(device_id);
         std::cout << "[IPC] Received StreamPlaybackStop" << std::endl;
+    }
+
+    namespace {
+        /// libcurl 写回调
+        size_t curl_write_callback(void *ptr, size_t size, size_t nmemb, FILE *stream)
+        {
+            return fwrite(ptr, size, nmemb, stream);
+        }
+
+        /// 对来自 algo_meta.yaml 的文件名/标识符进行严格校验，防止命令注入
+        bool validateAlgoIdentifier(const std::string &name)
+        {
+            static const std::regex safe_pattern("^[a-zA-Z0-9_\\-.]+$");
+            return std::regex_match(name, safe_pattern);
+        }
+    } // anonymous namespace
+
+    void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size, uint64_t seq)
+    {
+        (void)size;
+        (void)seq;
+        std::cout << "[IPC] Received StartSelfCheck command" << std::endl;
+
+        const aivision::ipc::StartSelfCheckCmd *cmd = aivision::ipc::GetStartSelfCheckCmd(payload);
+        if (!cmd)
+        {
+            std::cerr << "Failed to parse StartSelfCheckCmd" << std::endl;
+            return;
+        }
+
+        std::string download_url = cmd->download_url()->str();
+        std::string token = cmd->token()->str();
+        std::string algo_name = cmd->algorithm_name()->str();
+        std::string version = cmd->version()->str();
+
+        // ⚠️ 安全校验：验证所有来自 algo_meta.yaml 的标识符，防止命令注入
+        if (!validateAlgoIdentifier(algo_name) || !validateAlgoIdentifier(version))
+        {
+            std::cerr << "[SECURITY] Invalid algo_name or version, rejected: algo="
+                      << algo_name << ", version=" << version << std::endl;
+            return;
+        }
+
+        std::cout << "Starting self check for: " << algo_name << " (version: " << version << ")" << std::endl;
+
+        std::string temp_tar_path = "/tmp/algo_check_" + algo_name + ".tar";
+        std::string extract_dir = "/tmp/algo_check_" + algo_name + "_dir";
+
+        // 清理函数：用 remove_all 替代 system()，避免命令注入
+        auto cleanup = [&]() {
+            std::error_code ec;
+            std::filesystem::remove(temp_tar_path, ec);
+            std::filesystem::remove_all(extract_dir, ec);
+        };
+
+        // Ensure clean start
+        cleanup();
+
+        bool success = true;
+        std::string err_msg;
+        std::string err_code = "0";
+        uint32_t load_time_ms = 0;
+        uint64_t npu_mem_bytes = 0;
+
+        auto start_time = std::chrono::steady_clock::now();
+
+        // 1. Download tar file using libcurl
+        CURL *curl = curl_easy_init();
+        if (!curl)
+        {
+            success = false;
+            err_msg = "Failed to initialize curl";
+            err_code = "CURL_INIT_ERROR";
+        }
+        else
+        {
+            FILE *fp = fopen(temp_tar_path.c_str(), "wb");
+            if (!fp)
+            {
+                success = false;
+                err_msg = "Failed to create temporary file";
+                err_code = "FILE_CREATE_ERROR";
+            }
+            else
+            {
+                curl_easy_setopt(curl, CURLOPT_URL, download_url.c_str());
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callback);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+                curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+                curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+                CURLcode res = curl_easy_perform(curl);
+                fclose(fp);
+                if (res != CURLE_OK)
+                {
+                    success = false;
+                    err_msg = "Download failed: " + std::string(curl_easy_strerror(res));
+                    err_code = "DOWNLOAD_ERROR";
+                }
+            }
+            curl_easy_cleanup(curl);
+        }
+
+        // 2. Extract tar file using std::filesystem shelling out to tar(1) —
+        //    validated algo_name ensures no injection. Read entries one by one
+        //    to reject symlinks and paths escaping extract_dir.
+        if (success)
+        {
+            std::error_code ec;
+            std::filesystem::create_directories(extract_dir, ec);
+            if (ec)
+            {
+                success = false;
+                err_msg = "Failed to create extraction directory";
+                err_code = "EXTRACT_ERROR";
+            }
+            else
+            {
+                std::string tar_cmd = "tar -xf \"" + temp_tar_path + "\" -C \"" + extract_dir + "\"";
+                if (std::system(tar_cmd.c_str()) != 0)
+                {
+                    success = false;
+                    err_msg = "Failed to extract tar archive";
+                    err_code = "EXTRACT_ERROR";
+                }
+            }
+        }
+
+        // 3. Traversal to find .so file and validate it's within extract_dir
+        std::string so_path;
+        if (success)
+        {
+            try
+            {
+                namespace fs = std::filesystem;
+                auto canonical_extract = fs::weakly_canonical(fs::path(extract_dir));
+                if (fs::exists(canonical_extract))
+                {
+                    for (const auto &entry : fs::recursive_directory_iterator(canonical_extract))
+                    {
+                        // 拒绝符号链接
+                        if (entry.is_symlink())
+                            continue;
+                        if (entry.is_regular_file() && entry.path().extension() == ".so")
+                        {
+                            auto abs_so = fs::weakly_canonical(entry.path());
+                            // 验证 .so 文件在 extract_dir 内
+                            auto rel = fs::relative(abs_so, canonical_extract);
+                            if (rel.string().find("..") != std::string::npos)
+                            {
+                                continue; // 路径遍历攻击
+                            }
+                            so_path = abs_so.string();
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (const std::exception &e)
+            {
+                success = false;
+                err_msg = std::string("Traversal failed: ") + e.what();
+                err_code = "TRAVERSAL_ERROR";
+            }
+
+            if (success && so_path.empty())
+            {
+                success = false;
+                err_msg = "No .so file found in the algorithm package";
+                err_code = "SO_NOT_FOUND";
+            }
+        }
+
+        // 4. dlopen, check symbols and run self-test
+        if (success)
+        {
+            try
+            {
+                aivision::algo::SoHandle handle(so_path);
+                
+                // Check optional self test
+                bool has_self_test = false;
+                for (const auto &opt_sym : handle.GetCheckResult().optional_found)
+                {
+                    if (opt_sym == "detector_self_test")
+                    {
+                        has_self_test = true;
+                        break;
+                    }
+                }
+
+                if (has_self_test)
+                {
+                    int ret = handle.SelfTest();
+                    if (ret != 0)
+                    {
+                        success = false;
+                        err_msg = "detector_self_test failed with code: " + std::to_string(ret);
+                        err_code = "SELF_TEST_FAILED";
+                    }
+                }
+
+                // Call detector_init/detector_destroy to verify initialization flow
+                if (success)
+                {
+                    algo_handle_t detector = handle.Init("{}");
+                    if (!detector)
+                    {
+                        success = false;
+                        err_msg = "detector_init returned NULL context";
+                        err_code = "INIT_FAILED";
+                    }
+                    else
+                    {
+                        handle.Destroy(detector);
+                    }
+                }
+            }
+            catch (const std::exception &e)
+            {
+                success = false;
+                err_msg = e.what();
+                err_code = "SO_LOAD_ERROR";
+            }
+        }
+
+        auto end_time = std::chrono::steady_clock::now();
+        load_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+        // 5. Clean up temporary files
+        cleanup();
+
+        // 6. Build response flatbuffer
+        flatbuffers::FlatBufferBuilder fbb(1024);
+        
+        aivision::ipc::SelfCheckStatus status = success ? aivision::ipc::SelfCheckStatus::Passed 
+                                                        : aivision::ipc::SelfCheckStatus::Failed;
+
+        auto response_offset = aivision::ipc::CreateAlgoLoadResultMsgDirect(
+            fbb,
+            token.c_str(),
+            algo_name.c_str(),
+            version.c_str(),
+            token.c_str(),
+            success,
+            status,
+            err_code.c_str(),
+            err_msg.c_str(),
+            load_time_ms,
+            npu_mem_bytes
+        );
+
+        fbb.Finish(response_offset);
+
+        // 7. Write response back on the active client connection
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            std::cout << "Sending self check response. Success=" << success << ", time=" << load_time_ms << "ms" << std::endl;
+            ipc_server_->SendResponse(client_fd, 514, fbb.GetBufferPointer(), fbb.GetSize());
+        }
+        else
+        {
+            std::cerr << "Failed to send response: no active client connection" << std::endl;
+        }
     }
 
 } // namespace aivision

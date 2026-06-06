@@ -46,10 +46,14 @@ type Config struct {
 	PermissionTreeRedisEnable bool
 	ChunkSizeMB               int
 	MaxFileSizeMB             int64
+	MaxAlgoFileSizeMB         int64
+	MaxUploadConcurrency      int
 	LocalUploadDir            string
 	LocalPublicURL            string
 	ZLMAPIURL                 string
 	ZLMSecret                 string
+	EngineSocketPath          string
+	EngineTimeoutSec          int
 	// GB28181 GB/T 28181 配置
 	GB28181Enabled        bool          `yaml:"gb28181_enabled" mapstructure:"gb28181_enabled"`
 	GB28181Domain         string        `yaml:"gb28181_domain" mapstructure:"gb28181_domain"`
@@ -132,6 +136,9 @@ func (r *Router) setupRoutes() {
 	wsHandler := deps.WSHandler
 	r.engine.GET("/api/v1/ws", wsHandler.HandleWebSocket)
 
+	// Algorithm Package Download (no auth required, verified by short-lived token)
+	v1.GET("/internal/algo/download", deps.AlgorithmPackageHandler.DownloadAlgorithmPackage)
+
 	// Protected routes
 	authorized := v1.Group("")
 	authorized.Use(middleware.Auth(r.jwtManager))
@@ -194,6 +201,16 @@ func (r *Router) setupRoutes() {
 		files.GET("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.GetByID)
 		files.GET("/:id/download", middleware.RBAC(rbacCache, r.db), fileHandler.Download)
 		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
+	}
+
+	// Algorithm Packages
+	algoHandler := deps.AlgorithmPackageHandler
+	algos := authorized.Group("/algorithmpackages")
+	{
+		algos.GET("", middleware.RBAC(rbacCache, r.db), algoHandler.List)
+		algos.POST("/upload", middleware.RBAC(rbacCache, r.db), middleware.UploadProtection(r.config.MaxUploadConcurrency), algoHandler.UploadAlgorithm)
+		algos.GET("/:id", middleware.RBAC(rbacCache, r.db), algoHandler.GetByID)
+		algos.DELETE("/:id", middleware.RBAC(rbacCache, r.db), algoHandler.Delete)
 	}
 
 	// Audit Logs

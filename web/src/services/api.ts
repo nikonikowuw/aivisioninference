@@ -1021,6 +1021,32 @@ export interface LicenseInfo {
   updated_at: string;
 }
 
+// AlgorithmPackage types
+export interface AlgorithmPackage {
+  id: string;
+  algorithm_name: string;
+  algorithm_alias: string;
+  version: string;
+  domain: string;
+  result_schema: string;
+  capabilities_image: string[];
+  capabilities_data: string[];
+  hardware: string[];
+  description: string;
+  package_path: string;
+  extract_path: string;
+  package_size: number;
+  package_md5: string;
+  so_path: string;
+  self_check_status: 'pending' | 'running' | 'passed' | 'failed';
+  self_check_result?: Record<string, any>;
+  ai_params_schema?: Record<string, any>;
+  self_check_at?: string;
+  status: 'draft' | 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
 export type LicenseListParams = CrudListParams & { status?: string };
 
 export const licenseApi = {
@@ -1042,4 +1068,27 @@ export const licenseApi = {
   },
   check: (algorithm: string) =>
     request<{ authorized: boolean; algorithm: string }>(`/license/check${buildQuery({ algorithm })}`),
+};
+
+export interface AlgorithmPackageListParams extends CrudListParams {
+  status?: string;
+  self_check_status?: string;
+  ids?: string;
+}
+
+export const algorithmPackagesApi = {
+  list: (params?: AlgorithmPackageListParams) => {
+    const query = buildQuery(params || {});
+    return request<PaginatedData<AlgorithmPackage>>(`/algorithmpackages${query}`);
+  },
+  get: (id: string) => request<AlgorithmPackage>(`/algorithmpackages/${id}`),
+  delete: (id: string) => request(`/algorithmpackages/${id}`, { method: 'DELETE' }),
+  upload: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<AlgorithmPackage>('/algorithmpackages/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  },
 };

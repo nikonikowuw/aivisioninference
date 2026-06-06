@@ -16,6 +16,7 @@ export const menu = {
   "license-management": "Manajemen Lisensi",
   "license": "Lisensi Algoritma",
   "files": "Berkas",
+  "algorithm-packages": "Paket Algoritma",
   "audit-logs": "Log Audit",
   "tasks": "Tugas",
   "brand-config": "Konfigurasi Merek",

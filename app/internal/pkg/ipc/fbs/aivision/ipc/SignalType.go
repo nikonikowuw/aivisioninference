@@ -14,6 +14,7 @@ const (
 	SignalTypeUpdateAlgoConfig   SignalType = 258
 	SignalTypeUpdateStreamConfig SignalType = 259
 	SignalTypeHeartbeat          SignalType = 260
+	SignalTypeStartSelfCheck     SignalType = 261
 	SignalTypeShutdown           SignalType = 511
 	SignalTypeInferenceResult    SignalType = 512
 	SignalTypeStreamStatusReport SignalType = 513
@@ -31,6 +32,7 @@ var EnumNamesSignalType = map[SignalType]string{
 	SignalTypeUpdateAlgoConfig:   "UpdateAlgoConfig",
 	SignalTypeUpdateStreamConfig: "UpdateStreamConfig",
 	SignalTypeHeartbeat:          "Heartbeat",
+	SignalTypeStartSelfCheck:     "StartSelfCheck",
 	SignalTypeShutdown:           "Shutdown",
 	SignalTypeInferenceResult:    "InferenceResult",
 	SignalTypeStreamStatusReport: "StreamStatusReport",
@@ -48,6 +50,7 @@ var EnumValuesSignalType = map[string]SignalType{
 	"UpdateAlgoConfig":   SignalTypeUpdateAlgoConfig,
 	"UpdateStreamConfig": SignalTypeUpdateStreamConfig,
 	"Heartbeat":          SignalTypeHeartbeat,
+	"StartSelfCheck":     SignalTypeStartSelfCheck,
 	"Shutdown":           SignalTypeShutdown,
 	"InferenceResult":    SignalTypeInferenceResult,
 	"StreamStatusReport": SignalTypeStreamStatusReport,

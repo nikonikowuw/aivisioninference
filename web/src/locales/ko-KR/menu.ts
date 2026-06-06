@@ -16,6 +16,7 @@ export const menu = {
   "license-management": "라이선스 관리",
   "license": "알고리즘 라이선스",
   "files": "파일",
+  "algorithm-packages": "알고리즘 패키지",
   "audit-logs": "감사 로그",
   "tasks": "태스크",
   "brand-config": "브랜드 설정",

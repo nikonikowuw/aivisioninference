@@ -84,6 +84,9 @@ func contextLanguage(c *gin.Context) string {
 func codeToHTTPStatus(code int) int {
 	switch code / 10000 {
 	case 1:
+		if code == apperrors.ErrTooManyRequests {
+			return http.StatusTooManyRequests
+		}
 		return http.StatusBadRequest // 1xxxx -> 400
 	case 2:
 		return http.StatusUnauthorized // 2xxxx -> 401

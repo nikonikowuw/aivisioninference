@@ -17,6 +17,7 @@ export const menu = {
   "license": "アルゴリズムライセンス",
   "files": "ファイル",
   "audit-logs": "監査ログ",
+  "algorithm-packages": "アルゴリズムパッケージ",
   "tasks": "タスク",
   "brand-config": "ブランド設定",
   "mail-config": "メール設定",

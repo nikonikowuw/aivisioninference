@@ -150,6 +150,14 @@ export const adminRoutes: RouteConfig[] = [
         layout: '/admin',
       },
       {
+        id: 'algorithm-packages',
+        path: '/algorithm-packages',
+        i18nKey: 'menu:algorithm-packages',
+        icon: 'MdExtension',
+        component: () => import('../views/admin/algorithmpackage'),
+        layout: '/admin',
+      },
+      {
         id: 'audit-logs',
         path: '/audit-logs',
         i18nKey: 'menu:audit-logs',

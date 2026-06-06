@@ -34,6 +34,7 @@ type EngineClient interface {
 	StartPlayback(ctx context.Context, deviceID string) (string, error)
 	StopPlayback(ctx context.Context, deviceID string) error
 	GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error)
+	StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error
 }
 
 // MockEngineClient 模拟实现
@@ -65,4 +66,8 @@ func (m *MockEngineClient) GetStreamStatus(ctx context.Context, deviceID string)
 		Status:   "active",
 		PlayURL:  "rtsp://mock-engine:554/live/" + deviceID,
 	}, nil
+}
+
+func (m *MockEngineClient) StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error {
+	return nil
 }

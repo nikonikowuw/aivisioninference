@@ -23,32 +23,67 @@ namespace aivision
         public:
             using TimeoutCallback = std::function<void()>;
 
-            HeartbeatManager();
+            HeartbeatManager()
+                : start_time_(std::chrono::steady_clock::now()),
+                  last_heartbeat_(std::chrono::steady_clock::now()) {}
 
             /// 构造并绑定 IPCServer
-            explicit HeartbeatManager(IPCServer *server);
+            explicit HeartbeatManager(IPCServer *server)
+                : server_(server),
+                  start_time_(std::chrono::steady_clock::now()),
+                  last_heartbeat_(std::chrono::steady_clock::now()) {}
+
+            ~HeartbeatManager() { Stop(); }
 
             /// 启动心跳监控线程
-            void Start();
+            void Start() {
+                if (running_.load()) return;
+                running_.store(true);
+                monitor_thread_ = std::make_unique<std::thread>(&HeartbeatManager::MonitorLoop, this);
+            }
 
             /// 停止心跳监控
-            void Stop();
+            void Stop() {
+                if (!running_.load()) return;
+                running_.store(false);
+                if (monitor_thread_ && monitor_thread_->joinable()) {
+                    monitor_thread_->join();
+                }
+            }
 
             /// 刷新心跳计时器 (收到 Go 心跳时调用)
-            void Refresh();
+            void Refresh() {
+                last_heartbeat_ = std::chrono::steady_clock::now();
+                sequence_++;
+            }
 
             /// 设置心跳超时回调
-            void SetTimeoutCallback(TimeoutCallback cb);
+            void SetTimeoutCallback(TimeoutCallback cb) {
+                timeout_cb_ = cb;
+            }
 
             /// 获取引擎运行时长 (秒)
-            uint64_t GetUptimeSec() const;
+            uint64_t GetUptimeSec() const {
+                auto now = std::chrono::steady_clock::now();
+                return std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
+            }
 
             /// 获取心跳序列号
             uint64_t GetSequence() const { return sequence_.load(); }
 
         private:
             /// 心跳监控循环
-            void MonitorLoop();
+            void MonitorLoop() {
+                while (running_.load()) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    auto now = std::chrono::steady_clock::now();
+                    if (std::chrono::duration_cast<std::chrono::seconds>(now - last_heartbeat_).count() > timeout_sec_) {
+                        if (timeout_cb_) {
+                            timeout_cb_();
+                        }
+                    }
+                }
+            }
 
             IPCServer *server_{nullptr};
             std::atomic<bool> running_{false};

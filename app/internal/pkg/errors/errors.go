@@ -65,6 +65,7 @@ const (
 	ErrNetworkConfirmFailed   = 10039
 	ErrWebhookPushFailed      = 10040
 	ErrNotImplemented         = 10041
+	ErrTooManyRequests        = 10042
 
 	// License 算法授权错误 (10xxx)
 	ErrLicenseInvalid          = 10050 // 授权文件无效或签名验证失败

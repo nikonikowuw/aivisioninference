@@ -19,6 +19,7 @@ import system from "./modules/system";
 import { license } from "./modules/license";
 import { aiTasks } from "./modules/ai-tasks";
 import { aiTimeSchedules } from "./modules/ai-time-schedules";
+import { algorithmpackage } from "./modules/algorithmpackage";
 
 export default {
   common,
@@ -30,6 +31,7 @@ export default {
   "modules/roles": roles,
   "modules/permissions": permissions,
   "modules/files": files,
+  "modules/algorithmpackage": algorithmpackage,
   "modules/audit-logs": auditLogs,
   "modules/tasks": tasks,
   "modules/brand-config": brandConfig,

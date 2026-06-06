@@ -268,7 +268,7 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 		}{
 			{Code: "user-management", Name: "用户管理", Icon: "MdPeople", ChildCodes: []string{"users", "roles", "permissions"}},
 			{Code: "license-management", Name: "授权管理", Icon: "MdVpnKey", ChildCodes: []string{"license"}},
-			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks"}},
+			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks", "algorithm-packages"}},
 		}
 
 		for _, pm := range parents {
@@ -584,6 +584,12 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "file:delete", Name: "删除文件", Path: "/api/v1/files/*", Method: "DELETE"},
 					{Code: "file:view", Name: "查看文件", Path: "/api/v1/files/*", Method: "GET"},
 					{Code: "file:download", Name: "下载文件", Path: "/api/v1/files/*/download", Method: "GET"},
+				}},
+				{Name: "算法包管理", Code: "algorithm-packages", Path: "/algorithm-packages", Icon: "MdExtension", Buttons: []buttonInfo{
+					{Code: "algorithm-package:list", Name: "算法包列表", Path: "/api/v1/algorithmpackages", Method: "GET"},
+					{Code: "algorithm-package:upload", Name: "上传算法包", Path: "/api/v1/algorithmpackages/upload", Method: "POST"},
+					{Code: "algorithm-package:view", Name: "查看算法包", Path: "/api/v1/algorithmpackages/*", Method: "GET"},
+					{Code: "algorithm-package:delete", Name: "删除算法包", Path: "/api/v1/algorithmpackages/*", Method: "DELETE"},
 				}},
 				{Name: "审计日志", Code: "audit-logs", Path: "/audit-logs", Icon: "MdHistory", Buttons: []buttonInfo{
 					{Code: "audit:view", Name: "查看审计日志", Path: "/api/v1/audit-logs", Method: "GET"},

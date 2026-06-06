@@ -16,6 +16,7 @@ export const menu = {
   "license-management": "License Management",
   "license": "Algorithm License",
   "files": "Files",
+  "algorithm-packages": "Algorithm Packages",
   "audit-logs": "Audit Logs",
   "tasks": "Tasks",
   "brand-config": "Brand Config",

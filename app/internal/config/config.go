@@ -23,6 +23,7 @@ type Config struct {
 	Seed      SeedConfig      `mapstructure:"seed"`
 	Proxy     ProxyConfig     `mapstructure:"proxy"`
 	ZLM       ZLMConfig       `mapstructure:"zlm"`
+	Engine    EngineConfig    `mapstructure:"engine"`
 }
 
 // AppConfig holds application-level settings.
@@ -63,11 +64,13 @@ type JWTConfig struct {
 
 // StorageConfig holds file storage settings.
 type StorageConfig struct {
-	Driver        string             `mapstructure:"driver"` // local | pg | oss
-	ChunkSizeMB   int                `mapstructure:"chunk_size"`
-	MaxFileSizeMB int64              `mapstructure:"max_file_size"`
-	Local         LocalStorageConfig `mapstructure:"local"`
-	OSS           OSSConfig          `mapstructure:"oss"`
+	Driver               string             `mapstructure:"driver"` // local | pg | oss
+	ChunkSizeMB          int                `mapstructure:"chunk_size"`
+	MaxFileSizeMB        int64              `mapstructure:"max_file_size"`
+	MaxAlgoFileSizeMB    int64              `mapstructure:"max_algo_file_size"`
+	MaxUploadConcurrency int                `mapstructure:"max_upload_concurrency"`
+	Local                LocalStorageConfig `mapstructure:"local"`
+	OSS                  OSSConfig          `mapstructure:"oss"`
 }
 
 // LocalStorageConfig holds local filesystem storage settings.
@@ -136,6 +139,12 @@ type ProxyConfig struct {
 type ZLMConfig struct {
 	APIURL string `mapstructure:"api_url"`
 	Secret string `mapstructure:"secret"`
+}
+
+// EngineConfig holds C++ inference engine connection settings.
+type EngineConfig struct {
+	SocketPath string        `mapstructure:"socket_path"`
+	TimeoutSec int           `mapstructure:"timeout_sec"`
 }
 
 // Load reads configuration from files and environment variables.
@@ -239,6 +248,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("storage.driver", "local")
 	v.SetDefault("storage.chunk_size", 5)      // MB
 	v.SetDefault("storage.max_file_size", 100) // MB
+	v.SetDefault("storage.max_algo_file_size", 1024) // MB
+	v.SetDefault("storage.max_upload_concurrency", 2)
 	v.SetDefault("storage.local.upload_dir", "./uploads")
 	v.SetDefault("storage.local.public_url", "/uploads")
 	v.SetDefault("storage.oss.endpoint", "")
@@ -288,6 +299,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("zlm.api_url", "http://localhost:80")
 	v.SetDefault("zlm.secret", "") // 必须通过环境变量 NIKO_ZLM_SECRET 设置
 
+	// Engine
+	v.SetDefault("engine.socket_path", "/tmp/aivision_ipc.sock")
+	v.SetDefault("engine.timeout_sec", 5)
+
 	// Seed
 	v.SetDefault("seed.username", "admin")
 	v.SetDefault("seed.password", "admin123")
@@ -315,6 +330,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Storage.MaxFileSizeMB <= 0 {
 		return fmt.Errorf("storage.max_file_size must be greater than 0")
+	}
+	if c.Storage.MaxAlgoFileSizeMB <= 0 {
+		return fmt.Errorf("storage.max_algo_file_size must be greater than 0")
 	}
 	if c.JWT.Secret == "" {
 		return fmt.Errorf("jwt.secret must be configured")

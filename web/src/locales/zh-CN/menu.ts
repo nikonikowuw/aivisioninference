@@ -16,6 +16,7 @@ export const menu = {
   "license-management": "授权管理",
   "license": "算法授权",
   "files": "文件",
+  "algorithm-packages": "算法包管理",
   "audit-logs": "审计日志",
   "tasks": "任务",
   "brand-config": "品牌配置",

@@ -112,7 +112,7 @@ export default function SecuritySettings() {
           />
           <InputRightElement display="flex" alignItems="center" mt="4px">
             <IconButton
-              aria-label="Toggle password visibility"
+              aria-label={showOld ? t('common:profile.hidePassword') : t('common:profile.showPassword')}
               variant="ghost"
               onClick={() => setShowOld(!showOld)}
               icon={<Icon color={secondaryColor} as={showOld ? FiEyeOff : FiEye} />}
@@ -139,7 +139,7 @@ export default function SecuritySettings() {
           />
           <InputRightElement display="flex" alignItems="center" mt="4px">
             <IconButton
-              aria-label="Toggle password visibility"
+              aria-label={showNew ? t('common:profile.hidePassword') : t('common:profile.showPassword')}
               variant="ghost"
               onClick={() => setShowNew(!showNew)}
               icon={<Icon color={secondaryColor} as={showNew ? FiEyeOff : FiEye} />}
@@ -166,7 +166,7 @@ export default function SecuritySettings() {
           />
           <InputRightElement display="flex" alignItems="center" mt="4px">
             <IconButton
-              aria-label="Toggle password visibility"
+              aria-label={showConfirm ? t('common:profile.hidePassword') : t('common:profile.showPassword')}
               variant="ghost"
               onClick={() => setShowConfirm(!showConfirm)}
               icon={<Icon color={secondaryColor} as={showConfirm ? FiEyeOff : FiEye} />}

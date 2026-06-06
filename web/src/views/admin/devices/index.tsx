@@ -386,9 +386,9 @@ export default function Devices() {
                     <Td><Text fontSize="sm">{device.last_online_at ? formatDateTime(device.last_online_at) : '-'}</Text></Td>
                     <Td textAlign="right">
                       <HStack justify="flex-end">
-                        <IconButton aria-label="edit" icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(device)} />
-                        <IconButton aria-label="test" icon={<MdSettings />} size="sm" variant="ghost" isLoading={isTesting} onClick={() => handleTestConnection(device)} />
-                        <IconButton aria-label="delete" icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(device.id)} />
+                        <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(device)} />
+                        <IconButton aria-label={t('actions.test')} icon={<MdSettings />} size="sm" variant="ghost" isLoading={isTesting} onClick={() => handleTestConnection(device)} />
+                        <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(device.id)} />
                       </HStack>
                     </Td>
                   </Tr>

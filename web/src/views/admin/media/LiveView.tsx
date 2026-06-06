@@ -12,6 +12,7 @@ import {
 } from '@chakra-ui/react';
 import VideoPlayer from 'components/VideoPlayer';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MdClose, MdRefresh } from 'react-icons/md';
 import { request } from 'services/api';
 
@@ -37,6 +38,7 @@ const LAYOUTS: Record<number, { cols: number }> = {
 };
 
 const LiveView: React.FC = () => {
+  const { t } = useTranslation('modules/media');
   const [tiles, setTiles] = useState<StreamTile[]>([]);
   const [layout, setLayout] = useState<number>(4);
   const toast = useToast();
@@ -84,16 +86,16 @@ const LiveView: React.FC = () => {
               colorScheme={layout === n ? 'blue' : 'gray'}
               onClick={() => setLayout(n)}
             >
-              {n}路
+              {t('layout.channels', { count: n, defaultValue: `${n}路` })}
             </Button>
           ))}
         </ButtonGroup>
         <IconButton
-          aria-label="add device"
+          aria-label={t('actions.refresh', { defaultValue: 'Refresh' })}
           icon={<MdRefresh />}
           size="sm"
           onClick={() => addTile(String(Date.now()))}
-          title="添加临时设备（请输入真实设备ID）"
+          title={t('actions.addDeviceHint', { defaultValue: '添加临时设备（请输入真实设备ID）' })}
         />
       </HStack>
 
@@ -105,13 +107,13 @@ const LiveView: React.FC = () => {
       >
         {tiles.length === 0 ? (
           <Center gridColumn="1 / -1" gridRow="1 / -1" color="gray.500">
-            点击刷新按钮添加设备预览
+            {t('empty.hint', { defaultValue: '点击刷新按钮添加设备预览' })}
           </Center>
         ) : (
           tiles.map((tile, idx) => (
             <GridItem key={idx} w="100%" h="100%" position="relative">
               <IconButton
-                aria-label="close"
+                aria-label={t('close', { defaultValue: 'Close' })}
                 icon={<MdClose />}
                 size="xs"
                 position="absolute"
@@ -129,7 +131,7 @@ const LiveView: React.FC = () => {
                 <VideoPlayer url={tile.url} protocol="hls" />
               ) : (
                 <Center h="100%" bg="gray.800" borderRadius="md" color="red.300" fontSize="sm">
-                  {tile.error || '加载失败'}
+                  {tile.error || t('empty.loadFailed', { defaultValue: '加载失败' })}
                 </Center>
               )}
             </GridItem>

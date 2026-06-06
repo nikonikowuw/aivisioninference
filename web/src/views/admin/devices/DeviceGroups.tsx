@@ -158,8 +158,8 @@ export default function DeviceGroups() {
                     <Td><Text fontSize="sm">{group.device_count}</Text></Td>
                     <Td textAlign="right">
                       <HStack justify="flex-end">
-                        <IconButton aria-label="edit" icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(group)} />
-                        <IconButton aria-label="delete" icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(group)} />
+                        <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(group)} />
+                        <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(group)} />
                       </HStack>
                     </Td>
                   </Tr>

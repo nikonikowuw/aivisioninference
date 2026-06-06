@@ -1,0 +1,170 @@
+// common.fbs — 共享基础类型定义
+// 所有 IPC 消息共用的几何、坐标、枚举类型
+//
+// 版本演进规则:
+//   - struct 类型不可变更 (固定大小, 二进制布局不变)
+//   - enum 只能在末尾追加新值, 不可重排
+//   - table 类型遵循 FlatBuffers 标准演进规则
+
+namespace ipc;
+
+// ============================================================
+// 坐标系枚举
+// ============================================================
+
+// CoordinateSystem 坐标系类型
+// v1: 仅 PIXEL; v2 新增 NORMALIZED
+enum CoordinateSystem : ubyte {
+  // 像素坐标, 范围取决于分辨率 (如 0-1920, 0-1080)
+  PIXEL = 0,
+  // 归一化坐标, 范围 0.0 - 1.0
+  NORMALIZED = 1,
+}
+
+// ============================================================
+// 几何基础类型 (struct — 固定大小, 栈分配, 零开销)
+// ============================================================
+
+// Point 整数像素坐标
+struct Point {
+  x: int;
+  y: int;
+}
+
+// PointF 浮点坐标 (归一化或亚像素精度)
+struct PointF {
+  x: float;
+  y: float;
+}
+
+// Rect 整数矩形 (像素)
+struct Rect {
+  x: int;
+  y: int;
+  w: int;
+  h: int;
+}
+
+// ============================================================
+// 几何复合类型 (table — 可演进)
+// ============================================================
+
+// Polygon 多边形区域
+// v1: 仅 points (像素坐标)
+// v2: 新增 points_normalized + coordinate_system
+table Polygon {
+  // 像素坐标顶点列表 (v1, 向后兼容)
+  points:[Point];
+  // 归一化坐标顶点列表 (v2 新增, 默认空)
+  points_normalized:[PointF];
+  // 坐标系标识 (v2 新增, 默认 PIXEL)
+  coord_system:CoordinateSystem = PIXEL;
+}
+
+// BoundingBox 检测框
+// v1: x, y, w, h, confidence, label_id
+// v2: 新增 label_name, track_id
+table BoundingBox {
+  // 框体左上角 X (像素)
+  x:int;
+  // 框体左上角 Y (像素)
+  y:int;
+  // 框体宽度 (像素)
+  w:int;
+  // 框体高度 (像素)
+  h:int;
+  // 置信度 0.0 - 1.0
+  confidence:float;
+  // 类别标签 ID (映射到 CategoryCode)
+  label_id:int;
+  // 人可读标签名 (v2 新增, 默认空)
+  label_name:string;
+  // 目标跟踪 ID, -1 表示无跟踪 (v2 新增, 默认 -1)
+  track_id:int = -1;
+}
+
+// ============================================================
+// 算法状态枚举
+// ============================================================
+
+// AlgorithmStatus 算法运行状态
+enum AlgorithmStatus : ubyte {
+  Pending  = 0,
+  Running  = 1,
+  Stopped  = 2,
+  Failed   = 3,
+}
+
+// ============================================================
+// 解码硬件类型 (与 Go model.DecodeHWType 对齐)
+// ============================================================
+
+// DecodeHWType 视频解码硬件类型
+enum DecodeHWType : ubyte {
+  Auto   = 0,
+  RKMPP  = 1,
+  DVPP   = 2,
+  FFmpeg = 3,
+}
+
+// ============================================================
+// 告警级别
+// ============================================================
+
+// AlarmLevel 告警级别
+enum AlarmLevel : ubyte {
+  Info     = 0,
+  Warning  = 1,
+  Critical = 2,
+}
+
+// ============================================================
+// 流状态 (与 Go model.InferTaskStatus 对齐)
+// ============================================================
+
+// StreamStatus 流运行状态
+enum StreamStatus : ubyte {
+  Pending      = 0,
+  Running      = 1,
+  Reconnecting = 2,
+  Stopped      = 3,
+  Failed       = 4,
+}
+
+// ============================================================
+// 错误码 (与 Go errors 包对齐, 按需扩展)
+// ============================================================
+
+// ErrorCode IPC 层错误码
+enum ErrorCode : ushort {
+  // 无错误
+  None              = 0,
+  // 通用错误
+  Unknown           = 1,
+  // 参数校验失败
+  InvalidParam      = 100,
+  // 流不存在
+  StreamNotFound    = 200,
+  // 流已存在
+  StreamExists      = 201,
+  // 解码器初始化失败
+  DecodeInitFailed  = 300,
+  // 解码器运行时错误
+  DecodeError       = 301,
+  // NPU 推理失败
+  InferFailed       = 400,
+  // NPU 内存不足
+  NpuOom            = 401,
+  // 算法库加载失败
+  AlgoLoadFailed    = 500,
+  // 算法库符号缺失
+  AlgoSymbolMissing = 501,
+  // 算法库版本冲突
+  AlgoVersionConflict = 502,
+  // DMA 内存分配失败
+  DmaAllocFailed    = 600,
+  // IPC 通信错误
+  IpcError          = 700,
+  // 协议版本不匹配
+  VersionMismatch   = 701,
+}

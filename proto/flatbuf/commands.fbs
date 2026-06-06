@@ -1,0 +1,176 @@
+// commands.fbs — Go → C++ 控制指令定义
+// 控制面下发给数据面的所有指令
+//
+// 演进规则:
+//   - 新增可选字段: 追加到 table 末尾, 给默认值
+//   - 新增指令类型: 在 MessagePayload union 中追加
+//   - 不可删除字段: 标记 deprecated, 保留位置
+//   - 不可变更字段语义: 如需变更, 新建字段 + 废弃旧字段
+
+namespace ipc;
+
+include "common.fbs";
+
+// ============================================================
+// 1. 启动视频流推理
+// ============================================================
+
+// StartStreamCmd 启动一路视频流推理
+// 对应 Go model.InferTask 的启动操作
+table StartStreamCmd {
+  // 推理任务 ID (UUID, 对应 InferTask.ID)
+  task_id:string;
+  // 视频流地址 (RTSP/RTMP/HTTP-FLV)
+  stream_url:string;
+  // 解码硬件类型
+  decode_hw:DecodeHWType = Auto;
+  // 设备 ID (UUID)
+  device_id:string;
+  // 设备名称 (用于日志和结果关联)
+  device_name:string;
+  // 该流绑定的算法列表 (启动时一次性下发)
+  algorithms:[AlgoBinding];
+  // 流的最大重连次数 (0 = 不重连, -1 = 无限重连)
+  max_reconnects:int = 3;
+  // 重连间隔 (秒)
+  reconnect_interval_sec:int = 5;
+}
+
+// AlgoBinding 算法绑定配置
+// 对应 Go model.InferTaskAlgorithm
+table AlgoBinding {
+  // 算法名称 (唯一标识)
+  algo_name:string;
+  // 算法版本
+  algo_version:string;
+  // 算法包 ID (UUID, 对应 AlgorithmPackage.ID)
+  package_id:string;
+  // .so 文件路径 (C++ 侧用于 dlopen)
+  so_path:string;
+  // 算法特定参数, JSON 序列化 (透传, C++ 侧自行解析)
+  // 对应 Go InferTaskAlgorithm.AIParams
+  algo_params_json:string;
+  // 感兴趣区域 (检测范围限制)
+  roi_regions:[Polygon];
+  // 屏蔽区域 (排除范围)
+  mark_regions:[Polygon];
+  // 越线检测线段 (由 2 个点组成的折线)
+  line_regions:[Polygon];
+  // 是否启用调度 (时间段生效)
+  schedule_enabled:bool = false;
+  // 调度开始时间 (HH:MM 格式, 如 "08:00")
+  schedule_start:string;
+  // 调度结束时间 (HH:MM 格式, 如 "18:00")
+  schedule_end:string;
+  // 算法排序优先级 (同流多算法时的执行顺序)
+  sort_order:int = 0;
+  // 类别标签映射表 (label_id → category_code)
+  // 用于 C++ 推理结果中的 label_id 映射到平台统一编码
+  label_maps:[LabelMap];
+}
+
+// LabelMap 标签映射
+// 对应 Go model.AlgorithmLabelMap
+table LabelMap {
+  // 模型内部标签 ID
+  label_id:int;
+  // 平台统一类别编码 (10000-99999)
+  category_code:int;
+  // 人可读显示名
+  display_name:string;
+}
+
+// ============================================================
+// 2. 停止视频流推理
+// ============================================================
+
+// StopStreamCmd 停止一路视频流推理
+table StopStreamCmd {
+  // 推理任务 ID
+  task_id:string;
+  // 是否强制停止 (true = 立即终止, false = 等待当前帧推理完成)
+  force:bool = false;
+  // 停止原因 (用于状态历史记录)
+  reason:string;
+}
+
+// ============================================================
+// 3. 更新算法配置 (运行时热更新)
+// ============================================================
+
+// UpdateConfigCmd 运行时更新算法配置
+// 不需要重启流, C++ 侧通过 Snapshot 机制安全应用
+// 对应 Go 对 InferTaskAlgorithm 的修改操作
+table UpdateConfigCmd {
+  // 推理任务 ID
+  task_id:string;
+  // 目标算法名称 (更新哪个算法的配置)
+  algo_name:string;
+  // 新的 ROI 区域 (空数组 = 不更新)
+  roi_regions:[Polygon];
+  // 新的屏蔽区域 (空数组 = 不更新)
+  mark_regions:[Polygon];
+  // 新的越线检测线段 (空数组 = 不更新)
+  line_regions:[Polygon];
+  // 新的算法参数 JSON (空字符串 = 不更新)
+  algo_params_json:string;
+  // 新的调度配置
+  schedule_enabled:bool = false;
+  schedule_start:string;
+  schedule_end:string;
+  // 配置版本号 (C++ 侧用于判断是否需要应用)
+  // Go 侧每次修改递增, C++ 侧只应用比当前版本号更大的配置
+  config_version:uint = 0;
+}
+
+// ============================================================
+// 4. 加载算法库
+// ============================================================
+
+// LoadAlgoCmd 加载/切换算法库 (.so)
+// 用于算法热更新场景: 先卸载旧版本, 再加载新版本
+table LoadAlgoCmd {
+  // 推理任务 ID (关联到具体流)
+  task_id:string;
+  // 算法名称
+  algo_name:string;
+  // 新版本号
+  algo_version:string;
+  // 算法包 ID (UUID)
+  package_id:string;
+  // .so 文件路径
+  so_path:string;
+  // 自检图片路径 (加载前验证用, 可选)
+  // 如果提供, C++ 侧会用这张图做一次推理验证
+  test_image_path:string;
+  // 标签映射
+  label_maps:[LabelMap];
+}
+
+// ============================================================
+// 5. 卸载算法库
+// ============================================================
+
+// UnloadAlgoCmd 卸载算法库
+table UnloadAlgoCmd {
+  // 推理任务 ID
+  task_id:string;
+  // 算法名称
+  algo_name:string;
+  // 是否强制卸载 (true = 忽略引用计数, 立即 dlclose)
+  force:bool = false;
+}
+
+// ============================================================
+// 6. 心跳
+// ============================================================
+
+// HeartbeatCmd 心跳探活请求
+table HeartbeatCmd {
+  // 发送方标识 (如 "go-controller" 或 "cpp-engine")
+  sender:string;
+  // 发送方当前状态摘要 (JSON, 可选)
+  // Go 侧可携带: 活跃流数、配置版本等
+  // C++ 侧可携带: 队列深度、Worker 状态等
+  status_json:string;
+}

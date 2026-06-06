@@ -2,7 +2,7 @@ APP_NAME      ?= niko-admin
 BUILD_DIR      = ./bin
 MAIN_PATH      = ./cmd/server
 ENV           ?= dev
-GO_FLAGS      ?= -ldflags="-s -w -X main.Version=$(VERSION) -X main.BuildTime=$(shell date +%Y%m%d%H%M%S)"
+GO_FLAGS      ?= -ldflags="-s -w -X github.com/niko-admin/niko-admin/internal/buildinfo.Version=$(VERSION) -X github.com/niko-admin/niko-admin/internal/buildinfo.BuildTime=$(shell date +%Y%m%d%H%M%S)"
 VERSION       ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 .PHONY: serve run dev test deploy build unit-test lint clean help migrate wire

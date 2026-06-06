@@ -1,12 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Text, Select, Button, HStack, VStack, useToast,
+  Box, Text, Select, Button, HStack, useToast, useColorModeValue, Flex,
 } from '@chakra-ui/react';
+import Card from 'components/card/Card';
 import { listGB28181Devices, startGB28181Live, stopGB28181Live, type GB28181Device } from '../../../services/gb28181';
 
 export default function LiveView() {
   const { t } = useTranslation('modules/gb28181');
+  const textColor = useColorModeValue('navy.700', 'white');
+  const bgCard = useColorModeValue('white', 'navy.800');
   const toast = useToast();
   const [devices, setDevices] = useState<GB28181Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -56,28 +59,32 @@ export default function LiveView() {
   }, [selectedDeviceId, streamId]);
 
   return (
-    <Box p={6}>
-      <Text fontSize="2xl" fontWeight="bold" mb={4}>{t('live.title')}</Text>
+    <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
+      <Flex justify="space-between" align="center" mb="20px">
+        <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('live.title')}</Text>
+      </Flex>
 
-      <HStack mb={4} spacing={4}>
-        <Select placeholder={t('live.selectDevice')} value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)} maxW="400px">
-          {devices.map(d => (
-            <option key={d.id} value={d.id}>{d.device_code} ({d.manufacturer})</option>
-          ))}
-        </Select>
-        <Button colorScheme="green" onClick={handleStart} isLoading={loading} isDisabled={!selectedDeviceId || !!playUrl}>
-          {t('live.startPlay')}
-        </Button>
-        <Button colorScheme="red" onClick={handleStop} isDisabled={!playUrl}>
-          {t('live.stopPlay')}
-        </Button>
-      </HStack>
+      <Card p="20px" mb={4}>
+        <HStack spacing={4}>
+          <Select placeholder={t('live.selectDevice')} value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)} maxW="400px" bg={bgCard}>
+            {devices.map(d => (
+              <option key={d.id} value={d.id}>{d.device_code} ({d.manufacturer})</option>
+            ))}
+          </Select>
+          <Button colorScheme="green" onClick={handleStart} isLoading={loading} isDisabled={!selectedDeviceId || !!playUrl}>
+            {t('live.startPlay')}
+          </Button>
+          <Button colorScheme="red" onClick={handleStop} isDisabled={!playUrl}>
+            {t('live.stopPlay')}
+          </Button>
+        </HStack>
+      </Card>
 
       {playUrl && (
-        <Box mt={4} p={4} border="1px solid" borderColor="gray.200" borderRadius="md">
-          <Text mb={2}>播放地址: <code>{playUrl}</code></Text>
-          <Box as="video" src={playUrl} controls autoPlay w="100%" maxH="500px" bg="black" />
-        </Box>
+        <Card p="20px">
+          <Text mb={2} fontSize="sm" color="gray.500">播放地址: <code>{playUrl}</code></Text>
+          <Box as="video" src={playUrl} controls autoPlay w="100%" maxH="500px" bg="black" borderRadius="md" />
+        </Card>
       )}
     </Box>
   );

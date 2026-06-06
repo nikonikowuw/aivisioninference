@@ -56,18 +56,18 @@ export function listGB28181Devices(params: GB28181DeviceListParams) {
   if (params.status) sp.set('status', params.status);
   const qs = sp.toString() ? `?${sp}` : '';
   return request<{ list: GB28181Device[]; total: number; page: number; page_size: number }>(
-    `/api/v1/gb28181/devices${qs}`,
+    `/gb28181/devices${qs}`,
   );
 }
 
 /** GB28181 设备详情 */
 export function getGB28181Device(id: string) {
-  return request<GB28181Device>(`/api/v1/gb28181/devices/${id}`);
+  return request<GB28181Device>(`/gb28181/devices/${id}`);
 }
 
 /** 更新 GB28181 设备 */
 export function updateGB28181Device(id: string, data: GB28181DeviceUpdateRequest) {
-  return request<GB28181Device>(`/api/v1/gb28181/devices/${id}`, {
+  return request<GB28181Device>(`/gb28181/devices/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
@@ -75,22 +75,22 @@ export function updateGB28181Device(id: string, data: GB28181DeviceUpdateRequest
 
 /** 删除 GB28181 设备 */
 export function deleteGB28181Device(id: string) {
-  return request<null>(`/api/v1/gb28181/devices/${id}`, { method: 'DELETE' });
+  return request<null>(`/gb28181/devices/${id}`, { method: 'DELETE' });
 }
 
 /** 触发目录查询 */
 export function triggerCatalog(id: string) {
-  return request<CatalogTaskResponse>(`/api/v1/gb28181/devices/${id}/catalog`, { method: 'POST' });
+  return request<CatalogTaskResponse>(`/gb28181/devices/${id}/catalog`, { method: 'POST' });
 }
 
 /** 查询目录任务状态 */
 export function getCatalogTaskStatus(taskId: string) {
-  return request<CatalogTaskStatusResponse>(`/api/v1/gb28181/catalog-tasks/${taskId}`);
+  return request<CatalogTaskStatusResponse>(`/gb28181/catalog-tasks/${taskId}`);
 }
 
 /** 设备通道列表 */
 export function getGB28181Channels(id: string) {
-  return request<any[]>(`/api/v1/gb28181/devices/${id}/channels`);
+  return request<any[]>(`/gb28181/devices/${id}/channels`);
 }
 
 // ============= GB28181 媒体 =============
@@ -103,7 +103,7 @@ export interface PlayResponse {
 
 /** 启动实时预览 */
 export function startGB28181Live(deviceId: string) {
-  return request<PlayResponse>('/api/v1/media/gb28181/live/start', {
+  return request<PlayResponse>('/media/gb28181/live/start', {
     method: 'POST',
     body: JSON.stringify({ device_id: deviceId }),
   });
@@ -111,7 +111,7 @@ export function startGB28181Live(deviceId: string) {
 
 /** 停止实时预览 */
 export function stopGB28181Live(deviceId: string, streamId: string) {
-  return request<null>('/api/v1/media/gb28181/live/stop', {
+  return request<null>('/media/gb28181/live/stop', {
     method: 'POST',
     body: JSON.stringify({ device_id: deviceId, stream_id: streamId }),
   });
@@ -119,7 +119,7 @@ export function stopGB28181Live(deviceId: string, streamId: string) {
 
 /** 启动回放 */
 export function startGB28181Playback(deviceId: string, startTime: string, endTime: string) {
-  return request<PlayResponse>('/api/v1/media/gb28181/playback/start', {
+  return request<PlayResponse>('/media/gb28181/playback/start', {
     method: 'POST',
     body: JSON.stringify({ device_id: deviceId, start_time: startTime, end_time: endTime }),
   });
@@ -127,7 +127,7 @@ export function startGB28181Playback(deviceId: string, startTime: string, endTim
 
 /** 回放控制 */
 export function controlGB28181Playback(streamId: string, action: string, speed?: number, stamp?: number) {
-  return request<null>('/api/v1/media/gb28181/playback/control', {
+  return request<null>('/media/gb28181/playback/control', {
     method: 'POST',
     body: JSON.stringify({ stream_id: streamId, action, speed, stamp }),
   });
@@ -135,7 +135,7 @@ export function controlGB28181Playback(streamId: string, action: string, speed?:
 
 /** 停止回放 */
 export function stopGB28181Playback(deviceId: string, streamId: string) {
-  return request<null>('/api/v1/media/gb28181/playback/stop', {
+  return request<null>('/media/gb28181/playback/stop', {
     method: 'POST',
     body: JSON.stringify({ device_id: deviceId, stream_id: streamId }),
   });
@@ -144,5 +144,5 @@ export function stopGB28181Playback(deviceId: string, streamId: string) {
 // ============= GB28181 配置 =============
 
 export function getGB28181Config() {
-  return request<Record<string, any>>('/api/v1/system/gb28181/config');
+  return request<Record<string, any>>('/system/gb28181/config');
 }

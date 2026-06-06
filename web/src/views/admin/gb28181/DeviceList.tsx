@@ -2,26 +2,33 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box, Button, HStack, VStack, Text, Badge, Input, Select,
-  Table, Thead, Tbody, Tr, Th, Td, TableContainer,
+  Table, Thead, Tbody, Tr, Th, Td,
   Drawer, DrawerBody, DrawerHeader, DrawerOverlay, DrawerContent, DrawerCloseButton,
   FormControl, FormLabel, useDisclosure, useToast, IconButton,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
   NumberInput, NumberInputField, NumberInputStepper, NumberIncrementStepper, NumberDecrementStepper,
-  Flex, Spacer,
+  Flex, Spacer, Center, Spinner, useColorModeValue, Checkbox,
 } from '@chakra-ui/react';
 import { MdRefresh, MdDelete, MdEdit, MdVisibility, MdDeviceHub } from 'react-icons/md';
+import Card from 'components/card/Card';
+import Pagination from 'components/pagination/Pagination';
 import {
   listGB28181Devices, getGB28181Device, updateGB28181Device, deleteGB28181Device,
   triggerCatalog, getCatalogTaskStatus, type GB28181Device, type GB28181DeviceUpdateRequest,
 } from '../../../services/gb28181';
+import { getAccessToken } from 'services/api';
 
 export default function DeviceList() {
   const { t } = useTranslation('modules/gb28181');
+  const textColor = useColorModeValue('navy.700', 'white');
+  const bgCard = useColorModeValue('white', 'navy.800');
+  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
+
   const [devices, setDevices] = useState<GB28181Device[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(20);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,6 +52,28 @@ export default function DeviceList() {
   }, [page, pageSize, keyword, statusFilter, toast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // WebSocket 订阅目录查询完成事件
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'gb28181_catalog_completed') {
+          toast({
+            title: t('devices.messages.catalogCompleted', { count: msg.payload?.channelCount || 0 }),
+            status: msg.payload?.success ? 'success' : 'warning',
+            duration: 3000,
+          });
+          fetchData();
+        }
+      } catch { /* 忽略非 JSON 消息 */ }
+    };
+    return () => ws.close();
+  }, [fetchData, t, toast]);
 
   const handleViewDetail = async (id: string) => {
     try {
@@ -85,34 +114,6 @@ export default function DeviceList() {
     }
   };
 
-  const subscribeCatalogEvent = useCallback(() => {
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-    if (!token) return undefined;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws?token=${encodeURIComponent(token)}`);
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'gb28181_catalog_completed') {
-          toast({
-            title: t('devices.messages.catalogCompleted', { count: msg.payload?.channelCount || 0 }),
-            status: msg.payload?.success ? 'success' : 'warning',
-            duration: 3000,
-          });
-          fetchData();
-        }
-      } catch {
-        // 忽略非 JSON 消息
-      }
-    };
-    return () => ws.close();
-  }, [fetchData, t, toast]);
-
-  useEffect(() => {
-    const cleanup = subscribeCatalogEvent();
-    return () => cleanup?.();
-  }, [subscribeCatalogEvent]);
-
   const pollCatalogTask = async (taskId: string) => {
     for (let i = 0; i < 15; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -129,9 +130,7 @@ export default function DeviceList() {
           fetchData();
           return;
         }
-      } catch {
-        return;
-      }
+      } catch { return; }
     }
   };
 
@@ -155,63 +154,69 @@ export default function DeviceList() {
   };
 
   return (
-    <Box p={6}>
-      <Text fontSize="2xl" fontWeight="bold" mb={4}>{t('devices.title')}</Text>
+    <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
+      <Flex justify="space-between" align="center" mb="20px">
+        <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('devices.title')}</Text>
+        <HStack spacing={2}>
+          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchData} isLoading={loading}>刷新</Button>
+        </HStack>
+      </Flex>
 
       <HStack mb={4} spacing={4}>
-        <Input placeholder="搜索..." value={keyword} onChange={(e) => setKeyword(e.target.value)} maxW="300px" />
-        <Select placeholder="状态筛选" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} maxW="200px">
+        <Input placeholder="搜索..." value={keyword} onChange={(e) => setKeyword(e.target.value)} maxW="300px" bg={bgCard} />
+        <Select placeholder="状态筛选" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} maxW="200px" bg={bgCard}>
           <option value="online">{t('devices.status.online')}</option>
           <option value="offline">{t('devices.status.offline')}</option>
           <option value="registered">{t('devices.status.registered')}</option>
         </Select>
-        <Button onClick={fetchData} isLoading={loading} leftIcon={<MdRefresh />}>刷新</Button>
       </HStack>
 
-      <TableContainer>
-        <Table variant="simple" size="sm">
-          <Thead>
-            <Tr>
-              <Th>{t('devices.fields.deviceCode')}</Th>
-              <Th>{t('devices.fields.manufacturer')}</Th>
-              <Th>{t('devices.fields.model')}</Th>
-              <Th>{t('devices.fields.status')}</Th>
-              <Th>{t('devices.fields.channelCount')}</Th>
-              <Th>{t('devices.fields.lastHeartbeatAt')}</Th>
-              <Th>操作</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {devices.map((d) => (
-              <Tr key={d.id}>
-                <Td>{d.device_code}</Td>
-                <Td>{d.manufacturer}</Td>
-                <Td>{d.model}</Td>
-                <Td><Badge colorScheme={statusColor(d.status)}>{d.status}</Badge></Td>
-                <Td>{d.channel_count}</Td>
-                <Td>{d.last_heartbeat_at ? new Date(d.last_heartbeat_at).toLocaleString() : '-'}</Td>
-                <Td>
-                  <HStack spacing={1}>
-                    <IconButton aria-label="Detail" icon={<MdVisibility />} size="sm" onClick={() => handleViewDetail(d.id)} />
-                    <IconButton aria-label="Edit" icon={<MdEdit />} size="sm" onClick={() => handleEdit(d)} />
-                    <IconButton aria-label="Refresh" icon={<MdDeviceHub />} size="sm" colorScheme="blue" onClick={() => handleRefreshCatalog(d.id)} />
-                    <IconButton aria-label="Delete" icon={<MdDelete />} size="sm" colorScheme="red" onClick={() => handleDelete(d.id)} />
-                  </HStack>
-                </Td>
+      <Card px="0px" pb="20px">
+        <Box overflowX="auto">
+          <Table variant="simple" color="gray.500" mb="24px">
+            <Thead>
+              <Tr>
+                <Th>{t('devices.fields.deviceCode')}</Th>
+                <Th>{t('devices.fields.manufacturer')}</Th>
+                <Th>{t('devices.fields.model')}</Th>
+                <Th>{t('devices.fields.status')}</Th>
+                <Th>{t('devices.fields.channelCount')}</Th>
+                <Th>{t('devices.fields.lastHeartbeatAt')}</Th>
+                <Th textAlign="right">操作</Th>
               </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
-
-      <Flex mt={4}>
-        <Spacer />
-        <HStack>
-          <Button size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} isDisabled={page <= 1}>上一页</Button>
-          <Text>第 {page} 页 / 共 {Math.ceil(total / pageSize)} 页</Text>
-          <Button size="sm" onClick={() => setPage(p => p + 1)} isDisabled={page * pageSize >= total}>下一页</Button>
-        </HStack>
-      </Flex>
+            </Thead>
+            <Tbody>
+              {loading ? (
+                <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+              ) : devices.length === 0 ? (
+                <Tr><Td colSpan={7}><Center py="20px">暂无数据</Center></Td></Tr>
+              ) : (
+                devices.map((d) => (
+                  <Tr key={d.id}>
+                    <Td><Text fontSize="sm" color={textColor} fontFamily="mono">{d.device_code}</Text></Td>
+                    <Td><Text fontSize="sm">{d.manufacturer || '-'}</Text></Td>
+                    <Td><Text fontSize="sm">{d.model || '-'}</Text></Td>
+                    <Td><Badge colorScheme={statusColor(d.status)} variant="solid">{d.status}</Badge></Td>
+                    <Td><Text fontSize="sm">{d.channel_count}</Text></Td>
+                    <Td><Text fontSize="sm">{d.last_heartbeat_at ? new Date(d.last_heartbeat_at).toLocaleString() : '-'}</Text></Td>
+                    <Td textAlign="right">
+                      <HStack justify="flex-end" spacing={1}>
+                        <IconButton aria-label="Detail" icon={<MdVisibility />} size="sm" variant="ghost" onClick={() => handleViewDetail(d.id)} />
+                        <IconButton aria-label="Edit" icon={<MdEdit />} size="sm" variant="ghost" onClick={() => handleEdit(d)} />
+                        <IconButton aria-label="Refresh" icon={<MdDeviceHub />} size="sm" variant="ghost" colorScheme="blue" onClick={() => handleRefreshCatalog(d.id)} />
+                        <IconButton aria-label="Delete" icon={<MdDelete />} size="sm" variant="ghost" colorScheme="red" onClick={() => handleDelete(d.id)} />
+                      </HStack>
+                    </Td>
+                  </Tr>
+                ))
+              )}
+            </Tbody>
+          </Table>
+        </Box>
+        <Box px="25px">
+          <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage} onPageSizeChange={setPageSize} />
+        </Box>
+      </Card>
 
       {/* 详情抽屉 */}
       <Drawer isOpen={isDetailOpen} placement="right" onClose={onDetailClose} size="md">
@@ -274,7 +279,7 @@ export default function DeviceList() {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onEditClose}>取消</Button>
-            <Button colorScheme="blue" onClick={handleSaveEdit}>保存</Button>
+            <Button colorScheme="brand" onClick={handleSaveEdit}>保存</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

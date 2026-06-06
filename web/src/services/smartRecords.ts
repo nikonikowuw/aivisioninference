@@ -38,7 +38,7 @@ export function listSmartRecords(params: SmartRecordListParams) {
   if (params.end_time) sp.set('end_time', params.end_time);
   const qs = sp.toString() ? `?${sp}` : '';
   return request<{ list: SmartRecord[]; total: number; page: number; page_size: number }>(
-    `/api/v1/smart-records${qs}`,
+    `/smart-records${qs}`,
   );
 }
 

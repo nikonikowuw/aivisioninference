@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Box, Text, Select, Button, HStack, VStack, useToast,
-  Slider, SliderTrack, SliderFilledTrack, SliderThumb,
+  Box, Text, Select, Button, HStack, VStack, useToast, useColorModeValue, Flex,
 } from '@chakra-ui/react';
+import Card from 'components/card/Card';
 import {
   listGB28181Devices, startGB28181Playback, stopGB28181Playback,
   controlGB28181Playback, type GB28181Device,
@@ -11,6 +11,8 @@ import {
 
 export default function PlaybackView() {
   const { t } = useTranslation('modules/gb28181');
+  const textColor = useColorModeValue('navy.700', 'white');
+  const bgCard = useColorModeValue('white', 'navy.800');
   const toast = useToast();
   const [devices, setDevices] = useState<GB28181Device[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -26,7 +28,6 @@ export default function PlaybackView() {
     listGB28181Devices({ page: 1, page_size: 100 })
       .then(res => setDevices(res.list || []))
       .catch(() => {});
-    // 默认24h
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     setEndTime(now.toISOString().slice(0, 16));
@@ -82,48 +83,52 @@ export default function PlaybackView() {
   }, [selectedDeviceId, streamId]);
 
   return (
-    <Box p={6}>
-      <Text fontSize="2xl" fontWeight="bold" mb={4}>{t('playback.title')}</Text>
+    <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
+      <Flex justify="space-between" align="center" mb="20px">
+        <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('playback.title')}</Text>
+      </Flex>
 
-      <VStack align="stretch" spacing={4} mb={4}>
-        <HStack spacing={4}>
-          <Select placeholder={t('live.selectDevice')} value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)} maxW="400px">
-            {devices.map(d => (
-              <option key={d.id} value={d.id}>{d.device_code} ({d.manufacturer})</option>
-            ))}
-          </Select>
-        </HStack>
-        <HStack spacing={4}>
-          <Box>
-            <Text fontSize="sm" mb={1}>{t('playback.startTime')}</Text>
-            <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
-          </Box>
-          <Box>
-            <Text fontSize="sm" mb={1}>{t('playback.endTime')}</Text>
-            <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
-          </Box>
-          <Button colorScheme="green" onClick={handleStart} isLoading={loading} isDisabled={!selectedDeviceId || !!playUrl} alignSelf="flex-end">
-            {t('playback.startPlayback')}
-          </Button>
-          <Button colorScheme="red" onClick={handleStop} isDisabled={!playUrl} alignSelf="flex-end">
-            {t('playback.stopPlayback')}
-          </Button>
-        </HStack>
-      </VStack>
+      <Card p="20px" mb={4}>
+        <VStack align="stretch" spacing={4}>
+          <HStack spacing={4}>
+            <Select placeholder={t('live.selectDevice')} value={selectedDeviceId} onChange={(e) => setSelectedDeviceId(e.target.value)} maxW="400px" bg={bgCard}>
+              {devices.map(d => (
+                <option key={d.id} value={d.id}>{d.device_code} ({d.manufacturer})</option>
+              ))}
+            </Select>
+          </HStack>
+          <HStack spacing={4}>
+            <Box>
+              <Text fontSize="sm" mb={1}>{t('playback.startTime')}</Text>
+              <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+            </Box>
+            <Box>
+              <Text fontSize="sm" mb={1}>{t('playback.endTime')}</Text>
+              <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+            </Box>
+            <Button colorScheme="green" onClick={handleStart} isLoading={loading} isDisabled={!selectedDeviceId || !!playUrl} alignSelf="flex-end">
+              {t('playback.startPlayback')}
+            </Button>
+            <Button colorScheme="red" onClick={handleStop} isDisabled={!playUrl} alignSelf="flex-end">
+              {t('playback.stopPlayback')}
+            </Button>
+          </HStack>
+        </VStack>
+      </Card>
 
       {playUrl && (
-        <Box mt={4}>
+        <Card p="20px">
           <Box as="video" src={playUrl} controls autoPlay w="100%" maxH="400px" bg="black" borderRadius="md" />
           <HStack mt={3} spacing={4}>
-            <Button size="sm" onClick={handlePauseResume}>{isPaused ? t('playback.resume') : t('playback.pause')}</Button>
+            <Button size="sm" variant="outline" onClick={handlePauseResume}>{isPaused ? t('playback.resume') : t('playback.pause')}</Button>
             <Text fontSize="sm">{t('playback.speed')}:</Text>
             {[0.5, 1, 2, 4].map(s => (
-              <Button key={s} size="sm" variant={speed === s ? 'solid' : 'outline'} colorScheme={speed === s ? 'blue' : 'gray'} onClick={() => handleSpeedChange(s)}>
+              <Button key={s} size="sm" variant={speed === s ? 'solid' : 'outline'} colorScheme={speed === s ? 'brand' : 'gray'} onClick={() => handleSpeedChange(s)}>
                 {s}x
               </Button>
             ))}
           </HStack>
-        </Box>
+        </Card>
       )}
     </Box>
   );

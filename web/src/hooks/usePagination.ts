@@ -40,7 +40,7 @@ export function usePagination<T>(
     try {
       const data = await fetcherRef.current(p, ps);
       if (id !== requestIdRef.current) return;
-      setList(data.list);
+      setList(data.list || []);
       setTotal(data.total);
       if (opts?.page !== undefined) setPage(opts.page);
       if (opts?.pageSize !== undefined) setPageSize(opts.pageSize);

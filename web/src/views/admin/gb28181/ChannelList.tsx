@@ -53,7 +53,7 @@ export default function ChannelList() {
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('channels.title')}</Text>
         <HStack spacing={2}>
-          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchChannels} isLoading={loading}>刷新</Button>
+          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchChannels} isLoading={loading}>{t('common.refresh')}</Button>
         </HStack>
       </Flex>
 
@@ -75,14 +75,14 @@ export default function ChannelList() {
                 <Th>{t('channels.fields.status')}</Th>
                 <Th>{t('channels.fields.manufacturer')}</Th>
                 <Th>{t('channels.fields.model')}</Th>
-                <Th textAlign="right">操作</Th>
+                <Th textAlign="right">{t('common.actions')}</Th>
               </Tr>
             </Thead>
             <Tbody>
               {loading ? (
                 <Tr><Td colSpan={6}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : channels.length === 0 ? (
-                <Tr><Td colSpan={6}><Center py="20px">暂无通道数据</Center></Td></Tr>
+                <Tr><Td colSpan={6}><Center py="20px">{t('channels.noData')}</Center></Td></Tr>
               ) : (
                 channels.map((ch) => (
                   <Tr key={ch.id}>

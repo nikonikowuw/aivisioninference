@@ -75,7 +75,7 @@ export default function Alarms() {
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('title')}</Text>
         <HStack spacing={2}>
-          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchData} isLoading={loading}>刷新</Button>
+          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchData} isLoading={loading}>{t('common.refresh')}</Button>
           <Button leftIcon={<MdDownload />} colorScheme="green" onClick={handleExport}>{t('actions.export')}</Button>
         </HStack>
       </Flex>
@@ -84,9 +84,9 @@ export default function Alarms() {
         <HStack spacing={4} flexWrap="wrap">
           <Input placeholder={t('filters.alarmType')} value={alarmType} onChange={(e) => setAlarmType(e.target.value)} maxW="200px" bg={bgCard} />
           <Select placeholder={t('filters.alarmLevel')} value={alarmLevel} onChange={(e) => setAlarmLevel(e.target.value)} maxW="150px" bg={bgCard}>
-            <option value="1">1 - 严重</option>
-            <option value="2">2 - 重要</option>
-            <option value="3">3 - 一般</option>
+            <option value="1">1 - {t('alarms.severity.critical')}</option>
+            <option value="2">2 - {t('alarms.severity.major')}</option>
+            <option value="3">3 - {t('alarms.severity.minor')}</option>
           </Select>
           <Input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} maxW="200px" bg={bgCard} />
           <Input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} maxW="200px" bg={bgCard} />
@@ -102,14 +102,14 @@ export default function Alarms() {
                 <Th>{t('fields.alarmLevel')}</Th>
                 <Th>{t('fields.deviceName')}</Th>
                 <Th>{t('fields.createdAt')}</Th>
-                <Th textAlign="right">操作</Th>
+                <Th textAlign="right">{t('common.actions')}</Th>
               </Tr>
             </Thead>
             <Tbody>
               {loading ? (
                 <Tr><Td colSpan={5}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : records.length === 0 ? (
-                <Tr><Td colSpan={5}><Center py="20px">暂无告警记录</Center></Td></Tr>
+                <Tr><Td colSpan={5}><Center py="20px">{t('alarms.noData')}</Center></Td></Tr>
               ) : (
                 records.map((r) => (
                   <Tr key={r.record_id}>

@@ -1,5 +1,17 @@
 export const gb28181 = {
   title: 'GB28181 設備管理',
+  common: {
+    refresh: '重新整理',
+    statusFilter: '狀態篩選',
+    actions: '操作',
+    noData: '暫無資料',
+    cancel: '取消',
+    save: '儲存',
+    passwordPlaceholder: '留空不修改',
+    catalogFailed: '目錄查詢失敗',
+    updateSuccess: '更新成功',
+    deleteSuccess: '刪除成功',
+  },
   devices: {
     title: 'GB28181 設備',
     fields: {
@@ -37,6 +49,7 @@ export const gb28181 = {
   },
   channels: {
     title: '通道管理',
+    noData: '暫無通道資料',
     fields: {
       channelId: '通道編碼',
       channelName: '通道名稱',
@@ -51,6 +64,7 @@ export const gb28181 = {
   },
   live: {
     title: 'GB28181 實時預覽',
+    playUrl: '播放地址',
     selectDevice: '選擇設備',
     selectChannel: '選擇通道',
     startPlay: '開始預覽',
@@ -69,6 +83,12 @@ export const gb28181 = {
   },
   alarms: {
     title: '告警記錄',
+    noData: '暫無告警記錄',
+    severity: {
+      critical: '嚴重',
+      major: '重要',
+      minor: '一般',
+    },
     fields: {
       alarmType: '告警類型',
       alarmLevel: '告警級別',
@@ -83,11 +103,19 @@ export const gb28181 = {
   },
   config: {
     title: 'GB28181 配置',
+    configItem: '配置項',
+    configValue: '值',
+    noData: '暫無配置資料',
     sipPort: 'SIP 端口',
     sipDomain: 'SIP 域',
     sipPassword: 'SIP 密碼',
     heartbeatInterval: '心跳間隔',
     syncInterval: '同步間隔',
     readOnly: '唯讀（修改需重啟 ZLM 服務）',
+  },
+  status: {
+    sipService: 'SIP 服務',
+    registeredDevices: '已註冊設備數',
+    viewDetail: '查看詳情 →',
   },
 };

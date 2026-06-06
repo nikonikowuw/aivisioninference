@@ -123,7 +123,7 @@ export default function DeviceList() {
           toast({
             title: status.status === 'completed'
               ? t('devices.messages.catalogCompleted', { count: status.channel_count })
-              : status.error || '目录查询失败',
+              : status.error || t('common.catalogFailed'),
             status: status.status === 'completed' ? 'success' : 'error',
             duration: 3000,
           });
@@ -158,13 +158,13 @@ export default function DeviceList() {
       <Flex justify="space-between" align="center" mb="20px">
         <Text fontSize="2xl" fontWeight="bold" color={textColor}>{t('devices.title')}</Text>
         <HStack spacing={2}>
-          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchData} isLoading={loading}>刷新</Button>
+          <Button leftIcon={<MdRefresh />} variant="outline" onClick={fetchData} isLoading={loading}>{t('common.refresh')}</Button>
         </HStack>
       </Flex>
 
       <HStack mb={4} spacing={4}>
-        <Input placeholder="搜索..." value={keyword} onChange={(e) => setKeyword(e.target.value)} maxW="300px" bg={bgCard} />
-        <Select placeholder="状态筛选" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} maxW="200px" bg={bgCard}>
+        <Input placeholder={t('common.search')} value={keyword} onChange={(e) => setKeyword(e.target.value)} maxW="300px" bg={bgCard} />
+        <Select placeholder={t('common.statusFilter')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} maxW="200px" bg={bgCard}>
           <option value="online">{t('devices.status.online')}</option>
           <option value="offline">{t('devices.status.offline')}</option>
           <option value="registered">{t('devices.status.registered')}</option>
@@ -182,14 +182,14 @@ export default function DeviceList() {
                 <Th>{t('devices.fields.status')}</Th>
                 <Th>{t('devices.fields.channelCount')}</Th>
                 <Th>{t('devices.fields.lastHeartbeatAt')}</Th>
-                <Th textAlign="right">操作</Th>
+                <Th textAlign="right">{t('common.actions')}</Th>
               </Tr>
             </Thead>
             <Tbody>
               {loading ? (
                 <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : devices.length === 0 ? (
-                <Tr><Td colSpan={7}><Center py="20px">暂无数据</Center></Td></Tr>
+                <Tr><Td colSpan={7}><Center py="20px">{t('common.noData')}</Center></Td></Tr>
               ) : (
                 devices.map((d) => (
                   <Tr key={d.id}>
@@ -263,7 +263,7 @@ export default function DeviceList() {
               </FormControl>
               <FormControl>
                 <FormLabel>{t('devices.fields.sipPassword')}</FormLabel>
-                <Input type="password" placeholder="留空不修改" onChange={(e) => setEditForm({ ...editForm, sip_password: e.target.value })} />
+                <Input type="password" placeholder={t('devices.fields.passwordPlaceholder')} onChange={(e) => setEditForm({ ...editForm, sip_password: e.target.value })} />
               </FormControl>
               <FormControl>
                 <FormLabel>{t('devices.fields.heartbeatInterval')}</FormLabel>
@@ -278,8 +278,8 @@ export default function DeviceList() {
             </VStack>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onEditClose}>取消</Button>
-            <Button colorScheme="brand" onClick={handleSaveEdit}>保存</Button>
+            <Button variant="ghost" mr={3} onClick={onEditClose}>{t('common.cancel')}</Button>
+            <Button colorScheme="brand" onClick={handleSaveEdit}>{t('common.save')}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

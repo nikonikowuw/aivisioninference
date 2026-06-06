@@ -22,6 +22,11 @@ export const menu = {
   "mail-config": "邮件配置",
   "feedback": "用户反馈",
   "system-config": "系统配置",
+  "gb28181-devices": "GB28181设备",
+  "gb28181-channels": "GB28181通道",
+  "gb28181-live": "GB28181预览",
+  "gb28181-playback": "GB28181回放",
+  "smart-records": "告警记录",
 } as const;
 
 export default menu;

@@ -64,6 +64,7 @@ interface ServiceStatusResponse {
 
 export default function StatusTab() {
   const { t } = useTranslation('modules/system');
+  const { t: tGb } = useTranslation('modules/gb28181');
   const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
@@ -336,10 +337,10 @@ export default function StatusTab() {
             <Flex direction="column" align="center" justify="center" flex={1}>
               <Text fontSize="3xl" fontWeight="800" color={sipOnlineCount > 0 ? 'green.500' : 'gray.400'}>{sipOnlineCount}</Text>
               <Text fontSize="xs" fontWeight="700" color="gray.400" mt={1}>
-                已注册设备数
+                {tGb('status.registeredDevices')}
               </Text>
-              <Text fontSize="xs" color="blue.500" mt={2} cursor="pointer" onClick={() => window.location.hash = '/admin/gb28181/devices'}>
-                查看详情 →
+              <Text fontSize="xs" color="blue.500" mt={2} cursor="pointer" onClick={() => window.location.href = '/admin/gb28181/devices'}>
+                {tGb('status.viewDetail')}
               </Text>
             </Flex>
           </Card>

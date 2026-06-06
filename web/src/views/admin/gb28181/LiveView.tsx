@@ -82,7 +82,7 @@ export default function LiveView() {
 
       {playUrl && (
         <Card p="20px">
-          <Text mb={2} fontSize="sm" color="gray.500">播放地址: <code>{playUrl}</code></Text>
+          <Text mb={2} fontSize="sm" color="gray.500">{t('live.playUrl')}: <code>{playUrl}</code></Text>
           <Box as="video" src={playUrl} controls autoPlay w="100%" maxH="500px" bg="black" borderRadius="md" />
         </Card>
       )}

@@ -35,8 +35,8 @@ export default function GB28181ConfigTab() {
         <Table variant="simple" size="sm">
           <Thead>
             <Tr>
-              <Th>配置项</Th>
-              <Th>值</Th>
+              <Th>{t('config.configItem')}</Th>
+              <Th>{t('config.configValue')}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -47,7 +47,7 @@ export default function GB28181ConfigTab() {
               </Tr>
             ))}
             {configKeys.length === 0 && (
-              <Tr><Td colSpan={2} textAlign="center">暂无配置数据</Td></Tr>
+              <Tr><Td colSpan={2} textAlign="center">{t('config.noData')}</Td></Tr>
             )}
           </Tbody>
         </Table>

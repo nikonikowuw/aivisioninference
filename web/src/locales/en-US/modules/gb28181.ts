@@ -1,5 +1,18 @@
 export const gb28181 = {
   title: 'GB28181 Device Management',
+  common: {
+    refresh: 'Refresh',
+    search: 'Search...',
+    statusFilter: 'Status Filter',
+    actions: 'Actions',
+    noData: 'No Data',
+    cancel: 'Cancel',
+    save: 'Save',
+    passwordPlaceholder: 'Leave empty to keep unchanged',
+    catalogFailed: 'Catalog query failed',
+    updateSuccess: 'Updated successfully',
+    deleteSuccess: 'Deleted successfully',
+  },
   devices: {
     title: 'GB28181 Devices',
     fields: {
@@ -37,6 +50,7 @@ export const gb28181 = {
   },
   channels: {
     title: 'Channel Management',
+    noData: 'No channels',
     fields: {
       channelId: 'Channel ID',
       channelName: 'Channel Name',
@@ -51,6 +65,7 @@ export const gb28181 = {
   },
   live: {
     title: 'GB28181 Live Preview',
+    playUrl: 'Play URL',
     selectDevice: 'Select Device',
     selectChannel: 'Select Channel',
     startPlay: 'Start Preview',
@@ -69,6 +84,12 @@ export const gb28181 = {
   },
   alarms: {
     title: 'Alarm Records',
+    noData: 'No alarm records',
+    severity: {
+      critical: 'Critical',
+      major: 'Major',
+      minor: 'Minor',
+    },
     fields: {
       alarmType: 'Alarm Type',
       alarmLevel: 'Alarm Level',
@@ -83,11 +104,19 @@ export const gb28181 = {
   },
   config: {
     title: 'GB28181 Configuration',
+    configItem: 'Config Item',
+    configValue: 'Value',
+    noData: 'No configuration data',
     sipPort: 'SIP Port',
     sipDomain: 'SIP Domain',
     sipPassword: 'SIP Password',
     heartbeatInterval: 'Heartbeat Interval',
     syncInterval: 'Sync Interval',
     readOnly: 'Read only (restart ZLM to modify)',
+  },
+  status: {
+    sipService: 'SIP Service',
+    registeredDevices: 'Registered Devices',
+    viewDetail: 'View Details →',
   },
 };

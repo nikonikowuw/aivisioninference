@@ -25,7 +25,9 @@ func (h *MediaPlayHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/play", h.GetPlayURL)
 	r.POST("/stop", h.StopPlay)
 	r.GET("/snapshot", h.GetSnapshot)
+	r.GET("/streams", h.ListStreams)
 }
+
 
 // GetPlayURL returns a signed playback URL for the specified device and protocol.
 // 对于 RTSP 设备，会自动通过 ZLM addStreamProxy 按需拉流。
@@ -87,3 +89,10 @@ func (h *MediaPlayHandler) GetSnapshot(c *gin.Context) {
 
 	c.Data(http.StatusOK, "image/jpeg", imgData)
 }
+
+// ListStreams returns all active streams in StreamManager.
+func (h *MediaPlayHandler) ListStreams(c *gin.Context) {
+	streams := h.mediaService.ListStreams(c.Request.Context())
+	response.OK(c, streams)
+}
+

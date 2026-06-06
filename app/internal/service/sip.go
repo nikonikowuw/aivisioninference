@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/repository"
 
@@ -18,6 +20,7 @@ type SIPService struct {
 	deviceRepo      *repository.DeviceRepository
 	gbDeviceRepo    *repository.GB28181DeviceRepository
 	mediaStreamRepo *repository.MediaStreamRepository
+	discoverySvc    *DeviceDiscoveryService
 }
 
 // NewSIPService creates a new SIPService.
@@ -32,6 +35,11 @@ func NewSIPService(
 		mediaStreamRepo: mediaStreamRepo,
 	}
 }
+
+func (s *SIPService) SetDiscoveryService(svc *DeviceDiscoveryService) {
+	s.discoverySvc = svc
+}
+
 
 var gb28181DeviceIDRegex = regexp.MustCompile(`^\d{20}$`)
 
@@ -75,10 +83,20 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 	// 4. Sync to Device model if associated
 	if gbDevice.DeviceID != nil {
 		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOnline, "", "")
+		
+		// 5. 触发目录查询（如果是 NVR/平台）
+		// 使用独立 context，HTTP 请求结束后 goroutine 仍可正常执行
+		go s.TriggerCatalogQuery(context.Background(), gbDevice.DeviceCode)
 	}
 
 	return nil
 }
+
+func (s *SIPService) TriggerCatalogQuery(ctx context.Context, deviceCode string) {
+	// TODO: 发送 SIP CatalogQuery 指令
+	zap.L().Debug("triggering CatalogQuery", zap.String("device_code", deviceCode))
+}
+
 
 // HandleHeartbeat updates the heartbeat timestamp for a registered device.
 func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error {

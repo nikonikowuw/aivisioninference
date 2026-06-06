@@ -146,10 +146,38 @@ func (h *SystemHandler) GetServiceStatus(c *gin.Context) {
 	response.OK(c, status)
 }
 
+// GetEngineStatus 获取引擎全局指标
+//
+// @Summary      获取引擎全局指标
+// @Description  获取 C++ 推理引擎的全局运行指标（DMA/NPU 内存、Worker 数等）
+// @Tags         系统管理-运行状态
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /system/status/engine [get]
+// @Security     BearerAuth
+func (h *SystemHandler) GetEngineStatus(c *gin.Context) {
+	status := h.systemSvc.GetEngineStatus()
+	response.OK(c, status)
+}
+
+// GetStreamsStatus 获取各流推理指标
+//
+// @Summary      获取各流推理指标
+// @Description  获取 C++ 推理引擎各视频流的推理延迟、队列深度等指标
+// @Tags         系统管理-运行状态
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /system/status/streams [get]
+// @Security     BearerAuth
+func (h *SystemHandler) GetStreamsStatus(c *gin.Context) {
+	streams := h.systemSvc.GetStreamsStatus()
+	response.OK(c, streams)
+}
+
 // GetStatusHistory 获取历史数据
 //
 // @Summary      获取历史指标
-// @Description  获取指定指标在指定时间范围内的历史数据点
+// @Description  获取指定指标在指定时间范围内的历史数据点（支持 engine.* 前缀指标）
 // @Tags         系统管理-运行状态
 // @Produce      json
 // @Param        metric    query  string  true   "指标名称 (cpu/memory/npu)"

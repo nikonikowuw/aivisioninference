@@ -28,10 +28,11 @@ type ServiceStatus struct {
 // 而不是另起一条 TCP 连接。这样探测结果与实际业务连接完全一致 ——
 // 只要业务跑得起来，探测必然显示 running；只要任一连接出问题，探测立刻反映。
 type ServiceStatusDetector struct {
-	rdb           *redis.Client
-	db            *gorm.DB
-	zlmAPIURL     string
-	cppSocketPath string
+	rdb                   *redis.Client
+	db                    *gorm.DB
+	zlmAPIURL             string
+	cppSocketPath          string
+	engineMetricsChecker  EngineMetricsChecker
 }
 
 // NewServiceStatusDetector 创建服务状态检测器
@@ -80,7 +81,20 @@ func (d *ServiceStatusDetector) detectGoServer() ServiceStatus {
 	}
 }
 
+// EngineMetricsChecker 引擎指标检查器接口（由 EngineMetricsStore 实现）
+type EngineMetricsChecker interface {
+	IsStale() bool
+	GetLastUpdateTime() time.Time
+	GetUpdateCount() uint64
+}
+
+// SetEngineMetricsChecker 设置引擎指标检查器（用于深度检测）
+func (d *ServiceStatusDetector) SetEngineMetricsChecker(checker EngineMetricsChecker) {
+	d.engineMetricsChecker = checker
+}
+
 // detectCppEngine 检测 C++ 推理引擎状态
+// 增强检测：从仅 socket 连通性检测升级为基于 IPC 心跳 + EngineMetricsStore 指标新鲜度的深度检测
 func (d *ServiceStatusDetector) detectCppEngine() ServiceStatus {
 	if d.cppSocketPath == "" {
 		return ServiceStatus{
@@ -90,7 +104,7 @@ func (d *ServiceStatusDetector) detectCppEngine() ServiceStatus {
 		}
 	}
 
-	// 检测 UDS socket 是否存在
+	// 1. 检测 UDS socket 是否存在
 	conn, err := net.DialTimeout("unix", d.cppSocketPath, 2*time.Second)
 	if err != nil {
 		return ServiceStatus{
@@ -101,9 +115,33 @@ func (d *ServiceStatusDetector) detectCppEngine() ServiceStatus {
 	}
 	_ = conn.Close()
 
+	// 2. 如果有 EngineMetricsChecker，进行深度检测
+	if d.engineMetricsChecker != nil {
+		if d.engineMetricsChecker.IsStale() {
+			lastUpdate := d.engineMetricsChecker.GetLastUpdateTime()
+			return ServiceStatus{
+				Name:   "cpp_engine",
+				Status: "error",
+				Message: truncate(fmt.Sprintf(
+					"socket connected but no metrics update for >15s (last: %s, count: %d)",
+					lastUpdate.Format(time.RFC3339),
+					d.engineMetricsChecker.GetUpdateCount()), 200),
+			}
+		}
+
+		return ServiceStatus{
+			Name:   "cpp_engine",
+			Status: "running",
+			Message: fmt.Sprintf("metrics active, updates: %d",
+				d.engineMetricsChecker.GetUpdateCount()),
+		}
+	}
+
+	// 3. 降级：仅 socket 连通性检测
 	return ServiceStatus{
 		Name:   "cpp_engine",
 		Status: "running",
+		Message: "socket connected, metrics check not available",
 	}
 }
 
@@ -205,17 +243,9 @@ func (d *ServiceStatusDetector) detectPostgreSQL() ServiceStatus {
 	}
 
 	port := 5432
-	if d.db.Dialector != nil {
-		if _, err := d.db.DB(); err == nil {
-			addr := ""
-			if dsn := d.dsnHint(); dsn != "" {
-				addr = dsn
-			}
-			if addr != "" {
-				if _, p, ok := splitHostPort(addr); ok {
-					port = p
-				}
-			}
+	if addr := d.dsnHint(); addr != "" {
+		if _, p, ok := splitHostPort(addr); ok {
+			port = p
 		}
 	}
 	return ServiceStatus{

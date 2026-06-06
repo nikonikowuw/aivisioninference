@@ -9,13 +9,31 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+
+	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 func setupTestWebhookHandler() *MediaWebhookHandler {
+	// 使用 mock 组件创建 handler
+	mockClient := &service.MockEngineClient{}
+	logger := zap.NewNop()
+	devRepo := repository.NewDeviceRepository(nil)
+	mediaStreamRepo := repository.NewMediaStreamRepository(nil)
+	stagingRepo := repository.NewDiscoveredDeviceRepository(nil)
+
+	streamManager := service.NewStreamManager(mockClient, devRepo, mediaStreamRepo, logger)
+	stagingSvc := service.NewDeviceStagingService(stagingRepo, devRepo)
+
+	// SIPService 不初始化完整 repo，我们用模拟的方式测试 webhook 路由
+	// 注意：OnRegister 会调用 sipService.HandleRegister 导致 panic 如果 db 为 nil
+	// 因此在测试中 OnRegister 需要在无 sip 环境下运行，或者使用 mock
 	return &MediaWebhookHandler{
-		mediaService: &service.MediaService{},
-		sipService:   &service.SIPService{},
+		mediaService:   &service.MediaService{},
+		sipService:     nil,
+		streamManager:  streamManager,
+		stagingService: stagingSvc,
 	}
 }
 

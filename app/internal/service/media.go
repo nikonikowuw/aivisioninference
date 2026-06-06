@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
@@ -21,6 +19,7 @@ type MediaService struct {
 	zlmClient       *zlm.Client
 	mediaStreamRepo *repository.MediaStreamRepository
 	deviceRepo      *repository.DeviceRepository
+	streamManager   *StreamManager
 	zlmBaseURL      string
 	zlmSecret       string
 }
@@ -30,6 +29,7 @@ func NewMediaService(
 	zlmClient *zlm.Client,
 	mediaStreamRepo *repository.MediaStreamRepository,
 	deviceRepo *repository.DeviceRepository,
+	streamManager *StreamManager,
 	zlmBaseURL string,
 	zlmSecret string,
 ) *MediaService {
@@ -37,6 +37,7 @@ func NewMediaService(
 		zlmClient:       zlmClient,
 		mediaStreamRepo: mediaStreamRepo,
 		deviceRepo:      deviceRepo,
+		streamManager:   streamManager,
 		zlmBaseURL:      zlmBaseURL,
 		zlmSecret:       zlmSecret,
 	}
@@ -62,66 +63,45 @@ func (s *MediaService) VerifyPlayAuth(ctx context.Context, app, stream, params s
 // GetPlayURL generates a playback URL for the given device.
 // Supported protocols: auto, webrtc, flv, hls.
 // streamType: "main" for main stream, "sub" for sub-stream.
-// For RTSP devices, this will automatically start pulling the stream via ZLM addStreamProxy.
+// For RTSP devices, this will automatically start pulling the stream via StreamManager.
 func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, streamType string) (string, error) {
-	// Resolve device
-	device, err := s.deviceRepo.FindByID(ctx, deviceID)
+	// 1. 通过 StreamManager 获取流引用
+	err := s.streamManager.Acquire(ctx, deviceID, "play", map[string]string{
+		"protocol":    protocol,
+		"stream_type": streamType,
+	})
 	if err != nil {
-		return "", errors.New(errors.ErrNotFound, "device not found")
+		return "", fmt.Errorf("acquire stream: %w", err)
 	}
 
-	// Build stream identifier (app and stream name)
+	// 2. 获取流状态以拿到播放地址
+	state := s.streamManager.GetStream(ctx, deviceID)
+	if state == nil {
+		return "", errors.New(errors.ErrInternal, "stream state not found after acquire")
+	}
+
 	app := "live"
 	stream := deviceID
 	if streamType == "sub" || streamType == "auxiliary" {
 		stream = deviceID + "_sub"
 	}
 
-	// 对于 RTSP 设备，按需通过 ZLM addStreamProxy 拉流
-	if device.AccessType == model.DeviceAccessTypeRTSP && device.RtspURL != "" {
-		_, proxyErr := s.zlmClient.AddStreamProxy(ctx, zlm.AddStreamProxyRequest{
-			Vhost:      "__defaultVhost__",
-			App:        app,
-			Stream:     stream,
-			URL:        device.RtspURL,
-			RetryCount: -1,
-			TimeoutSec: 10,
-			EnableHls:  1,
-			EnableRtmp: 1,
-			EnableRtsp: 1,
-			EnableFmp4: 1,
-		})
-		if proxyErr != nil {
-			// 流已存在（重复调用）不是错误，忽略
-			zap.L().Warn("zlm addStreamProxy failed on play",
-				zap.String("device_id", deviceID),
-				zap.Error(proxyErr))
-		}
-	}
-
 	// Generate signed token
 	token := s.GeneratePlayToken(stream, "anonymous", 30*time.Minute)
 
 	switch protocol {
-	case "webrtc":
-		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", s.zlmBaseURL, app, stream, token), nil
 	case "flv":
 		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", s.zlmBaseURL, app, stream, token), nil
 	case "hls":
 		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", s.zlmBaseURL, app, stream, token), nil
-	default: // auto
+	default: // auto, webrtc
 		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", s.zlmBaseURL, app, stream, token), nil
 	}
 }
 
 // StopPlayURL closes the stream proxy for a device (stop preview).
 func (s *MediaService) StopPlayURL(ctx context.Context, deviceID string) error {
-	return s.zlmClient.CloseStream(ctx, zlm.CloseStreamRequest{
-		Vhost:  "__defaultVhost__",
-		App:    "live",
-		Stream: deviceID,
-		Force:  1,
-	})
+	return s.streamManager.Release(ctx, deviceID, "play")
 }
 
 // GetSnapshot captures a snapshot from the device stream.
@@ -150,3 +130,9 @@ func (s *MediaService) GetSnapshot(ctx context.Context, deviceID string) ([]byte
 
 	return imgData, nil
 }
+
+// ListStreams returns all active stream states managed by StreamManager.
+func (s *MediaService) ListStreams(ctx context.Context) []*StreamState {
+	return s.streamManager.ListStreams(ctx)
+}
+

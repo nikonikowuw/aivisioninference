@@ -76,6 +76,14 @@ func (m *MockDeviceRepo) ReplaceGroups(ctx context.Context, deviceID string, gro
 	return args.Error(0)
 }
 
+func (m *MockDeviceRepo) FindByExternalKey(ctx context.Context, key string) (*model.Device, error) {
+	args := m.Called(ctx, key)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Device), args.Error(1)
+}
+
 // MockCache is a mock of cache interface
 type MockCache struct {
 	mock.Mock
@@ -134,7 +142,7 @@ func TestDeviceService_Integration_Workflow(t *testing.T) {
 	mockCache := new(MockCache)
 	mockTask := new(MockTaskClient)
 	mockZLM := new(MockZLMClient)
-	svc := NewDeviceService(mockRepo, mockCache, mockTask, mockZLM)
+	svc := NewDeviceService(mockRepo, mockCache, mockTask, mockZLM, nil)
 
 	ctx := context.Background()
 

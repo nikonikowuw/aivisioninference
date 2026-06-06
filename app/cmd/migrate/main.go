@@ -64,6 +64,7 @@ func main() {
 		&model.Device{},
 		&model.DeviceGroupMember{},
 		&model.GB28181Device{},
+		&model.DiscoveredDevice{},
 
 		// AIVisionInference: Algorithm Package Management.
 		&model.CategoryCode{},
@@ -443,6 +444,14 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "device:view", Name: "查看设备", Path: "/api/v1/devices/*", Method: "GET"},
 					{Code: "device:test", Name: "测试连接", Path: "/api/v1/devices/*/test", Method: "POST"},
 				}},
+				{Name: "设备待接入", Code: "device-staging", Path: "/devices/staging", Icon: "MdOutlineDeviceHub", Buttons: []buttonInfo{
+					{Code: "device-staging:list", Name: "待接入列表", Path: "/api/v1/device-staging", Method: "GET"},
+					{Code: "device-staging:import", Name: "导入设备", Path: "/api/v1/device-staging/*/import", Method: "POST"},
+					{Code: "device-staging:ignore", Name: "忽略设备", Path: "/api/v1/device-staging/*/ignore", Method: "POST"},
+					{Code: "device-staging:batch-import", Name: "批量导入", Path: "/api/v1/device-staging/batch-import", Method: "POST"},
+					{Code: "device-staging:batch-ignore", Name: "批量忽略", Path: "/api/v1/device-staging/batch-ignore", Method: "POST"},
+					{Code: "device-staging:scan", Name: "ONVIF扫描", Path: "/api/v1/device-staging/scan-onvif", Method: "POST"},
+				}},
 				{Name: "设备分组", Code: "device-groups", Path: "/devices/groups", Icon: "MdFolder", Buttons: []buttonInfo{
 					{Code: "device-group:list", Name: "分组列表", Path: "/api/v1/device-groups", Method: "GET"},
 					{Code: "device-group:create", Name: "创建分组", Path: "/api/v1/device-groups", Method: "POST"},
@@ -458,6 +467,9 @@ func defaultMenuList() []parentMenuDef {
 				{Name: "实时预览", Code: "live-view", Path: "/media/live", Icon: "MdViewStream", Buttons: []buttonInfo{
 					{Code: "media:play", Name: "获取播放地址", Path: "/api/v1/media/play", Method: "GET"},
 					{Code: "media:snapshot", Name: "获取截图", Path: "/api/v1/media/snapshot", Method: "GET"},
+				}},
+				{Name: "流状态看板", Code: "stream-status", Path: "/media/streams", Icon: "MdTimeline", Buttons: []buttonInfo{
+					{Code: "stream:list", Name: "查看流状态", Path: "/api/v1/media/streams", Method: "GET"},
 				}},
 				{Name: "录像回放", Code: "recordings", Path: "/media/recordings", Icon: "MdVideoLibrary", Buttons: []buttonInfo{
 					{Code: "recording:list", Name: "录像列表", Path: "/api/v1/media/recordings", Method: "GET"},

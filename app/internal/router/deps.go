@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -12,6 +13,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
+	"github.com/niko-admin/niko-admin/internal/pkg/onvif"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/niko-admin/niko-admin/internal/repository"
@@ -36,9 +38,11 @@ type RouteDeps struct {
 	MailHandler        *handler.MailHandler
 	FeedbackHandler    *handler.FeedbackHandler
 	DashboardHandler   *handler.DashboardHandler
-	DeviceHandler      *handler.DeviceHandler
-	DeviceGroupHandler *handler.DeviceGroupHandler
-	SystemHandler      *handler.SystemHandler
+	DeviceHandler        *handler.DeviceHandler
+	DeviceGroupHandler   *handler.DeviceGroupHandler
+	DeviceStagingHandler *handler.DeviceStagingHandler
+	SystemHandler        *handler.SystemHandler
+	StreamManager        *service.StreamManager
 }
 
 func provideAvatarStorage(cfg *Config) (*storage.LocalStorage, error) {
@@ -82,19 +86,46 @@ func provideWSHandler(hub *ws.Hub, jwtManager *jwt.Manager, cfg *Config) *handle
 	return handler.NewWSHandler(hub, jwtManager, cfg.AllowOrigins)
 }
 
+func provideStreamManager(deviceRepo *repository.DeviceRepository, mediaStreamRepo *repository.MediaStreamRepository) *service.StreamManager {
+	engineClient := &service.MockEngineClient{}
+	sm := service.NewStreamManager(engineClient, deviceRepo, mediaStreamRepo, zap.L())
+	sm.StartBackgroundTasks(context.Background())
+	return sm
+}
+
+func provideDeviceStagingHandler(
+	stagingSvc *service.DeviceStagingService,
+	discoverySvc *service.DeviceDiscoveryService,
+) *handler.DeviceStagingHandler {
+	return handler.NewDeviceStagingHandler(stagingSvc, discoverySvc)
+}
+
 func provideDeviceHandler(
 	deviceRepo *repository.DeviceRepository,
 	permCache cache.Cache,
 	taskClient *task.Client,
 	zlmClient *zlm.Client,
+	streamManager *service.StreamManager,
 ) *handler.DeviceHandler {
-	deviceSvc := service.NewDeviceService(deviceRepo, permCache, taskClient, zlmClient)
+	deviceSvc := service.NewDeviceService(deviceRepo, permCache, taskClient, zlmClient, streamManager)
 	return handler.NewDeviceHandler(deviceSvc)
 }
 
 func provideDeviceGroupHandler(groupRepo *repository.DeviceGroupRepository) *handler.DeviceGroupHandler {
 	groupSvc := service.NewDeviceGroupService(groupRepo)
 	return handler.NewDeviceGroupHandler(groupSvc)
+}
+
+func provideDeviceStagingService(
+	stagingRepo *repository.DiscoveredDeviceRepository,
+	deviceRepo *repository.DeviceRepository,
+) *service.DeviceStagingService {
+	return service.NewDeviceStagingService(stagingRepo, deviceRepo)
+}
+
+func provideDeviceDiscoveryService(stagingSvc *service.DeviceStagingService) *service.DeviceDiscoveryService {
+	onvifScanner := onvif.NewScanner()
+	return service.NewDeviceDiscoveryService(stagingSvc, onvifScanner, nil)
 }
 
 func provideSystemHandler(db *gorm.DB, rdb *redis.Client, cfg *Config, scheduler *asynq.Scheduler) *handler.SystemHandler {
@@ -133,26 +164,30 @@ func newRouteDeps(
 	dashboardHandler *handler.DashboardHandler,
 	deviceHandler *handler.DeviceHandler,
 	deviceGroupHandler *handler.DeviceGroupHandler,
+	deviceStagingHandler *handler.DeviceStagingHandler,
 	systemHandler *handler.SystemHandler,
+	streamManager *service.StreamManager,
 ) *RouteDeps {
 	return &RouteDeps{
-		RBACCache:         permCache,
-		AuditService:      auditSvc,
-		AuthHandler:       authHandler,
-		WSHandler:         wsHandler,
-		UserHandler:       userHandler,
-		RoleHandler:       roleHandler,
-		PermissionHandler: permHandler,
-		FileHandler:       fileHandler,
-		AuditHandler:      auditHandler,
-		TaskHandler:       taskHandler,
-		BrandHandler:      brandHandler,
-		MailHandler:       mailHandler,
-		FeedbackHandler:   feedbackHandler,
-		DashboardHandler:   dashboardHandler,
-		DeviceHandler:      deviceHandler,
-		DeviceGroupHandler: deviceGroupHandler,
-		SystemHandler:      systemHandler,
+		RBACCache:            permCache,
+		AuditService:         auditSvc,
+		AuthHandler:          authHandler,
+		WSHandler:            wsHandler,
+		UserHandler:          userHandler,
+		RoleHandler:          roleHandler,
+		PermissionHandler:     permHandler,
+		FileHandler:          fileHandler,
+		AuditHandler:         auditHandler,
+		TaskHandler:          taskHandler,
+		BrandHandler:         brandHandler,
+		MailHandler:          mailHandler,
+		FeedbackHandler:      feedbackHandler,
+		DashboardHandler:     dashboardHandler,
+		DeviceHandler:        deviceHandler,
+		DeviceGroupHandler:   deviceGroupHandler,
+		DeviceStagingHandler: deviceStagingHandler,
+		SystemHandler:        systemHandler,
+		StreamManager:        streamManager,
 	}
 }
 
@@ -167,20 +202,26 @@ func provideZLMClient(cfg *Config) *zlm.Client {
 	return zlm.NewClient(cfg.ZLMAPIURL, cfg.ZLMSecret, zap.L())
 }
 
-func provideMediaServices(db *gorm.DB, cfg *Config) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler) {
+func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.StreamManager) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler, *handler.DeviceStagingHandler) {
 	zlmClient := provideZLMClient(cfg)
 	deviceRepo := repository.NewDeviceRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
 	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
 	recordingRepo := repository.NewRecordingRepository(db)
+	stagingRepo := repository.NewDiscoveredDeviceRepository(db)
+
+	onvifScanner := onvif.NewScanner()
+	stagingSvc := service.NewDeviceStagingService(stagingRepo, deviceRepo)
+	discoverySvc := service.NewDeviceDiscoveryService(stagingSvc, onvifScanner, nil)
 
 	sipSvc := service.NewSIPService(deviceRepo, gbDeviceRepo, mediaStreamRepo)
-	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, cfg.ZLMAPIURL, cfg.ZLMSecret)
+	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, streamManager, cfg.ZLMAPIURL, cfg.ZLMSecret)
 	recordingSvc := service.NewRecordingService(recordingRepo, zlmClient)
 
-	webhookHandler := handler.NewMediaWebhookHandler(mediaSvc, sipSvc)
+	webhookHandler := handler.NewMediaWebhookHandler(mediaSvc, sipSvc, streamManager, stagingSvc)
 	playHandler := handler.NewMediaPlayHandler(mediaSvc)
 	recordingHandler := handler.NewMediaRecordingHandler(recordingSvc)
+	stagingHandler := handler.NewDeviceStagingHandler(stagingSvc, discoverySvc)
 
-	return webhookHandler, playHandler, recordingHandler
+	return webhookHandler, playHandler, recordingHandler, stagingHandler
 }

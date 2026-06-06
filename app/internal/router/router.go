@@ -266,11 +266,22 @@ func (r *Router) setupRoutes() {
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
 
 	// Media streaming (ZLM webhooks - internal, no auth)
-	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler := provideMediaServices(r.db, r.config)
+	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager)
 	// Register ZLM webhooks at root level with secret validation
 	zlmGroup := r.engine.Group("")
 	zlmGroup.Use(middleware.ZLMWebhookAuth(r.config.ZLMSecret))
 	mediaWebhookHandler.RegisterRoutes(zlmGroup)
+
+	// Device Staging (Discover results)
+	staging := authorized.Group("/device-staging")
+	{
+		staging.GET("", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.List)
+		staging.POST("/batch-import", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.BatchImport)
+		staging.POST("/batch-ignore", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.BatchIgnore)
+		staging.POST("/scan-onvif", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.ScanONVIF)
+		staging.POST("/:id/import", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.Import)
+		staging.POST("/:id/ignore", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.Ignore)
+	}
 
 	// Media playback API (under /api/v1/media)
 	mediaPlayGroup := v1.Group("/media")

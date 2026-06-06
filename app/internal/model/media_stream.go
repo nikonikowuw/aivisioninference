@@ -23,6 +23,8 @@ type MediaStream struct {
 	PlayURLMp4  string     `gorm:"type:text" json:"play_url_mp4,omitempty"`
 	ExternalKey string     `gorm:"type:varchar(200);uniqueIndex" json:"external_key,omitempty"`
 	Status      string     `gorm:"type:varchar(16);default:inactive;check:status IN ('active','inactive','error')" json:"status"`
+	ConsumerCount int      `gorm:"default:0" json:"consumer_count"`
+	LastConsumerReason string `gorm:"type:varchar(64)" json:"last_consumer_reason"`
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	StoppedAt   *time.Time `json:"stopped_at,omitempty"`
 }

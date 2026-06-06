@@ -1,120 +1,54 @@
-// envelope.fbs — IPC 信封层定义
-// 所有跨进程消息的外层包装, 提供版本协商、消息路由、请求-响应配对
-//
-// 设计原则:
-//   1. 信封层几乎不变, 所有消息体通过 union MessagePayload 多态承载
-//   2. schema_version 用于版本兼容性检查, major 不兼容时拒绝通信
-//   3. sequence_id 用于请求-响应配对和异步回调关联
-//
-// 版本号语义:
-//   schema_version = major * 100 + minor
-//   minor: 新增可选字段 (完全兼容, 旧代码忽略新字段)
-//   major: 结构性变更 (需要双写过渡, 可能不兼容)
-//
-// 当前版本: 100 (v1.0)
-
-namespace ipc;
+// IPC Envelope — wraps every message with version metadata.
+// schema_version = major * 100 + minor
+//   Major bump: structural change requiring dual-write migration.
+//   Minor bump: new optional fields, fully backward compatible.
 
 include "common.fbs";
-include "commands.fbs";
-include "results.fbs";
 
-// ============================================================
-// 消息类型枚举
-// ============================================================
+namespace aivision.ipc;
 
-// MessageType 消息类型标识
-// 编号规则:
-//   1-99    Go → C++ 控制指令
-//   100-199 C++ → Go 结果/状态上报
-//   200-299 双向通用 (心跳等)
-enum MessageType : ubyte {
-  NONE = 0,
+/// 信令类型枚举：区分每个消息的 payload 类型
+enum SignalType:ushort {
+    Unknown = 0,
+    // Go → C++ 指令 (0x0100 - 0x01FF)
+    StartStream = 0x0100,
+    StopStream = 0x0101,
+    UpdateAlgoConfig = 0x0102,
+    UpdateStreamConfig = 0x0103,
+    Heartbeat = 0x0104,
+    Shutdown = 0x01FF,
 
-  // ── Go → C++ 控制指令 ──
-  // 启动视频流推理
-  StartStream     = 1,
-  // 停止视频流推理
-  StopStream      = 2,
-  // 更新流的算法配置 (ROI/MARK/LINE/参数)
-  UpdateConfig    = 3,
-  // 加载算法库 (.so)
-  LoadAlgorithm   = 4,
-  // 卸载算法库
-  UnloadAlgorithm = 5,
+    // C++ → Go 结果 (0x0200 - 0x02FF)
+    InferenceResult = 0x0200,
+    StreamStatusReport = 0x0201,
+    AlgoLoadResult = 0x0202,
+    EngineMetrics = 0x0203,
+    HeartbeatAck = 0x0204,
 
-  // ── C++ → Go 结果上报 ──
-  // 推理结果 (检测/识别/告警)
-  InferenceResult = 100,
-  // 流状态变更通知
-  StreamStatusChanged = 101,
-  // 算法加载结果
-  AlgoLoadResult  = 102,
-  // 引擎运行指标
-  EngineMetrics   = 103,
-  // Worker 状态变更 (新增 v1.1)
-  WorkerStatus    = 104,
-
-  // ── 双向通用 ──
-  // 心跳探活
-  Heartbeat       = 200,
-  // 心跳响应
-  HeartbeatAck    = 201,
+    // 双向通用 (0x0300 - 0x03FF)
+    Error = 0x0300,
+    Log = 0x0301,
 }
 
-// ============================================================
-// 消息体联合类型
-// ============================================================
-
-// MessagePayload 消息体联合类型
-// 新增消息类型时, 在此 union 末尾追加即可
-// 旧代码遇到未知类型会安全跳过
-union MessagePayload {
-  // Go → C++
-  StartStreamCmd,
-  StopStreamCmd,
-  UpdateConfigCmd,
-  LoadAlgoCmd,
-  UnloadAlgoCmd,
-  // C++ → Go
-  InferenceResultMsg,
-  StreamStatusMsg,
-  AlgoLoadResultMsg,
-  EngineMetricsMsg,
-  WorkerStatusMsg,
-  // 双向
-  HeartbeatCmd,
-  HeartbeatAckMsg,
-}
-
-// ============================================================
-// 信封
-// ============================================================
-
-// IPCEnvelope 所有 IPC 消息的外层信封
-// C++ 和 Go 都必须先解析信封, 再根据 message_type 分发处理
+/// IPC 信封：所有消息的最外层包装
 table IPCEnvelope {
-  // 协议版本号 = major * 100 + minor
-  // 当前: 100 (v1.0)
-  // 接收方检查规则:
-  //   if (received.major > MY_MAJOR): log.Warn, 尝试读取已知字段
-  //   if (received.major < MY_MAJOR): return Error(VersionMismatch)
-  //   if (received.minor > MY_MINOR): log.Debug, 忽略未知字段
-  schema_version:ushort = 100;
+    /// Schema 版本号 (major*100 + minor)
+    schema_version: uint = 100;
 
-  // 消息类型, 决定 payload 的实际类型
-  message_type:MessageType;
+    /// 信令类型
+    signal_type: SignalType;
 
-  // 请求-响应序列号
-  // - 请求方递增分配
-  // - 响应方原样回传
-  // - 用于异步回调关联 (如: 发送 LoadAlgorithm, 等待 AlgoLoadResult)
-  sequence_id:uint;
+    /// 消息序列号 (请求-响应配对)
+    sequence_id: uint64 = 0;
 
-  // 发送方时间戳 (Unix 纳秒)
-  // 用于延迟计算和时序调试
-  timestamp_ns:ulong;
+    /// 发送时间戳 (Unix 纳秒)
+    timestamp_ns: uint64;
 
-  // 消息体 (由 message_type 决定实际类型)
-  payload:MessagePayload;
+    /// Payload 类型标识 (反射用)
+    payload_type: string;
+
+    /// 实际消息体 (指向具体 table 的 root)
+    payload: [ubyte] (required);
 }
+
+root_type IPCEnvelope;

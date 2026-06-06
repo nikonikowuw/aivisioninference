@@ -89,6 +89,16 @@ func (r *DeviceRepository) FindByIDs(ctx context.Context, ids []string) ([]model
 	return items, err
 }
 
+// FindByExternalKey 根据外部 ID 查询
+func (r *DeviceRepository) FindByExternalKey(ctx context.Context, key string) (*model.Device, error) {
+	var item model.Device
+	err := r.db.WithContext(ctx).Where("external_key = ?", key).First(&item).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
 // ExistsByName 检查设备名称是否已存在（排除指定 ID）
 func (r *DeviceRepository) ExistsByName(ctx context.Context, name, excludeID string) (bool, error) {
 	var count int64

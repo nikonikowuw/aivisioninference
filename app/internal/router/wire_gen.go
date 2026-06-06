@@ -69,17 +69,23 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	deviceRepository := repository.NewDeviceRepository(db)
 	client := task.NewClient(rdb)
 	zlmClient := provideZLMClient(cfg)
-	deviceHandler := provideDeviceHandler(deviceRepository, cache, client, zlmClient)
+	mediaStreamRepository := repository.NewMediaStreamRepository(db)
+	streamManager := provideStreamManager(deviceRepository, mediaStreamRepository)
+	deviceHandler := provideDeviceHandler(deviceRepository, cache, client, zlmClient, streamManager)
 	deviceGroupRepository := repository.NewDeviceGroupRepository(db)
 	deviceGroupHandler := provideDeviceGroupHandler(deviceGroupRepository)
+	discoveredDeviceRepository := repository.NewDiscoveredDeviceRepository(db)
+	deviceStagingService := provideDeviceStagingService(discoveredDeviceRepository, deviceRepository)
+	deviceDiscoveryService := provideDeviceDiscoveryService(deviceStagingService)
+	deviceStagingHandler := provideDeviceStagingHandler(deviceStagingService, deviceDiscoveryService)
 	systemHandler := provideSystemHandler(db, rdb, cfg, scheduler)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, systemHandler)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, streamManager)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository)
 
 var serviceSet = wire.NewSet(
 	provideAvatarStorage,
@@ -89,8 +95,13 @@ var serviceSet = wire.NewSet(
 	provideAuthService,
 	provideBrandService,
 	providePermissionService, service.NewAuditService, wire.Bind(new(middleware.AuditLogger), new(*service.AuditService)), service.NewUserService, service.NewRoleService, service.NewTaskService, service.NewDashboardService, service.NewMailService, service.NewEmailVerificationService, service.NewFeedbackService, task.NewClient, provideZLMClient,
+	provideStreamManager,
+	provideDeviceStagingService,
+	provideDeviceDiscoveryService,
+	provideSystemHandler,
 )
 
-var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceHandler,
+var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, handler.NewUserHandler, handler.NewRoleHandler, handler.NewPermissionHandler, handler.NewFileHandler, handler.NewAuditHandler, handler.NewTaskHandler, handler.NewBrandHandler, handler.NewMailHandler, handler.NewFeedbackHandler, handler.NewDashboardHandler, provideDeviceStagingHandler,
+	provideDeviceHandler,
 	provideDeviceGroupHandler,
 )

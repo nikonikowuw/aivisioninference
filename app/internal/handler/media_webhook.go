@@ -6,20 +6,30 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 // MediaWebhookHandler handles ZLMediaKit webhooks.
 type MediaWebhookHandler struct {
-	mediaService *service.MediaService
-	sipService   *service.SIPService
+	mediaService   *service.MediaService
+	sipService     *service.SIPService
+	streamManager  *service.StreamManager
+	stagingService *service.DeviceStagingService
 }
 
 // NewMediaWebhookHandler creates a new MediaWebhookHandler.
-func NewMediaWebhookHandler(mediaService *service.MediaService, sipService *service.SIPService) *MediaWebhookHandler {
+func NewMediaWebhookHandler(
+	mediaService *service.MediaService,
+	sipService *service.SIPService,
+	streamManager *service.StreamManager,
+	stagingService *service.DeviceStagingService,
+) *MediaWebhookHandler {
 	return &MediaWebhookHandler{
-		mediaService: mediaService,
-		sipService:   sipService,
+		mediaService:   mediaService,
+		sipService:     sipService,
+		streamManager:  streamManager,
+		stagingService: stagingService,
 	}
 }
 
@@ -68,11 +78,26 @@ func (h *MediaWebhookHandler) OnRegister(c *gin.Context) {
 
 	zap.L().Info("ZLM on_register received", zap.String("device_id", req.DeviceID), zap.String("ip", req.RemoteIP))
 
-	// TODO: 调用 sipService 验证设备
-	// if err := h.sipService.HandleRegister(c.Request.Context(), req.DeviceID, req.RemoteIP, req.Port); err != nil {
-	// 	c.JSON(http.StatusOK, gin.H{"code": -1, "msg": err.Error()})
-	// 	return
-	// }
+	// 1. 尝试调用 sipService 验证设备并注册
+	if h.sipService != nil {
+		err := h.sipService.HandleRegister(c.Request.Context(), req.DeviceID, req.RemoteIP, req.Port)
+		if err != nil {
+			// 如果设备未预注册，记录到发现暂存区
+			zap.L().Warn("device not pre-registered, adding to staging", zap.String("device_id", req.DeviceID), zap.Error(err))
+
+			if h.stagingService != nil {
+				if stagingErr := h.stagingService.AddDiscovered(c.Request.Context(), &model.DiscoveredDevice{
+					Source:      model.SourceGB28181,
+					DeviceIP:    req.RemoteIP,
+					GB28181Code: req.DeviceID,
+					Status:      model.StatusPending,
+				}); stagingErr != nil {
+					zap.L().Error("failed to add discovered device to staging",
+						zap.String("device_id", req.DeviceID), zap.Error(stagingErr))
+				}
+			}
+		}
+	}
 
 	successWebhook(c)
 }
@@ -91,8 +116,8 @@ func (h *MediaWebhookHandler) OnPublish(c *gin.Context) {
 
 	zap.L().Info("ZLM on_publish received", zap.String("app", req.App), zap.String("stream", req.Stream))
 
-	// TODO: 调用 mediaService 更新流状态
-	// h.mediaService.UpdateStreamStatus(c.Request.Context(), req.App, req.Stream, "active")
+	// 通知 StreamManager
+	h.streamManager.HandleStreamOnline(c.Request.Context(), req.App, req.Stream, req.Vhost)
 
 	successWebhook(c)
 }
@@ -108,13 +133,12 @@ func (h *MediaWebhookHandler) OnPlay(c *gin.Context) {
 		return
 	}
 
-	zap.L().Info("ZLM on_play received", zap.String("app", req.App), zap.String("stream", req.Stream), zap.String("params", req.Params))
+	zap.L().Info("ZLM on_play received", zap.String("app", req.App), zap.String("stream", req.Stream))
 
-	// TODO: 调用 mediaService 验证播放权限
-	// if err := h.mediaService.VerifyPlayAuth(c.Request.Context(), req.App, req.Stream, req.Params); err != nil {
-	// 	c.JSON(http.StatusOK, gin.H{"code": -1, "msg": "auth failed"})
-	// 	return
-	// }
+	if err := h.streamManager.VerifyPlaybackAuth(c.Request.Context(), req.App, req.Stream, req.Params); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": -1, "msg": "auth failed"})
+		return
+	}
 
 	successWebhook(c)
 }
@@ -126,7 +150,7 @@ func (h *MediaWebhookHandler) OnStreamChanged(c *gin.Context) {
 		Stream string `json:"stream"`
 		Vhost  string `json:"vhost"`
 		Schema string `json:"schema"`
-		Status int    `json:"status"`
+		Status int    `json:"status"` // 1: 注册, 0: 注销
 	}
 	if !h.bindJSON(c, &req) {
 		return
@@ -134,7 +158,11 @@ func (h *MediaWebhookHandler) OnStreamChanged(c *gin.Context) {
 
 	zap.L().Info("ZLM on_stream_changed", zap.String("app", req.App), zap.String("stream", req.Stream), zap.Int("status", req.Status))
 
-	// TODO: 更新媒体流状态
+	if req.Status == 1 {
+		h.streamManager.HandleStreamOnline(c.Request.Context(), req.App, req.Stream, req.Vhost)
+	} else {
+		h.streamManager.HandleStreamOffline(c.Request.Context(), req.App, req.Stream, req.Vhost)
+	}
 
 	successWebhook(c)
 }
@@ -153,7 +181,8 @@ func (h *MediaWebhookHandler) OnStreamNotFound(c *gin.Context) {
 
 	zap.L().Warn("ZLM on_stream_not_found", zap.String("app", req.App), zap.String("stream", req.Stream))
 
-	// TODO: 更新流状态为 error，触发重试
+	// 触发 StreamManager 的重试逻辑
+	h.streamManager.HandleStreamNotFound(c.Request.Context(), req.App, req.Stream, req.Vhost)
 
 	successWebhook(c)
 }
@@ -173,9 +202,12 @@ func (h *MediaWebhookHandler) OnRecordMP4(c *gin.Context) {
 		return
 	}
 
-	zap.L().Info("ZLM on_record_mp4", zap.String("app", req.App), zap.String("stream", req.Stream), zap.String("file_path", req.FilePath))
+	zap.L().Info("ZLM on_record_mp4 received", 
+		zap.String("stream", req.Stream), 
+		zap.String("path", req.FilePath))
 
-	// TODO: 建立录像索引
+	// TODO: 真正的数据库入库逻辑
+	// h.mediaService.CreateRecordingRecord(c.Request.Context(), req)
 
 	successWebhook(c)
 }
@@ -191,7 +223,8 @@ func (h *MediaWebhookHandler) OnServerStarted(c *gin.Context) {
 
 	zap.L().Info("ZLM server started", zap.String("version", req.Version))
 
-	// TODO: 恢复 ZLM 重启前的流
+	// 恢复所有流
+	h.streamManager.RecoverOnServerStart(c.Request.Context())
 
 	successWebhook(c)
 }

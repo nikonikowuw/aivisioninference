@@ -1,237 +1,133 @@
-// results.fbs — C++ → Go 结果/状态上报定义
-// 数据面回馈给控制面的所有消息
-//
-// 设计重点:
-//   1. InferenceResultMsg 是最高频的消息, 每帧每算法一条
-//      → 12路 × 25fps × 2算法 = 600条/秒
-//      → 结构必须紧凑, 避免不必要的字符串字段
-//   2. 扩展结果通过 result_json 透传 (JSON, 低频变更)
-//   3. 告警相关字段直接结构化 (高频查询/索引)
-//
-// 对应 Go 模型:
-//   InferenceResultMsg → SmartRecord + 告警判定
-//   StreamStatusMsg → InferTask.Status 更新
-//   AlgoLoadResultMsg → AlgorithmPackage.SelfCheckStatus 更新
-//   EngineMetricsMsg → system-status 监控面板
-
-namespace ipc;
+// C++ → Go 结果消息。
+// 每个 table 对应一种 SignalType，作为 IPCEnvelope.payload 的具体内容。
 
 include "common.fbs";
 
-// ============================================================
-// 1. 推理结果 (最高频, 每帧每算法一条)
-// ============================================================
+namespace aivision.ipc;
 
-// RecordType 记录类型 (与 Go model.SmartRecord.RecordType 对齐)
-enum RecordType : ubyte {
-  // 仅抓拍, 无命中规则
-  Capture     = 0,
-  // 目标识别 (人脸/人体/车辆等)
-  Recognition = 1,
-  // 告警 (越线/区域入侵等)
-  Alarm       = 2,
-}
-
-// InferenceResultMsg 单帧单算法的推理结果
-// 这是 IPC 通信中最高频的消息类型
-// 约束: 12路 × 25fps × 2算法 ≈ 600 条/秒
+/// 推理结果 (SignalType.InferenceResult)
 table InferenceResultMsg {
-  // ── 基础标识 ──
-  // 推理任务 ID (对应 InferTask.ID)
-  task_id:string;
-  // 算法名称
-  algo_name:string;
-  // 设备 ID (UUID)
-  device_id:string;
-
-  // ── 帧信息 ──
-  // 帧时间戳 (Unix 纳秒, 用于时序排序和延迟计算)
-  frame_ts:ulong;
-  // 帧宽度 (像素)
-  frame_width:int;
-  // 帧高度 (像素)
-  frame_height:int;
-
-  // ── 检测结果 ──
-  // 检测框列表 (0-N 个目标)
-  detections:[BoundingBox];
-
-  // ── 记录分类 ──
-  // 记录类型 (决定是否触发告警流程)
-  record_type:RecordType = Capture;
-
-  // ── 告警相关 (仅 record_type=Alarm 时有效) ──
-  // 告警类型标识 (如 "line_crossing", "intrusion", "loitering")
-  // 对应 Go SmartRecord.AlarmType
-  alarm_type:string;
-  // 告警级别
-  alarm_level:AlarmLevel = Info;
-  // 触发的越线/区域 ID 列表 (对应 LineRegions/ROIRegions 的索引)
-  triggered_ids:[string];
-
-  // ── 文件路径 (由 C++ 截图后填入) ──
-  // 全景截图路径 (对应 SmartRecord.SnapshotImageURL)
-  snapshot_path:string;
-  // 目标裁剪图路径 (对应 SmartRecord.TargetCropURL)
-  crop_path:string;
-  // 背景图路径 (对应 SmartRecord.BackgroundImageURL)
-  background_path:string;
-
-  // ── 扩展结果 ──
-  // 算法特定的扩展结果, JSON 序列化
-  // 用于存储非结构化的算法输出 (如人脸特征向量、姿态关键点等)
-  // 对应 Go SmartRecord.RawResult
-  result_json:string;
-
-  // ── 推理性能 (v1.1 新增) ──
-  // 推理耗时 (微秒)
-  infer_time_us:uint;
-  // 预处理耗时 (微秒)
-  preprocess_time_us:uint;
-  // 后处理耗时 (微秒)
-  postprocess_time_us:uint;
+    task_id: string (required);
+    algo_name: string;
+    device_id: string;
+    /// 帧时间戳 (Unix 纳秒)
+    frame_ts_ns: uint64;
+    frame_width: uint;
+    frame_height: uint;
+    /// 检测框列表
+    detections: [BoundingBoxInfo];
+    record_type: RecordType = Capture;
+    alarm_type: string;
+    alarm_level: string;
+    /// 触发的绊线 ID 列表
+    triggered_line_ids: [string];
+    snapshot_path: string;
+    crop_path: string;
+    background_path: string;
+    /// 推理结果 JSON (透传)
+    result_json: string;
+    /// 推理耗时 (微秒)
+    infer_time_us: uint;
 }
 
-// ============================================================
-// 2. 流状态变更
-// ============================================================
-
-// StreamStatusMsg 流状态变更通知
-// 当流的状态发生转换时, C++ 侧主动上报
-table StreamStatusMsg {
-  // 推理任务 ID
-  task_id:string;
-  // 新状态
-  status:StreamStatus;
-  // 错误码 (仅 Failed/Reconnecting 时有效)
-  error_code:ErrorCode = None;
-  // 错误详情 (人可读, 用于日志和前端展示)
-  error_message:string;
-  // 已重连次数 (仅 Reconnecting 时有效)
-  reconnect_count:int = 0;
-  // 最大重连次数
-  max_reconnects:int = 3;
-  // 状态变更时间戳 (Unix 纳秒)
-  timestamp_ns:ulong;
+/// 流状态上报 (SignalType.StreamStatusReport)
+table StreamStatusReportMsg {
+    task_id: string (required);
+    status: StreamStatus;
+    error_code: string;
+    error_message: string;
+    reconnect_count: uint = 0;
+    max_reconnects: uint = 0;
 }
 
-// ============================================================
-// 3. 算法加载结果
-// ============================================================
-
-// SelfCheckStatus 自检状态 (与 Go model.SelfCheckStatus 对齐)
-enum SelfCheckStatus : ubyte {
-  Pending = 0,
-  Running = 1,
-  Passed  = 2,
-  Failed  = 3,
-}
-
-// AlgoLoadResultMsg 算法库加载结果
-// 响应 Go 侧的 LoadAlgoCmd
+/// 算法加载/热更新结果 (SignalType.AlgoLoadResult)
 table AlgoLoadResultMsg {
-  // 推理任务 ID
-  task_id:string;
-  // 算法名称
-  algo_name:string;
-  // 算法版本
-  algo_version:string;
-  // 算法包 ID (UUID)
-  package_id:string;
-  // 加载是否成功
-  success:bool;
-  // 自检状态
-  self_check:SelfCheckStatus = Pending;
-  // 错误码 (success=false 时有效)
-  error_code:ErrorCode = None;
-  // 错误详情
-  error_message:string;
-  // 加载耗时 (毫秒)
-  load_time_ms:uint;
-  // NPU 内存占用 (字节, 加载后)
-  npu_memory_bytes:ulong;
-  // 关联的请求序列号 (对应 LoadAlgoCmd 的 sequence_id)
-  request_sequence_id:uint;
+    task_id: string (required);
+    algo_name: string;
+    algo_version: string;
+    package_id: string;
+    /// 加载是否成功
+    success: bool = false;
+    self_check_status: SelfCheckStatus;
+    error_code: string;
+    error_message: string;
+    /// 加载耗时 (毫秒)
+    load_time_ms: uint = 0;
+    /// 模型占用的 NPU 内存 (字节)
+    npu_memory_bytes: uint64 = 0;
 }
 
-// ============================================================
-// 4. 引擎运行指标
-// ============================================================
-
-// StreamMetrics 单流指标
+/// 单流指标快照
 table StreamMetrics {
-  // 推理任务 ID
-  task_id:string;
-  // 队列当前深度 (0-5, 最大容量 5)
-  queue_depth:ushort;
-  // 队列满载挤出次数 (累计)
-  evict_count:uint;
-  // 最近一次推理延迟 (微秒)
-  last_infer_latency_us:uint;
-  // 平均推理延迟 (微秒, 最近 100 帧)
-  avg_infer_latency_us:uint;
-  // P95 推理延迟 (微秒, 最近 100 帧)
-  p95_infer_latency_us:uint;
-  // 帧计数 (累计)
-  frame_count:ulong;
-  // 最后一帧时间戳
-  last_frame_ts:ulong;
+    task_id: string (required);
+    /// 当前队列深度 (0-5)
+    queue_depth: uint8;
+    /// 累计挤出帧数
+    evict_count: uint;
+    /// 最近一次推理耗时 (微秒)
+    last_infer_latency_us: uint;
+    /// 平均推理耗时 (微秒)
+    avg_infer_latency_us: uint;
+    /// P95 推理耗时 (微秒)
+    p95_infer_latency_us: uint;
+    /// 累计处理帧数
+    frame_count: uint64;
+    /// 最后一帧时间戳 (Unix 纳秒)
+    last_frame_ts_ns: uint64;
 }
 
-// EngineMetricsMsg 引擎全局指标
-// 周期性上报 (建议 5 秒间隔)
+/// 引擎全局指标 (SignalType.EngineMetrics)
+/// C++ MetricsReporter 每 5 秒主动推送
 table EngineMetricsMsg {
-  // 各流的指标
-  streams:[StreamMetrics];
-  // 活跃流数
-  active_stream_count:uint;
-  // DMA Buffer 池使用量 (字节)
-  dma_pool_used_bytes:ulong;
-  // DMA Buffer 池总量 (字节)
-  dma_pool_total_bytes:ulong;
-  // NPU 总内存使用量 (字节)
-  npu_memory_used_bytes:ulong;
-  // NPU 总内存容量 (字节)
-  npu_memory_total_bytes:ulong;
-  // Worker 线程数
-  worker_count:uint;
-  // 空闲 Worker 数
-  idle_worker_count:uint;
-  // 指标采集时间戳 (Unix 纳秒)
-  timestamp_ns:ulong;
+    /// 各流指标快照
+    streams: [StreamMetrics];
+    /// 活跃流数
+    active_stream_count: uint;
+    /// DMA 已用字节
+    dma_used_bytes: uint64;
+    /// DMA 总容量
+    dma_total_bytes: uint64;
+    /// NPU 已用字节
+    npu_used_bytes: uint64;
+    /// NPU 总容量
+    npu_total_bytes: uint64;
+    /// Worker 总数
+    worker_count: uint;
+    /// 空闲 Worker 数
+    idle_worker_count: uint;
+    /// 时间戳 (Unix 纳秒)
+    timestamp_ns: uint64;
 }
 
-// ============================================================
-// 5. Worker 状态 (v1.1 新增)
-// ============================================================
-
-// WorkerStatusMsg 单个 Worker 的状态
-// 用于诊断 Worker 卡死或异常
-table WorkerStatusMsg {
-  // Worker 线程 ID (系统级)
-  worker_tid:int;
-  // 当前正在处理的任务 ID (空闲时为空)
-  current_task_id:string;
-  // 当前正在处理的算法名称
-  current_algo:string;
-  // 状态: "idle" | "preprocessing" | "inferencing" | "postprocessing"
-  state:string;
-  // 当前任务已耗时 (微秒)
-  current_task_elapsed_us:uint;
-  // 上一次任务完成时间戳
-  last_task_ts:ulong;
-}
-
-// ============================================================
-// 6. 心跳响应
-// ============================================================
-
-// HeartbeatAckMsg 心跳响应
+/// 心跳回复 (SignalType.HeartbeatAck)
 table HeartbeatAckMsg {
-  // 响应方标识
-  sender:string;
-  // 响应方状态摘要 (JSON)
-  status_json:string;
-  // 响应时间戳 (Unix 纳秒)
-  timestamp_ns:ulong;
+    sequence: uint64;
+    /// 引擎运行时长 (秒)
+    uptime_sec: uint64;
 }
+
+/// 错误消息 (SignalType.Error)
+table ErrorMsg {
+    error_code: string;
+    error_message: string;
+    /// 关联的任务 ID (如有)
+    task_id: string;
+}
+
+/// 流状态响应 (SignalType.StreamStatusRsp)
+table StreamStatusRspMsg {
+    device_id: string (required);
+    is_running: bool;
+    active_stages: [string];
+    queue_size: uint;
+    queue_capacity: uint;
+    playback_url: string;
+}
+
+root_type InferenceResultMsg;
+root_type StreamStatusReportMsg;
+root_type AlgoLoadResultMsg;
+root_type EngineMetricsMsg;
+root_type HeartbeatAckMsg;
+root_type ErrorMsg;
+root_type StreamStatusRspMsg;

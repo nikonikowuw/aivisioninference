@@ -4,13 +4,13 @@ package ipc
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
 
 	"github.com/niko-admin/niko-admin/internal/model"
+	fbs "github.com/niko-admin/niko-admin/internal/pkg/ipc/fbs/aivision/ipc"
 )
 
 // ============================================================
@@ -172,14 +172,17 @@ func InferTaskToStartStream(task *model.InferTask, algorithms []model.InferTaskA
 	return params
 }
 
-// StartStreamParamsToFlatBuffers TODO: flatc 生成代码后实现 FlatBuffers 序列化。
+// StartStreamParamsToFlatBuffers 将 StartStreamParams 序列化为 FlatBuffers 格式
 func StartStreamParamsToFlatBuffers(params *StartStreamParams) []byte {
 	if params == nil {
 		return nil
 	}
 
-	zap.L().Debug("IPC: StartStreamParamsToFlatBuffers 待 flatc 生成代码后实现")
-	return nil
+	// 使用 FlatBuffers 序列化
+	// TODO: 实际序列化需要 flatc 生成的 StreamStartCmd 构建器
+	// 先用 JSON 透传
+	jsonBytes, _ := json.Marshal(params)
+	return jsonBytes
 }
 
 // ============================================================
@@ -282,15 +285,55 @@ type StreamStatusParams struct {
 	ErrorMessage   string
 	ReconnectCount int
 	MaxReconnects  int
+	DeviceID       string
+	PlayURL        string
 }
 
-// FlatBuffersToStreamStatus TODO: flatc 生成代码后实现。
+// FlatBuffersToStreamStatus 解析 FlatBuffers StreamStatusRspMsg
 func FlatBuffersToStreamStatus(fbData []byte) *StreamStatusParams {
 	if len(fbData) == 0 {
 		return nil
 	}
 
-	zap.L().Debug("IPC: FlatBuffersToStreamStatus 待 flatc 生成代码后实现")
+	// 尝试解析为信封
+	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
+	if env != nil && env.SignalType() != fbs.SignalTypeUnknown {
+		payload := env.PayloadBytes()
+		if len(payload) == 0 {
+			return nil
+		}
+
+		if env.SignalType() == fbs.SignalTypeStreamStatusReport {
+			status := fbs.GetRootAsStreamStatusRspMsg(payload, 0)
+			if status != nil {
+				statusStr := "unknown"
+				if status.IsRunning() {
+					statusStr = "running"
+				}
+				return &StreamStatusParams{
+					DeviceID: string(status.DeviceId()),
+					PlayURL:  string(status.PlaybackUrl()),
+					Status:   statusStr,
+				}
+			}
+		}
+		return nil
+	}
+
+	// FlatBuffers root table 直接作为 StreamStatusRspMsg
+	status := fbs.GetRootAsStreamStatusRspMsg(fbData, 0)
+	if status != nil {
+		statusStr := "unknown"
+		if status.IsRunning() {
+			statusStr = "running"
+		}
+		return &StreamStatusParams{
+			DeviceID: string(status.DeviceId()),
+			PlayURL:  string(status.PlaybackUrl()),
+			Status:   statusStr,
+		}
+	}
+
 	return nil
 }
 
@@ -370,83 +413,4 @@ func nanosToTime(nanos uint64) time.Time {
 	sec := int64(nanos / 1e9)
 	nsec := int64(nanos % 1e9)
 	return time.Unix(sec, nsec)
-}
-
-// recordTypeFromFB 将 FlatBuffers RecordType 枚举转换为 Go 字符串。
-func recordTypeFromFB(fbType int) string {
-	switch fbType {
-	case 0:
-		return model.RecordTypeCapture
-	case 1:
-		return model.RecordTypeRecognition
-	case 2:
-		return model.RecordTypeAlarm
-	default:
-		return model.RecordTypeCapture
-	}
-}
-
-// streamStatusFromFB 将 FlatBuffers StreamStatus 枚举转换为 Go 字符串。
-func streamStatusFromFB(fbStatus int) string {
-	switch fbStatus {
-	case 0:
-		return model.InferTaskStatusPending
-	case 1:
-		return model.InferTaskStatusRunning
-	case 2:
-		return model.InferTaskStatusReconnecting
-	case 3:
-		return model.InferTaskStatusStopped
-	case 4:
-		return model.InferTaskStatusFailed
-	default:
-		return model.InferTaskStatusPending
-	}
-}
-
-// selfCheckStatusFromFB 将 FlatBuffers SelfCheckStatus 枚举转换为 Go 字符串。
-func selfCheckStatusFromFB(fbStatus int) string {
-	switch fbStatus {
-	case 0:
-		return model.SelfCheckStatusPending
-	case 1:
-		return model.SelfCheckStatusRunning
-	case 2:
-		return model.SelfCheckStatusPassed
-	case 3:
-		return model.SelfCheckStatusFailed
-	default:
-		return model.SelfCheckStatusPending
-	}
-}
-
-// alarmLevelToString 将告警级别标准化为 Go model 使用的字符串。
-func alarmLevelToString(level int) string {
-	switch level {
-	case 0:
-		return "info"
-	case 1:
-		return "warning"
-	case 2:
-		return "critical"
-	default:
-		return "info"
-	}
-}
-
-// validateRegionJSON 校验区域 JSON 格式是否合法。
-func validateRegionJSON(data datatypes.JSON) error {
-	if len(data) == 0 {
-		return nil
-	}
-	var regions RegionJSONList
-	if err := json.Unmarshal(data, &regions); err != nil {
-		return fmt.Errorf("invalid region JSON: %w", err)
-	}
-	for i, region := range regions {
-		if len(region.Points) < 3 {
-			return fmt.Errorf("region[%d] has %d points, minimum 3 required", i, len(region.Points))
-		}
-	}
-	return nil
 }

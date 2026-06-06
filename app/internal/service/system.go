@@ -11,6 +11,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/buildinfo"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -27,9 +28,10 @@ type SystemService struct {
 	rdb              *redis.Client
 	version          string
 	metricsCollector *MetricsCollector
-	npuCollector     NPUCollector
-	serviceDetector  *ServiceStatusDetector
-	historyBuffer    *HistoryBuffer
+	npuCollector         NPUCollector
+	serviceDetector      *ServiceStatusDetector
+	historyBuffer        *HistoryBuffer
+	engineMetricsStore   *EngineMetricsStore
 
 	// 缓存实时指标
 	mu            sync.RWMutex
@@ -67,6 +69,27 @@ func NewSystemService(
 	s.startMetricsLoop(ctx, 2*time.Second)
 
 	return s
+}
+
+// SetEngineMetricsStore 设置引擎指标存储（启动后注入）
+func (s *SystemService) SetEngineMetricsStore(store *EngineMetricsStore) {
+	s.engineMetricsStore = store
+}
+
+// GetEngineStatus 获取引擎全局指标
+func (s *SystemService) GetEngineStatus() *EngineMetricsSummary {
+	if s.engineMetricsStore == nil {
+		return nil
+	}
+	return s.engineMetricsStore.GetSummary()
+}
+
+// GetStreamsStatus 获取各流推理指标
+func (s *SystemService) GetStreamsStatus() []ipc.StreamMetricsSnapshot {
+	if s.engineMetricsStore == nil {
+		return nil
+	}
+	return s.engineMetricsStore.GetAllStreamMetrics()
 }
 
 // Close 停止采集协程，实现优雅关闭
@@ -205,7 +228,7 @@ func (s *SystemService) resolveDeviceModel() string {
 				return v
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			// DB 错误仅记录，不中断（降级到硬件检测）
+			zap.L().Warn("query device_model config failed", zap.Error(err))
 		}
 	}
 

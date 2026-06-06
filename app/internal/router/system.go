@@ -46,6 +46,8 @@ func (r *SystemRouter) RegisterRoutes(router *gin.RouterGroup) {
 		status.GET("/realtime", r.systemHandler.GetRealtimeStatus)
 		status.GET("/resources", r.systemHandler.GetResourceStatus)
 		status.GET("/services", r.systemHandler.GetServiceStatus)
+		status.GET("/engine", r.systemHandler.GetEngineStatus)
+		status.GET("/streams", r.systemHandler.GetStreamsStatus)
 		status.GET("/history", r.systemHandler.GetStatusHistory)
 	}
 

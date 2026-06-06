@@ -62,9 +62,11 @@ type Device struct {
 	LastOfflineAt     *time.Time `json:"last_offline_at,omitempty"`
 	LastErrorCode     string  `gorm:"type:varchar(64)" json:"last_error_code,omitempty"`
 	LastErrorMessage  string  `gorm:"type:text" json:"last_error_message,omitempty"`
-	ExternalKey       string  `gorm:"type:varchar(128);uniqueIndex" json:"external_key,omitempty"`
+	ExternalKey       *string `gorm:"type:varchar(128);uniqueIndex" json:"external_key,omitempty"`
 	Remark            string  `gorm:"type:text" json:"remark,omitempty"`
 	Version           int     `gorm:"default:1" json:"version"`
+	AutoInfer         bool    `gorm:"default:false" json:"auto_infer"`
+	ParentNvrID       *string `gorm:"type:uuid;index" json:"parent_nvr_id,omitempty"`
 	Groups            []DeviceGroup  `gorm:"many2many:device_group_members;" json:"groups,omitempty"`
 }
 

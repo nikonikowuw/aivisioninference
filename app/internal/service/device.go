@@ -33,6 +33,7 @@ type deviceRepo interface {
 	BatchDelete(ctx context.Context, ids []string) error
 	ListByGroupID(ctx context.Context, groupID string) ([]model.Device, error)
 	ReplaceGroups(ctx context.Context, deviceID string, groupIDs []string) error
+	FindByExternalKey(ctx context.Context, key string) (*model.Device, error)
 }
 
 // zlmClient ZLM API 客户端接口
@@ -66,19 +67,21 @@ type taskClient interface {
 
 // DeviceService 处理设备管理的业务逻辑
 type DeviceService struct {
-	deviceRepo deviceRepo
-	cache      cache
-	taskClient taskClient
-	zlmClient  zlmClient
+	deviceRepo    deviceRepo
+	cache         cache
+	taskClient    taskClient
+	zlmClient     zlmClient
+	streamManager *StreamManager
 }
 
 // NewDeviceService 创建并返回一个新的 DeviceService 实例
-func NewDeviceService(repo deviceRepo, cache cache, taskClient taskClient, zlmClient zlmClient) *DeviceService {
+func NewDeviceService(repo deviceRepo, cache cache, taskClient taskClient, zlmClient zlmClient, streamManager *StreamManager) *DeviceService {
 	return &DeviceService{
-		deviceRepo: repo,
-		cache:      cache,
-		taskClient: taskClient,
-		zlmClient:  zlmClient,
+		deviceRepo:    repo,
+		cache:         cache,
+		taskClient:    taskClient,
+		zlmClient:     zlmClient,
+		streamManager: streamManager,
 	}
 }
 
@@ -152,10 +155,12 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 	switch req.AccessType {
 	case "rtsp":
 		if req.RtspURL != "" {
-			item.ExternalKey = "rtsp:" + req.RtspURL
+			key := "rtsp:" + req.RtspURL
+			item.ExternalKey = &key
 		}
 	case "gb28181":
-		item.ExternalKey = "gb28181:" + req.GB28181DeviceID + ":" + req.GB28181ChannelID
+		key := "gb28181:" + req.GB28181DeviceID + ":" + req.GB28181ChannelID
+		item.ExternalKey = &key
 	}
 
 	// 密码加密
@@ -213,17 +218,37 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 	}
 
 	// 更新可编辑字段
-	if req.AccessType != "" {
+	accessChanged := false
+	if req.AccessType != "" && req.AccessType != item.AccessType {
 		item.AccessType = req.AccessType
+		accessChanged = true
 	}
-	if req.RtspURL != "" {
+	if req.RtspURL != "" && req.RtspURL != item.RtspURL {
 		item.RtspURL = req.RtspURL
+		accessChanged = true
 	}
-	if req.GB28181DeviceID != "" {
+	if req.GB28181DeviceID != "" && req.GB28181DeviceID != item.GB28181DeviceID {
 		item.GB28181DeviceID = req.GB28181DeviceID
+		accessChanged = true
 	}
-	if req.GB28181ChannelID != "" {
+	if req.GB28181ChannelID != "" && req.GB28181ChannelID != item.GB28181ChannelID {
 		item.GB28181ChannelID = req.GB28181ChannelID
+		accessChanged = true
+	}
+
+	if accessChanged {
+		// 重新生成 ExternalKey
+		item.ExternalKey = nil // 先置空，再根据类型生成
+		switch item.AccessType {
+		case model.DeviceAccessTypeRTSP:
+			if item.RtspURL != "" {
+				key := "rtsp:" + item.RtspURL
+				item.ExternalKey = &key
+			}
+		case model.DeviceAccessTypeGB28181:
+			key := "gb28181:" + item.GB28181DeviceID + ":" + item.GB28181ChannelID
+			item.ExternalKey = &key
+		}
 	}
 	if req.Username != "" {
 		item.Username = req.Username
@@ -350,26 +375,26 @@ func (s *DeviceService) BatchDelete(ctx context.Context, ids []string) *dto.Batc
 
 // TestConnection 测试设备连接，进行真实的流可达性探测并更新设备状态
 func (s *DeviceService) TestConnection(ctx context.Context, id string) (*dto.DeviceTestResultResponse, error) {
-	item, err := s.deviceRepo.FindByID(ctx, id)
+	_, err := s.deviceRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrNotFound, "设备不存在")
 	}
 
 	now := time.Now().Format(time.RFC3339)
-	testStreamKey := fmt.Sprintf("test_%s_%d", id, time.Now().UnixMilli())
 
-	var testSuccess bool
-	var testMessage string
-
-	switch item.AccessType {
-	case "rtsp":
-		testSuccess, testMessage = s.testRTSPConnection(ctx, item, testStreamKey)
-	case "gb28181":
-		testSuccess, testMessage = s.testGB28181Connection(ctx, item)
-	default:
-		testSuccess = true
-		testMessage = fmt.Sprintf("接入类型 '%s' 暂不支持自动测试", item.AccessType)
+	// 使用 StreamManager 进行连接探测（Acquire reason="detect"）
+	err = s.streamManager.Acquire(ctx, id, "detect", nil)
+	
+	testSuccess := err == nil
+	testMessage := "测试连接成功，流可达"
+	if err != nil {
+		testMessage = fmt.Sprintf("连接失败: %v", err)
 	}
+
+	// 探测完成后立即释放
+	defer func() {
+		_ = s.streamManager.Release(ctx, id, "detect")
+	}()
 
 	// 根据测试结果更新设备状态
 	newStatus := model.DeviceStatusOffline
@@ -392,98 +417,14 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string) (*dto.Dev
 	_ = s.cache.Set(ctx, s.getStatusCacheKey(id), statusData, 24*time.Hour)
 
 	return &dto.DeviceTestResultResponse{
-		Success: testSuccess,
-		Message: testMessage,
+		Success:  testSuccess,
+		Message:  testMessage,
 		TestedAt: now,
 	}, nil
 }
 
-// testRTSPConnection 测试 RTSP 流连接，通过 ZLM 拉流验证可达性
-func (s *DeviceService) testRTSPConnection(ctx context.Context, item *model.Device, testStreamKey string) (bool, string) {
-	if item.RtspURL == "" {
-		return false, "RTSP URL 为空"
-	}
-	if !strings.HasPrefix(strings.ToLower(item.RtspURL), "rtsp://") {
-		return false, "RTSP URL 格式无效，必须以 rtsp:// 开头"
-	}
+// 移除不再需要的 testRTSPConnection 和 testGB28181Connection 方法（逻辑已整合到 SM 或不需要了）
 
-	// 1. 通过 ZLM 添加代理拉流
-	_, err := s.zlmClient.AddStreamProxy(ctx, zlm.AddStreamProxyRequest{
-		Vhost:      "__defaultVhost__",
-		App:        "live",
-		Stream:     testStreamKey,
-		URL:        item.RtspURL,
-		RetryCount: 0,
-		RtpType:    0, // TCP
-		TimeoutSec: 10,
-		EnableHls:  0,
-		EnableMp4:  0,
-		EnableRtsp: 1,
-		EnableRtmp: 0,
-		EnableTs:   0,
-		EnableFmp4: 0,
-	})
-	if err != nil {
-		zap.L().Warn("RTSP test: addStreamProxy failed",
-			zap.String("device_id", item.ID),
-			zap.String("url", item.RtspURL),
-			zap.Error(err),
-		)
-		return false, fmt.Sprintf("无法连接到 RTSP 流: %v", err)
-	}
-
-	// 确保测试完成后关闭测试流
-	defer func() {
-		_ = s.zlmClient.CloseStream(ctx, zlm.CloseStreamRequest{
-			Vhost:  "__defaultVhost__",
-			App:    "live",
-			Stream: testStreamKey,
-			Force:  1,
-		})
-	}()
-
-	// 2. 等待一小段时间让流稳定
-	time.Sleep(2 * time.Second)
-
-	// 3. 检查流是否在线
-	online, err := s.zlmClient.IsMediaOnline(ctx, "rtsp", "__defaultVhost__", "live", testStreamKey)
-	if err != nil {
-		zap.L().Warn("RTSP test: isMediaOnline failed",
-			zap.String("device_id", item.ID),
-			zap.Error(err),
-		)
-		return false, fmt.Sprintf("检查流状态失败: %v", err)
-	}
-
-	if !online {
-		return false, "RTSP 流连接失败，流未上线"
-	}
-
-	zap.L().Info("RTSP test: connection successful",
-		zap.String("device_id", item.ID),
-		zap.String("url", item.RtspURL),
-	)
-	return true, "测试连接成功，RTSP 流可达"
-}
-
-// testGB28181Connection 测试 GB28181 设备连接状态
-func (s *DeviceService) testGB28181Connection(ctx context.Context, item *model.Device) (bool, string) {
-	if item.GB28181DeviceID == "" {
-		return false, "GB28181 设备编码为空"
-	}
-
-	// GB28181 设备连接状态基于最近的心跳/注册时间
-	// 如果设备最近有心跳（5 分钟内），则认为在线
-	if item.LastOnlineAt != nil {
-		timeSinceLastOnline := time.Since(*item.LastOnlineAt)
-		if timeSinceLastOnline < 5*time.Minute {
-			return true, fmt.Sprintf("测试连接成功，设备在线（最后在线: %v 前）", timeSinceLastOnline.Round(time.Second))
-		}
-		return false, fmt.Sprintf("设备离线（最后在线: %v 前）", timeSinceLastOnline.Round(time.Second))
-	}
-
-	return false, "设备从未在线，请检查设备是否已注册"
-}
 
 // ExportCSV 导出设备列表为 CSV
 func (s *DeviceService) ExportCSV(ctx context.Context, req dto.DeviceListRequest) ([]byte, error) {
@@ -574,20 +515,20 @@ func (s *DeviceService) ImportCSV(ctx context.Context, reader io.Reader, lang st
 		}
 
 		exists, err := s.deviceRepo.ExistsByName(ctx, deviceName, "")
-		if err != nil || exists {
-			if err != nil {
-				result.Failed++
-				result.Items = append(result.Items, dto.BatchItemResult{
-					Message: fmt.Sprintf("第 %d 行: 校验失败", lineNum),
-					Success: false, Code: apperrors.ErrInternal,
-				})
-			} else {
-				result.Failed++
-				result.Items = append(result.Items, dto.BatchItemResult{
-					Message: fmt.Sprintf("第 %d 行: 设备名称已存在", lineNum),
-					Success: false, Code: apperrors.ErrBadRequest,
-				})
-			}
+		if err != nil {
+			result.Failed++
+			result.Items = append(result.Items, dto.BatchItemResult{
+				Message: fmt.Sprintf("第 %d 行: 校验失败", lineNum),
+				Success: false, Code: apperrors.ErrInternal,
+			})
+			continue
+		}
+		if exists {
+			result.Failed++
+			result.Items = append(result.Items, dto.BatchItemResult{
+				Message: fmt.Sprintf("第 %d 行: 设备名称已存在", lineNum),
+				Success: false, Code: apperrors.ErrBadRequest,
+			})
 			continue
 		}
 
@@ -632,6 +573,20 @@ func (s *DeviceService) ImportCSV(ctx context.Context, reader io.Reader, lang st
 			Status:          model.DeviceStatusUnknown,
 			Enabled:         true,
 			Remark:          createReq.Remark,
+		}
+
+		// 设置 ExternalKey 用于唯一约束去重
+		switch item.AccessType {
+		case model.DeviceAccessTypeRTSP:
+			if item.RtspURL != "" {
+				key := "rtsp:" + item.RtspURL
+				item.ExternalKey = &key
+			}
+		case model.DeviceAccessTypeGB28181:
+			if item.GB28181DeviceID != "" {
+				key := "gb28181:" + item.GB28181DeviceID + ":" + item.GB28181ChannelID
+				item.ExternalKey = &key
+			}
 		}
 
 		if err := s.deviceRepo.Create(ctx, item); err != nil {
@@ -789,10 +744,13 @@ func toDeviceResponse(item *model.Device) *dto.DeviceResponse {
 		LocationDesc:     item.LocationDesc,
 		LastErrorCode:    item.LastErrorCode,
 		LastErrorMessage: item.LastErrorMessage,
-		ExternalKey:      item.ExternalKey,
 		Remark:           item.Remark,
 		Version:          item.Version,
 		CreatedBy:        item.CreatedBy,
+	}
+
+	if item.ExternalKey != nil {
+		resp.ExternalKey = *item.ExternalKey
 	}
 
 	if item.LastOnlineAt != nil {

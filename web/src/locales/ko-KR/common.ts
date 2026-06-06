@@ -119,6 +119,8 @@ export const common = {
     security: "보안 설정",
     displayNamePlaceholder: "표시 이름을 입력하세요",
     emailPlaceholder: "이메일 주소를 입력하세요",
+    showPassword: "비밀번호 표시",
+    hidePassword: "비밀번호 숨기기",
   },
   pagination: {
     pageOf: "{{page}} / {{totalPages}} 페이지",
@@ -188,6 +190,12 @@ export const common = {
       inactive: "비활성",
     },
   },
+  actions: "작업",
+  edit: "편집",
+  delete: "삭제",
+  cancel: "취소",
+  save: "저장",
+  minutes: "분",
 } as const;
 
 export default common;

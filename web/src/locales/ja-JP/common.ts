@@ -121,6 +121,8 @@ export const common = {
     security: "セキュリティ設定",
     displayNamePlaceholder: "表示名を入力してください",
     emailPlaceholder: "メールアドレスを入力してください",
+    showPassword: "パスワードを表示",
+    hidePassword: "パスワードを隠す",
   },
   pagination: {
     pageOf: "{{page}} / {{totalPages}} ページ",
@@ -190,6 +192,12 @@ export const common = {
       inactive: "無効",
     },
   },
+  actions: "操作",
+  edit: "編集",
+  delete: "削除",
+  cancel: "キャンセル",
+  save: "保存",
+  minutes: "分",
 } as const;
 
 export default common;

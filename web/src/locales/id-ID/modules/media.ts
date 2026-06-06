@@ -38,4 +38,8 @@ export default {
   accessType: "Jenis Akses",
   manufacturer: "Pabrikan",
   operations: "Aksi",
+  layoutChannels: "{{count}} Tampilan",
+  refresh: "Segarkan",
+  addDeviceHint: "Tambahkan perangkat sementara (masukkan ID perangkat asli)",
+  loadFailed: "Gagal memuat",
 } as const;

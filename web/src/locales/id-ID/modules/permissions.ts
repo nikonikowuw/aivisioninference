@@ -152,6 +152,21 @@ export const permissions = {
       start: "Mulai Rekam",
       stop: "Hentikan Rekam",
     },
+    system: {
+      "time-view": "Lihat Waktu Sistem",
+      "time-update": "Atur Waktu Sistem",
+      "ntp-update": "Konfigurasi Server NTP",
+      "status-view": "Lihat Status Sistem",
+      "network-view": "Lihat Konfigurasi Jaringan",
+      "network-update": "Perbarui Konfigurasi Jaringan",
+      "webhook-view": "Lihat Webhook",
+      "webhook-create": "Buat Webhook",
+      "webhook-delete": "Hapus Webhook",
+      "webhook-test": "Uji Webhook",
+      "storage-view": "Lihat Konfigurasi Penyimpanan",
+      "storage-update": "Perbarui Konfigurasi Penyimpanan",
+      "storage-cleanup": "Jalankan Pembersihan Manual",
+    },
   },
 } as const;
 

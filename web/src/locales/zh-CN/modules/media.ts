@@ -38,4 +38,8 @@ export default {
   accessType: "接入类型",
   manufacturer: "制造商",
   operations: "操作",
+  layoutChannels: "{{count}}路",
+  refresh: "刷新",
+  addDeviceHint: "添加临时设备（请输入真实设备ID）",
+  loadFailed: "加载失败",
 } as const;

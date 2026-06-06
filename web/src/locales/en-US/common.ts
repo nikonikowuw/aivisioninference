@@ -121,6 +121,8 @@ export const common = {
     security: "Security Settings",
     displayNamePlaceholder: "Enter your display name",
     emailPlaceholder: "Enter your email address",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
   },
   pagination: {
     pageOf: "Page {{page}} / {{totalPages}}",
@@ -146,7 +148,7 @@ export const common = {
   date: {
     format: {
       date: "MMM d, yyyy",
-      datetime: "MMM d, yyyy HH:mm",
+      datetime: "yyyy-MM-dd HH:mm:ss",
       time: "HH:mm",
     },
     today: "Today",
@@ -196,6 +198,12 @@ export const common = {
       inactive: "Inactive",
     },
   },
+  actions: "Actions",
+  edit: "Edit",
+  delete: "Delete",
+  cancel: "Cancel",
+  save: "Save",
+  minutes: "minutes",
 } as const;
 
 export default common;

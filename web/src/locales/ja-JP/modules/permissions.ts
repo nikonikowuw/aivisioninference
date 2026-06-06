@@ -151,6 +151,21 @@ export const permissions = {
       start: "録画開始",
       stop: "録画停止",
     },
+    system: {
+      "time-view": "システム時刻を表示",
+      "time-update": "システム時刻を設定",
+      "ntp-update": "NTPサーバーを設定",
+      "status-view": "システムステータスを表示",
+      "network-view": "ネットワーク設定を表示",
+      "network-update": "ネットワーク設定を更新",
+      "webhook-view": "Webhookを表示",
+      "webhook-create": "Webhookを作成",
+      "webhook-delete": "Webhookを削除",
+      "webhook-test": "Webhookをテスト",
+      "storage-view": "ストレージ設定を表示",
+      "storage-update": "ストレージ設定を更新",
+      "storage-cleanup": "手動クリーンアップを実行",
+    },
   },
 } as const;
 

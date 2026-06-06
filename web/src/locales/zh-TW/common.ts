@@ -119,6 +119,8 @@ export const common = {
     security: "安全設定",
     displayNamePlaceholder: "請輸入顯示名稱",
     emailPlaceholder: "請輸入電子郵件",
+    showPassword: "顯示密碼",
+    hidePassword: "隱藏密碼",
   },
   pagination: {
     pageOf: "第 {{page}} / {{totalPages}} 頁",
@@ -188,6 +190,12 @@ export const common = {
       inactive: "禁用",
     },
   },
+  actions: "操作",
+  edit: "編輯",
+  delete: "刪除",
+  cancel: "取消",
+  save: "儲存",
+  minutes: "分鐘",
 } as const;
 
 export default common;

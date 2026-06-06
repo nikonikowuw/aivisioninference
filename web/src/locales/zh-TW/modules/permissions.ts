@@ -151,6 +151,21 @@ export const permissions = {
       start: "開始錄影",
       stop: "停止錄影",
     },
+    system: {
+      "time-view": "查看系統時間",
+      "time-update": "設置系統時間",
+      "ntp-update": "設置NTP伺服器",
+      "status-view": "查看系統狀態",
+      "network-view": "查看網路配置",
+      "network-update": "更新網路配置",
+      "webhook-view": "查看Webhook",
+      "webhook-create": "創建Webhook",
+      "webhook-delete": "刪除Webhook",
+      "webhook-test": "測試Webhook",
+      "storage-view": "查看儲存配置",
+      "storage-update": "更新儲存配置",
+      "storage-cleanup": "執行手動清理",
+    },
   },
 } as const;
 

@@ -17,6 +17,7 @@ export const menu = {
   "brand-config": "Brand Config",
   "mail-config": "Mail Config",
   "feedback": "Feedback",
+  "system-config": "System Config",
 } as const;
 
 export default menu;

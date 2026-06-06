@@ -152,6 +152,21 @@ export const permissions = {
       start: "Start Recording",
       stop: "Stop Recording",
     },
+    system: {
+      "time-view": "View System Time",
+      "time-update": "Set System Time",
+      "ntp-update": "Configure NTP Servers",
+      "status-view": "View System Status",
+      "network-view": "View Network Config",
+      "network-update": "Update Network Config",
+      "webhook-view": "View Webhooks",
+      "webhook-create": "Create Webhook",
+      "webhook-delete": "Delete Webhook",
+      "webhook-test": "Test Webhook",
+      "storage-view": "View Storage Config",
+      "storage-update": "Update Storage Config",
+      "storage-cleanup": "Run Manual Cleanup",
+    },
   },
 } as const;
 

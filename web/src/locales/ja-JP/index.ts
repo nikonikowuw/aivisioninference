@@ -14,6 +14,7 @@ import { tasks } from "./modules/tasks";
 import { users } from "./modules/users";
 import { devices } from "./modules/devices";
 import media from "./modules/media";
+import system from "./modules/system";
 
 export default {
   common,
@@ -32,4 +33,5 @@ export default {
   "modules/feedback": feedback,
   "modules/devices": devices,
   "modules/media": media,
+  "modules/system": system,
 };

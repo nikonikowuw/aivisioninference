@@ -123,6 +123,8 @@ export const common = {
     security: "Pengaturan Keamanan",
     displayNamePlaceholder: "Masukkan nama tampilan Anda",
     emailPlaceholder: "Masukkan alamat email Anda",
+    showPassword: "Tampilkan kata sandi",
+    hidePassword: "Sembunyikan kata sandi",
   },
   pagination: {
     pageOf: "Halaman {{page}} / {{totalPages}}",
@@ -192,6 +194,12 @@ export const common = {
       inactive: "Tidak Aktif",
     },
   },
+  actions: "Aksi",
+  edit: "Edit",
+  delete: "Hapus",
+  cancel: "Batal",
+  save: "Simpan",
+  minutes: "menit",
 } as const;
 
 export default common;

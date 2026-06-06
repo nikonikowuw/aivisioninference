@@ -38,4 +38,8 @@ export default {
   accessType: "接入タイプ",
   manufacturer: "メーカー",
   operations: "操作",
+  layoutChannels: "{{count}}画面分割",
+  refresh: "更新",
+  addDeviceHint: "一時デバイスを追加（実デバイスIDを入力してください）",
+  loadFailed: "読み込み失敗",
 } as const;

@@ -38,4 +38,8 @@ export default {
   accessType: "접속 유형",
   manufacturer: "제조사",
   operations: "작업",
+  layoutChannels: "{{count}}화면 분할",
+  refresh: "새로고침",
+  addDeviceHint: "임시 장치 추가 (실제 장치 ID를 입력하세요)",
+  loadFailed: "로드 실패",
 } as const;

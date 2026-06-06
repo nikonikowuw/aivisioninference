@@ -38,4 +38,8 @@ export default {
   accessType: "Access Type",
   manufacturer: "Manufacturer",
   operations: "Actions",
+  layoutChannels: "{{count}}-View",
+  refresh: "Refresh",
+  addDeviceHint: "Add temporary device (please enter a real device ID)",
+  loadFailed: "Load failed",
 } as const;

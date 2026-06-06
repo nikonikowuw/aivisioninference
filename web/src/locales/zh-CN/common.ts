@@ -119,6 +119,8 @@ export const common = {
     security: "安全设置",
     displayNamePlaceholder: "请输入显示名称",
     emailPlaceholder: "请输入电子邮箱",
+    showPassword: "显示密码",
+    hidePassword: "隐藏密码",
   },
   pagination: {
     pageOf: "第 {{page}} / {{totalPages}} 页",
@@ -144,7 +146,7 @@ export const common = {
   date: {
     format: {
       date: "yyyy年M月d日",
-      datetime: "yyyy年M月d日 HH:mm",
+      datetime: "yyyy-MM-dd HH:mm:ss",
       time: "HH:mm",
     },
     today: "今天",
@@ -194,6 +196,12 @@ export const common = {
       inactive: "禁用",
     },
   },
+  actions: "操作",
+  edit: "编辑",
+  delete: "删除",
+  cancel: "取消",
+  save: "保存",
+  minutes: "分钟",
 } as const;
 
 export default common;

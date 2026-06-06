@@ -151,6 +151,21 @@ export const permissions = {
       start: "녹화 시작",
       stop: "녹화 중지",
     },
+    system: {
+      "time-view": "시스템 시간 조회",
+      "time-update": "시스템 시간 설정",
+      "ntp-update": "NTP 서버 설정",
+      "status-view": "시스템 상태 조회",
+      "network-view": "네트워크 설정 조회",
+      "network-update": "네트워크 설정 변경",
+      "webhook-view": "Webhook 조회",
+      "webhook-create": "Webhook 생성",
+      "webhook-delete": "Webhook 삭제",
+      "webhook-test": "Webhook 테스트",
+      "storage-view": "저장소 설정 조회",
+      "storage-update": "저장소 설정 변경",
+      "storage-cleanup": "수동 정리 실행",
+    },
   },
 } as const;
 

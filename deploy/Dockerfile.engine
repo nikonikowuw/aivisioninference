@@ -1,0 +1,88 @@
+# aivision-engine Dockerfile
+# 基于支持 NPU 和媒体硬件加速的异构基础镜像构建
+# Stage 1: 构建阶段
+FROM ubuntu:22.04 AS builder
+
+LABEL stage=builder
+LABEL description="aivision-engine build stage"
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# 安装构建依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    ninja-build \
+    pkg-config \
+    libflatbuffers-dev \
+    flatbuffers-compiler \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# 复制源码
+COPY engine/ ./engine/
+COPY proto/ ./proto/
+
+# 生成 FlatBuffers Go 和 C++ 代码
+RUN mkdir -p generated/cpp generated/go && \
+    flatc --cpp --gen-object-api -o generated/cpp proto/flatbuf/common.fbs && \
+    flatc --cpp --gen-object-api -o generated/cpp proto/flatbuf/envelope.fbs && \
+    flatc --cpp --gen-object-api -o generated/cpp proto/flatbuf/commands.fbs && \
+    flatc --cpp --gen-object-api -o generated/cpp proto/flatbuf/results.fbs && \
+    flatc --go -o generated/go proto/flatbuf/common.fbs && \
+    flatc --go -o generated/go proto/flatbuf/envelope.fbs && \
+    flatc --go -o generated/go proto/flatbuf/commands.fbs && \
+    flatc --go -o generated/go proto/flatbuf/results.fbs
+
+# 构建 C++ 引擎
+RUN mkdir -p engine/build && cd engine/build && \
+    cmake .. -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/install && \
+    ninja && \
+    ninja install
+
+# Stage 2: 运行阶段
+FROM ubuntu:22.04 AS runtime
+
+LABEL description="aivision-engine inference data plane"
+LABEL version="1.0.0"
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# 安装运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libflatbuffers-dev \
+    libssl3 \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建运行时用户
+RUN groupadd -r aivision && useradd -r -g aivision -d /var/lib/aivision -s /sbin/nologin aivision
+
+# 复制构建产物
+COPY --from=builder /install/bin/aivision-engine /usr/local/bin/
+
+# 创建必要目录
+RUN mkdir -p /tmp/ipc /var/lib/aivision/data && \
+    chown -R aivision:aivision /tmp/ipc /var/lib/aivision
+
+# 如果需要 NPU 驱动，在此添加
+# COPY --from=rknpu-driver /lib/firmware /lib/firmware
+
+# 健康检查 (通过 UDS 心跳)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD test -S /tmp/ipc/aivision_ipc.sock || exit 1
+
+# 默认端口（仅 UDS，无网络端口暴露）
+EXPOSE 0
+
+USER aivision
+
+ENTRYPOINT ["aivision-engine"]
+CMD ["--socket-path", "/tmp/ipc/aivision_ipc.sock", "--workers", "4"]

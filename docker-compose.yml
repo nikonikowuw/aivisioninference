@@ -1,0 +1,152 @@
+version: "3.9"
+
+services:
+  # ============================================================
+  # PostgreSQL 数据库
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: aivision-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: aivision
+      POSTGRES_PASSWORD: aivision123
+      POSTGRES_DB: aivision
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aivision"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # Redis 缓存与消息队列
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: aivision-redis
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # ZLMediaKit 流媒体服务器
+  # ============================================================
+  zlmediakit:
+    image: zlmediakit/zlmediakit:latest
+    container_name: aivision-zlm
+    restart: always
+    network_mode: host
+    volumes:
+      - ./zlm/config/config.ini:/opt/media/conf/config.ini
+      - ./zlm/data/www:/opt/media/www
+      - ./zlm/data/record:/opt/media/record
+    environment:
+      - TZ=Asia/Shanghai
+
+  # ============================================================
+  # Go 控制面 (Niko Admin)
+  # ============================================================
+  go-server:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    container_name: aivision-go-server
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NIKO_DB_HOST: postgres
+      NIKO_DB_PORT: 5432
+      NIKO_DB_USER: aivision
+      NIKO_DB_PASSWORD: aivision123
+      NIKO_DB_NAME: aivision
+      NIKO_REDIS_HOST: redis
+      NIKO_REDIS_PORT: 6379
+      NIKO_JWT_SECRET: ${NIKO_JWT_SECRET:-change-me-in-production}
+      NIKO_CPP_SOCKET_PATH: /tmp/ipc/aivision_ipc.sock
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+      - "8090:8090"  # WebSocket
+    volumes:
+      - go_uploads:/app/uploads
+      - ipc_socket:/tmp/ipc  # 共享 UDS Socket 目录
+      - ./web/dist:/app/web/dist:ro  # 前端静态文件
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================
+  # C++ 推理引擎 (数据面)
+  # ============================================================
+  cpp-engine:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.engine
+    container_name: aivision-cpp-engine
+    restart: unless-stopped
+    depends_on:
+      - go-server
+    environment:
+      TZ: Asia/Shanghai
+    # 硬件设备透传：NPU 设备节点、DMA 堆、RGA 等
+    devices:
+      # RK3588 / RK3576 NPU 设备
+      - /dev/dri:/dev/dri
+      - /dev/dma_heap:/dev/dma_heap
+      - /dev/rga:/dev/rga
+      - /dev/mpp_service:/dev/mpp_service
+      # RKNN NPU 驱动
+      - /dev/user-gpu0:/dev/user-gpu0
+      # Ascend NPU (可选)
+      # - /dev/davinci0:/dev/davinci0
+      # - /dev/davinci_manager:/dev/davinci_manager
+    volumes:
+      - ipc_socket:/tmp/ipc  # 共享 UDS Socket 目录
+      - engine_data:/var/lib/aivision/data
+    # 启用特权模式以访问硬件（如需要）
+    # cap_add:
+    #   - SYS_PTRACE
+    #   - SYS_ADMIN
+    command: >
+      aivision-engine
+      --socket-path /tmp/ipc/aivision_ipc.sock
+      --workers 4
+    healthcheck:
+      test: ["CMD", "test", "-S", "/tmp/ipc/aivision_ipc.sock"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+# ============================================================
+# 共享 Volume
+# ============================================================
+volumes:
+  postgres_data:
+  redis_data:
+  go_uploads:
+  engine_data:
+  ipc_socket:  # UDS IPC 通信共享目录
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

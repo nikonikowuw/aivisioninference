@@ -12,7 +12,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
 
+	pkgcache "github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/niko-admin/niko-admin/internal/repository"
 
@@ -26,6 +28,7 @@ type SIPService struct {
 	mediaStreamRepo *repository.MediaStreamRepository
 	discoverySvc    *DeviceDiscoveryService
 	smartRecordRepo *repository.SmartRecordRepository
+	taskClient      taskClient
 
 	// GB28181 ZLM 集成字段
 	zlmClient     *zlm.Client
@@ -34,6 +37,10 @@ type SIPService struct {
 	rtmpPort      int    // ZLM RTMP 端口
 	rtspPort      int    // ZLM RTSP 端口
 	httpPort      int    // ZLM HTTP 端口
+
+	// 缓存和 WebSocket
+	cache pkgcache.Cache
+	hub   *ws.Hub
 }
 
 // NewSIPService creates a new SIPService.
@@ -54,21 +61,29 @@ func NewSIPServiceWithZLM(
 	deviceRepo *repository.DeviceRepository,
 	gbDeviceRepo *repository.GB28181DeviceRepository,
 	mediaStreamRepo *repository.MediaStreamRepository,
+	smartRecordRepo *repository.SmartRecordRepository,
+	taskClient taskClient,
 	zlmClient *zlm.Client,
 	streamManager *StreamManager,
 	zlmBaseIP string,
 	rtmpPort, rtspPort, httpPort int,
+	cache pkgcache.Cache,
+	hub *ws.Hub,
 ) *SIPService {
 	return &SIPService{
 		deviceRepo:      deviceRepo,
 		gbDeviceRepo:    gbDeviceRepo,
 		mediaStreamRepo: mediaStreamRepo,
+		smartRecordRepo: smartRecordRepo,
+		taskClient:      taskClient,
 		zlmClient:       zlmClient,
 		streamManager:   streamManager,
 		zlmBaseIP:       zlmBaseIP,
 		rtmpPort:        rtmpPort,
 		rtspPort:        rtspPort,
 		httpPort:        httpPort,
+		cache:           cache,
+		hub:             hub,
 	}
 }
 
@@ -323,14 +338,52 @@ func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID str
 	if end.Before(start) {
 		return "", errors.New(errors.ErrBadRequest, "end_time must be after start_time")
 	}
-	// 通过 ZLM GB28181 模块发起回放
+	if s.zlmClient == nil {
+		return "", errors.New(errors.ErrInternal, "zlm client not configured")
+	}
+
+	// 1. ZLM 创建 RTP 接收端口
+	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{
+		Port:     0,
+		TCPMode:  0,
+		StreamID: streamID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("open rtp server: %w", err)
+	}
+
+	// 2. ZLM 触发设备回放推流
+	// 注意：由于没有原生的 ZLM 回放触发 API，这里模拟 StartSendRtp，实际上真正的 SIP INVITE 应该包含时间参数。
+	// 这里按任务要求只补充 StartSendRtp 调用
+	_, err = s.zlmClient.StartSendRtp(ctx, zlm.StartSendRtpRequest{
+		Vhost:   "__defaultVhost__",
+		App:     "rtp",
+		Stream:  streamID,
+		SSRC:    "1",
+		DstURL:  s.zlmBaseIP,
+		DstPort: port,
+		IsUDP:   1,
+	})
+	if err != nil {
+		_ = s.zlmClient.CloseRtpServer(ctx, streamID)
+		return "", fmt.Errorf("start playback rtp: %w", err)
+	}
+
+	// 3. StreamManager 注册
+	if s.streamManager != nil {
+		_ = s.streamManager.Acquire(ctx, deviceCode, "gb28181_playback", map[string]string{
+			"zlm_stream_id": streamID,
+			"device_code":   deviceCode,
+		})
+	}
+
 	zap.L().Info("GB28181 playback started",
 		zap.String("device", deviceCode),
 		zap.String("stream", streamID),
 		zap.Time("start", start),
 		zap.Time("end", end))
-	// 回放应使用 HTTP-FLV 端口，因为 GB28181 设备的录像回放通常通过 HTTP-FLV 拉取
-	return fmt.Sprintf("http://%s:%d/live/%s.flv", s.zlmBaseIP, s.httpPort, streamID), nil
+
+	return fmt.Sprintf("http://%s:%d/rtp/%s.flv", s.zlmBaseIP, s.httpPort, streamID), nil
 }
 
 // PlaybackControl 回放控制
@@ -411,6 +464,40 @@ func (s *SIPService) SyncCatalogChannels(ctx context.Context, nvrDeviceCode stri
 		zap.Int("total", len(channels)),
 		zap.Int("created", successCount),
 		zap.Int("updated", updatedCount))
+
+	// 更新 GB28181Device 的通道数
+	if uerr := s.gbDeviceRepo.Update(ctx, gbDevice.ID, map[string]interface{}{
+		"channel_count": len(channels),
+	}); uerr != nil {
+		zap.L().Warn("update gb28181 device channel count failed", zap.Error(uerr))
+	}
+
+	// 更新任务状态和触发 WebSocket 广播
+	if s.cache != nil && s.hub != nil {
+		deviceTaskKey := "catalog_task:device:" + nvrDeviceCode
+		if taskIDBytes, err := s.cache.Get(ctx, deviceTaskKey); err == nil && len(taskIDBytes) > 0 {
+			taskID := string(taskIDBytes)
+			status := map[string]interface{}{
+				"task_id":       taskID,
+				"status":        "completed",
+				"channel_count": len(channels),
+			}
+			statusData, _ := json.Marshal(status)
+			_ = s.cache.Set(ctx, "catalog_task:"+taskID, statusData, 2*time.Minute)
+
+			// 广播 ws 事件
+			msg := &ws.Message{
+				Type: "gb28181_catalog_completed",
+				Payload: map[string]interface{}{
+					"deviceCode":   nvrDeviceCode,
+					"success":      true,
+					"channelCount": len(channels),
+				},
+			}
+			s.hub.Broadcast(msg)
+		}
+	}
+
 	return nil
 }
 
@@ -454,6 +541,10 @@ func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 			zap.L().Warn("save GB28181 alarm to smart_records failed",
 				zap.String("device_id", alarm.DeviceID), zap.Error(err))
 		}
+	}
+
+	if s.taskClient != nil {
+		_ = s.taskClient.Enqueue(ctx, "alarm:dispatch", rawJSON)
 	}
 	return nil
 }

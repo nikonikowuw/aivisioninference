@@ -1,0 +1,15 @@
+[Unit]
+Description=Network configuration rollback daemon for %i
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/network-rollback apply %i
+ExecStop=/usr/local/bin/network-rollback confirm %i
+TimeoutStartSec=120
+Environment=ROLLBACK_TIMEOUT=120
+
+[Install]
+WantedBy=multi-user.target

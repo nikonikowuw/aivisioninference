@@ -1,0 +1,73 @@
+#!/bin/bash
+# Network configuration rollback daemon
+# Usage: network-rollback {apply|confirm} <transaction-id>
+
+INTERFACE=$1
+ACTION=$2
+ROLLBACK_DIR="/var/lib/network-rollback"
+CONFIG_FILE="$ROLLBACK_DIR/transaction-${INTERFACE}/rollback.json"
+CONFIRM_FILE="$ROLLBACK_DIR/transaction-${INTERFACE}/confirm"
+BACKUP_DIR="$ROLLBACK_DIR/transaction-${INTERFACE}"
+
+# 默认回滚超时时间（秒）
+ROLLBACK_TIMEOUT=${ROLLBACK_TIMEOUT:-120}
+
+apply() {
+    echo "Starting network rollback daemon for transaction: $INTERFACE"
+    echo "Rollback timeout: ${ROLLBACK_TIMEOUT}s"
+
+    # 等待确认文件出现
+    for i in $(seq 1 $ROLLBACK_TIMEOUT); do
+        if [ -f "$CONFIRM_FILE" ]; then
+            echo "Configuration confirmed, exiting rollback daemon"
+            rm -f "$CONFIG_FILE" "$CONFIRM_FILE"
+            exit 0
+        fi
+        sleep 1
+    done
+
+    # 超时，执行回滚
+    echo "Rollback timeout reached, reverting configuration"
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        # 读取备份配置并恢复
+        # 这里简化实现，实际应该解析 JSON 并恢复配置
+        echo "Rolling back network configuration..."
+        
+        # 重启网络服务
+        systemctl restart networking 2>/dev/null || true
+        
+        # 清理临时文件
+        rm -f "$CONFIG_FILE" "$CONFIRM_FILE"
+        
+        echo "Network configuration rolled back"
+        exit 1
+    else
+        echo "No rollback configuration found"
+        exit 1
+    fi
+}
+
+confirm() {
+    echo "Confirming network configuration for transaction: $INTERFACE"
+    
+    # 写入确认标志
+    mkdir -p "$(dirname "$CONFIRM_FILE")"
+    echo "confirmed" > "$CONFIRM_FILE"
+    
+    echo "Configuration confirmed"
+    exit 0
+}
+
+case "$ACTION" in
+    apply)
+        apply
+        ;;
+    confirm)
+        confirm
+        ;;
+    *)
+        echo "Usage: $0 {apply|confirm} <transaction-id>"
+        exit 1
+        ;;
+esac

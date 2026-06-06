@@ -89,6 +89,11 @@ func main() {
 		&model.WebhookConfig{},
 		&model.WebhookPushLog{},
 
+		// AIVisionInference: System Management.
+		&model.SystemConfig{},
+		&model.NetworkInterfaceConfig{},
+		&model.TimeConfig{},
+
 		// AIVisionInference: System Config & Async Tasks.
 		&model.AISystemConfig{},
 		&model.AIAsyncTask{},
@@ -144,11 +149,6 @@ func tryExec(db *gorm.DB, sql string) {
 	if err := db.Exec(sql).Error; err != nil {
 		log.Printf("WARNING: %s: %v", sql[:min(len(sql), 60)], err)
 	}
-}
-
-// shouldCreateSeedAdmin 判断是否需要在用户名和邮箱均不存在时创建默认管理员。
-func shouldCreateSeedAdmin(adminUsernameExists, adminEmailExists bool) bool {
-	return !adminUsernameExists && !adminEmailExists
 }
 
 // addFileMD5ColumnSQL 返回文件 MD5 字段及索引的幂等迁移语句。
@@ -316,7 +316,8 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig, redisCfg config.RedisConfi
 	if err := db.Model(&model.User{}).Where("email = ?", seedCfg.Email).Count(&emailCount).Error; err != nil {
 		return fmt.Errorf("count admin email: %w", err)
 	}
-	if shouldCreateSeedAdmin(usernameCount > 0, emailCount > 0) {
+	// 用户名和邮箱均不存在时创建默认管理员
+	if usernameCount == 0 && emailCount == 0 {
 		if err := db.Transaction(func(tx *gorm.DB) error {
 			adminPwd, err := hash.Hash(seedCfg.Password)
 			if err != nil {
@@ -543,6 +544,36 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "feedback:export", Name: "导出反馈", Path: "/api/v1/feedback/export", Method: "GET"},
 					{Code: "feedback:batch-status", Name: "批量更新反馈状态", Path: "/api/v1/feedback/batch-status", Method: "PUT"},
 					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
+				}},
+				{Name: "系统配置", Code: "system-config", Path: "/system/config", Icon: "MdSettings", Buttons: []buttonInfo{
+					// 运行状态 Tab
+					{Code: "system:status:view", Name: "查看运行状态", Path: "/api/v1/system/status/realtime", Method: "GET"},
+					{Code: "system:status:resources", Name: "查看资源状态", Path: "/api/v1/system/status/resources", Method: "GET"},
+					{Code: "system:status:services", Name: "查看服务状态", Path: "/api/v1/system/status/services", Method: "GET"},
+					// 网络配置 Tab
+					{Code: "system:network:view", Name: "查看网络配置", Path: "/api/v1/system/network", Method: "GET"},
+					{Code: "system:network:apply", Name: "应用网络配置", Path: "/api/v1/system/network/apply", Method: "POST"},
+					{Code: "system:network:confirm", Name: "确认网络配置", Path: "/api/v1/system/network/confirm", Method: "POST"},
+					{Code: "system:network:rollback", Name: "回滚网络配置", Path: "/api/v1/system/network/rollback", Method: "POST"},
+					// 时间配置 Tab
+					{Code: "system:time:view", Name: "查看时间配置", Path: "/api/v1/system/time", Method: "GET"},
+					{Code: "system:time:manual", Name: "手动设置时间", Path: "/api/v1/system/time/manual", Method: "POST"},
+					{Code: "system:time:timezone", Name: "设置时区", Path: "/api/v1/system/time/timezone", Method: "PUT"},
+					{Code: "system:ntp:view", Name: "查看NTP配置", Path: "/api/v1/system/time/ntp", Method: "GET"},
+					{Code: "system:ntp:manage", Name: "管理NTP服务器", Path: "/api/v1/system/time/ntp/servers", Method: "POST"},
+					{Code: "system:ntp:sync", Name: "同步NTP时间", Path: "/api/v1/system/time/ntp/sync", Method: "POST"},
+					// 告警上报 Tab
+					{Code: "system:webhook:list", Name: "Webhook列表", Path: "/api/v1/system/webhook", Method: "GET"},
+					{Code: "system:webhook:create", Name: "创建Webhook", Path: "/api/v1/system/webhook", Method: "POST"},
+					{Code: "system:webhook:edit", Name: "编辑Webhook", Path: "/api/v1/system/webhook/*", Method: "PUT"},
+					{Code: "system:webhook:delete", Name: "删除Webhook", Path: "/api/v1/system/webhook/*", Method: "DELETE"},
+					{Code: "system:webhook:test", Name: "测试Webhook", Path: "/api/v1/system/webhook/*/test", Method: "POST"},
+					{Code: "system:webhook:logs", Name: "查看推送日志", Path: "/api/v1/system/webhook/logs", Method: "GET"},
+					// 存储配置 Tab
+					{Code: "system:storage:view", Name: "查看存储配置", Path: "/api/v1/system/storage/config", Method: "GET"},
+					{Code: "system:storage:edit", Name: "编辑存储配置", Path: "/api/v1/system/storage/config", Method: "PUT"},
+					{Code: "system:storage:cleanup-logs", Name: "查看清理日志", Path: "/api/v1/system/storage/cleanup-logs", Method: "GET"},
+					{Code: "system:storage:cleanup", Name: "手动触发清理", Path: "/api/v1/system/storage/cleanup/run", Method: "POST"},
 				}},
 			},
 		},

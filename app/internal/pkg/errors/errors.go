@@ -66,6 +66,15 @@ const (
 	ErrWebhookPushFailed      = 10040
 	ErrNotImplemented         = 10041
 
+	// License 算法授权错误 (10xxx)
+	ErrLicenseInvalid          = 10050 // 授权文件无效或签名验证失败
+	ErrLicenseDeviceMismatch   = 10051 // 授权文件绑定的设备指纹与当前设备不匹配
+	ErrLicenseNotAuthorized    = 10052 // 算法未在授权范围内
+	ErrLicenseExpired          = 10053 // 授权已过期
+	ErrLicenseNotYetValid      = 10054 // 授权尚未生效
+	ErrLicenseStreamLimit      = 10055 // 授权并发路数不足
+	ErrLicenseNotConfigured    = 10056 // 授权公钥未配置
+
 	// Server errors (5xxxx).
 	ErrInternal = 50001
 )

@@ -15,6 +15,7 @@
 |---|---|---|---|
 | V0.1 | 基于 `docs/prd.md` 生成 PRD 草稿 | 2026-06-04 | 待定 |
 | V0.2 | 基于 openspec/specs 全量规范综合更新：新增媒体录制（6.8）、设备发现暂存（6.9）、流管理器（6.10）模块；补充系统管理细节（存储双模式清理、多网卡配置、Webhook 标签路由）；更新版本路线图 | 2026-06-06 | AI Agent |
+| V0.3 | 基于 add-person-management 分支代码实现更新 6.2 人员管理模块：新增分组管理、导入任务、Excel 导出、批量操作等 API 文档；更新字段定义、异常场景和验收标准；更新版本路线图 | 2026-06-07 | AI Agent |
 
 ## 3. 名词解释
 
@@ -29,6 +30,9 @@
 | LINE | 越界线配置，用于越线、方向判断或区域越界检测。 |
 | Algorithm Package | 算法包，以压缩包形式交付和上传，解压后需包含算法代码/运行库、模型文件、`algo_meta.yaml`、`testimage.jpg`、`label_map.json` 等标准文件。 |
 | category_code | 平台统一类别编码，必须为 integer 类型五位数字。 |
+| Person Record | 人员记录，遵循“一张人脸图对应一条记录”原则，与人员基本信息、图片和特征向量关联。 |
+| Person Group | 人员分组，用于按业务维度对人员进行分类管理，支持单层自关联结构。 |
+| Import Task | 导入任务，追踪批量导入的进度、状态和结果统计。 |
 | UDS | *[已废弃]* Unix Domain Socket。系统现已全面升级为 **Raw TCP Socket**，支持跨机器的分布式部署。 |
 | pgvector | PostgreSQL 向量插件，用于存储和检索人脸 Embedding。 |
 
@@ -76,7 +80,7 @@ AIVisionInference 旨在构建一套高性能、可扩展、可运维的边缘�
 | Pipeline 性能 | 支持运行时动态增删 Stage (推理、编码、推流)，动态操作对已有推理分支的影响 `<= 10ms`。 |
 | 编码推流 | 支持 MPP 硬件编码与 RTSP (RTP over TCP) 推送，断线重连 P95 `<= 15s`。 |
 | 热更新 | 算法动态库热更新期间旧任务不中断；启用状态切换 P95 `< 100ms`，不包含模型加载与 Runtime 初始化。 |
-| 管理能力 | 后台覆盖用户、人员、设备、算法包、任务、实时预览、智能记录、存储配置、系统配置等模块。 |
+| 管理能力 | 后台覆盖用户、人员、人员分组、设备、算法包、任务、实时预览、智能记录、存储配置、系统配置等模块。 |
 | 前端性能 | 列表页面渲染 P95 延迟 `<= 300ms`。 |
 | 国际化 | 全面支持简体中文、繁体中文和英语；后端返回给前端的错误必须经过 i18n 翻译。 |
 
@@ -309,13 +313,14 @@ AIVisionInference 不直接与旷视、英特灵达的大型完整方案做全�
 **验收标准**：
 
 - 人员数据以单张人脸图对应一条人员记录管理。
-- 上传图片后通过 Asynq 异步任务或提取接口提取特征并入库。
-- 支持按标签、分组、人员状态检索和管理人员档案。
-- 人脸识别默认基于 InsightFace 实现。
-- 人脸 Embedding 维度为 `512`。
-- 相似度阈值支持在前端配置。
-- 1:N 检索默认返回 Top-K `5`。
-- 图片文件通过统一 Storage 抽象层存储，支持 Local、PG、OSS。
+- 上传图片后通过 Asynq 异步任务提取特征并入库（MVP 阶段为 SHA256 占位实现）。
+- 支持按分组、人员状态检索和管理人员档案。
+- 支持图片 MD5 去重，防止同一张图片被多人使用。
+- 支持分片上传后关联和 multipart 直传两种图片上传模式。
+- 支持压缩包批量导入（ZIP/TAR.GZ/TAR.BZ2），文件名自动解析人员信息。
+- 支持 Excel 导出并内嵌人脸图片。
+- 人脸 Embedding 维度为 `512`，存储于 PostgreSQL pgvector。
+- 图片文件通过统一 Storage 抽象层存储，支持 Local 和 OSS。
 
 #### 用户故事 9：账号权限与系统管理
 
@@ -493,16 +498,25 @@ AIVisionInference 不直接与旷视、英特灵达的大型完整方案做全�
 
 ```mermaid
 graph TD
-    A[用户上传人脸图片] --> B[保存原始图片至 Storage]
-    B --> C[创建人员基础记录]
-    C --> D[推入 Asynq 异步队列]
-    D --> E[调用 InsightFace 模型]
-    E --> F{提取是否成功?}
-    F -->|是| G[获取 512 维特征向量]
-    G --> H[将向量写入 PostgreSQL pgvector]
-    H --> I[更新记录状态为已提取]
-    F -->|否| J[记录错误并重试/标记失败]
+    A[用户上传人脸图片] --> B{上传模式}
+    B -->|分片上传| C1[获得 image_url]
+    B -->|Multipart 直传| C2[保存至 Storage]
+    C1 --> D[计算图片 MD5 去重校验]
+    C2 --> D
+    D --> E[创建人员基础记录]
+    E --> F[投递 Asynq 异步任务]
+    F --> G{特征提取实现}
+    G -->|MVP 占位| G1[SHA256 生成确定性 512 维向量]
+    G -->|v1.2 正式| G2[调用 InsightFace 模型]
+    G1 --> H{提取是否成功?}
+    G2 --> H
+    H -->|是| I[获取 512 维特征向量]
+    I --> J[将向量写入 PostgreSQL pgvector]
+    J --> K[更新状态为 active]
+    H -->|否| L[记录错误码和 i18n 消息键，标记失败]
 ```
+
+> **当前状态**：特征提取使用 SHA256 占位实现，生成确定性向量用于开发和测试。计划在 v1.2 阶段替换为 InsightFace 真实模型。
 
 #### 用户场景
 
@@ -560,53 +574,164 @@ graph TD
 | 字段 | 类型 | 必填 | 说明 |
 |---|---:|---:|---|
 | `person_record_id` | UUID/String | 是 | 单张人脸图对应的人员记录 ID |
-| `person_code` | String | 否 | 业务人员编号，可用于关联同一物理人员的多条记录 |
+| `person_code` | String | 否 | 业务人员编号；留空时系统自动生成 `P{时间戳}{随机6位}` 格式编号，全局唯一 |
 | `person_name` | String | 是 | 人员姓名或展示名称 |
-| `gender` | Enum | 否 | `unknown`、`male`、`female`、`other` |
+| `gender` | Enum | 否 | `unknown`、`male`、`female`、`other`，默认 `unknown` |
 | `phone` | String | 否 | 联系方式，敏感字段需脱敏展示 |
 | `id_number` | String | 否 | 证件号，敏感字段需加密存储或脱敏展示 |
-| `tags` | Array | 否 | 人员标签，如员工、访客、黑名单、白名单 |
-| `groups` | Array | 否 | 人员分组，一个记录可归属多个分组 |
+| `groups` | Array | 否 | 人员分组，一个记录可归属多个分组（多对多关联表 `person_group_members`） |
 | `image_url` | String | 是 | 人脸图片存储地址，由 Storage 抽象层管理 |
-| `face_quality_score` | Number | 否 | 图片质量评分，取值 `0.0` 到 `1.0` |
+| `image_md5` | String | 否 | 图片内容 MD5，用于去重校验，数据库唯一索引 |
+| `face_quality_score` | Number | 否 | 图片质量评分，取值 `0.0` 到 `1.0`（预留，由 InsightFace 质量检测模块回填） |
 | `embedding_status` | Enum | 是 | `pending`、`extracting`、`active`、`failed`、`disabled` |
+| `embedding_error_code` | String | 否 | 特征提取失败错误码，如 `EXTRACTION_FAILED`、`DB_WRITE_ERROR` |
+| `embedding_error_message_key` | String | 否 | 特征提取失败的 i18n 消息键，如 `person.error.embeddingExtract` |
+| `embedding_retryable` | Boolean | 否 | 特征提取失败是否可重试 |
 | `enabled` | Boolean | 是 | 是否启用；禁用后不参与 1:N 比对 |
 | `remark` | String | 否 | 备注 |
+| `created_at` | DateTime | 是 | 创建时间 |
+| `updated_at` | DateTime | 是 | 最后更新时间 |
+
+> **说明**：PRD 中规划的 `tags`（人员标签）字段在当前版本中暂未实现，计划在后续版本中引入。当前版本通过分组（groups）实现人员分类管理。
 
 #### 图片与特征提取规则
+
+图片上传支持两种模式：
+
+1. **分片上传后关联（推荐）**：前端通过通用分片上传接口将文件传到 Storage，获得 `image_url` 后通过 JSON body 提交创建/更新请求。适用于大文件和弱网环境。
+2. **传统 Multipart 直传**：通过 `multipart/form-data` 直接上传图片文件。适用于快速操作。
 
 图片要求：
 
 - 支持 `jpg`、`jpeg`、`png`、`webp` 格式。
 - 单张图片大小默认不超过 `10MB`。
-- 图片分辨率建议不低于 `160x160`，人脸区域建议不低于 `80x80`。
-- 默认要求单张图片中只包含一张有效人脸。
-- 若检测到多张人脸，默认导入失败。
-- 图片文件必须通过统一 Storage 抽象层保存，支持 Local、PG LOB 或 OSS。
+- 图片文件必须通过统一 Storage 抽象层保存，支持 Local 和 OSS。
+
+图片去重：
+
+- 上传时自动计算图片内容 MD5 哈希值，写入 `image_md5` 字段。
+- `image_md5` 字段建有数据库唯一索引，同一张图片不能被多人使用。
+- 更新人员时，若新图片与当前记录 MD5 相同，跳过去重检查。
 
 特征提取规则：
 
-- 上传保存后人员记录状态为 `pending` 或 `extracting`。
-- Asynq Worker 拉取任务后调用人脸检测和特征提取接口。
-- 特征向量写入 PostgreSQL `pgvector` 字段，并建立向量索引。
-- 同一 `person_record_id` 只保留一条当前有效 Embedding。
-- 重新上传图片或重新提取特征时，应覆盖当前记录的 Embedding，并记录历史审计。
+- 上传保存后人员记录状态为 `pending`。
+- Asynq Worker 拉取任务后执行特征提取（MVP 阶段为 SHA256 占位实现）。
+- 特征向量写入 PostgreSQL `pgvector` 字段（`vector(512)`）。
+- 同一 `person_record_id` 只保留一条当前有效 Embedding（提取前先删除旧记录）。
+- 重新上传图片或重新提取特征时，覆盖当前 Embedding。
 - `enabled=false` 或 `embedding_status != active` 的记录不得参与 1:N 比对。
+- 特征提取失败时，写入 `embedding_error_code`（如 `EXTRACTION_FAILED`、`DB_WRITE_ERROR`）和 `embedding_error_message_key`（i18n 消息键）。
+- 支持单个和批量重提特征，仅 `failed` 和 `pending` 状态允许重提。
 
 #### 批量导入规则
 
-批量导入支持两种形式：
+当前版本支持基于压缩包的图片文件名约定导入：
 
-1. **模板 + 图片压缩包**：模板包含人员字段和图片文件名，系统按图片文件名匹配人员记录。
-2. **图片文件名约定导入**：文件名格式可配置，例如 `{person_code}_{person_name}.jpg`。
+1. **压缩包格式**：支持 `.zip`、`.tar.gz`（`.tgz`）、`.tar.bz2`（`.tbz2`）。
+2. **文件名约定**：图片文件名作为人员信息来源，支持两种格式：
+   - `{person_code}_{person_name}.jpg` — 解析出编号和姓名。
+   - `{person_name}.jpg` — 仅解析出姓名，编号自动生成（`IMP{时间戳}{随机6位}`）。
+3. **支持的图片格式**：JPG、JPEG、PNG、WebP。
+4. **压缩包大小限制**：最大 100MB，防止内存溢出。
 
 导入要求：
 
-- 支持导入前预校验，展示成功数、失败数和失败原因。
-- 支持部分成功导入；失败行不得影响合法行入库。
-- 支持下载失败明细。
-- 批量导入完成后异步投递特征提取任务。
-- 导入任务应记录进度、总数、成功数、失败数和当前处理状态。
+- 导入为异步任务（Asynq），用户提交后立即返回任务 ID。
+- 每条图片记录独立处理，单条失败不影响其他记录入库。
+- 导入任务记录进度（total_rows、success_rows、failed_rows）和状态（pending → running → completed/failed）。
+- 每条成功记录自动投递 Asynq 特征提取任务。
+- 支持 `overwrite_on_duplicate` 参数：勾选时对已存在 person_code 的记录进行覆盖；未勾选时跳过重复记录。
+- 支持分片上传后通过文件 URL 创建导入任务（`POST /person-import-tasks/by-url`），适用于大文件场景。
+
+#### 分组管理
+
+人员分组支持单层结构（`PersonGroup` 表通过 `parent_id` 支持自关联），用于按业务维度对人员进行分类。
+
+**分组功能特性**：
+
+- 分组 CRUD：新增、编辑、删除分组，支持设置分组名称、描述、排序值。
+- 分组与人员多对多关联：通过 `person_group_members` 关联表实现，一个人可属于多个分组。
+- 分组人员计数：查询分组列表时批量统计每个分组下的人数（`BatchCountPersons`），避免 N+1 查询。
+- 人员列表按分组筛选：列表接口支持 `group_id` 参数过滤指定分组下的人员。
+- 删除分组时，关联表中的对应记录自动清理，不影响人员主体数据。
+
+**分组 API 接口**：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/person-groups` | 分组列表 |
+| POST | `/api/v1/person-groups` | 创建分组 |
+| PUT | `/api/v1/person-groups/{id}` | 更新分组 |
+| DELETE | `/api/v1/person-groups/{id}` | 删除分组 |
+
+#### Excel 导出
+
+支持将人员数据导出为 `.xlsx` 文件，内嵌人员人脸图片。
+
+**导出特性**：
+
+- 流式写入，限制单次最大导出 10000 条记录，防止 OOM。
+- 导出文件包含表头（图片、姓名、编号、性别、手机号、特征状态、启用状态、创建时间）。
+- 图片通过 Storage 抽象层读取并内嵌到 Excel 单元格中（行高 60px）。
+- 导出达到上限时，在末尾添加提示行引导用户使用过滤条件缩小范围。
+
+#### 图片双模式上传
+
+人员创建和更新支持两种图片上传模式：
+
+1. **分片上传后关联（推荐）**：前端通过通用分片上传接口将文件传到 Storage，获得 `image_url` 后通过 JSON body 提交。适用于大图片和弱网环境。
+2. **传统 Multipart 直传**：通过 `multipart/form-data` 直接上传图片文件。适用于小图片和快速操作。
+
+两种模式均会计算图片 MD5 并执行去重校验，避免重复图片入库。
+
+#### 图片 MD5 去重
+
+系统在创建和更新人员时自动计算图片内容的 MD5 哈希值，并在 `image_md5` 字段上建立唯一索引。若检测到重复 MD5，返回 `ErrPersonImageDuplicate` 错误，防止同一张图片被多人重复使用。更新人员时，若新图片 MD5 与当前记录相同，则跳过去重检查。
+
+#### 重提特征（Retry Embedding）
+
+当特征提取失败或需要更新底库照片时，支持单个或批量重新触发特征提取任务：
+
+- 单个重提：`POST /api/v1/persons/{id}/retry-embedding`
+- 批量重提：`POST /api/v1/persons/batch-retry-embedding`（请求体包含 `ids` 数组）
+- 仅 `embedding_status` 为 `failed` 或 `pending` 的记录允许重提，`active` 和 `extracting` 状态返回 `ErrPersonStatusNoRetry`。
+- 重提时自动将状态置为 `pending` 并投递 Asynq 异步任务。
+- 批量重提返回 `BatchRetryResult`，包含成功数、失败数和按 personID 分类的失败原因。
+
+#### API 接口清单
+
+**人员管理**：
+
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | `/api/v1/persons` | 人员列表（分页、关键字、分组、特征状态筛选） | `person:list` |
+| POST | `/api/v1/persons` | 创建人员（multipart 或 JSON body） | `person:create` |
+| GET | `/api/v1/persons/{id}` | 人员详情 | `person:view` |
+| PUT | `/api/v1/persons/{id}` | 更新人员 | `person:edit` |
+| DELETE | `/api/v1/persons/{id}` | 删除人员（软删除） | `person:delete` |
+| POST | `/api/v1/persons/batch-delete` | 批量删除 | `person:batch-delete` |
+| POST | `/api/v1/persons/batch-toggle` | 批量启用/禁用 | `person:batch-toggle` |
+| POST | `/api/v1/persons/{id}/retry-embedding` | 重提特征 | `person:retry-embedding` |
+| POST | `/api/v1/persons/batch-retry-embedding` | 批量重提特征 | `person:batch-retry-embedding` |
+| GET | `/api/v1/persons/export` | 导出 Excel | `person:export` |
+| GET | `/api/v1/persons/image/{filename}` | 查看人员图片 | `person:view` |
+
+**导入任务**：
+
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | `/api/v1/person-import-tasks` | 导入任务列表 | `person:list` |
+| POST | `/api/v1/person-import-tasks` | 上传压缩包导入（multipart） | `person:create` |
+| POST | `/api/v1/person-import-tasks/by-url` | 通过文件 URL 导入（分片上传后调用） | `person:create` |
+| GET | `/api/v1/person-import-tasks/{id}` | 导入任务详情 | `person:view` |
+
+**异步任务处理器**：
+
+| 任务类型 | 说明 |
+|---|---|
+| `person:embedding` | 特征提取：调用 InsightFace 模型提取 512 维向量并写入 pgvector |
+| `person:import` | 批量导入：解压压缩包（ZIP/TAR.GZ/TAR.BZ2），按文件名识别人员，逐条创建记录并投递特征提取任务 |
 
 #### 异常场景
 
@@ -616,8 +741,13 @@ graph TD
 | 多张人脸 | 单张人员图中检测到多个人脸 | 阻止入库，要求上传单人脸图片 | 图片包含多个人脸，请上传单人脸图片 |
 | 特征提取失败 | InsightFace 服务异常或图片解码失败 | 标记任务失败并允许重试 | 特征提取失败，请稍后重试 |
 | 无导出权限 | 用户尝试导出人员敏感数据但权限不足 | 拦截导出并记录审计 | 无权限导出人员数据 |
-| 文件格式不支持 | 上传了非 JPEG/PNG 格式的文件 | 前端拦截并提示格式要求 | 请上传 JPEG 或 PNG 格式的图片 |
-| 文件大小超限 | 上传的人员照片超过系统限制（如 5MB） | 阻止上传并提示上限 | 图片大小不能超过 5MB |
+| 文件格式不支持 | 上传了非 JPEG/PNG/WebP 格式的文件 | 前端拦截并提示格式要求 | 请上传 JPG、PNG 或 WebP 格式的图片 |
+| 文件大小超限 | 上传的人员照片超过系统限制（默认 10MB） | 阻止上传并提示上限 | 图片大小不能超过 10MB |
+| 图片重复 | 上传的图片 MD5 与已有记录重复 | 阻止创建，返回重复错误 | 该图片已存在，请更换图片后重试 |
+| 人员编号重复 | 创建或更新时输入了已存在的 person_code | 阻止保存 | 人员编号已存在，请更换后重试 |
+| 压缩包格式不支持 | 导入时上传了非 ZIP/TAR.GZ/TAR.BZ2 格式 | 阻止导入 | 不支持的压缩包格式，请上传 ZIP 或 TAR.GZ 文件 |
+| 压缩包超限 | 导入压缩包超过 100MB | 阻止导入 | 文件过大，导入压缩包最大支持 100MB |
+| 重提特征状态不允许 | 对 active 或 extracting 状态的记录执行重提 | 返回状态不允许错误 | 当前状态无需重提特征 |
 | 向量库同步失败 | pgvector 数据库连接中断或写入异常 | 记录错误日志，将人员状态设为“特征待同步” | 系统繁忙，特征向量写入失败，请重试 |
 | 批量导入冲突 | 导入 CSV 中包含重复的工号或 ID | 忽略冲突项或覆盖更新（视配置而定），并输出导入失败清单 | 导入完成，XX 条成功，X 条因 ID 重复失败 |
 | 存储后端写满 | 存储磁盘空间不足导致无法保存新图片 | 停止上传，触发系统级存储报警 | 磁盘空间不足，请联系运维清理存储 |
@@ -629,17 +759,24 @@ graph TD
 #### 验收标准
 
 - 支持新增、编辑、删除、批量删除、批量导入、批量导出人员记录。
-- 支持按姓名、人员编号、标签、分组、状态、创建时间进行筛选。
+- 支持按姓名、人员编号、手机号、分组、特征状态、启用状态进行筛选，支持关键字多字段模糊搜索。
 - 支持“一张人脸图对应一条人员记录”的数据模型。
-- 上传图片后必须自动投递特征提取任务。
+- 支持图片双模式上传：分片上传后关联（image_url）和传统 multipart 直传。
+- 图片上传时自动计算 MD5 并执行去重校验，防止重复图片入库。
+- 上传图片后必须自动投递 Asynq 异步特征提取任务。
 - 特征提取成功后，人员记录状态更新为 `active`，并写入 pgvector 向量索引。
-- 特征提取失败时，必须记录明确错误码和可国际化错误消息。
-- 支持手动重新触发特征提取。
+- 特征提取失败时，必须记录明确错误码（`embedding_error_code`）和 i18n 消息键（`embedding_error_message_key`）。
+- 支持单个和批量手动重新触发特征提取，仅允许对 failed/pending 状态的记录操作。
 - 禁用人员记录后，该记录不得参与 1:N 人脸识别比对。
-- 删除人员记录时，如存在历史识别记录引用，默认执行软删除或禁用，不得破坏历史记录可追溯性。
-- 批量导入支持失败明细下载，失败行不影响合法行入库。
-- 人脸图片、证件号、手机号、Embedding 等敏感数据必须受权限控制和审计保护。
+- 删除人员记录时执行软删除，不破坏历史识别记录可追溯性。
+- 支持人员分组 CRUD 和多对多关联，分组列表自动统计人员数量。
+- 人员列表支持按分组筛选。
+- 批量导入支持 ZIP/TAR.GZ/TAR.BZ2 压缩包，文件名格式支持“编号_姓名”或纯“姓名”。
+- 导入任务异步执行，支持通过任务列表查看进度、成功数、失败数和状态。
+- 导出为 Excel 文件并内嵌人脸图片，限制单次最大 10000 条。
+- 人脸图片、证件号、手机号、Embedding 等敏感数据必须受 RBAC 权限控制。
 - 所有错误信息必须通过 i18n Key 或错误码映射展示。
+- 人员管理前端页面支持国际化，当前覆盖 zh-CN、zh-TW、en-US、ja-JP、ko-KR、id-ID 六种语言。
 
 #### 指标要求
 
@@ -651,25 +788,30 @@ graph TD
 | 批量导入规模 | `>= 10000` 条/次 | 支持分批入库和异步特征提取 |
 | 特征提取成功率 | `>= 98%` | 基于符合图片质量要求的数据集 |
 | 向量检索 Top-K 查询 P95 | `<= 200ms` | 默认库规模和索引配置下 |
+| Excel 导出 P95 | `<= 10s` | 10000 条以内，含图片内嵌 |
+| 分组列表查询 P95 | `<= 200ms` | 包含批量人员计数 |
 
 #### 权限与安全要求
 
 - `person:list`: 查看人员列表。
 - `person:create`: 新增人员记录。
-- `person:update`: 编辑人员基础信息、标签和状态。
-- `person:delete`: 删除或禁用人员记录。
-- `person:import`: 批量导入人员。
+- `person:edit`: 编辑人员基础信息和状态。
+- `person:delete`: 删除人员记录。
+- `person:view`: 查看人员详情和图片。
 - `person:export`: 批量导出人员。
-- `person:image:upload`: 上传或替换人员图片。
-- `person:embedding:retry`: 重新触发特征提取。
+- `person:batch-delete`: 批量删除人员。
+- `person:batch-toggle`: 批量启用/禁用人员。
+- `person:batch-retry-embedding`: 批量重提特征。
+- `person:retry-embedding`: 重新触发单人特征提取。
 
 安全约束：
 
 - 人脸图片、Embedding、证件号和手机号属于敏感数据，必须按角色授权访问。
 - Embedding 默认不得通过普通管理接口导出或展示。
 - 导出人员数据时，敏感字段默认脱敏。
-- 图片访问 URL 必须具备有效期和权限校验，禁止公开永久 URL。
+- 图片访问 URL 必须经过鉴权中间件校验，禁止公开无鉴权访问。
 - 删除人员记录需写入审计日志。
+- 批量操作（批量删除、批量启禁用、批量重提）限制单次最多 100 条。
 - 越权访问必须在 Gin 中间件层拦截，并返回标准权限错误码。
 
 ### 6.3 流设备管理模块
@@ -2666,6 +2808,7 @@ graph TD
 - C++ 推理引擎完成 TCP 通信、ZLM 本地流拉取、FFmpeg/OpenCV 软解和 Mock 算法调用。
 - 跑通 `Device Ingest -> ZLM -> C++ Decode -> Infer -> Result -> Go Event Router -> Preview Overlay` 主链路。
 - 管理后台完成设备管理、算法包管理、任务配置、实时预览和基础智能记录页面。
+- ✅ **人员管理基础能力**：人员 CRUD、分组管理、图片双模式上传（分片 + multipart）、图片 MD5 去重、Asynq 异步特征提取（占位实现）、批量导入（ZIP/TAR.GZ/TAR.BZ2）、Excel 导出（内嵌图片）、批量操作（删除/启禁用/重提特征）、前端国际化（6 种语言）。
 
 ### v1.1：Rockchip 性能里程碑
 
@@ -2677,7 +2820,10 @@ graph TD
 
 ### v1.2：业务运营能力
 
-- 完成人员管理、人脸 Embedding 提取、识别记录、告警记录和抓拍记录。
+- ✅ 人员管理基础能力已在 v1.0 完成（CRUD、分组、导入、导出、批量操作、异步特征提取）。
+- 补充人员标签系统（tags），支持多维度标签筛选和布控关联。
+- 完成 InsightFace 真实特征提取替换占位实现。
+- 完成识别记录、告警记录和抓拍记录。
 - 完成存储阈值清理和 Webhook 告警上报。
 - 完成审计日志、系统配置和运行状态监控。
 - 完善异常重连、失败重试、任务批量操作和数据导出。
@@ -2733,6 +2879,11 @@ graph TD
 | 智能记录保留策略 | 默认只保留当天数据。 |
 | 前端实时播放默认协议 | 默认优先使用 HTTP-FLV。 |
 | C++ 推理进程架构 | 采用单进程多线程架构，废弃跨进程沙箱隔离。 |
+| 人员数据模型 | 一张人脸图对应一条人员记录；通过 `person_group_members` 多对多关联分组；特征向量通过 pgvector `vector(512)` 存储。 |
+| 人员图片上传 | 支持分片上传后关联（image_url）和 multipart 直传两种模式；自动计算 MD5 并执行去重校验。 |
+| 人员导入格式 | 支持 ZIP、TAR.GZ、TGZ、TAR.BZ2、TBZ2 压缩包；文件名格式支持 `{编号}_{姓名}` 或纯 `{姓名}`。 |
+| 特征提取实现 | MVP 阶段使用 SHA256 占位实现，生成确定性 512 维向量；v1.2 替换为 InsightFace 真实模型。 |
+| 人员管理国际化 | 支持 zh-CN、zh-TW、en-US、ja-JP、ko-KR、id-ID 六种语言。 |
 
 ### 12.2 仍待确认问题
 
@@ -2744,11 +2895,11 @@ graph TD
 
 ### 完整性检查
 
-- [ ] 产品背景清晰，说明了为什么做。
-- [ ] 目标用户和用户场景明确。
-- [ ] 成功指标可量化。
-- [ ] 核心功能模块覆盖完整。
-- [ ] 验收标准可执行、可测试。
+- [x] 产品背景清晰，说明了为什么做。
+- [x] 目标用户和用户场景明确。
+- [x] 成功指标可量化。
+- [x] 核心功能模块覆盖完整。
+- [x] 验收标准可执行、可测试。
 - [ ] 非目标范围明确。
 - [ ] 路线图阶段边界清晰。
 - [ ] 风险与应对策略完整。

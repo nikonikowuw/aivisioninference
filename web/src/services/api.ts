@@ -367,15 +367,19 @@ export interface AuditLog {
   user_id: string | null;
   username: string;
   action_type: string;
+  action_type_label: string;
   resource_type: string;
+  resource_type_label: string;
   resource_id: string;
   request_path: string;
   request_method: string;
+  request_method_label: string;
   request_ip: string;
   user_agent: string;
   response_status: number;
   duration_ms: number;
   result_summary: string;
+  result_summary_label: string;
   error_summary: string;
   created_at: string;
 }

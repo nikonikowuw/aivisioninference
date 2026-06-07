@@ -182,13 +182,13 @@ const togglePageSelection = () => {
                   />
                 </Td>
                 <Td>{l.username || l.user_id || '-'}</Td>
-                <Td>{t(`actionTypes.${l.action_type.replace(/:/g, '.')}`, { defaultValue: l.action_type || '-' })}</Td>
-                <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method}</Badge></Td>
+                <Td>{l.action_type_label || t(`actionTypes.${l.action_type.replace(/:/g, '.')}`, { defaultValue: l.action_type || '-' })}</Td>
+                <Td><Badge colorScheme={methodColor(l.request_method)}>{l.request_method_label || l.request_method}</Badge></Td>
                 <Td maxW="240px" isTruncated>{l.request_path}</Td>
                 <Td>{l.request_ip}</Td>
                 <Td><Badge colorScheme={l.response_status >= 400 ? 'red' : 'green'}>{l.response_status}</Badge></Td>
                 <Td>{t('table.durationMs', { value: l.duration_ms ?? 0 })}</Td>
-                <Td><Badge colorScheme={resultColor(l.result_summary)}>{t(`filter.results.${l.result_summary}`, { defaultValue: l.result_summary || '-' })}</Badge></Td>
+                <Td><Badge colorScheme={resultColor(l.result_summary)}>{l.result_summary_label || t(`filter.results.${l.result_summary}`, { defaultValue: l.result_summary || '-' })}</Badge></Td>
                 <Td whiteSpace="nowrap">{formatDateTime(l.created_at)}</Td>
               </Tr>
             ))}

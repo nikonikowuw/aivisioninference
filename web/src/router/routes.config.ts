@@ -109,6 +109,31 @@ export const adminRoutes: RouteConfig[] = [
     layout: '/admin',
   },
   {
+    id: 'aivision',
+    path: '/aivision',
+    i18nKey: 'menu:aivision',
+    icon: 'MdVisibility',
+    layout: '/admin',
+    children: [
+      {
+        id: 'aivisiontasks',
+        path: '/aivision/tasks',
+        i18nKey: 'menu:aivisiontasks',
+        icon: 'MdAssignment',
+        component: () => import('../views/admin/ai-tasks'),
+        layout: '/admin',
+      },
+      {
+        id: 'ai-time-schedules',
+        path: '/aivision/time-schedules',
+        i18nKey: 'menu:ai-time-schedules',
+        icon: 'MdSchedule',
+        component: () => import('../views/admin/ai-time-schedules'),
+        layout: '/admin',
+      },
+    ],
+  },
+  {
     id: 'person-management',
     path: '/person-management',
     i18nKey: 'menu:person-management',

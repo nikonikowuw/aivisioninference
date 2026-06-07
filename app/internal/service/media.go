@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -89,13 +91,26 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 	// Generate signed token
 	token := s.GeneratePlayToken(stream, "anonymous", 30*time.Minute)
 
+	// 解析 zlmBaseURL 获取主机名
+	host := s.zlmBaseURL
+	if u, err := url.Parse(s.zlmBaseURL); err == nil && u.Hostname() != "" {
+		host = u.Hostname()
+	}
+	// 清理可能的协议前缀
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	// 移除端口（如果有）
+	if idx := strings.Index(host, ":"); idx > 0 {
+		host = host[:idx]
+	}
+
 	switch protocol {
 	case "flv":
-		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", s.zlmBaseURL, app, stream, token), nil
+		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", host, app, stream, token), nil
 	case "hls":
-		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", s.zlmBaseURL, app, stream, token), nil
+		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", host, app, stream, token), nil
 	default: // auto, webrtc
-		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", s.zlmBaseURL, app, stream, token), nil
+		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", host, app, stream, token), nil
 	}
 }
 

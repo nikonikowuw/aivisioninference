@@ -54,6 +54,8 @@ pnpm-debug.log*
 # Proto / FlatBuffers
 **/generated/
 **/proto/*.pb.go
+**/proto/flatbuf/*_generated.h
+**/include/proto/*_generated.h
 
 # ZLM
 zlm/data/

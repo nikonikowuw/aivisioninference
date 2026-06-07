@@ -89,7 +89,7 @@ rate_limit:
   requests_per_minute: 100
 
 zlm:
-  api_url: "http://localhost:80"
+  api_url: "localhost"
   secret: "PDGMueZYJRz5ZYCNF4DsBg1G10xoJq56"
 
 engine:

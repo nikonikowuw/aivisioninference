@@ -53,6 +53,12 @@ namespace aivision
 
         /// RTSP 推流目标服务器地址 (如 "rtsp://zlm:554")
         std::string rtsp_push_server = "rtsp://zlm:554";
+
+        /// ZLM API URL (如 "http://localhost:80")
+        std::string zlm_api_url = "http://localhost:80";
+
+        /// ZLM Secret
+        std::string zlm_secret = "";
     };
 
     /// 推理引擎主类
@@ -128,6 +134,16 @@ namespace aivision
 
         /// 处理 StartSelfCheck 指令
         void HandleStartSelfCheck(const uint8_t *payload, size_t size, uint64_t seq);
+
+        /// 调用 ZLM addStreamProxy API 拉取 RTSP 流
+        /// 返回 ZLM 的播放 URL，失败返回空字符串
+        std::string AddStreamProxy(const std::string &device_id, const std::string &rtsp_url);
+
+        /// 调用 ZLM closeStream API 停止拉流
+        bool CloseStreamProxy(const std::string &device_id);
+
+        /// 解析简单的 JSON 字段
+        std::string ExtractJsonField(const std::string &json, const std::string &field_name);
 
         EngineConfig config_;
         std::atomic<bool> running_{false};

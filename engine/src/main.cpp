@@ -39,11 +39,13 @@ static void PrintUsage(const char *prog)
 {
     std::cout << "Usage: " << prog << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  --addr HOST:PORT   IPC listen address (default: 0.0.0.0:9500)" << std::endl;
+    std::cout << "  --addr HOST:PORT     IPC listen address (default: 0.0.0.0:9500)" << std::endl;
     std::cout << "  --workers N          Worker thread count (default: 4)" << std::endl;
     std::cout << "  --hal-so PATH        HAL platform pipeline .so path" << std::endl;
     std::cout << "  --hal-config JSON    HAL configuration JSON" << std::endl;
     std::cout << "  --metrics-ms N       Metrics report interval in ms (default: 5000)" << std::endl;
+    std::cout << "  --zlm-url URL        ZLM API URL (default: http://localhost:80)" << std::endl;
+    std::cout << "  --zlm-secret SECRET  ZLM API secret" << std::endl;
     std::cout << "  --version            Print version and exit" << std::endl;
     std::cout << "  --help               Print this help and exit" << std::endl;
 }
@@ -85,6 +87,14 @@ int main(int argc, char *argv[])
         else if (arg == "--metrics-ms" && i + 1 < argc)
         {
             config.metrics_interval_ms = static_cast<uint32_t>(std::stoul(argv[++i]));
+        }
+        else if (arg == "--zlm-url" && i + 1 < argc)
+        {
+            config.zlm_api_url = argv[++i];
+        }
+        else if (arg == "--zlm-secret" && i + 1 < argc)
+        {
+            config.zlm_secret = argv[++i];
         }
         else
         {

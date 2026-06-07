@@ -167,32 +167,409 @@ namespace aivision
         Shutdown();
     }
 
+    std::string InferenceEngine::ExtractJsonField(const std::string &json, const std::string &field_name)
+    {
+        std::string search = "\"" + field_name + "\"";
+        size_t pos = json.find(search);
+        if (pos == std::string::npos)
+            return "";
+
+        size_t start = json.find(":", pos);
+        if (start == std::string::npos)
+            return "";
+
+        // 跳过空白
+        start++;
+        while (start < json.size() && (json[start] == ' ' || json[start] == '\t'))
+            start++;
+
+        if (start >= json.size())
+            return "";
+
+        // 字符串值
+        if (json[start] == '"')
+        {
+            start++;
+            size_t end = json.find("\"", start);
+            if (end == std::string::npos)
+                return "";
+            return json.substr(start, end - start);
+        }
+
+        // 数字或布尔值
+        size_t end = json.find_first_of(",}\n", start);
+        if (end == std::string::npos)
+            end = json.size();
+        return json.substr(start, end - start);
+    }
+
+    namespace {
+        /// libcurl 写回调，将响应追加到 std::string
+        size_t curl_string_write_callback(void *ptr, size_t size, size_t nmemb, void *userdata)
+        {
+            std::string *str = static_cast<std::string*>(userdata);
+            str->append(static_cast<const char*>(ptr), size * nmemb);
+            return size * nmemb;
+        }
+    }
+
+    std::string InferenceEngine::AddStreamProxy(const std::string &device_id, const std::string &rtsp_url)
+    {
+        if (config_.zlm_api_url.empty())
+        {
+            std::cerr << "[ZLM] zlm_api_url not configured" << std::endl;
+            return "";
+        }
+
+        // 构建 ZLM addStreamProxy URL
+        // GET /index/api/addStreamProxy?vhost=__defaultVhost__&app=live&stream={device_id}&url={rtsp_url}&secret=xxx&retry_count=3&rtp_type=0
+        std::string zlm_url = config_.zlm_api_url;
+        if (zlm_url.back() == '/')
+            zlm_url.pop_back();
+
+        // URL 编码 rtsp_url
+        std::string encoded_url;
+        CURL *curl = curl_easy_init();
+        if (curl)
+        {
+            char *encoded = curl_easy_escape(curl, rtsp_url.c_str(), rtsp_url.size());
+            if (encoded)
+            {
+                encoded_url = encoded;
+                curl_free(encoded);
+            }
+            curl_easy_cleanup(curl);
+        }
+        if (encoded_url.empty())
+            encoded_url = rtsp_url;
+
+        std::string api_url = zlm_url + "/index/api/addStreamProxy"
+            + "?vhost=__defaultVhost__"
+            + "&app=live"
+            + "&stream=" + device_id
+            + "&url=" + encoded_url
+            + "&secret=" + config_.zlm_secret
+            + "&retry_count=3"
+            + "&rtp_type=0"  // TCP
+            + "&timeout_sec=10";
+
+        std::cout << "[ZLM] Calling addStreamProxy for device: " << device_id << std::endl;
+        std::cout << "[ZLM] URL: " << api_url << std::endl;
+
+        // 发送 HTTP 请求
+        std::string response;
+        CURL *curl_handle = curl_easy_init();
+        if (!curl_handle)
+        {
+            std::cerr << "[ZLM] Failed to init curl" << std::endl;
+            return "";
+        }
+
+        curl_easy_setopt(curl_handle, CURLOPT_URL, api_url.c_str());
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, curl_string_write_callback);
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 30L);
+
+        CURLcode res = curl_easy_perform(curl_handle);
+        curl_easy_cleanup(curl_handle);
+
+        if (res != CURLE_OK)
+        {
+            std::cerr << "[ZLM] addStreamProxy failed: " << curl_easy_strerror(res) << std::endl;
+            return "";
+        }
+
+        std::cout << "[ZLM] Response: " << response << std::endl;
+
+        // 解析响应，检查 code 是否为 0
+        std::string code_str = ExtractJsonField(response, "code");
+        if (code_str != "0")
+        {
+            std::cerr << "[ZLM] addStreamProxy error: code=" << code_str << std::endl;
+            std::string msg = ExtractJsonField(response, "msg");
+            if (!msg.empty())
+                std::cerr << "[ZLM] msg: " << msg << std::endl;
+            return "";
+        }
+
+        // 构建播放 URL
+        // RTSP: rtsp://{host}:554/live/{device_id}
+        // WebRTC: webrtc://{host}:8000/live/{device_id}
+        // 提取 host
+        std::string host = config_.zlm_api_url;
+        // 移除协议前缀
+        size_t proto_end = host.find("://");
+        if (proto_end != std::string::npos)
+            host = host.substr(proto_end + 3);
+        // 移除端口和路径
+        size_t colon_pos = host.find(":");
+        if (colon_pos != std::string::npos)
+            host = host.substr(0, colon_pos);
+        size_t slash_pos = host.find("/");
+        if (slash_pos != std::string::npos)
+            host = host.substr(0, slash_pos);
+
+        std::string play_url = "rtsp://" + host + ":554/live/" + device_id;
+        std::cout << "[ZLM] Stream proxy added, play URL: " << play_url << std::endl;
+
+        return play_url;
+    }
+
+    bool InferenceEngine::CloseStreamProxy(const std::string &device_id)
+    {
+        if (config_.zlm_api_url.empty())
+            return false;
+
+        std::string zlm_url = config_.zlm_api_url;
+        if (zlm_url.back() == '/')
+            zlm_url.pop_back();
+
+        std::string api_url = zlm_url + "/index/api/closeStream"
+            + "?vhost=__defaultVhost__"
+            + "&app=live"
+            + "&stream=" + device_id
+            + "&force=1"
+            + "&secret=" + config_.zlm_secret;
+
+        std::cout << "[ZLM] Closing stream proxy for device: " << device_id << std::endl;
+
+        std::string response;
+        CURL *curl = curl_easy_init();
+        if (!curl)
+            return false;
+
+        curl_easy_setopt(curl, CURLOPT_URL, api_url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_string_write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+
+        CURLcode res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+
+        if (res != CURLE_OK)
+        {
+            std::cerr << "[ZLM] closeStream failed: " << curl_easy_strerror(res) << std::endl;
+            return false;
+        }
+
+        std::cout << "[ZLM] closeStream response: " << response << std::endl;
+        return true;
+    }
+
     void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size, uint64_t seq)
     {
-        // TODO: 解析 FlatBuffers StreamStartCmd
-        // pipeline_mgr_->CreatePipeline(device_id, stream_url, enable_infer, enable_playback);
+        (void)seq;
         std::cout << "[IPC] Received StreamStart" << std::endl;
+
+        // 解析 JSON payload (Go 端使用 JSON 序列化)
+        std::string device_id;
+        std::string stream_url;
+        
+        if (payload && size > 0)
+        {
+            std::string json_str(reinterpret_cast<const char*>(payload), size);
+            device_id = ExtractJsonField(json_str, "DeviceID");
+            stream_url = ExtractJsonField(json_str, "StreamURL");
+        }
+
+        std::cout << "[IPC] StreamStart device_id=" << device_id
+                  << ", stream_url=" << stream_url << std::endl;
+
+        if (device_id.empty() || stream_url.empty())
+        {
+            std::cerr << "[IPC] Invalid StreamStart payload: missing device_id or stream_url" << std::endl;
+            flatbuffers::FlatBufferBuilder fbb(256);
+            auto device_id_str = fbb.CreateString("");
+            auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+            fbb.Finish(resp);
+            int client_fd = ipc_server_->GetActiveClientFd();
+            if (client_fd >= 0)
+                ipc_server_->SendResponse(client_fd, 301, fbb.GetBufferPointer(), fbb.GetSize());
+            return;
+        }
+
+        // 调用 ZLM addStreamProxy 拉取 RTSP 流
+        std::string play_url = AddStreamProxy(device_id, stream_url);
+        if (play_url.empty())
+        {
+            std::cerr << "[IPC] Failed to add stream proxy for device: " << device_id << std::endl;
+            flatbuffers::FlatBufferBuilder fbb(256);
+            auto device_id_str = fbb.CreateString(device_id);
+            auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+            fbb.Finish(resp);
+            int client_fd = ipc_server_->GetActiveClientFd();
+            if (client_fd >= 0)
+                ipc_server_->SendResponse(client_fd, 301, fbb.GetBufferPointer(), fbb.GetSize());
+            return;
+        }
+
+        // TODO: 调用 pipeline_mgr_->CreatePipeline(device_id, stream_url, enable_infer, enable_playback);
+
+        // 返回成功响应，包含播放 URL
+        flatbuffers::FlatBufferBuilder fbb(512);
+        auto device_id_str = fbb.CreateString(device_id);
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, true);
+        fbb.Finish(resp);
+
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 301, fbb.GetBufferPointer(), fbb.GetSize());
+            std::cout << "[IPC] StreamStart response sent for device: " << device_id
+                      << ", play_url=" << play_url << std::endl;
+        }
+        else
+        {
+            std::cerr << "[IPC] Failed to send StreamStart response: no active client" << std::endl;
+        }
     }
 
     void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size, uint64_t seq)
     {
-        // TODO: 解析 FlatBuffers StreamStopCmd
-        // pipeline_mgr_->DestroyPipeline(device_id);
+        (void)seq;
         std::cout << "[IPC] Received StreamStop" << std::endl;
+
+        // 解析 JSON payload
+        std::string device_id;
+        if (payload && size > 0)
+        {
+            std::string json_str(reinterpret_cast<const char*>(payload), size);
+            device_id = ExtractJsonField(json_str, "DeviceID");
+        }
+
+        // 如果 JSON 解析失败，尝试作为纯字符串
+        if (device_id.empty() && payload && size > 0)
+        {
+            device_id = std::string(reinterpret_cast<const char*>(payload), size);
+        }
+
+        std::cout << "[IPC] StreamStop device_id=" << device_id << std::endl;
+
+        // 调用 ZLM closeStream 停止拉流
+        if (!device_id.empty())
+        {
+            CloseStreamProxy(device_id);
+        }
+
+        // TODO: 调用 pipeline_mgr_->DestroyPipeline(device_id);
+
+        // 发送响应
+        flatbuffers::FlatBufferBuilder fbb(256);
+        auto device_id_str = fbb.CreateString(device_id);
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+        fbb.Finish(resp);
+
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 302, fbb.GetBufferPointer(), fbb.GetSize());
+            std::cout << "[IPC] StreamStop response sent for device: " << device_id << std::endl;
+        }
     }
 
     void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload, size_t size, uint64_t seq)
     {
-        // TODO: 解析 FlatBuffers StreamPlaybackStartCmd
-        // pipeline_mgr_->EnablePlayback(device_id);
+        (void)seq;
         std::cout << "[IPC] Received StreamPlaybackStart" << std::endl;
+
+        // 解析 JSON payload
+        std::string device_id;
+        if (payload && size > 0)
+        {
+            std::string json_str(reinterpret_cast<const char*>(payload), size);
+            // 简单解析 device_id
+            size_t pos = json_str.find("\"DeviceID\"");
+            if (pos != std::string::npos)
+            {
+                size_t start = json_str.find(":", pos);
+                if (start != std::string::npos)
+                {
+                    start = json_str.find("\"", start + 1);
+                    if (start != std::string::npos)
+                    {
+                        size_t end = json_str.find("\"", start + 1);
+                        if (end != std::string::npos)
+                        {
+                            device_id = json_str.substr(start + 1, end - start - 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (device_id.empty())
+        {
+            device_id = std::string(reinterpret_cast<const char*>(payload), size);
+        }
+
+        std::cout << "[IPC] StreamPlaybackStart device_id=" << device_id << std::endl;
+
+        // TODO: 实际启用播放
+
+        // 发送响应
+        flatbuffers::FlatBufferBuilder fbb(256);
+        auto device_id_str = fbb.CreateString(device_id);
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, true);
+        fbb.Finish(resp);
+
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 303, fbb.GetBufferPointer(), fbb.GetSize());
+            std::cout << "[IPC] StreamPlaybackStart response sent for device: " << device_id << std::endl;
+        }
     }
 
     void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload, size_t size, uint64_t seq)
     {
-        // TODO: 解析 FlatBuffers StreamPlaybackStopCmd
-        // pipeline_mgr_->DisablePlayback(device_id);
+        (void)seq;
         std::cout << "[IPC] Received StreamPlaybackStop" << std::endl;
+
+        // 解析 JSON payload
+        std::string device_id;
+        if (payload && size > 0)
+        {
+            std::string json_str(reinterpret_cast<const char*>(payload), size);
+            size_t pos = json_str.find("\"DeviceID\"");
+            if (pos != std::string::npos)
+            {
+                size_t start = json_str.find(":", pos);
+                if (start != std::string::npos)
+                {
+                    start = json_str.find("\"", start + 1);
+                    if (start != std::string::npos)
+                    {
+                        size_t end = json_str.find("\"", start + 1);
+                        if (end != std::string::npos)
+                        {
+                            device_id = json_str.substr(start + 1, end - start - 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (device_id.empty())
+        {
+            device_id = std::string(reinterpret_cast<const char*>(payload), size);
+        }
+
+        std::cout << "[IPC] StreamPlaybackStop device_id=" << device_id << std::endl;
+
+        // TODO: 实际停止播放
+
+        // 发送响应
+        flatbuffers::FlatBufferBuilder fbb(256);
+        auto device_id_str = fbb.CreateString(device_id);
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+        fbb.Finish(resp);
+
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 304, fbb.GetBufferPointer(), fbb.GetSize());
+            std::cout << "[IPC] StreamPlaybackStop response sent for device: " << device_id << std::endl;
+        }
     }
 
     namespace {

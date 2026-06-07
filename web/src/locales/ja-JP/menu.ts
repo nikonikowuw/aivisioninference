@@ -8,7 +8,7 @@ export const menu = {
   "live-view": "ライブビュー",
   "recordings": "録画再生",
   "stream-status": "配信ステータス",
-  "smart-records": "スマートレコード",
+
 
   "user-management": "ユーザー管理",
   "users": "ユーザー",

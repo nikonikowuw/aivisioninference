@@ -13,7 +13,7 @@ interface UseWebSocketOptions {
 export function useWebSocket({ onMessage, onOpen, onClose, onError, urlPath = '/api/v1/ws' }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const unmountedRef = useRef(false);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryDelayRef = useRef(1000);
   const maxRetryDelay = 30000;
 

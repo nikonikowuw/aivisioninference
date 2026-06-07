@@ -244,9 +244,6 @@ func (r *Router) setupRoutes() {
 	// AI Time Schedules (reusable time configurations for AI tasks)
 	RegisterAITimeScheduleRoutes(authorized, deps.AITimeScheduleHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
 
-	// Algorithm packages (read-only for AI task form selection)
-	RegisterAlgorithmPackageReadRoutes(authorized, r.db, middleware.RBAC(rbacCache, r.db))
-
 	// System brand configuration
 	brandHandler := deps.BrandHandler
 	v1.GET("/system/brand-config", brandHandler.GetConfig)
@@ -390,15 +387,6 @@ func (r *Router) setupRoutes() {
 			mediaGB28181.POST("/playback/start", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StartPlayback)
 			mediaGB28181.POST("/playback/control", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.PlaybackControl)
 			mediaGB28181.POST("/playback/stop", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StopPlayback)
-		}
-	}
-
-	// Smart Records 路由
-	if deps.SmartRecordHandler != nil {
-		smartRecords := authorized.Group("/smart-records")
-		{
-			smartRecords.GET("", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.List)
-			smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportCSV)
 		}
 	}
 

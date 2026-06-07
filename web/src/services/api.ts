@@ -727,6 +727,169 @@ export interface CategoryCodeOption {
   label: string;
 }
 
+// Algorithm Package types
+export interface AlgorithmPackage {
+  id: string;
+  algorithm_name: string;
+  algorithm_alias?: string;
+  version: string;
+  domain: string;
+  result_schema: string;
+  capabilities_image?: string[];
+  capabilities_data?: string[];
+  hardware?: string[];
+  description?: string;
+  package_path: string;
+  extract_path: string;
+  package_size?: number;
+  package_md5?: string;
+  so_path: string;
+  ai_params_schema?: unknown;
+  self_check_status: string;
+  self_check_result?: unknown;
+  self_check_at?: string;
+  status: string;
+  ref_count: number;
+  is_current: boolean;
+  remark?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface AlgorithmPackageListParams extends CrudListParams {
+  status?: string;
+  domain?: string;
+  self_check_status?: string;
+}
+
+export const algorithmPackagesApi = {
+  ...crud<AlgorithmPackage, AlgorithmPackageListParams>('algorithmpackages'),
+  upload: async (file: File, onProgress?: (pct: number) => void): Promise<AlgorithmPackage> => {
+    const headers = authHeaders();
+    const response = await fetch(`${API_BASE}/algorithmpackages/upload`, {
+      method: 'POST',
+      headers,
+      body: file,
+    });
+    redirectOnUnauthorized(response);
+    const json = await parseApiResponse<AlgorithmPackage>(response);
+    if (json.code !== 0) {
+      throw new ApiError(
+        json.code,
+        resolveApiErrorMessage(json.code, json.message),
+        response.status,
+      );
+    }
+    return json.data;
+  },
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/algorithmpackages/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  exportCsv: (params?: AlgorithmPackageListParams) =>
+    downloadFile(`/algorithmpackages/export${buildQuery(params || {})}`, 'algorithm-packages.csv'),
+};
+
+// algoPackagesApi 别名（兼容旧导入）
+export const algoPackagesApi = algorithmPackagesApi;
+
+// Region types for AI vision tasks
+export interface ROIRegion {
+  id: string;
+  type: 'polygon' | 'rect';
+  label?: string;
+  points?: number[][]; // normalized 0-1 coordinates [[x, y], ...]
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+export type MarkRegion = ROIRegion;
+
+export interface LineRegion {
+  id: string;
+  label?: string;
+  start: [number, number]; // normalized [x, y]
+  end: [number, number]; // normalized [x, y]
+  direction?: 'both' | 'in' | 'out';
+}
+
+// AI Time Schedule types
+export interface AITimeSchedule {
+  id: string;
+  name: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  time_windows: { start: string; end: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AITimeScheduleListParams extends CrudListParams {}
+
+export const aiTimeSchedulesApi = {
+  ...crud<AITimeSchedule, AITimeScheduleListParams>('ai-time-schedules'),
+  listAll: () =>
+    request<AITimeSchedule[]>('/ai-time-schedules/all'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/ai-time-schedules/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+};
+
+// AI Vision Task types
+export interface AIVisionTask {
+  id: string;
+  name: string;
+  status: string;
+  schedule_id: string;
+  device_channel_id: string;
+  algo_package_id: string;
+  target_node_id: string;
+  start_date: string;
+  end_date: string;
+  time_windows: { start: string; end: string }[];
+  ai_params?: Record<string, unknown>;
+  roi_regions?: ROIRegion[];
+  mark_regions?: MarkRegion[];
+  line_regions?: LineRegion[];
+  error_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIVisionTaskListParams extends CrudListParams {
+  status?: string;
+}
+
+export interface AIVisionTaskConflictCheck {
+  target_node_id: string;
+  start_date: string;
+  end_date: string;
+  time_windows: { start: string; end: string }[];
+  exclude_task_id?: string;
+}
+
+export const aiVisionTasksApi = {
+  ...crud<AIVisionTask, AIVisionTaskListParams>('ai-vision-tasks'),
+  checkConflict: (data: AIVisionTaskConflictCheck) =>
+    request<{ conflict: boolean; message?: string }>('/ai-vision-tasks/check-conflict', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/ai-vision-tasks/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+};
+
 export const brandConfigApi = {
   get: () => request<BrandConfig>('/system/brand-config'),
   save: (data: Pick<BrandConfig, 'system_name' | 'logo_url'>) =>

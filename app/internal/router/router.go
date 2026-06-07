@@ -59,9 +59,9 @@ type Config struct {
 	GB28181PlaybackMaxSec int           `yaml:"gb28181_playback_max_sec" mapstructure:"gb28181_playback_max_sec"`
 	GB28181StreamTimeout  time.Duration `yaml:"gb28181_stream_timeout" mapstructure:"gb28181_stream_timeout"`
 	// ZLM 端口配置（可被 docker 端口映射覆盖）
-	ZLMRTMPPort   int    `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
-	ZLMRTSPPort   int    `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
-	ZLMHTTPPort   int    `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
+	ZLMRTMPPort int `yaml:"zlm_rtmp_port" mapstructure:"zlm_rtmp_port"`
+	ZLMRTSPPort int `yaml:"zlm_rtsp_port" mapstructure:"zlm_rtsp_port"`
+	ZLMHTTPPort int `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
 	// ZLM 实际对外 IP（设备推流目标地址，默认从 ZLMAPIURL 解析）
 	ZLMExternalIP string `yaml:"zlm_external_ip" mapstructure:"zlm_external_ip"`
 }
@@ -321,12 +321,17 @@ func (r *Router) setupRoutes() {
 		gb28181 := authorized.Group("/gb28181")
 		{
 			gb28181.GET("/devices", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.List)
+			gb28181.POST("/devices", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Create)
+			gb28181.POST("/devices/batch-delete", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.BatchDelete)
 			gb28181.GET("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetByID)
 			gb28181.PUT("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Update)
 			gb28181.DELETE("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Delete)
 			gb28181.POST("/devices/:id/catalog", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.TriggerCatalog)
 			gb28181.GET("/devices/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetChannels)
 			gb28181.GET("/catalog-tasks/:task_id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetCatalogTaskStatus)
+			// 新数据模型接口（Device 表）
+			gb28181.GET("/nvrs", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.ListNVRs)
+			gb28181.GET("/nvrs/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetNVRChannels)
 		}
 	}
 

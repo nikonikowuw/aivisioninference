@@ -84,7 +84,9 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	licenseHandler := provideLicenseHandler(licenseService)
 	gb28181DeviceRepository := repository.NewGB28181DeviceRepository(db)
 	smartRecordRepository := repository.NewSmartRecordRepository(db)
-	sipService := provideSIPServiceWithZLM(deviceRepository, gb28181DeviceRepository, mediaStreamRepository, smartRecordRepository, client, zlmClient, streamManager, cfg, cache, hub)
+	deviceSipConfigRepository := repository.NewDeviceSipConfigRepository(db)
+	deviceRepositoryV2 := repository.NewDeviceRepositoryV2(db)
+	sipService := provideSIPServiceWithZLM(deviceRepository, gb28181DeviceRepository, mediaStreamRepository, smartRecordRepository, deviceSipConfigRepository, deviceRepositoryV2, client, zlmClient, streamManager, cfg, cache, hub)
 	gb28181Handler := provideGB28181Handler(sipService, cache, hub)
 	mediaGB28181Handler := provideMediaGB28181Handler(sipService)
 	smartRecordHandler := provideSmartRecordHandler(smartRecordRepository)
@@ -95,7 +97,7 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository, repository.NewGB28181DeviceRepository, repository.NewSmartRecordRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewLicenseRepository, repository.NewGB28181DeviceRepository, repository.NewSmartRecordRepository, repository.NewDeviceSipConfigRepository, repository.NewDeviceRepositoryV2)
 
 var serviceSet = wire.NewSet(
 	provideAvatarStorage,

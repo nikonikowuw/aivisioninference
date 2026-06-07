@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"time"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -18,32 +19,17 @@ func NewMediaGB28181Handler(sipSvc *service.SIPService) *MediaGB28181Handler {
 	return &MediaGB28181Handler{sipSvc: sipSvc}
 }
 
-type StartLiveRequest struct {
-	DeviceID string `json:"device_id" binding:"required"`
-}
-
-type StopLiveRequest struct {
-	DeviceID string `json:"device_id" binding:"required"`
-	StreamID string `json:"stream_id" binding:"required"`
-}
-
-type PlayResponse struct {
-	URL      string `json:"url"`
-	Protocol string `json:"protocol"`
-	StreamID string `json:"stream_id"`
-}
-
 // StartLive 启动 GB28181 实时预览
 // @Summary      启动实时预览
 // @Tags         GB28181媒体
 // @Accept       json
 // @Produce      json
-// @Param        body  body  StartLiveRequest  true  "请求参数"
-// @Success      200  {object}  dto.Response{data=PlayResponse}
+// @Param        body  body  dto.StartLiveRequest  true  "请求参数"
+// @Success      200  {object}  dto.Response{data=dto.PlayResponse}
 // @Router       /media/gb28181/live/start [post]
 // @Security     BearerAuth
 func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
-	var req StartLiveRequest
+	var req dto.StartLiveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
@@ -62,7 +48,7 @@ func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, PlayResponse{
+	response.OK(c, dto.PlayResponse{
 		URL:      url,
 		Protocol: "rtmp",
 		StreamID: streamID,
@@ -74,12 +60,12 @@ func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
 // @Tags         GB28181媒体
 // @Accept       json
 // @Produce      json
-// @Param        body  body  StopLiveRequest  true  "请求参数"
+// @Param        body  body  dto.StopLiveRequest  true  "请求参数"
 // @Success      200  {object}  dto.Response
 // @Router       /media/gb28181/live/stop [post]
 // @Security     BearerAuth
 func (h *MediaGB28181Handler) StopLive(c *gin.Context) {
-	var req StopLiveRequest
+	var req dto.StopLiveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
@@ -99,23 +85,17 @@ func (h *MediaGB28181Handler) StopLive(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-type StartPlaybackRequest struct {
-	DeviceID  string    `json:"device_id" binding:"required"`
-	StartTime time.Time `json:"start_time" binding:"required"`
-	EndTime   time.Time `json:"end_time" binding:"required"`
-}
-
 // StartPlayback 启动 GB28181 录像回放
 // @Summary      启动录像回放
 // @Tags         GB28181媒体
 // @Accept       json
 // @Produce      json
-// @Param        body  body  StartPlaybackRequest  true  "请求参数"
-// @Success      200  {object}  dto.Response{data=PlayResponse}
+// @Param        body  body  dto.StartPlaybackRequest  true  "请求参数"
+// @Success      200  {object}  dto.Response{data=dto.PlayResponse}
 // @Router       /media/gb28181/playback/start [post]
 // @Security     BearerAuth
 func (h *MediaGB28181Handler) StartPlayback(c *gin.Context) {
-	var req StartPlaybackRequest
+	var req dto.StartPlaybackRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
@@ -127,25 +107,18 @@ func (h *MediaGB28181Handler) StartPlayback(c *gin.Context) {
 		return
 	}
 
-	streamID := uuid.New().String()
+	streamID := fmt.Sprintf("playback_%s_%s", gbDevice.DeviceCode, uuid.New().String()[:8])
 	url, err := h.sipSvc.StartPlayback(c.Request.Context(), gbDevice.DeviceCode, streamID, req.StartTime, req.EndTime)
 	if err != nil {
 		attachError(c, err)
 		return
 	}
 
-	response.OK(c, PlayResponse{
+	response.OK(c, dto.PlayResponse{
 		URL:      url,
 		Protocol: "flv",
 		StreamID: streamID,
 	})
-}
-
-type PlaybackControlRequest struct {
-	StreamID string  `json:"stream_id" binding:"required"`
-	Action   string  `json:"action" binding:"required,oneof=pause resume scale seek"`
-	Speed    float64 `json:"speed"`
-	Stamp    int64   `json:"stamp"`
 }
 
 // PlaybackControl GB28181 回放控制
@@ -153,12 +126,12 @@ type PlaybackControlRequest struct {
 // @Tags         GB28181媒体
 // @Accept       json
 // @Produce      json
-// @Param        body  body  PlaybackControlRequest  true  "控制参数"
+// @Param        body  body  dto.PlaybackControlRequest  true  "控制参数"
 // @Success      200  {object}  dto.Response
 // @Router       /media/gb28181/playback/control [post]
 // @Security     BearerAuth
 func (h *MediaGB28181Handler) PlaybackControl(c *gin.Context) {
-	var req PlaybackControlRequest
+	var req dto.PlaybackControlRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
@@ -172,22 +145,17 @@ func (h *MediaGB28181Handler) PlaybackControl(c *gin.Context) {
 	response.OK(c, nil)
 }
 
-type StopPlaybackRequest struct {
-	DeviceID string `json:"device_id" binding:"required"`
-	StreamID string `json:"stream_id" binding:"required"`
-}
-
 // StopPlayback 停止 GB28181 录像回放
 // @Summary      停止录像回放
 // @Tags         GB28181媒体
 // @Accept       json
 // @Produce      json
-// @Param        body  body  StopPlaybackRequest  true  "请求参数"
+// @Param        body  body  dto.StopPlaybackRequest  true  "请求参数"
 // @Success      200  {object}  dto.Response
 // @Router       /media/gb28181/playback/stop [post]
 // @Security     BearerAuth
 func (h *MediaGB28181Handler) StopPlayback(c *gin.Context) {
-	var req StopPlaybackRequest
+	var req dto.StopPlaybackRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
@@ -199,8 +167,6 @@ func (h *MediaGB28181Handler) StopPlayback(c *gin.Context) {
 		return
 	}
 
-	// 停止回放也是调用 ZLM close stream，可以用 StopLiveStream，或提供专用的 StopPlayback
-	// 这里复用 StopLiveStream，效果是一样的：停止 rtp 接收
 	if err := h.sipSvc.StopLiveStream(c.Request.Context(), gbDevice.DeviceCode, req.StreamID); err != nil {
 		attachError(c, err)
 		return

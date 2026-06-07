@@ -46,6 +46,28 @@ func (m *mockGB28181Service) UpdateGB28181Device(ctx context.Context, id string,
 
 func (m *mockGB28181Service) DeleteGB28181Device(ctx context.Context, id string) error { return nil }
 
+func (m *mockGB28181Service) CreateGB28181Device(ctx context.Context, req dto.GB28181DeviceCreateRequest) (*model.GB28181Device, error) {
+	return &model.GB28181Device{
+		BaseModel:  model.BaseModel{ID: "gb-new"},
+		DeviceCode: req.DeviceCode,
+		SipID:      req.SipID,
+		SipDomain:  req.SipDomain,
+		Status:     model.GB28181StatusOffline,
+	}, nil
+}
+
+func (m *mockGB28181Service) BatchDeleteGB28181Devices(ctx context.Context, ids []string) dto.BatchResult {
+	return dto.BatchResult{Total: len(ids), Success: len(ids)}
+}
+
+func (m *mockGB28181Service) GetNVRChannels(ctx context.Context, nvrID string, page, pageSize int) ([]dto.GB28181DeviceResponse, int64, error) {
+	return []dto.GB28181DeviceResponse{}, 0, nil
+}
+
+func (m *mockGB28181Service) ListNVRs(ctx context.Context, keyword, status string, page, pageSize int) ([]dto.GB28181DeviceResponse, int64, error) {
+	return []dto.GB28181DeviceResponse{}, 0, nil
+}
+
 func (m *mockGB28181Service) QueryCatalog(ctx context.Context, deviceCode string) error {
 	m.queryCatalogCalled = true
 	m.lastCatalogCode = deviceCode
@@ -61,7 +83,11 @@ func setupGB28181TestRouter(svc *mockGB28181Service) *gin.Engine {
 	r := gin.New()
 	h := NewGB28181Handler(svc, cache.NewMemoryCache(0), ws.NewHub())
 	r.GET("/gb28181/devices", h.List)
+	r.POST("/gb28181/devices", h.Create)
+	r.POST("/gb28181/devices/batch-delete", h.BatchDelete)
 	r.POST("/gb28181/devices/:id/catalog", h.TriggerCatalog)
+	r.GET("/gb28181/nvrs", h.ListNVRs)
+	r.GET("/gb28181/nvrs/:id/channels", h.GetNVRChannels)
 	return r
 }
 
@@ -91,7 +117,7 @@ func TestGB28181HandlerTriggerCatalog(t *testing.T) {
 	assert.Equal(t, "34020000001320000001", svc.lastCatalogCode)
 
 	var resp struct {
-		Code int `json:"code"`
+		Code int                     `json:"code"`
 		Data dto.CatalogTaskResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))

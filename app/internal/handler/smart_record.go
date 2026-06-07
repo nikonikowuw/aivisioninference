@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
+	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
@@ -42,14 +43,7 @@ func (h *SmartRecordHandler) List(c *gin.Context) {
 		return
 	}
 
-	filters := map[string]interface{}{
-		"record_type": req.RecordType,
-		"device_id":   req.DeviceID,
-		"alarm_type":  req.AlarmType,
-		"alarm_level": req.AlarmLevel,
-		"start_time":  req.StartTime,
-		"end_time":    req.EndTime,
-	}
+	filters := buildSmartRecordFilters(req)
 
 	items, total, err := h.repo.List(c.Request.Context(), filters, req.GetPage(), req.GetPageSize())
 	if err != nil {
@@ -59,27 +53,7 @@ func (h *SmartRecordHandler) List(c *gin.Context) {
 
 	var list []dto.SmartRecordResponse
 	for _, item := range items {
-		var rawResult interface{}
-		_ = json.Unmarshal(item.RawResult, &rawResult)
-
-		deviceID := ""
-		if item.DeviceID != nil {
-			deviceID = *item.DeviceID
-		}
-
-		list = append(list, dto.SmartRecordResponse{
-			RecordID:         item.RecordID,
-			RecordType:       item.RecordType,
-			DeviceID:         deviceID,
-			DeviceName:       item.DeviceName,
-			TaskName:         item.TaskName,
-			AlarmType:        item.AlarmType,
-			AlarmLevel:       item.AlarmLevel,
-			SnapshotImageURL: item.SnapshotImageURL,
-			Confidence:       item.Confidence,
-			RawResult:        rawResult,
-			CreatedAt:        item.CreatedAt,
-		})
+		list = append(list, smartRecordToResponse(item))
 	}
 
 	response.Page(c, list, total, req.GetPage(), req.GetPageSize())
@@ -105,14 +79,7 @@ func (h *SmartRecordHandler) ExportCSV(c *gin.Context) {
 		return
 	}
 
-	filters := map[string]interface{}{
-		"record_type": req.RecordType,
-		"device_id":   req.DeviceID,
-		"alarm_type":  req.AlarmType,
-		"alarm_level": req.AlarmLevel,
-		"start_time":  req.StartTime,
-		"end_time":    req.EndTime,
-	}
+	filters := buildSmartRecordFilters(req)
 
 	items, _, err := h.repo.List(c.Request.Context(), filters, 1, 10000)
 	if err != nil {
@@ -128,14 +95,10 @@ func (h *SmartRecordHandler) ExportCSV(c *gin.Context) {
 	_ = writer.Write([]string{"RecordID", "Type", "DeviceID", "AlarmType", "AlarmLevel", "CreatedAt", "RawResult"})
 
 	for _, item := range items {
-		deviceID := ""
-		if item.DeviceID != nil {
-			deviceID = *item.DeviceID
-		}
 		_ = writer.Write([]string{
 			item.RecordID,
 			item.RecordType,
-			deviceID,
+			safeDeref(item.DeviceID),
 			item.AlarmType,
 			item.AlarmLevel,
 			item.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -143,4 +106,55 @@ func (h *SmartRecordHandler) ExportCSV(c *gin.Context) {
 		})
 	}
 	writer.Flush()
+}
+
+// safeDeref 安全解引用 string 指针，nil 返回空字符串。
+func safeDeref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// smartRecordToResponse 将 model.SmartRecord 转换为 dto.SmartRecordResponse。
+func smartRecordToResponse(item model.SmartRecord) dto.SmartRecordResponse {
+	var rawResult interface{}
+	_ = json.Unmarshal(item.RawResult, &rawResult)
+	return dto.SmartRecordResponse{
+		RecordID:         item.RecordID,
+		RecordType:       item.RecordType,
+		DeviceID:         safeDeref(item.DeviceID),
+		DeviceName:       item.DeviceName,
+		TaskName:         item.TaskName,
+		AlarmType:        item.AlarmType,
+		AlarmLevel:       item.AlarmLevel,
+		SnapshotImageURL: item.SnapshotImageURL,
+		Confidence:       item.Confidence,
+		RawResult:        rawResult,
+		CreatedAt:        item.CreatedAt,
+	}
+}
+
+// buildSmartRecordFilters 构建 SmartRecord 查询过滤器，自动跳过空值。
+func buildSmartRecordFilters(req dto.SmartRecordListRequest) map[string]interface{} {
+	filters := map[string]interface{}{}
+	if req.RecordType != "" {
+		filters["record_type"] = req.RecordType
+	}
+	if req.DeviceID != "" {
+		filters["device_id"] = req.DeviceID
+	}
+	if req.AlarmType != "" {
+		filters["alarm_type"] = req.AlarmType
+	}
+	if req.AlarmLevel != "" {
+		filters["alarm_level"] = req.AlarmLevel
+	}
+	if req.StartTime != "" {
+		filters["start_time"] = req.StartTime
+	}
+	if req.EndTime != "" {
+		filters["end_time"] = req.EndTime
+	}
+	return filters
 }

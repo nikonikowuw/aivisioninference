@@ -38,6 +38,8 @@ var repositorySet = wire.NewSet(
 	repository.NewLicenseRepository,
 	repository.NewGB28181DeviceRepository,
 	repository.NewSmartRecordRepository,
+	repository.NewDeviceSipConfigRepository,
+	repository.NewDeviceRepositoryV2,
 )
 
 var serviceSet = wire.NewSet(

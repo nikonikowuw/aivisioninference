@@ -24,20 +24,20 @@ import (
 
 // RouteDeps 聚合路由注册阶段需要的 Handler、Service 与缓存依赖。
 type RouteDeps struct {
-	RBACCache          cache.Cache
-	AuditService       *service.AuditService
-	AuthHandler        *handler.AuthHandler
-	WSHandler          *handler.WSHandler
-	UserHandler        *handler.UserHandler
-	RoleHandler        *handler.RoleHandler
-	PermissionHandler  *handler.PermissionHandler
-	FileHandler        *handler.FileHandler
-	AuditHandler       *handler.AuditHandler
-	TaskHandler        *handler.TaskHandler
-	BrandHandler       *handler.BrandHandler
-	MailHandler        *handler.MailHandler
-	FeedbackHandler    *handler.FeedbackHandler
-	DashboardHandler   *handler.DashboardHandler
+	RBACCache            cache.Cache
+	AuditService         *service.AuditService
+	AuthHandler          *handler.AuthHandler
+	WSHandler            *handler.WSHandler
+	UserHandler          *handler.UserHandler
+	RoleHandler          *handler.RoleHandler
+	PermissionHandler    *handler.PermissionHandler
+	FileHandler          *handler.FileHandler
+	AuditHandler         *handler.AuditHandler
+	TaskHandler          *handler.TaskHandler
+	BrandHandler         *handler.BrandHandler
+	MailHandler          *handler.MailHandler
+	FeedbackHandler      *handler.FeedbackHandler
+	DashboardHandler     *handler.DashboardHandler
 	DeviceHandler        *handler.DeviceHandler
 	DeviceGroupHandler   *handler.DeviceGroupHandler
 	DeviceStagingHandler *handler.DeviceStagingHandler
@@ -189,7 +189,7 @@ func newRouteDeps(
 		WSHandler:            wsHandler,
 		UserHandler:          userHandler,
 		RoleHandler:          roleHandler,
-		PermissionHandler:     permHandler,
+		PermissionHandler:    permHandler,
 		FileHandler:          fileHandler,
 		AuditHandler:         auditHandler,
 		TaskHandler:          taskHandler,
@@ -232,6 +232,8 @@ func provideSIPServiceWithZLM(
 	gbDeviceRepo *repository.GB28181DeviceRepository,
 	mediaStreamRepo *repository.MediaStreamRepository,
 	smartRecordRepo *repository.SmartRecordRepository,
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository,
+	deviceRepoV2 *repository.DeviceRepositoryV2,
 	taskClient *task.Client,
 	zlmClient *zlm.Client,
 	streamManager *service.StreamManager,
@@ -258,7 +260,7 @@ func provideSIPServiceWithZLM(
 	}
 	return service.NewSIPServiceWithZLM(
 		deviceRepo, gbDeviceRepo, mediaStreamRepo,
-		smartRecordRepo, taskClient,
+		smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, taskClient,
 		zlmClient, streamManager, zlmBaseIP,
 		rtmpPort, rtspPort, httpPort,
 		cache, hub,

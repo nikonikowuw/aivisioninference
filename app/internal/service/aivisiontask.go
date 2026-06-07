@@ -9,16 +9,16 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
-	"github.com/niko-admin/niko-admin/internal/repository"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
 // AIVisionTaskService 处理 AIVisionTask 业务逻辑
 type AIVisionTaskService struct {
-	aivisiontaskRepo      *repository.AIVisionTaskRepository
-	aiTimeScheduleRepo    *repository.AITimeScheduleRepository
-	sipSvc                *SIPService
-	streamManager         *StreamManager
+	aivisiontaskRepo   *repository.AIVisionTaskRepository
+	aiTimeScheduleRepo *repository.AITimeScheduleRepository
+	sipSvc             *SIPService
+	streamManager      *StreamManager
 }
 
 // NewAIVisionTaskService 创建新的 AIVisionTaskService
@@ -44,7 +44,7 @@ func NewAIVisionTaskService(
 func (s *AIVisionTaskService) resolveSchedule(ctx context.Context, scheduleID string) (datatypes.Date, datatypes.Date, datatypes.JSON, error) {
 	schedule, err := s.aiTimeScheduleRepo.FindByID(ctx, scheduleID)
 	if err != nil {
-		return datatypes.Date{}, datatypes.Date{}, nil, apperrors.New(apperrors.ErrBadRequest, "时间配置不存在")
+		return datatypes.Date{}, datatypes.Date{}, nil, apperrors.New(apperrors.ErrAITimeScheduleNotFound, "")
 	}
 	return schedule.StartDate, schedule.EndDate, schedule.TimeWindows, nil
 }
@@ -53,7 +53,7 @@ func (s *AIVisionTaskService) resolveSchedule(ctx context.Context, scheduleID st
 func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID string, startDate, endDate datatypes.Date, newWindows []dto.TimeWindow, excludeTaskID string) error {
 	tasks, err := s.aivisiontaskRepo.FindActiveByNode(ctx, nodeID, excludeTaskID)
 	if err != nil {
-		return apperrors.New(apperrors.ErrInternal, "查询节点任务失败")
+		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
 	maxStreams := 4 // TODO: 从节点配置或 License 获取最大路数
@@ -100,14 +100,14 @@ func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID 
 			st, err1 := time.Parse("15:04", w.Start)
 			et, err2 := time.Parse("15:04", w.End)
 			if err1 != nil || err2 != nil {
-				return apperrors.New(apperrors.ErrBadRequest, "时间窗格式错误，期望 HH:mm")
+				return apperrors.New(apperrors.ErrTimeWindowFormat, "")
 			}
 			startMin := st.Hour()*60 + st.Minute()
 			endMin := et.Hour()*60 + et.Minute()
 
 			for m := startMin; m < endMin; m++ {
 				if minutes[m]+1 > maxStreams {
-					return apperrors.New(409, "算力节点资源冲突，超出最大路数限制。冲突任务: "+toJSONString(conflictNames))
+					return apperrors.New(apperrors.ErrResourceConflict, "")
 				}
 			}
 		}
@@ -167,7 +167,7 @@ func (s *AIVisionTaskService) Create(ctx context.Context, req dto.CreateAIVision
 	// 解析时间窗用于冲突检查
 	var windows []dto.TimeWindow
 	if err := json.Unmarshal(timeWindows, &windows); err != nil {
-		return nil, apperrors.New(apperrors.ErrInternal, "解析时间配置时间窗失败")
+		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
 	if err := s.CheckResourceConflict(ctx, req.TargetNodeID, startDate, endDate, windows, ""); err != nil {
@@ -237,7 +237,7 @@ func (s *AIVisionTaskService) Update(ctx context.Context, id string, req dto.Upd
 	// 解析时间窗用于冲突检查
 	var windows []dto.TimeWindow
 	if err := json.Unmarshal(item.TimeWindows, &windows); err != nil {
-		return apperrors.New(apperrors.ErrInternal, "解析时间配置时间窗失败")
+		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
 	if err := s.CheckResourceConflict(ctx, item.TargetNodeID, item.StartDate, item.EndDate, windows, id); err != nil {

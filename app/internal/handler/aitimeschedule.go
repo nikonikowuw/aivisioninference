@@ -34,7 +34,7 @@ func NewAITimeScheduleHandler(svc *service.AITimeScheduleService) *AITimeSchedul
 func (h *AITimeScheduleHandler) List(c *gin.Context) {
 	var req dto.AITimeScheduleListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -79,7 +79,7 @@ func (h *AITimeScheduleHandler) ListAll(c *gin.Context) {
 func (h *AITimeScheduleHandler) Create(c *gin.Context) {
 	var req dto.CreateAITimeScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *AITimeScheduleHandler) Update(c *gin.Context) {
 	}
 	var req dto.UpdateAITimeScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 

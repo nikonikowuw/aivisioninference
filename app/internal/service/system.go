@@ -48,7 +48,7 @@ func NewSystemService(
 	db *gorm.DB,
 	rdb *redis.Client,
 	version string,
-	zlmAPIURL, cppSocketPath string,
+	zlmAPIURL, cppAddr string,
 ) *SystemService {
 	if version == "" {
 		version = buildinfo.Version
@@ -62,7 +62,7 @@ func NewSystemService(
 		version:          version,
 		metricsCollector: NewMetricsCollector(),
 		npuCollector:     NewNPUCollector(),
-		serviceDetector:  NewServiceStatusDetector(rdb, db, zlmAPIURL, cppSocketPath),
+		serviceDetector:  NewServiceStatusDetector(rdb, db, zlmAPIURL, cppAddr),
 		historyBuffer:    NewHistoryBuffer(60), // 保留 60 个数据点
 		cancel:           cancel,
 	}
@@ -292,7 +292,7 @@ func (s *SystemService) collectVersions() VersionInfo {
 	}
 }
 
-// detectCPPEngineVersion 探测 C++ 引擎版本（通过 UDS 握手或返回 "unknown"）
+// detectCPPEngineVersion 探测 C++ 引擎版本（通过 TCP 握手或返回 "unknown"）
 func (s *SystemService) detectCPPEngineVersion() string {
 	// 暂保持简单：调用业务连接探测（如未来 C++ 引擎支持版本查询 API 时可补）
 	return "unknown"

@@ -172,7 +172,7 @@ export default function StreamStatus() {
                     </Td>
                     <Td>
                       <Badge colorScheme={statusColor[stream.status] || 'gray'}>
-                        {stream.status.toUpperCase()}
+                        {(stream.status || 'unknown').toUpperCase()}
                       </Badge>
                     </Td>
                     <Td>

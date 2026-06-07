@@ -214,13 +214,11 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Router       /auth/me [get]
 // @Security     BearerAuth
 func (h *AuthHandler) Me(c *gin.Context) {
-	// 从上下文获取当前登录用户 ID
 	uid, ok := getUserID(c)
 	if !ok {
 		return
 	}
 
-	// 获取详细的用户信息
 	info, err := h.svc.GetMe(c.Request.Context(), uid)
 	if err != nil {
 		attachError(c, err)
@@ -245,19 +243,16 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // @Security     BearerAuth
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	var req dto.UpdateProfileRequest
-	// 绑定并校验修改请求参数
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
 	}
 
-	// 获取当前登录用户 ID
 	uid, ok := getUserID(c)
 	if !ok {
 		return
 	}
 
-	// 更新用户属性并返回更新后的结构
 	info, err := h.svc.UpdateProfile(c.Request.Context(), uid, &req)
 	if err != nil {
 		attachError(c, err)
@@ -282,19 +277,16 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 // @Security     BearerAuth
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	var req dto.ChangePasswordRequest
-	// 绑定并验证请求体参数
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
 	}
 
-	// 获取当前操作的用户 ID
 	uid, ok := getUserID(c)
 	if !ok {
 		return
 	}
 
-	// 调用服务层更新密码，服务层内部会自动哈希化密码
 	if err := h.svc.ChangePassword(c.Request.Context(), uid, req.OldPassword, req.NewPassword); err != nil {
 		attachError(c, err)
 		return
@@ -315,12 +307,10 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 // @Router       /auth/password-reset/request [post]
 func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 	var req dto.RequestPasswordResetRequest
-	// 绑定并验证请求体参数
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
 	}
-	// 如果邮件服务已启用，则发送重置链接
 	if h.emailSvc != nil {
 		if err := h.emailSvc.SendPasswordReset(c.Request.Context(), req.Email, c.ClientIP()); err != nil {
 			attachError(c, err)
@@ -342,16 +332,14 @@ func (h *AuthHandler) RequestPasswordReset(c *gin.Context) {
 // @Router       /auth/password-reset/confirm [post]
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req dto.ConfirmPasswordResetRequest
-	// 绑定并验证请求体参数
 	if err := c.ShouldBindJSON(&req); err != nil {
 		attachError(c, badRequestError(c, err))
 		return
 	}
 	if h.emailSvc == nil {
-		attachError(c, apperrors.New(apperrors.ErrBadRequest, "邮件服务未启用"))
+		attachError(c, apperrors.New(apperrors.ErrMailNotEnabled, ""))
 		return
 	}
-	// 通过 Token 校验并更新密码
 	if err := h.emailSvc.ResetPassword(c.Request.Context(), req.Token, req.NewPassword); err != nil {
 		attachError(c, err)
 		return
@@ -373,26 +361,22 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 // @Router       /auth/avatar [post]
 // @Security     BearerAuth
 func (h *AuthHandler) UploadAvatar(c *gin.Context) {
-	// 获取当前登录用户 ID
 	uid, ok := getUserID(c)
 	if !ok {
 		return
 	}
 
-	// 提取表单中的头像文件
 	fileHeader, err := c.FormFile("avatar")
 	if err != nil {
 		attachError(c, apperrors.New(apperrors.ErrBadRequest, "缺少头像文件"))
 		return
 	}
 
-	// 调用服务执行上传和配置更新逻辑
 	avatarURL, err := h.svc.UploadAvatar(c.Request.Context(), uid, fileHeader)
 	if err != nil {
 		attachError(c, err)
 		return
 	}
 
-	// 返回上传成功后的访问 URL
 	response.OK(c, dto.AvatarUploadResponse{AvatarURL: avatarURL})
 }

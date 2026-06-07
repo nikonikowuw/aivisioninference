@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 	"go.uber.org/zap"
@@ -28,7 +29,6 @@ func (h *MediaPlayHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/streams", h.ListStreams)
 }
 
-
 // GetPlayURL returns a signed playback URL for the specified device and protocol.
 // 对于 RTSP 设备，会自动通过 ZLM addStreamProxy 按需拉流。
 func (h *MediaPlayHandler) GetPlayURL(c *gin.Context) {
@@ -37,14 +37,14 @@ func (h *MediaPlayHandler) GetPlayURL(c *gin.Context) {
 	streamType := c.DefaultQuery("stream_type", "main")
 
 	if deviceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "device_id is required"})
+		response.Err(c, apperrors.New(apperrors.ErrBadRequest, ""))
 		return
 	}
 
 	url, err := h.mediaService.GetPlayURL(c.Request.Context(), deviceID, protocol, streamType)
 	if err != nil {
 		zap.L().Error("get play url failed", zap.String("device_id", deviceID), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 50001, "message": err.Error()})
+		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
 		return
 	}
 
@@ -60,7 +60,7 @@ func (h *MediaPlayHandler) GetPlayURL(c *gin.Context) {
 func (h *MediaPlayHandler) StopPlay(c *gin.Context) {
 	deviceID := c.Query("device_id")
 	if deviceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "device_id is required"})
+		response.Err(c, apperrors.New(apperrors.ErrBadRequest, ""))
 		return
 	}
 
@@ -76,14 +76,14 @@ func (h *MediaPlayHandler) StopPlay(c *gin.Context) {
 func (h *MediaPlayHandler) GetSnapshot(c *gin.Context) {
 	deviceID := c.Query("device_id")
 	if deviceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "device_id is required"})
+		response.Err(c, apperrors.New(apperrors.ErrBadRequest, ""))
 		return
 	}
 
 	imgData, err := h.mediaService.GetSnapshot(c.Request.Context(), deviceID)
 	if err != nil {
 		zap.L().Error("get snapshot failed", zap.String("device_id", deviceID), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 50001, "message": err.Error()})
+		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
 		return
 	}
 
@@ -95,4 +95,3 @@ func (h *MediaPlayHandler) ListStreams(c *gin.Context) {
 	streams := h.mediaService.ListStreams(c.Request.Context())
 	response.OK(c, streams)
 }
-

@@ -77,12 +77,12 @@ RUN mkdir -p /tmp/ipc /var/lib/aivision/data && \
 
 # 健康检查 (通过 UDS 心跳)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD test -S /tmp/ipc/aivision_ipc.sock || exit 1
+    CMD nc -z localhost 9500 || exit 1
 
-# 默认端口（仅 UDS，无网络端口暴露）
-EXPOSE 0
+# IPC 端口
+EXPOSE 9500
 
 USER aivision
 
 ENTRYPOINT ["aivision-engine"]
-CMD ["--socket-path", "/tmp/ipc/aivision_ipc.sock", "--workers", "4"]
+CMD ["--addr", "0.0.0.0:9500", "--workers", "4"]

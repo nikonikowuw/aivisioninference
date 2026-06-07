@@ -1,8 +1,15 @@
 {
   "compilerOptions": {
-    "typeRoots": ["node_modules/@types", "src/types"],
+    "typeRoots": [
+      "node_modules/@types",
+      "src/types"
+    ],
     "target": "ES2020",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -17,22 +24,53 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
-    "types": ["react", "react-dom"],
+    "types": [
+      "react",
+      "react-dom"
+    ],
     "paths": {
-      "assets/*": ["src/assets/*"],
-      "components/*": ["src/components/*"],
-      "contexts/*": ["src/contexts/*"],
-      "layouts/*": ["src/layouts/*"],
-      "theme/*": ["src/theme/*"],
-      "views/*": ["src/views/*"],
-      "variables/*": ["src/variables/*"],
-      "types/*": ["src/types/*"],
-      "services/*": ["src/services/*"],
-      "hooks/*": ["src/hooks/*"],
-      "utils/*": ["src/utils/*"],
-      "router": ["src/router/index.tsx"],
-      "router/*": ["src/router/*"]
+      "assets/*": [
+        "src/assets/*"
+      ],
+      "components/*": [
+        "src/components/*"
+      ],
+      "contexts/*": [
+        "src/contexts/*"
+      ],
+      "layouts/*": [
+        "src/layouts/*"
+      ],
+      "theme/*": [
+        "src/theme/*"
+      ],
+      "views/*": [
+        "src/views/*"
+      ],
+      "variables/*": [
+        "src/variables/*"
+      ],
+      "types/*": [
+        "src/types/*"
+      ],
+      "services/*": [
+        "src/services/*"
+      ],
+      "hooks/*": [
+        "src/hooks/*"
+      ],
+      "utils/*": [
+        "src/utils/*"
+      ],
+      "router": [
+        "src/router/index.tsx"
+      ],
+      "router/*": [
+        "src/router/*"
+      ]
     }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

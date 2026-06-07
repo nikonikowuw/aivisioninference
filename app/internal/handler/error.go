@@ -21,7 +21,11 @@ func attachError(c *gin.Context, err error) {
 func badRequestError(c *gin.Context, err error) error {
 	lang, _ := c.Get(middleware.ContextKeyLang)
 	langStr, _ := lang.(string)
-	return apperrors.New(apperrors.ErrBadRequest, validatorx.TranslateValidationError(err, langStr))
+	msg := validatorx.TranslateValidationError(err, langStr)
+	if msg == "" {
+		return apperrors.New(apperrors.ErrBadRequest, "")
+	}
+	return apperrors.NewLocalized(apperrors.ErrBadRequest, msg)
 }
 
 // currentLang 从 Gin 上下文中提取中间件注入的当前语言设置。

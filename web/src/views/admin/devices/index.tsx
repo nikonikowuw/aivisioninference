@@ -106,7 +106,7 @@ export default function Devices() {
   const [batchAction, setBatchAction] = useState<'delete' | null>(null);
   const [isBatching, setIsBatching] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
+  const [isTesting, setIsTesting] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -184,7 +184,7 @@ export default function Devices() {
   };
 
   const handleTestConnection = async (device: Device) => {
-    setIsTesting(true);
+    setIsTesting(device.id);
     try {
       const result = await devicesApi.test(device.id);
       toast({
@@ -195,7 +195,7 @@ export default function Devices() {
     } catch (err) {
       toast({ title: t('message.testError'), description: err instanceof Error ? err.message : '', status: 'error' });
     } finally {
-      setIsTesting(false);
+      setIsTesting(null);
     }
   };
 
@@ -259,7 +259,6 @@ export default function Devices() {
 
   const toggleAll = () => {
     setSelectedIds((prev) => {
-      const pageIds = devices.map((d) => d.id);
       const allSelected = pageIds.every((id) => prev.includes(id));
       if (allSelected) {
         return prev.filter((id) => !pageIds.includes(id));
@@ -397,7 +396,7 @@ export default function Devices() {
                     <Td textAlign="right">
                       <HStack justify="flex-end">
                         <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(device)} />
-                        <IconButton aria-label={t('actions.test')} icon={<MdSettings />} size="sm" variant="ghost" isLoading={isTesting} onClick={() => handleTestConnection(device)} />
+                        <IconButton aria-label={t('actions.test')} icon={<MdSettings />} size="sm" variant="ghost" isLoading={isTesting === device.id} onClick={() => handleTestConnection(device)} />
                         {device.access_type === 'gb28181' && (
                           <IconButton aria-label="刷新通道" icon={<MdDeviceHub />} size="sm" variant="ghost" colorScheme="blue" onClick={() => handleRefreshCatalog(device)} />
                         )}

@@ -77,7 +77,7 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 	// 2. 获取流状态以拿到播放地址
 	state := s.streamManager.GetStream(ctx, deviceID)
 	if state == nil {
-		return "", errors.New(errors.ErrInternal, "stream state not found after acquire")
+		return "", errors.New(errors.ErrStreamStateNotFound, "")
 	}
 
 	app := "live"
@@ -108,7 +108,7 @@ func (s *MediaService) StopPlayURL(ctx context.Context, deviceID string) error {
 func (s *MediaService) GetSnapshot(ctx context.Context, deviceID string) ([]byte, error) {
 	device, err := s.deviceRepo.FindByID(ctx, deviceID)
 	if err != nil {
-		return nil, errors.New(errors.ErrNotFound, "device not found")
+		return nil, errors.New(errors.ErrDeviceNotFound, "")
 	}
 
 	url := ""
@@ -135,4 +135,3 @@ func (s *MediaService) GetSnapshot(ctx context.Context, deviceID string) ([]byte
 func (s *MediaService) ListStreams(ctx context.Context) []*StreamState {
 	return s.streamManager.ListStreams(ctx)
 }
-

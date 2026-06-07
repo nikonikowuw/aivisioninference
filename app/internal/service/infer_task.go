@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"go.uber.org/zap"
 
@@ -26,15 +25,15 @@ type LicenseChecker interface {
 
 // InferTaskService 推理任务管理
 type InferTaskService struct {
-	repo          inferTaskRepo
-	streamManager *StreamManager
+	repo           inferTaskRepo
+	streamManager  *StreamManager
 	licenseChecker LicenseChecker // 可选，为 nil 时跳过授权校验
 }
 
 func NewInferTaskService(repo inferTaskRepo, streamManager *StreamManager, licenseChecker LicenseChecker) *InferTaskService {
 	return &InferTaskService{
-		repo:          repo,
-		streamManager: streamManager,
+		repo:           repo,
+		streamManager:  streamManager,
 		licenseChecker: licenseChecker,
 	}
 }
@@ -53,7 +52,7 @@ func (s *InferTaskService) Create(ctx context.Context, taskName, deviceID, strea
 	// 1. 检查设备是否已有活跃推理任务
 	existing, _ := s.repo.FindByDeviceID(ctx, deviceID)
 	if existing != nil && existing.Status == model.InferTaskStatusRunning {
-		return nil, errors.New(errors.ErrBadRequest, fmt.Sprintf("device %s already has a running infer task", deviceID))
+		return nil, errors.New(errors.ErrResourceConflict, "")
 	}
 
 	// 2. 创建任务记录
@@ -91,7 +90,7 @@ func (s *InferTaskService) Create(ctx context.Context, taskName, deviceID, strea
 func (s *InferTaskService) Stop(ctx context.Context, id string) error {
 	task, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, "infer task not found")
+		return errors.New(errors.ErrTaskNotFound, "")
 	}
 
 	// 通过 StreamManager 释放推理引用

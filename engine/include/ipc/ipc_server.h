@@ -1,9 +1,9 @@
 #ifndef AIVISION_IPC_SERVER_H
 #define AIVISION_IPC_SERVER_H
 
-// C++ 侧 IPC Server — 基于 UDS 的 FlatBuffers 消息服务端。
+// C++ 侧 IPC Server — 基于 TCP 的 FlatBuffers 消息服务端。
 // 职责：
-//   1. 建立 UDS 监听，接受 Go 控制面的连接。
+//   1. 建立 TCP 监听，接受 Go 控制面的连接。
 //   2. 接收并反序列化 FlatBuffers 指令 (commands.fbs)。
 //   3. 将指令分发到对应 Handler。
 //   4. 发送 FlatBuffers 结果 (results.fbs) 回 Go 侧。
@@ -30,8 +30,8 @@ namespace aivision
         /// IPC Server 配置
         struct IPCServerConfig
         {
-            /// UDS Socket 路径
-            std::string socket_path = "/tmp/aivision_ipc.sock";
+            /// 监听地址 (host:port)
+            std::string addr = "0.0.0.0:9500";
             /// 最大挂起连接数
             int backlog = 32;
             /// 接收缓冲区大小 (字节)
@@ -103,7 +103,7 @@ namespace aivision
             std::unordered_map<uint16_t, CommandHandler> handlers_;
             std::mutex handlers_mutex_;
 
-            /// Transport 抽象 (当前使用 UDS)
+            /// Transport 抽象 (当前使用 TCP)
             std::unique_ptr<Transport> transport_;
         };
 

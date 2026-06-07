@@ -43,6 +43,7 @@ func (h *MediaWebhookHandler) RegisterRoutes(r *gin.RouterGroup) {
 		g.POST("/on_stream_not_found", h.OnStreamNotFound)
 		g.POST("/on_record_mp4", h.OnRecordMP4)
 		g.POST("/on_server_started", h.OnServerStarted)
+		g.POST("/on_server_keepalive", h.OnServerKeepalive)
 		g.POST("/on_register", h.OnRegister)
 		g.POST("/on_catalog", h.OnCatalogResponse)
 		g.POST("/on_alarm", h.OnAlarm)
@@ -202,8 +203,8 @@ func (h *MediaWebhookHandler) OnRecordMP4(c *gin.Context) {
 		return
 	}
 
-	zap.L().Info("ZLM on_record_mp4 received", 
-		zap.String("stream", req.Stream), 
+	zap.L().Info("ZLM on_record_mp4 received",
+		zap.String("stream", req.Stream),
 		zap.String("path", req.FilePath))
 
 	// TODO: 真正的数据库入库逻辑
@@ -229,13 +230,40 @@ func (h *MediaWebhookHandler) OnServerStarted(c *gin.Context) {
 	successWebhook(c)
 }
 
+// OnServerKeepalive 处理 ZLM 服务端心跳回调，记录服务器资源状态。
+func (h *MediaWebhookHandler) OnServerKeepalive(c *gin.Context) {
+	var req struct {
+		MediaServerID string `json:"mediaServerId"`
+		CPU           int    `json:"cpu"`
+		Mem           int    `json:"mem"`
+	}
+	if !h.bindJSON(c, &req) {
+		return
+	}
+
+	fields := []zap.Field{
+		zap.String("server_id", req.MediaServerID),
+		zap.Int("cpu", req.CPU),
+		zap.Int("mem", req.Mem),
+	}
+
+	// CPU 或内存超 80% 记为警告，否则 Debug
+	if req.CPU > 80 || req.Mem > 80 {
+		zap.L().Warn("ZLM server high resource usage", fields...)
+	} else {
+		zap.L().Debug("ZLM server keepalive", fields...)
+	}
+
+	successWebhook(c)
+}
+
 // OnCatalogResponse handles GB28181 device catalog response forwarded by ZLM.
 // ZLM 接收到设备的目录响应后会通过此 webhook 转发给 Go 控制面。
 func (h *MediaWebhookHandler) OnCatalogResponse(c *gin.Context) {
 	var req struct {
-		DeviceID  string `json:"device_id"`  // NVR 设备国标编码
-		XMLData   string `json:"xml"`        // 原始 MANSCDP XML
-		Channel   string `json:"channel"`     // 通道名（备用）
+		DeviceID string `json:"device_id"` // NVR 设备国标编码
+		XMLData  string `json:"xml"`       // 原始 MANSCDP XML
+		Channel  string `json:"channel"`   // 通道名（备用）
 	}
 	if !h.bindJSON(c, &req) {
 		return

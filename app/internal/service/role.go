@@ -39,7 +39,7 @@ func (s *RoleService) List(ctx context.Context, req dto.RoleListRequest) ([]mode
 // Create 创建一个新的角色，创建前会验证角色层级合法性及角色名唯一性
 func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest, currentUserID string, isRoot bool) (*model.Role, error) {
 	if req.Level < 1 {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "")
+		return nil, apperrors.New(apperrors.ErrRoleLevelInvalid, "")
 	}
 	// 校验当前用户是否有权限创建指定层级的角色（不能创建高于自身层级的角色）。
 	if err := checkRoleLevelChange(ctx, s.userRepo, currentUserID, isRoot, req.Level); err != nil {
@@ -52,7 +52,7 @@ func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest, cur
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	if count > 0 {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "角色名称已存在")
+		return nil, apperrors.New(apperrors.ErrRoleNameTaken, "")
 	}
 
 	role := model.Role{
@@ -75,7 +75,7 @@ func (s *RoleService) Create(ctx context.Context, req dto.CreateRoleRequest, cur
 func (s *RoleService) GetByID(ctx context.Context, id string) (*model.Role, error) {
 	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "角色不存在")
+		return nil, apperrors.New(apperrors.ErrRoleNotFound, "")
 	}
 	return role, nil
 }
@@ -84,7 +84,7 @@ func (s *RoleService) GetByID(ctx context.Context, id string) (*model.Role, erro
 func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleRequest, currentUserID string, isRoot bool) error {
 	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
+		return apperrors.New(apperrors.ErrRoleNotFound, "")
 	}
 
 	// 三级权限校验：
@@ -99,7 +99,7 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 	// 3. checkRoleLevelChange — 如果要修改角色层级，新的层级必须在当前用户的权限范围内
 	if req.Level != nil {
 		if *req.Level < 1 {
-			return apperrors.New(apperrors.ErrBadRequest, "角色层级必须大于0")
+			return apperrors.New(apperrors.ErrRoleLevelInvalid, "")
 		}
 		if err := checkRoleLevelChange(ctx, s.userRepo, currentUserID, isRoot, *req.Level); err != nil {
 			return err
@@ -114,7 +114,7 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 			return apperrors.New(apperrors.ErrInternal, "")
 		}
 		if count > 0 {
-			return apperrors.New(apperrors.ErrBadRequest, "角色名称已存在")
+			return apperrors.New(apperrors.ErrRoleNameTaken, "")
 		}
 	}
 
@@ -150,7 +150,7 @@ func (s *RoleService) Update(ctx context.Context, id string, req dto.UpdateRoleR
 func (s *RoleService) Delete(ctx context.Context, id string, currentUserID string, isRoot bool) error {
 	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
+		return apperrors.New(apperrors.ErrRoleNotFound, "")
 	}
 
 	// 硬性约束：有用户绑定的角色不可删除，防止孤立的角色引用。
@@ -167,7 +167,7 @@ func (s *RoleService) Delete(ctx context.Context, id string, currentUserID strin
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 	if userCount > 0 {
-		return apperrors.New(apperrors.ErrBadRequest, "该角色已分配给用户，无法删除")
+		return apperrors.New(apperrors.ErrRoleAssigned, "")
 	}
 
 	if err := s.roleRepo.Delete(ctx, id); err != nil {
@@ -217,7 +217,7 @@ func (s *RoleService) ExportCSV(ctx context.Context, req dto.RoleListRequest) ([
 func (s *RoleService) GetPermissions(ctx context.Context, id string) ([]model.Permission, error) {
 	_, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "角色不存在")
+		return nil, apperrors.New(apperrors.ErrRoleNotFound, "")
 	}
 
 	permissions, err := s.roleRepo.GetPermissionsByRoleID(ctx, id)
@@ -233,7 +233,7 @@ func (s *RoleService) GetPermissions(ctx context.Context, id string) ([]model.Pe
 func (s *RoleService) AssignPermissions(ctx context.Context, id string, req dto.AssignPermissionsRequest, currentUserID string, isRoot bool) error {
 	role, err := s.roleRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "角色不存在")
+		return apperrors.New(apperrors.ErrRoleNotFound, "")
 	}
 
 	// 必须校验层级：防止低层级用户通过修改高角色权限实现越权。

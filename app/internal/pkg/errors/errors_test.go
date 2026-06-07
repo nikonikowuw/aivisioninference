@@ -2,11 +2,8 @@ package errors
 
 import "testing"
 
-func TestNewMarksDefaultMessage(t *testing.T) {
+func TestNewUsesDefaultMessageWhenEmpty(t *testing.T) {
 	err := New(ErrUnauthorized, "")
-	if !err.IsDefaultMessage() {
-		t.Fatal("expected empty message to be marked as default")
-	}
 	if err.Message != DefaultMessage(ErrUnauthorized, "en") {
 		t.Fatalf("expected en default message, got %q", err.Message)
 	}
@@ -14,11 +11,15 @@ func TestNewMarksDefaultMessage(t *testing.T) {
 
 func TestNewKeepsExplicitMessage(t *testing.T) {
 	err := New(ErrUnauthorized, "缺少认证令牌")
-	if err.IsDefaultMessage() {
-		t.Fatal("expected explicit message not to be marked as default")
-	}
 	if err.Message != "缺少认证令牌" {
 		t.Fatalf("expected explicit message, got %q", err.Message)
+	}
+}
+
+func TestNewLocalizedMarksFrontendSafeMessage(t *testing.T) {
+	err := NewLocalized(ErrBadRequest, "email is a required field")
+	if !err.IsLocalizedMessage() {
+		t.Fatal("expected localized message to be marked frontend-safe")
 	}
 }
 

@@ -79,16 +79,16 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (*LoginRe
 	// 防止用户名枚举攻击：用户不存在和密码错误返回相同错误信息。
 	user, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err != nil {
-		return nil, errors.New(errors.ErrUnauthorized, "用户名或密码错误")
+		return nil, errors.New(errors.ErrInvalidCredentials, "")
 	}
 
 	if !hash.Check(req.Password, user.Password) {
-		return nil, errors.New(errors.ErrUnauthorized, "用户名或密码错误")
+		return nil, errors.New(errors.ErrInvalidCredentials, "")
 	}
 
 	// 密码验证通过后再检查用户状态，避免攻击者通过响应速度判断用户名是否存在。
 	if user.Status != 1 {
-		return nil, errors.New(errors.ErrForbidden, "用户已被禁用")
+		return nil, errors.New(errors.ErrUserDisabled, "")
 	}
 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
@@ -142,7 +142,7 @@ func (s *AuthService) RevokeAllRefreshTokens(ctx context.Context, userID string)
 func (s *AuthService) GetMe(ctx context.Context, userID string) (*dto.UserInfo, error) {
 	user, err := s.userRepo.FindByIDWithRoles(ctx, userID)
 	if err != nil {
-		return nil, errors.New(errors.ErrNotFound, "用户不存在")
+		return nil, errors.New(errors.ErrUserNotFound, "")
 	}
 
 	roleInfos, roleIDs := toRoleInfosAndIDs(user.Roles)
@@ -423,7 +423,7 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 		// 在事务中锁住用户行，确保邮箱唯一性检查和更新之间的原子性。
 		user, err = txRepo.FindByIDForUpdate(ctx, userID)
 		if err != nil {
-			return errors.New(errors.ErrNotFound, "")
+			return errors.New(errors.ErrUserNotFound, "")
 		}
 
 		if req.Email != nil && *req.Email != user.Email {
@@ -466,7 +466,7 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 func (s *AuthService) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, "")
+		return errors.New(errors.ErrUserNotFound, "")
 	}
 
 	if !hash.Check(oldPassword, user.Password) {
@@ -534,7 +534,7 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 
 	// http.DetectContentType 需要至少 512 字节才能可靠检测 MIME 类型。
 	if len(allBytes) < 512 {
-		return "", errors.New(errors.ErrBadRequest, "文件内容不完整")
+		return "", errors.New(errors.ErrFileContentIncomplete, "")
 	}
 
 	// 基于文件内容检测真实 MIME 类型，而非信任客户端声明的 Content-Type，
@@ -578,7 +578,7 @@ func (s *AuthService) UploadAvatar(ctx context.Context, userID string, fileHeade
 
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return "", errors.New(errors.ErrNotFound, "")
+		return "", errors.New(errors.ErrUserNotFound, "")
 	}
 
 	// 更新用户头像 URL 后，清理旧头像文件以减少存储占用。

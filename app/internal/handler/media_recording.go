@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -39,7 +39,7 @@ func (h *MediaRecordingHandler) BatchDeleteRecordings(c *gin.Context) {
 		IDs []string `json:"ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "ids are required"})
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *MediaRecordingHandler) BatchDeleteRecordings(c *gin.Context) {
 func (h *MediaRecordingHandler) ListRecordings(c *gin.Context) {
 	deviceID := c.Query("device_id")
 	if deviceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "device_id is required"})
+		response.Err(c, apperrors.New(apperrors.ErrBadRequest, ""))
 		return
 	}
 
@@ -69,19 +69,19 @@ func (h *MediaRecordingHandler) ListRecordings(c *gin.Context) {
 
 	start, err := time.Parse(time.RFC3339, startStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "invalid start time format"})
+		response.Err(c, apperrors.New(apperrors.ErrStartTimeFormat, ""))
 		return
 	}
 	end, err := time.Parse(time.RFC3339, endStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "invalid end time format"})
+		response.Err(c, apperrors.New(apperrors.ErrEndTimeFormat, ""))
 		return
 	}
 
 	recordings, total, err := h.recordingService.QueryRecordings(c.Request.Context(), deviceID, start, end, page, pageSize)
 	if err != nil {
 		zap.L().Error("query recordings failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 50001, "message": err.Error()})
+		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *MediaRecordingHandler) GetPlaybackURL(c *gin.Context) {
 
 	url, err := h.recordingService.GetPlaybackURL(c.Request.Context(), recordingID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 40401, "message": err.Error()})
+		response.Err(c, apperrors.New(apperrors.ErrNotFound, ""))
 		return
 	}
 
@@ -109,13 +109,13 @@ func (h *MediaRecordingHandler) StartRecording(c *gin.Context) {
 		Stream   string `json:"stream" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "invalid params"})
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
 	if err := h.recordingService.StartRecording(c.Request.Context(), req.DeviceID, req.App, req.Stream); err != nil {
 		zap.L().Error("start recording failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 50001, "message": err.Error()})
+		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
 		return
 	}
 
@@ -129,13 +129,13 @@ func (h *MediaRecordingHandler) StopRecording(c *gin.Context) {
 		Stream string `json:"stream" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "message": "invalid params"})
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
 	if err := h.recordingService.StopRecording(c.Request.Context(), req.App, req.Stream); err != nil {
 		zap.L().Error("stop recording failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 50001, "message": err.Error()})
+		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
 		return
 	}
 

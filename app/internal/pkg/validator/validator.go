@@ -135,14 +135,14 @@ func TranslateValidationError(err error, lang string) string {
 
 	var verrs validator.ValidationErrors
 	if !errors.As(err, &verrs) {
-		return err.Error()
+		return ""
 	}
 
 	normalizedLang := normalizeLang(lang)
 	// transMap is initialized at process startup by InitGinBindingValidator().
-	// If initialization is skipped, fall back to the original error message.
+	// If initialization is skipped, let the response layer fall back to the error code.
 	if transMap == nil {
-		return err.Error()
+		return ""
 	}
 
 	trans := transMap[normalizedLang]
@@ -150,7 +150,7 @@ func TranslateValidationError(err error, lang string) string {
 		trans = transMap["en"]
 	}
 	if trans == nil {
-		return err.Error()
+		return ""
 	}
 
 	msgs := make([]string, 0, len(verrs))

@@ -38,7 +38,7 @@ func NewAlgorithmPackageHandler(svc *service.AlgorithmPackageService) *Algorithm
 func (h *AlgorithmPackageHandler) List(c *gin.Context) {
 	var req dto.AlgorithmPackageListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *AlgorithmPackageHandler) List(c *gin.Context) {
 func (h *AlgorithmPackageHandler) Create(c *gin.Context) {
 	var req dto.CreateAlgorithmPackageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *AlgorithmPackageHandler) Update(c *gin.Context) {
 	}
 	var req dto.UpdateAlgorithmPackageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 

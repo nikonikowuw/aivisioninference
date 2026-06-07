@@ -101,7 +101,7 @@ var gb28181DeviceIDRegex = regexp.MustCompile(`^\d{20}$`)
 
 func (s *SIPService) ValidateDeviceCode(deviceID string) error {
 	if !gb28181DeviceIDRegex.MatchString(deviceID) {
-		return errors.New(errors.ErrBadRequest, fmt.Sprintf("invalid GB28181 device code format: %s", deviceID))
+		return errors.New(errors.ErrInvalidGB28181DeviceCode, "")
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 	// 2. Find the device in database
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, fmt.Sprintf("GB28181 device not found: %s", deviceID))
+		return errors.New(errors.ErrDeviceNotFound, "")
 	}
 
 	// 3. Update registration info
@@ -164,7 +164,7 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, fmt.Sprintf("device not found: %s", deviceID))
+		return errors.New(errors.ErrDeviceNotFound, "")
 	}
 
 	if err := s.gbDeviceRepo.UpdateHeartbeat(ctx, gbDevice.ID); err != nil {
@@ -220,7 +220,7 @@ func (s *SIPService) BuildCatalogueResponse(ctx context.Context, deviceID, sn st
 	// Find the device
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return "", errors.New(errors.ErrNotFound, fmt.Sprintf("device not found: %s", deviceID))
+		return "", errors.New(errors.ErrDeviceNotFound, "")
 	}
 
 	// Find the associated system device
@@ -264,7 +264,7 @@ func (s *SIPService) BuildCatalogueResponse(ctx context.Context, deviceID, sn st
 func (s *SIPService) HandleUnregister(ctx context.Context, deviceID string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, fmt.Sprintf("device not found: %s", deviceID))
+		return errors.New(errors.ErrDeviceNotFound, "")
 	}
 	if err := s.gbDeviceRepo.UpdateStatus(ctx, gbDevice.ID, model.GB28181StatusOffline); err != nil {
 		return fmt.Errorf("update status: %w", err)
@@ -280,10 +280,10 @@ func (s *SIPService) HandleUnregister(ctx context.Context, deviceID string) erro
 func (s *SIPService) QueryCatalog(ctx context.Context, deviceCode string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, fmt.Sprintf("device not found: %s", deviceCode))
+		return errors.New(errors.ErrDeviceNotFound, "")
 	}
 	if gbDevice.Status != model.GB28181StatusOnline {
-		return errors.New(errors.ErrBadRequest, fmt.Sprintf("device %s not online", deviceCode))
+		return errors.New(errors.ErrGB28181DeviceOffline, "")
 	}
 	// ZLM 内部 SIP 栈处理目录查询
 	// Go 端通过 webhook 接收响应后调用 SyncCatalogChannels
@@ -296,7 +296,7 @@ func (s *SIPService) QueryCatalog(ctx context.Context, deviceCode string) error 
 // StartLiveStream 通过 ZLM 控制 GB28181 设备向平台推流
 func (s *SIPService) StartLiveStream(ctx context.Context, deviceCode, streamID string) (string, error) {
 	if s.zlmClient == nil {
-		return "", errors.New(errors.ErrInternal, "zlm client not configured")
+		return "", errors.New(errors.ErrZLMNotConfigured, "")
 	}
 	// 1. ZLM 创建 RTP 接收端口
 	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{
@@ -335,7 +335,7 @@ func (s *SIPService) StartLiveStream(ctx context.Context, deviceCode, streamID s
 // deviceCode: NVR 设备国标编码（作为 StreamManager key），streamID: ZLM 内部流 ID
 func (s *SIPService) StopLiveStream(ctx context.Context, deviceCode, streamID string) error {
 	if s.zlmClient == nil {
-		return errors.New(errors.ErrInternal, "zlm client not configured")
+		return errors.New(errors.ErrZLMNotConfigured, "")
 	}
 	_ = s.zlmClient.StopSendRtp(ctx, zlm.StopSendRtpRequest{
 		Vhost:  "__defaultVhost__",
@@ -355,10 +355,10 @@ func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID str
 		return "", err
 	}
 	if end.Before(start) {
-		return "", errors.New(errors.ErrBadRequest, "end_time must be after start_time")
+		return "", errors.New(errors.ErrTimeRangeOrder, "")
 	}
 	if s.zlmClient == nil {
-		return "", errors.New(errors.ErrInternal, "zlm client not configured")
+		return "", errors.New(errors.ErrZLMNotConfigured, "")
 	}
 
 	// 1. ZLM 创建 RTP 接收端口
@@ -417,7 +417,7 @@ func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID str
 // PlaybackControl 回放控制
 func (s *SIPService) PlaybackControl(ctx context.Context, streamID, action string, speed float64, stamp int64) error {
 	if s.zlmClient == nil {
-		return errors.New(errors.ErrInternal, "zlm client not configured")
+		return errors.New(errors.ErrZLMNotConfigured, "")
 	}
 	switch action {
 	case "scale":
@@ -435,7 +435,7 @@ func (s *SIPService) PlaybackControl(ctx context.Context, streamID, action strin
 			Stamp:  stamp,
 		})
 	default:
-		return errors.New(errors.ErrBadRequest, fmt.Sprintf("unknown action: %s", action))
+		return errors.New(errors.ErrInvalidPlaybackAction, "")
 	}
 }
 
@@ -443,7 +443,7 @@ func (s *SIPService) PlaybackControl(ctx context.Context, streamID, action strin
 func (s *SIPService) SyncCatalogChannels(ctx context.Context, nvrDeviceCode string, channels []ChannelInfo) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, nvrDeviceCode)
 	if err != nil {
-		return errors.New(errors.ErrNotFound, fmt.Sprintf("NVR device not found: %s", nvrDeviceCode))
+		return errors.New(errors.ErrDeviceNotFound, "")
 	}
 	successCount := 0
 	updatedCount := 0
@@ -562,7 +562,7 @@ func (s *SIPService) enqueueAlarmDispatch(ctx context.Context, record *model.Sma
 // HandleAlarm 处理设备告警上报
 func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 	if alarm.DeviceID == "" {
-		return errors.New(errors.ErrBadRequest, "alarm device_id required")
+		return errors.New(errors.ErrAlarmDeviceRequired, "")
 	}
 	zap.L().Info("GB28181 alarm received",
 		zap.String("device_id", alarm.DeviceID),
@@ -595,6 +595,9 @@ func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 	})
 	record.RawResult = datatypes.JSON(rawJSON)
 	if s.smartRecordRepo == nil {
+		if s.taskClient != nil {
+			s.enqueueAlarmDispatch(ctx, record, alarm)
+		}
 		return nil
 	}
 

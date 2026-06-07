@@ -1,4 +1,4 @@
-// Package service 提供业务逻辑层实现，包含认证鉴权、资源管理和系统配置等核心业务流程。
+// Package service 提供业务逻辑层实现,包含认证鉴权、资源管理和系统配置等核心业务流程。
 package service
 
 import (
@@ -17,6 +17,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/csvx"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/hash"
+	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 )
 
@@ -53,7 +54,7 @@ type deviceGroupRepo interface {
 	CountByGroupID(ctx context.Context, groupID string) (int64, error)
 }
 
-// cache 接口抽象，复用 internal/pkg/cache
+// cache 接口抽象,复用 internal/pkg/cache
 type cache interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
@@ -109,12 +110,12 @@ func (s *DeviceService) List(ctx context.Context, req dto.DeviceListRequest) ([]
 func (s *DeviceService) GetByID(ctx context.Context, id string) (*dto.DeviceResponse, error) {
 	item, err := s.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "设备不存在")
+		return nil, apperrors.New(apperrors.ErrDeviceNotFound, "")
 	}
 	return toDeviceResponse(item), nil
 }
 
-// Create 创建设备，包含名称唯一性校验和密码加密
+// Create 创建设备,包含名称唯一性校验和密码加密
 func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest) (*dto.DeviceResponse, error) {
 	// 名称唯一性校验
 	exists, err := s.deviceRepo.ExistsByName(ctx, req.DeviceName, "")
@@ -122,15 +123,15 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	if exists {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "设备名称已存在")
+		return nil, apperrors.New(apperrors.ErrDeviceNameTaken, "")
 	}
 
 	// 条件必填校验
 	if req.AccessType == "rtsp" && req.RtspURL == "" {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "RTSP 接入类型必须提供 RTSP URL")
+		return nil, apperrors.New(apperrors.ErrRTSPURLRequired, "")
 	}
 	if req.AccessType == "gb28181" && req.GB28181DeviceID == "" {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "GB28181 接入类型必须提供国标编码")
+		return nil, apperrors.New(apperrors.ErrGB28181CodeRequired, "")
 	}
 
 	item := &model.Device{
@@ -151,7 +152,7 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		Remark:           req.Remark,
 	}
 
-	// 设置 ExternalKey 用于唯一约束去重（rtsp:{url} | gb28181:{deviceID}:{channel}）
+	// 设置 ExternalKey 用于唯一约束去重(rtsp:{url} | gb28181:{deviceID}:{channel})
 	switch req.AccessType {
 	case "rtsp":
 		if req.RtspURL != "" {
@@ -162,6 +163,7 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		key := "gb28181:" + req.GB28181DeviceID + ":" + req.GB28181ChannelID
 		item.ExternalKey = &key
 	}
+
 
 	// 密码加密
 	if req.Password != "" {
@@ -192,17 +194,17 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 	statusData, _ := json.Marshal(item.Status)
 	_ = s.cache.Set(ctx, s.getStatusCacheKey(item.ID), statusData, 24*time.Hour)
 
-	// 2. 发起异步连接探测任务（仅测试 RTSP 地址连通性）
+	// 2. 发起异步连接探测任务(仅测试 RTSP 地址连通性)
 	_ = s.taskClient.Enqueue(ctx, "device:detect", map[string]string{"id": item.ID})
 
 	return toDeviceResponse(item), nil
 }
 
-// Update 更新设备，包含名称唯一性校验和可选密码更新
+// Update 更新设备,包含名称唯一性校验和可选密码更新
 func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpdateRequest) (*dto.DeviceResponse, error) {
 	item, err := s.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "设备不存在")
+		return nil, apperrors.New(apperrors.ErrDeviceNotFound, "")
 	}
 
 	// 名称唯一性校验
@@ -212,7 +214,7 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 			return nil, apperrors.New(apperrors.ErrInternal, "")
 		}
 		if exists {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "设备名称已存在")
+			return nil, apperrors.New(apperrors.ErrDeviceNameTaken, "")
 		}
 		item.DeviceName = req.DeviceName
 	}
@@ -238,7 +240,7 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 
 	if accessChanged {
 		// 重新生成 ExternalKey
-		item.ExternalKey = nil // 先置空，再根据类型生成
+		item.ExternalKey = nil // 先置空,再根据类型生成
 		switch item.AccessType {
 		case model.DeviceAccessTypeRTSP:
 			if item.RtspURL != "" {
@@ -295,7 +297,7 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
-	// 同步设备分组关联（显式传入空数组也视为清空）
+	// 同步设备分组关联(显式传入空数组也视为清空)
 	if req.GroupIDs != nil {
 		if err := s.deviceRepo.ReplaceGroups(ctx, item.ID, req.GroupIDs); err != nil {
 			zap.L().Error("sync device groups failed", zap.Error(err))
@@ -305,13 +307,13 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 	// 重新加载分组信息以返回完整数据
 	item, _ = s.deviceRepo.FindByID(ctx, item.ID)
 
-	// 1. 如果状态发生变更，同步更新缓存
+	// 1. 如果状态发生变更,同步更新缓存
 	if req.Status != "" {
 		statusData, _ := json.Marshal(item.Status)
 		_ = s.cache.Set(ctx, s.getStatusCacheKey(item.ID), statusData, 24*time.Hour)
 	}
 
-	// 2. 如果修改了关键接入参数，重新触发异步探测
+	// 2. 如果修改了关键接入参数,重新触发异步探测
 	if req.AccessType != "" || req.RtspURL != "" || req.GB28181DeviceID != "" {
 		_ = s.taskClient.Enqueue(ctx, "device:detect", map[string]string{"id": item.ID})
 	}
@@ -322,11 +324,11 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 // Delete 删除设备
 func (s *DeviceService) Delete(ctx context.Context, id string) error {
 	if _, err := s.deviceRepo.FindByID(ctx, id); err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "设备不存在")
+		return apperrors.New(apperrors.ErrDeviceNotFound, "")
 	}
 
-	// TODO: 校验设备是否被推理任务绑定（后续对接 InferTaskRepository）
-	// if bound, return ErrBadRequest "设备已绑定任务，请先停止或解绑任务"
+	// TODO: 校验设备是否被推理任务绑定(后续对接 InferTaskRepository)
+	// if bound, return ErrBadRequest "设备已绑定任务,请先停止或解绑任务"
 
 	if err := s.deviceRepo.Delete(ctx, id); err != nil {
 		zap.L().Error("delete device failed", zap.Error(err))
@@ -335,10 +337,10 @@ func (s *DeviceService) Delete(ctx context.Context, id string) error {
 
 	// 关闭 ZLM 中对应的代理流
 	_ = s.zlmClient.CloseStream(ctx, zlm.CloseStreamRequest{
-		Vhost: "__defaultVhost__",
-		App:   "live",
+		Vhost:  "__defaultVhost__",
+		App:    "live",
 		Stream: id,
-		Force: 1,
+		Force:  1,
 	})
 
 	return nil
@@ -373,22 +375,28 @@ func (s *DeviceService) BatchDelete(ctx context.Context, ids []string) *dto.Batc
 	}
 }
 
-// TestConnection 测试设备连接，进行真实的流可达性探测并更新设备状态
-func (s *DeviceService) TestConnection(ctx context.Context, id string) (*dto.DeviceTestResultResponse, error) {
+// TestConnection 测试设备连接,进行真实的流可达性探测并更新设备状态
+func (s *DeviceService) TestConnection(ctx context.Context, id string, lang string) (*dto.DeviceTestResultResponse, error) {
 	_, err := s.deviceRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "设备不存在")
+		return nil, apperrors.New(apperrors.ErrDeviceNotFound, "")
 	}
 
 	now := time.Now().Format(time.RFC3339)
 
-	// 使用 StreamManager 进行连接探测（Acquire reason="detect"）
+	// 使用 StreamManager 进行连接探测(Acquire reason="detect")
 	err = s.streamManager.Acquire(ctx, id, "detect", nil)
-	
+
 	testSuccess := err == nil
 	testMessage := "测试连接成功，流可达"
 	if err != nil {
-		testMessage = fmt.Sprintf("连接失败: %v", err)
+		// 完整错误记入日志，不暴露内部细节给前端
+		zap.L().Warn("device connection test failed",
+			zap.String("device_id", id),
+			zap.Error(err),
+		)
+		errCode := classifyConnectionError(err)
+		testMessage = i18n.Translate(lang, errCode)
 	}
 
 	// 探测完成后立即释放
@@ -423,8 +431,22 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string) (*dto.Dev
 	}, nil
 }
 
-// 移除不再需要的 testRTSPConnection 和 testGB28181Connection 方法（逻辑已整合到 SM 或不需要了）
+// classifyConnectionError 根据错误类型返回错误码,供 i18n 翻译。
+func classifyConnectionError(err error) int {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "dial tcp"):
+		return apperrors.ErrEngineNotReady
+	case strings.Contains(msg, "i/o timeout") || strings.Contains(msg, "deadline exceeded"):
+		return apperrors.ErrConnectionTimeout
+	case strings.Contains(msg, "read resp"):
+		return apperrors.ErrEngineResponseBad
+	default:
+		return apperrors.ErrConnectionFailed
+	}
+}
 
+// 移除不再需要的 testRTSPConnection 和 testGB28181Connection 方法(逻辑已整合到 SM 或不需要了)
 
 // ExportCSV 导出设备列表为 CSV
 func (s *DeviceService) ExportCSV(ctx context.Context, req dto.DeviceListRequest) ([]byte, error) {
@@ -472,7 +494,7 @@ func (s *DeviceService) ImportCSV(ctx context.Context, reader io.Reader, lang st
 	}
 
 	if len(records) < 2 { // 至少要有表头+1行数据
-		return nil, apperrors.New(apperrors.ErrCSVInvalidContent, "CSV 文件为空或只有表头")
+		return nil, apperrors.New(apperrors.ErrCSVInvalidContent, "")
 	}
 
 	// 校验表头
@@ -484,14 +506,14 @@ func (s *DeviceService) ImportCSV(ctx context.Context, reader io.Reader, lang st
 	}
 	for _, expected := range expectedHeaders {
 		if _, ok := headerMap[expected]; !ok {
-			return nil, apperrors.New(apperrors.ErrCSVHeaderInvalid, fmt.Sprintf("缺少必需列: %s", expected))
+			return nil, apperrors.New(apperrors.ErrCSVHeaderInvalid, "")
 		}
 	}
 
 	var result dto.BatchResult
 	result.Total = len(records) - 1
 
-	// 辅助函数：从行数据中提取指定列值
+	// 辅助函数:从行数据中提取指定列值
 	cell := func(col string, row []string) string {
 		if idx, ok := headerMap[col]; ok && idx < len(row) {
 			return strings.TrimSpace(row[idx])
@@ -618,7 +640,7 @@ func NewDeviceGroupService(repo deviceGroupRepo) *DeviceGroupService {
 	return &DeviceGroupService{groupRepo: repo}
 }
 
-// List 返回分页的设备分组列表（含设备数量）
+// List 返回分页的设备分组列表(含设备数量)
 func (s *DeviceGroupService) List(ctx context.Context, req dto.DeviceGroupListRequest) ([]dto.DeviceGroupResponse, int64, error) {
 	items, total, err := s.groupRepo.List(ctx, req)
 	if err != nil {
@@ -639,7 +661,7 @@ func (s *DeviceGroupService) List(ctx context.Context, req dto.DeviceGroupListRe
 func (s *DeviceGroupService) GetByID(ctx context.Context, id string) (*dto.DeviceGroupResponse, error) {
 	item, err := s.groupRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "分组不存在")
+		return nil, apperrors.New(apperrors.ErrDeviceGroupNotFound, "")
 	}
 	count, _ := s.groupRepo.CountByGroupID(ctx, item.ID)
 	return toDeviceGroupResponse(item, count), nil
@@ -664,7 +686,7 @@ func (s *DeviceGroupService) Create(ctx context.Context, req dto.DeviceGroupCrea
 func (s *DeviceGroupService) Update(ctx context.Context, id string, req dto.DeviceGroupUpdateRequest) (*dto.DeviceGroupResponse, error) {
 	item, err := s.groupRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "分组不存在")
+		return nil, apperrors.New(apperrors.ErrDeviceGroupNotFound, "")
 	}
 
 	if req.GroupName != "" {
@@ -692,7 +714,7 @@ func (s *DeviceGroupService) Update(ctx context.Context, id string, req dto.Devi
 // Delete 删除设备分组
 func (s *DeviceGroupService) Delete(ctx context.Context, id string) error {
 	if _, err := s.groupRepo.FindByID(ctx, id); err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "分组不存在")
+		return apperrors.New(apperrors.ErrDeviceGroupNotFound, "")
 	}
 
 	count, err := s.groupRepo.CountByGroupID(ctx, id)
@@ -700,7 +722,7 @@ func (s *DeviceGroupService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 	if count > 0 {
-		return apperrors.New(apperrors.ErrBadRequest, "分组下存在设备，无法删除")
+		return apperrors.New(apperrors.ErrDeviceGroupNotEmpty, "")
 	}
 
 	if err := s.groupRepo.Delete(ctx, id); err != nil {

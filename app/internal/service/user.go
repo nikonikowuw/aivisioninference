@@ -45,7 +45,7 @@ func (s *UserService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	if count > 0 {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "用户名已存在")
+		return nil, apperrors.New(apperrors.ErrUsernameTaken, "")
 	}
 	if req.Email != "" {
 		count, err := s.userRepo.CountByEmail(ctx, req.Email, "")
@@ -87,7 +87,7 @@ func (s *UserService) Create(ctx context.Context, req dto.CreateUserRequest) (*m
 func (s *UserService) GetByID(ctx context.Context, id string) (*model.User, error) {
 	user, err := s.userRepo.FindByIDWithRoles(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "用户不存在")
+		return nil, apperrors.New(apperrors.ErrUserNotFound, "")
 	}
 	return user, nil
 }
@@ -96,7 +96,7 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*model.User, erro
 func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserRequest, currentUserID string, isRoot bool) error {
 	user, err := s.userRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "用户不存在")
+		return apperrors.New(apperrors.ErrUserNotFound, "")
 	}
 
 	// write=true 表示当前操作需要写入能力，检查层级确保当前用户有足够权限修改目标用户。
@@ -112,7 +112,7 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 			return apperrors.New(apperrors.ErrInternal, "")
 		}
 		if count > 0 {
-			return apperrors.New(apperrors.ErrBadRequest, "用户名已存在")
+			return apperrors.New(apperrors.ErrUsernameTaken, "")
 		}
 	}
 
@@ -145,7 +145,7 @@ func (s *UserService) Update(ctx context.Context, id string, req dto.UpdateUserR
 // Delete 根据用户ID软删除用户
 func (s *UserService) Delete(ctx context.Context, id, currentUserID string, isRoot bool) error {
 	if id == currentUserID {
-		return apperrors.New(apperrors.ErrBadRequest, "不能删除当前登录用户")
+		return apperrors.New(apperrors.ErrCannotDeleteSelf, "")
 	}
 
 	if err := checkUserHierarchy(ctx, s.userRepo, currentUserID, id, isRoot, false); err != nil {
@@ -209,10 +209,10 @@ func (s *UserService) ImportCSV(ctx context.Context, reader io.Reader, lang stri
 	csvReader.FieldsPerRecord = -1
 	header, err := csvReader.Read()
 	if err != nil {
-		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, localizedDefaultMessage(apperrors.ErrCSVInvalidContent, lang))
+		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, apperrors.DefaultMessage(apperrors.ErrCSVInvalidContent, lang))
 	}
 	if !validUserImportHeader(header) {
-		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVHeaderInvalid, localizedDefaultMessage(apperrors.ErrCSVHeaderInvalid, lang))
+		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVHeaderInvalid, apperrors.DefaultMessage(apperrors.ErrCSVHeaderInvalid, lang))
 	}
 
 	seenUsernames := make(map[string]int)
@@ -223,13 +223,13 @@ func (s *UserService) ImportCSV(ctx context.Context, reader io.Reader, lang stri
 			break
 		}
 		if err != nil {
-			return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, localizedDefaultMessage(apperrors.ErrCSVInvalidContent, lang))
+			return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, apperrors.DefaultMessage(apperrors.ErrCSVInvalidContent, lang))
 		}
 		if isEmptyCSVRow(row) {
 			continue
 		}
 		if result.Total >= maxCSVImportRows {
-			return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVRowLimitExceeded, localizedDefaultMessage(apperrors.ErrCSVRowLimitExceeded, lang))
+			return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVRowLimitExceeded, apperrors.DefaultMessage(apperrors.ErrCSVRowLimitExceeded, lang))
 		}
 
 		item := dto.BatchItemResult{ID: strconv.Itoa(rowNo)}
@@ -241,7 +241,7 @@ func (s *UserService) ImportCSV(ctx context.Context, reader io.Reader, lang stri
 
 		username := strings.TrimSpace(row[0])
 		if firstRow, ok := seenUsernames[strings.ToLower(username)]; ok {
-			appendImportFailureMessage(&result, item, rowNo, apperrors.ErrCSVDuplicateUsername, fmt.Sprintf("%s (%d)", localizedDefaultMessage(apperrors.ErrCSVDuplicateUsername, lang), firstRow), lang)
+			appendImportFailureMessage(&result, item, rowNo, apperrors.ErrCSVDuplicateUsername, fmt.Sprintf("%s (%d)", apperrors.DefaultMessage(apperrors.ErrCSVDuplicateUsername, lang), firstRow), lang)
 			continue
 		}
 		seenUsernames[strings.ToLower(username)] = rowNo
@@ -273,7 +273,7 @@ func (s *UserService) ImportCSV(ctx context.Context, reader io.Reader, lang stri
 	}
 
 	if result.Total == 0 {
-		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, localizedDefaultMessage(apperrors.ErrCSVInvalidContent, lang))
+		return dto.BatchResult{}, apperrors.New(apperrors.ErrCSVInvalidContent, apperrors.DefaultMessage(apperrors.ErrCSVInvalidContent, lang))
 	}
 	return result, nil
 }
@@ -337,7 +337,7 @@ func validateImportUserRequest(req dto.CreateUserRequest) int {
 }
 
 func appendImportFailure(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code int, lang string) {
-	appendImportFailureMessage(result, item, rowNo, code, localizedDefaultMessage(code, lang), lang)
+	appendImportFailureMessage(result, item, rowNo, code, apperrors.DefaultMessage(code, lang), lang)
 }
 
 func appendImportFailureMessage(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code int, message string, lang string) {
@@ -360,13 +360,13 @@ func (s *UserService) ResetPassword(ctx context.Context, targetUserID, password,
 	// 禁止管理员通过此接口重置自己的密码，防止误操作导致自己无法登录。
 	// 自己改密码应走 ChangePassword 流程（需验证旧密码）。
 	if targetUserID == currentUserID {
-		return apperrors.New(apperrors.ErrBadRequest, "不能重置自己的密码，请使用修改密码功能")
+		return apperrors.New(apperrors.ErrCannotResetSelf, "")
 	}
 
 	// 检查目标用户存在
 	_, err := s.userRepo.FindByID(ctx, targetUserID)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "用户不存在")
+		return apperrors.New(apperrors.ErrUserNotFound, "")
 	}
 
 	// 层级权限校验：上级才能重置下级的密码，防止越权操作。

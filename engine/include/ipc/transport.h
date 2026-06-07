@@ -2,7 +2,7 @@
 #define AIVISION_IPC_TRANSPORT_H
 
 // 跨环境的 Transport 接口抽象层。
-// 本地使用 UDS，未来分布式可切换至 gRPC/TCP。
+// 本地或分布式均使用 TCP，支持跨机器部署。
 // 设计原则：与 FlatBuffers 序列化后的字节流解耦，调用者自行编解码。
 
 #include <cstdint>
@@ -69,8 +69,7 @@ namespace aivision
         /// Transport 工厂函数
         enum class TransportType
         {
-            UDS, // Unix Domain Socket (单机默认)
-            TCP, // TCP Socket
+            TCP, // TCP Socket (默认，支持单机和分布式)
         };
 
         std::unique_ptr<Transport> CreateTransport(TransportType type);

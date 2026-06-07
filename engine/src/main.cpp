@@ -39,7 +39,7 @@ static void PrintUsage(const char *prog)
 {
     std::cout << "Usage: " << prog << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  --socket-path PATH   UDS Socket path (default: /tmp/aivision_ipc.sock)" << std::endl;
+    std::cout << "  --addr HOST:PORT   IPC listen address (default: 0.0.0.0:9500)" << std::endl;
     std::cout << "  --workers N          Worker thread count (default: 4)" << std::endl;
     std::cout << "  --hal-so PATH        HAL platform pipeline .so path" << std::endl;
     std::cout << "  --hal-config JSON    HAL configuration JSON" << std::endl;
@@ -66,9 +66,9 @@ int main(int argc, char *argv[])
             PrintVersion();
             return 0;
         }
-        else if (arg == "--socket-path" && i + 1 < argc)
+        else if (arg == "--addr" && i + 1 < argc)
         {
-            config.ipc_socket_path = argv[++i];
+            config.ipc_addr = argv[++i];
         }
         else if (arg == "--workers" && i + 1 < argc)
         {
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "Engine initialized, starting IPC server on "
-              << config.ipc_socket_path << "..." << std::endl;
+              << config.ipc_addr << "..." << std::endl;
 
     // 运行主循环 (阻塞)
     engine.Run();

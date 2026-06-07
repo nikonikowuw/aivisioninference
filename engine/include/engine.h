@@ -29,8 +29,8 @@ namespace aivision
     /// 引擎配置
     struct EngineConfig
     {
-        /// IPC UDS Socket 路径
-        std::string ipc_socket_path = "/tmp/aivision_ipc.sock";
+        /// IPC 监听地址 (host:port)
+        std::string ipc_addr = "0.0.0.0:9500";
 
         /// Worker 线程数
         uint32_t worker_count = 4;

@@ -20,7 +20,7 @@ namespace aivision
         : config_(config)
     {
         // 创建组件
-        ipc_server_ = std::make_unique<ipc::IPCServer>(ipc::IPCServerConfig{config.ipc_socket_path});
+        ipc_server_ = std::make_unique<ipc::IPCServer>(ipc::IPCServerConfig{config.ipc_addr});
         heartbeat_ = std::make_unique<ipc::HeartbeatManager>();
         heartbeat_->SetServer(ipc_server_.get());
 

@@ -16,19 +16,19 @@ import (
 // maxIPCRespSize 单次 IPC 响应最大字节数（64MB），防止异常引擎返回超大长度导致 OOM
 const maxIPCRespSize = 64 * 1024 * 1024
 
-// IPCEngineClient 通过 FlatBuffers + UDS 与 C++ 推理引擎通信
+// IPCEngineClient 通过 FlatBuffers + TCP 与 C++ 推理引擎通信
 type IPCEngineClient struct {
-	socketPath string
-	timeout    time.Duration
-	logger     *zap.Logger
+	addr    string
+	timeout time.Duration
+	logger  *zap.Logger
 }
 
 // NewIPCEngineClient 创建 IPC 引擎客户端
-func NewIPCEngineClient(socketPath string, timeout time.Duration, logger *zap.Logger) *IPCEngineClient {
+func NewIPCEngineClient(addr string, timeout time.Duration, logger *zap.Logger) *IPCEngineClient {
 	return &IPCEngineClient{
-		socketPath: socketPath,
-		timeout:    timeout,
-		logger:     logger,
+		addr:    addr,
+		timeout: timeout,
+		logger:  logger,
 	}
 }
 
@@ -38,9 +38,9 @@ func (c *IPCEngineClient) sendCommand(ctx context.Context, cmdType uint32, paylo
 
 // sendCommandWithTimeout 发送 IPC 命令并等待响应，使用自定义超时（用于长时间操作如自检）。
 func (c *IPCEngineClient) sendCommandWithTimeout(_ context.Context, cmdType uint32, payload []byte, timeout time.Duration) ([]byte, error) {
-	conn, err := net.DialTimeout("unix", c.socketPath, timeout)
+	conn, err := net.DialTimeout("tcp", c.addr, timeout)
 	if err != nil {
-		return nil, fmt.Errorf("dial uds: %w", err)
+		return nil, fmt.Errorf("dial tcp: %w", err)
 	}
 	defer conn.Close()
 

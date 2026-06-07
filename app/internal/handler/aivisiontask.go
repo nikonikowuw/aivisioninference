@@ -5,9 +5,9 @@
 package handler
 
 import (
-	"time"
 	"github.com/gin-gonic/gin"
 	"gorm.io/datatypes"
+	"time"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
@@ -40,7 +40,7 @@ func NewAIVisionTaskHandler(svc *service.AIVisionTaskService) *AIVisionTaskHandl
 func (h *AIVisionTaskHandler) List(c *gin.Context) {
 	var req dto.AIVisionTaskListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *AIVisionTaskHandler) List(c *gin.Context) {
 func (h *AIVisionTaskHandler) Create(c *gin.Context) {
 	var req dto.CreateAIVisionTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -124,7 +124,7 @@ func (h *AIVisionTaskHandler) Update(c *gin.Context) {
 	}
 	var req dto.UpdateAIVisionTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -173,18 +173,18 @@ func (h *AIVisionTaskHandler) Delete(c *gin.Context) {
 func (h *AIVisionTaskHandler) CheckConflict(c *gin.Context) {
 	var req dto.CheckConflictRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
 	startDate, err := time.Parse(time.DateOnly, req.StartDate)
 	if err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "开始日期格式错误，期望 YYYY-MM-DD"))
+		response.Err(c, apperrors.New(apperrors.ErrStartTimeFormat, ""))
 		return
 	}
 	endDate, err := time.Parse(time.DateOnly, req.EndDate)
 	if err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "结束日期格式错误，期望 YYYY-MM-DD"))
+		response.Err(c, apperrors.New(apperrors.ErrEndTimeFormat, ""))
 		return
 	}
 

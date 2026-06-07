@@ -17,7 +17,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
-func TestRoleServiceCreateRejectsMissingLevelWithDefaultBadRequestMessage(t *testing.T) {
+func TestRoleServiceCreateRejectsMissingLevelWithRoleLevelMessage(t *testing.T) {
 	svc := &RoleService{}
 
 	role, err := svc.Create(context.Background(), dto.CreateRoleRequest{Name: "manager"}, "", true)
@@ -26,8 +26,8 @@ func TestRoleServiceCreateRejectsMissingLevelWithDefaultBadRequestMessage(t *tes
 	require.Error(t, err)
 	var appErr *apperrors.AppError
 	require.ErrorAs(t, err, &appErr)
-	assert.Equal(t, apperrors.ErrBadRequest, appErr.Code)
-	assert.Equal(t, apperrors.New(apperrors.ErrBadRequest, "").Message, appErr.Message)
+	assert.Equal(t, apperrors.ErrRoleLevelInvalid, appErr.Code)
+	assert.Equal(t, apperrors.New(apperrors.ErrRoleLevelInvalid, "").Message, appErr.Message)
 }
 
 func TestRoleHierarchyLevelRoleMessageExplainsLevelChangeRule(t *testing.T) {

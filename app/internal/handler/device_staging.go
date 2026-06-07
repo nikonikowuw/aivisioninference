@@ -66,7 +66,7 @@ func (h *DeviceStagingHandler) BatchImport(c *gin.Context) {
 		IDs []string `json:"ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "无效的设备 ID 列表"))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 	if err := h.svc.BatchImport(c.Request.Context(), req.IDs); err != nil {
@@ -81,7 +81,7 @@ func (h *DeviceStagingHandler) BatchIgnore(c *gin.Context) {
 		IDs []string `json:"ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "无效的设备 ID 列表"))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 	if err := h.svc.BatchIgnore(c.Request.Context(), req.IDs); err != nil {

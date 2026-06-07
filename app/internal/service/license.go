@@ -29,7 +29,7 @@ type LicenseClaims struct {
 	DeviceSN          string   `json:"device_sn,omitempty"`
 	DeviceFingerprint string   `json:"device_fingerprint,omitempty"`
 	Algorithms        []string `json:"algorithms"`
-	MaxStreams         int     `json:"max_streams,omitempty"`
+	MaxStreams        int      `json:"max_streams,omitempty"`
 	Features          []string `json:"features,omitempty"`
 	ExpireAction      string   `json:"expire_action,omitempty"`
 	jwt.RegisteredClaims
@@ -59,7 +59,7 @@ func (s *LicenseService) ensurePublicKey() error {
 	}
 	s.loadPublicKey()
 	if s.rsaPublicKey == nil {
-		return errors.New(errors.ErrLicenseNotConfigured, "license RSA public key not configured")
+		return errors.New(errors.ErrLicenseNotConfigured, "")
 	}
 	return nil
 }
@@ -106,7 +106,8 @@ func (s *LicenseService) GetDeviceFingerprint(ctx context.Context) (*dto.Fingerp
 
 	fp, err := fingerprint.Extract()
 	if err != nil {
-		return nil, errors.New(errors.ErrInternal, fmt.Sprintf("failed to extract device fingerprint: %v", err))
+		zap.L().Error("failed to extract device fingerprint", zap.Error(err))
+		return nil, errors.New(errors.ErrFingerprintExtract, "")
 	}
 
 	return &dto.FingerprintResponse{
@@ -132,10 +133,10 @@ func (s *LicenseService) Upload(ctx context.Context, rawJWT string) (*dto.Licens
 	})
 	if err != nil {
 		zap.L().Warn("license JWT parsing failed", zap.Error(err))
-		return nil, errors.New(errors.ErrLicenseInvalid, fmt.Sprintf("授权文件解析失败: %v", err))
+		return nil, errors.New(errors.ErrLicenseInvalid, "")
 	}
 	if !token.Valid {
-		return nil, errors.New(errors.ErrLicenseInvalid, "授权文件签名验证失败")
+		return nil, errors.New(errors.ErrLicenseInvalid, "")
 	}
 
 	// 校验设备指纹匹配
@@ -145,7 +146,7 @@ func (s *LicenseService) Upload(ctx context.Context, rawJWT string) (*dto.Licens
 	}
 	if claims.DeviceFingerprint != "" && localFingerprint != "" {
 		if claims.DeviceFingerprint != localFingerprint {
-			return nil, errors.New(errors.ErrLicenseDeviceMismatch, "授权文件不适用于当前设备")
+			return nil, errors.New(errors.ErrLicenseDeviceMismatch, "")
 		}
 	}
 
@@ -175,7 +176,7 @@ func (s *LicenseService) Upload(ctx context.Context, rawJWT string) (*dto.Licens
 		DeviceSN:          claims.DeviceSN,
 		DeviceFingerprint: claims.DeviceFingerprint,
 		Algorithms:        algorithmsJSON,
-		MaxStreams:         claims.MaxStreams,
+		MaxStreams:        claims.MaxStreams,
 		Features:          featuresJSON,
 		NotBefore:         claims.NotBefore.Time,
 		NotAfter:          getExpirationTime(claims.ExpiresAt),
@@ -192,11 +193,13 @@ func (s *LicenseService) Upload(ctx context.Context, rawJWT string) (*dto.Licens
 		license.CreatedBy = existing.CreatedBy
 		license.CreatedAt = existing.CreatedAt
 		if err := s.repo.Update(ctx, license); err != nil {
-			return nil, errors.New(errors.ErrInternal, "更新授权记录失败")
+			zap.L().Error("update license failed", zap.Error(err))
+			return nil, errors.New(errors.ErrInternal, "")
 		}
 	} else {
 		if err := s.repo.Create(ctx, license); err != nil {
-			return nil, errors.New(errors.ErrInternal, "保存授权记录失败")
+			zap.L().Error("create license failed", zap.Error(err))
+			return nil, errors.New(errors.ErrInternal, "")
 		}
 	}
 
@@ -213,7 +216,7 @@ func (s *LicenseService) Upload(ctx context.Context, rawJWT string) (*dto.Licens
 func (s *LicenseService) GetActive(ctx context.Context) (*dto.LicenseInfoResponse, error) {
 	license, err := s.repo.FindActive(ctx)
 	if err != nil {
-		return nil, errors.New(errors.ErrNotFound, "未找到有效授权")
+		return nil, errors.New(errors.ErrLicenseNotFound, "")
 	}
 	return s.toResponse(license), nil
 }
@@ -236,19 +239,19 @@ func (s *LicenseService) List(ctx context.Context, req dto.LicenseListRequest) (
 func (s *LicenseService) CheckAlgorithmAuth(ctx context.Context, algoName string) error {
 	license, err := s.repo.FindActive(ctx)
 	if err != nil {
-		return errors.New(errors.ErrLicenseNotAuthorized, "未找到有效授权，算法不可用")
+		return errors.New(errors.ErrLicenseNotAuthorized, "")
 	}
 
 	// 先检查授权是否生效，再检查算法是否在授权范围内
 	if !license.IsEffective() {
 		if license.IsExpired() {
-			return errors.New(errors.ErrLicenseExpired, "授权已过期")
+			return errors.New(errors.ErrLicenseExpired, "")
 		}
-		return errors.New(errors.ErrLicenseNotYetValid, "授权尚未生效")
+		return errors.New(errors.ErrLicenseNotYetValid, "")
 	}
 
 	if !license.HasAlgorithm(algoName) {
-		return errors.New(errors.ErrLicenseNotAuthorized, fmt.Sprintf("算法 %s 未授权", algoName))
+		return errors.New(errors.ErrLicenseNotAuthorized, "")
 	}
 
 	return nil
@@ -258,11 +261,11 @@ func (s *LicenseService) CheckAlgorithmAuth(ctx context.Context, algoName string
 func (s *LicenseService) CheckStreamLimit(ctx context.Context, currentRunningStreams int) error {
 	license, err := s.repo.FindActive(ctx)
 	if err != nil {
-		return errors.New(errors.ErrLicenseNotAuthorized, "未找到有效授权")
+		return errors.New(errors.ErrLicenseNotAuthorized, "")
 	}
 
 	if license.MaxStreams > 0 && currentRunningStreams >= license.MaxStreams {
-		return errors.New(errors.ErrLicenseStreamLimit, fmt.Sprintf("授权并发数量不足（当前 %d / 上限 %d）", currentRunningStreams, license.MaxStreams))
+		return errors.New(errors.ErrLicenseStreamLimit, "")
 	}
 
 	return nil
@@ -330,7 +333,7 @@ func (s *LicenseService) toResponse(license *model.DeviceLicense) *dto.LicenseIn
 		DeviceSN:          license.DeviceSN,
 		DeviceFingerprint: license.DeviceFingerprint,
 		Algorithms:        algorithms,
-		MaxStreams:         license.MaxStreams,
+		MaxStreams:        license.MaxStreams,
 		Features:          features,
 		NotBefore:         license.NotBefore,
 		NotAfter:          license.NotAfter,

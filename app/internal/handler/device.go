@@ -180,7 +180,7 @@ func (h *DeviceHandler) BatchDelete(c *gin.Context) {
 // @Security     BearerAuth
 func (h *DeviceHandler) TestConnection(c *gin.Context) {
 	id := c.Param("id")
-	result, err := h.svc.TestConnection(c.Request.Context(), id)
+	result, err := h.svc.TestConnection(c.Request.Context(), id, currentLang(c))
 	if err != nil {
 		attachError(c, err)
 		return

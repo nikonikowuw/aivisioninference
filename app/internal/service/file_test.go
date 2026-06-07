@@ -15,6 +15,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
@@ -29,7 +30,9 @@ func TestFileServiceInitUploadRejectsOversizedFile(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "文件大小超过限制")
+	appErr, ok := err.(*apperrors.AppError)
+	require.True(t, ok)
+	require.Equal(t, apperrors.ErrFileTooLarge, appErr.Code)
 }
 
 func TestFileServiceInitUploadRejectsSVG(t *testing.T) {
@@ -43,7 +46,9 @@ func TestFileServiceInitUploadRejectsSVG(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "不支持上传 SVG")
+	appErr, ok := err.(*apperrors.AppError)
+	require.True(t, ok)
+	require.Equal(t, apperrors.ErrFileInvalidType, appErr.Code)
 }
 
 func TestFileServiceInitUploadRejectsMismatchedChunkCount(t *testing.T) {
@@ -57,7 +62,9 @@ func TestFileServiceInitUploadRejectsMismatchedChunkCount(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "分片数量与文件大小不匹配")
+	appErr, ok := err.(*apperrors.AppError)
+	require.True(t, ok)
+	require.Equal(t, apperrors.ErrChunkCountMismatch, appErr.Code)
 }
 
 func TestFileServiceMaxChunkRequestBytesIncludesMultipartOverhead(t *testing.T) {
@@ -79,7 +86,9 @@ func TestFileServiceSaveChunkRejectsOversizedChunk(t *testing.T) {
 	err = svc.SaveChunk(context.Background(), chunk.UploadID, 0, strings.NewReader("12345"))
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "分片大小超过限制")
+	appErr, ok := err.(*apperrors.AppError)
+	require.True(t, ok)
+	require.Equal(t, apperrors.ErrFileTooLarge, appErr.Code)
 }
 
 func TestFileServiceCheckFileFindsExistingMD5(t *testing.T) {

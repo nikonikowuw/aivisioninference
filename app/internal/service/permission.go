@@ -86,11 +86,21 @@ func (s *PermissionService) invalidateTreeCache(ctx context.Context) {
 	}
 }
 
+// applyOptionalPermissionUpdates applies optional parent ID and sort order updates.
+func applyOptionalPermissionUpdates(perm *model.Permission, parentID *string, sortOrder *int) {
+	if parentID != nil {
+		perm.ParentID = parentID
+	}
+	if sortOrder != nil {
+		perm.SortOrder = *sortOrder
+	}
+}
+
 // Update 更新现有的权限配置，更新成功后清除权限树缓存
 func (s *PermissionService) Update(ctx context.Context, id string, req dto.UpdatePermissionRequest) error {
 	perm, err := s.permRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "权限不存在")
+		return apperrors.New(apperrors.ErrPermissionNotFound, "")
 	}
 
 	if req.Code != "" && req.Code != perm.Code {
@@ -100,7 +110,7 @@ func (s *PermissionService) Update(ctx context.Context, id string, req dto.Updat
 			return apperrors.New(apperrors.ErrInternal, "")
 		}
 		if count > 0 {
-			return apperrors.New(apperrors.ErrBadRequest, "权限编码已存在")
+			return apperrors.New(apperrors.ErrPermissionCodeTaken, "")
 		}
 	}
 
@@ -122,12 +132,7 @@ func (s *PermissionService) Update(ctx context.Context, id string, req dto.Updat
 	if req.Icon != "" {
 		perm.Icon = req.Icon
 	}
-	if req.ParentID != nil {
-		perm.ParentID = req.ParentID
-	}
-	if req.SortOrder != nil {
-		perm.SortOrder = *req.SortOrder
-	}
+	applyOptionalPermissionUpdates(perm, req.ParentID, req.SortOrder)
 
 	if err := s.permRepo.Update(ctx, perm); err != nil {
 		zap.L().Error("update permission failed", zap.Error(err))
@@ -141,7 +146,7 @@ func (s *PermissionService) Update(ctx context.Context, id string, req dto.Updat
 // Delete 删除指定权限及其所有子孙权限，执行前会校验其是否已分配给任何角色
 func (s *PermissionService) Delete(ctx context.Context, id string) error {
 	if _, err := s.permRepo.FindByID(ctx, id); err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "权限不存在")
+		return apperrors.New(apperrors.ErrPermissionNotFound, "")
 	}
 
 	descendants, err := s.permRepo.FindDescendantIDs(ctx, id)
@@ -158,7 +163,7 @@ func (s *PermissionService) Delete(ctx context.Context, id string) error {
 			return apperrors.New(apperrors.ErrInternal, "")
 		}
 		if roleCount > 0 {
-			return apperrors.New(apperrors.ErrBadRequest, "该权限或其子权限已分配给角色，无法删除")
+			return apperrors.New(apperrors.ErrPermissionAssigned, "")
 		}
 	}
 
@@ -179,7 +184,7 @@ func (s *PermissionService) Create(ctx context.Context, req dto.CreatePermission
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 	if count > 0 {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "权限编码已存在")
+		return nil, apperrors.New(apperrors.ErrPermissionCodeTaken, "")
 	}
 
 	if req.ParentID != nil {
@@ -189,7 +194,7 @@ func (s *PermissionService) Create(ctx context.Context, req dto.CreatePermission
 			return nil, apperrors.New(apperrors.ErrInternal, "")
 		}
 		if !exists {
-			return nil, apperrors.New(apperrors.ErrNotFound, "父级权限不存在")
+			return nil, apperrors.New(apperrors.ErrPermissionNotFound, "")
 		}
 	}
 

@@ -132,6 +132,13 @@ func main() {
 	mustExec(db, "CREATE INDEX IF NOT EXISTS idx_person_embeddings_vector ON person_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
 
 	mustExec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_root ON users (is_root) WHERE is_root = true")
+
+	// 修复 devices.external_key：RTSP URL 允许重复添加，移除唯一索引。
+	mustExec(db, `DO $$ BEGIN
+		IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_devices_external_key') THEN
+			DROP INDEX idx_devices_external_key;
+		END IF;
+	END $$`)
 	mustExec(db, rootUsernameConstraintSQL())
 	mustExec(db, ensureAuditLogSummaryColumnsSQL())
 	mustExec(db, dropAuditLogActionColumnSQL())
@@ -292,7 +299,7 @@ func cleanupDuplicateSmartRecordsMenu(db *gorm.DB) {
 		return // 无重复记录，无需清理。
 	}
 
-	log.Printf("Cleaning up duplicate smart-records menu (id=%d) under system-management", dup.ID)
+	log.Printf("Cleaning up duplicate smart-records menu (id=%s) under system-management", dup.ID)
 
 	// 先删除该菜单下的按钮权限。
 	if err := db.Where("parent_id = ? AND type = ?", dup.ID, "button").Delete(&model.Permission{}).Error; err != nil {
@@ -306,7 +313,7 @@ func cleanupDuplicateSmartRecordsMenu(db *gorm.DB) {
 	if err := db.Delete(&dup).Error; err != nil {
 		log.Printf("Warning: failed to delete duplicate smart-records menu: %v", err)
 	} else {
-		log.Printf("Removed duplicate smart-records menu (id=%d) from system-management", dup.ID)
+		log.Printf("Removed duplicate smart-records menu (id=%s) from system-management", dup.ID)
 	}
 }
 
@@ -323,8 +330,8 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 		}{
 			{Code: "user-management", Name: "用户管理", Icon: "MdPeople", ChildCodes: []string{"users", "roles", "permissions"}},
 			{Code: "person-management", Name: "人员管理", Icon: "MdFace", ChildCodes: []string{"persons", "person-groups"}},
-			{Code: "license-management", Name: "授权管理", Icon: "MdVpnKey", ChildCodes: []string{"license"}},
-			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks", "algorithm-packages"}},
+			{Code: "algorithm-management", Name: "算法管理", Icon: "MdVpnKey", ChildCodes: []string{"license", "algorithm-packages"}},
+			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks"}},
 		}
 
 		for _, pm := range parents {
@@ -459,6 +466,11 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig, redisCfg config.RedisConfi
 	if rdb, err := cache.New(redisCfg.Host, redisCfg.Port, redisCfg.Password, redisCfg.DB); err == nil {
 		defer rdb.Close()
 		ctx := context.Background()
+		// 清除权限树缓存。
+		if delErr := rdb.Del(ctx, "perm:tree:all").Err(); delErr == nil {
+			log.Println("Invalidated permission tree cache (perm:tree:all)")
+		}
+		// 清除各角色的菜单树缓存。
 		iter := rdb.Scan(ctx, 0, "perm:menu_tree:*", 0).Iterator()
 		var count int
 		for iter.Next(ctx) {
@@ -485,13 +497,21 @@ type buttonInfo struct {
 	Method string // HTTP method for RBAC
 }
 
-// childMenuDef 定义子菜单及其按钮权限。
-type childMenuDef struct {
+// subMenuDef 定义三级子菜单（Tab）及其按钮权限。
+type subMenuDef struct {
 	Name    string
 	Code    string
-	Path    string
-	Icon    string
 	Buttons []buttonInfo
+}
+
+// childMenuDef 定义子菜单及其按钮权限。
+type childMenuDef struct {
+	Name     string
+	Code     string
+	Path     string
+	Icon     string
+	Buttons  []buttonInfo
+	SubMenus []subMenuDef // 三级子菜单（Tab），如系统配置下的各个配置Tab
 }
 
 // parentMenuDef 定义父菜单（分组）及其子菜单。
@@ -515,25 +535,51 @@ func defaultMenuList() []parentMenuDef {
 			Children: nil,
 		},
 		{
-			Name: "人员管理", Code: "person-management", Path: "/person-management", Icon: "MdFace",
+			Name: "智能记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive",
+			Buttons: []buttonInfo{
+				{Code: "records:recognition:list", Name: "查看识别记录", Path: "/api/v1/smart-records", Method: "GET"},
+				{Code: "records:alarm:list", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
+				{Code: "records:capture:list", Name: "查看抓拍记录", Path: "/api/v1/smart-records", Method: "GET"},
+				{Code: "records:export", Name: "导出智能记录", Path: "/api/v1/smart-records/export", Method: "GET"},
+				{Code: "records:batch-delete", Name: "批量删除智能记录", Path: "/api/v1/smart-records/batch-delete", Method: "POST"},
+				{Code: "records:export-selected", Name: "导出选定智能记录", Path: "/api/v1/smart-records/export-selected", Method: "POST"},
+				{Code: "records:category-codes:list", Name: "查看类别编码", Path: "/api/v1/smart-records/category-codes", Method: "GET"},
+			},
+			Children: nil,
+		},
+		{
+			Name: "媒体预览", Code: "media-management", Path: "/media-management", Icon: "MdLiveTv",
 			Children: []childMenuDef{
-				{Name: "人员", Code: "persons", Path: "/persons", Icon: "MdFace", Buttons: []buttonInfo{
-					{Code: "person:list", Name: "人员列表", Path: "/api/v1/persons", Method: "GET"},
-					{Code: "person:create", Name: "创建人员", Path: "/api/v1/persons", Method: "POST"},
-					{Code: "person:export", Name: "导出人员", Path: "/api/v1/persons/export", Method: "GET"},
-					{Code: "person:batch-delete", Name: "批量删除", Path: "/api/v1/persons/batch-delete", Method: "POST"},
-					{Code: "person:batch-toggle", Name: "批量启禁用", Path: "/api/v1/persons/batch-toggle", Method: "POST"},
-					{Code: "person:batch-retry-embedding", Name: "批量重提特征", Path: "/api/v1/persons/batch-retry-embedding", Method: "POST"},
-					{Code: "person:edit", Name: "编辑人员", Path: "/api/v1/persons/*", Method: "PUT"},
-					{Code: "person:delete", Name: "删除人员", Path: "/api/v1/persons/*", Method: "DELETE"},
-					{Code: "person:view", Name: "查看人员", Path: "/api/v1/persons/*", Method: "GET"},
-					{Code: "person:retry-embedding", Name: "重提特征", Path: "/api/v1/persons/*/retry-embedding", Method: "POST"},
+				{Name: "实时预览", Code: "live-view", Path: "/media/live", Icon: "MdViewStream", Buttons: []buttonInfo{
+					{Code: "media:play", Name: "获取播放地址", Path: "/api/v1/media/play", Method: "GET"},
+					{Code: "media:snapshot", Name: "获取截图", Path: "/api/v1/media/snapshot", Method: "GET"},
 				}},
-				{Name: "人员分组", Code: "person-groups", Path: "/person-groups", Icon: "MdFolder", Buttons: []buttonInfo{
-					{Code: "person-group:list", Name: "分组列表", Path: "/api/v1/person-groups", Method: "GET"},
-					{Code: "person-group:create", Name: "创建分组", Path: "/api/v1/person-groups", Method: "POST"},
-					{Code: "person-group:edit", Name: "编辑分组", Path: "/api/v1/person-groups/*", Method: "PUT"},
-					{Code: "person-group:delete", Name: "删除分组", Path: "/api/v1/person-groups/*", Method: "DELETE"},
+				{Name: "流状态看板", Code: "stream-status", Path: "/media/streams", Icon: "MdTimeline", Buttons: []buttonInfo{
+					{Code: "stream:list", Name: "查看流状态", Path: "/api/v1/media/streams", Method: "GET"},
+				}},
+				{Name: "录像回放", Code: "recordings", Path: "/media/recordings", Icon: "MdVideoLibrary", Buttons: []buttonInfo{
+					{Code: "recording:list", Name: "录像列表", Path: "/api/v1/media/recordings", Method: "GET"},
+					{Code: "recording:playback", Name: "录像回放", Path: "/api/v1/media/recordings/*/playback", Method: "POST"},
+					{Code: "recording:start", Name: "开始录像", Path: "/api/v1/media/recordings/start", Method: "POST"},
+					{Code: "recording:stop", Name: "停止录像", Path: "/api/v1/media/recordings/stop", Method: "POST"},
+				}},
+			},
+		},
+		{
+			Name: "AI视觉推理", Code: "aivision", Path: "/aivision", Icon: "MdRemoveRedEye",
+			Children: []childMenuDef{
+				{Name: "时间配置", Code: "ai-time-schedules", Path: "/ai-time-schedules", Icon: "MdTimeline", Buttons: []buttonInfo{
+					{Code: "ai-time-schedules:list", Name: "时间配置列表", Path: "/api/v1/ai-time-schedules", Method: "GET"},
+					{Code: "ai-time-schedules:create", Name: "创建时间配置", Path: "/api/v1/ai-time-schedules", Method: "POST"},
+					{Code: "ai-time-schedules:edit", Name: "编辑时间配置", Path: "/api/v1/ai-time-schedules/*", Method: "PUT"},
+					{Code: "ai-time-schedules:delete", Name: "删除时间配置", Path: "/api/v1/ai-time-schedules/*", Method: "DELETE"},
+				}},
+				{Name: "推理任务", Code: "aivisiontasks", Path: "/ai-tasks", Icon: "MdAssignment", Buttons: []buttonInfo{
+					{Code: "aivisiontasks:list", Name: "任务列表", Path: "/api/v1/aivisiontasks", Method: "GET"},
+					{Code: "aivisiontasks:create", Name: "创建任务", Path: "/api/v1/aivisiontasks", Method: "POST"},
+					{Code: "aivisiontasks:edit", Name: "编辑任务", Path: "/api/v1/aivisiontasks/*", Method: "PUT"},
+					{Code: "aivisiontasks:delete", Name: "删除任务", Path: "/api/v1/aivisiontasks/*", Method: "DELETE"},
+					{Code: "aivisiontasks:check-conflict", Name: "检查冲突", Path: "/api/v1/aivisiontasks/check-conflict", Method: "POST"},
 				}},
 			},
 		},
@@ -582,35 +628,27 @@ func defaultMenuList() []parentMenuDef {
 			},
 		},
 		{
-			Name: "媒体预览", Code: "media-management", Path: "/media-management", Icon: "MdLiveTv",
+			Name: "人员管理", Code: "person-management", Path: "/person-management", Icon: "MdFace",
 			Children: []childMenuDef{
-				{Name: "实时预览", Code: "live-view", Path: "/media/live", Icon: "MdViewStream", Buttons: []buttonInfo{
-					{Code: "media:play", Name: "获取播放地址", Path: "/api/v1/media/play", Method: "GET"},
-					{Code: "media:snapshot", Name: "获取截图", Path: "/api/v1/media/snapshot", Method: "GET"},
+				{Name: "人员", Code: "persons", Path: "/persons", Icon: "MdFace", Buttons: []buttonInfo{
+					{Code: "person:list", Name: "人员列表", Path: "/api/v1/persons", Method: "GET"},
+					{Code: "person:create", Name: "创建人员", Path: "/api/v1/persons", Method: "POST"},
+					{Code: "person:export", Name: "导出人员", Path: "/api/v1/persons/export", Method: "GET"},
+					{Code: "person:batch-delete", Name: "批量删除", Path: "/api/v1/persons/batch-delete", Method: "POST"},
+					{Code: "person:batch-toggle", Name: "批量启禁用", Path: "/api/v1/persons/batch-toggle", Method: "POST"},
+					{Code: "person:batch-retry-embedding", Name: "批量重提特征", Path: "/api/v1/persons/batch-retry-embedding", Method: "POST"},
+					{Code: "person:edit", Name: "编辑人员", Path: "/api/v1/persons/*", Method: "PUT"},
+					{Code: "person:delete", Name: "删除人员", Path: "/api/v1/persons/*", Method: "DELETE"},
+					{Code: "person:view", Name: "查看人员", Path: "/api/v1/persons/*", Method: "GET"},
+					{Code: "person:retry-embedding", Name: "重提特征", Path: "/api/v1/persons/*/retry-embedding", Method: "POST"},
 				}},
-				{Name: "流状态看板", Code: "stream-status", Path: "/media/streams", Icon: "MdTimeline", Buttons: []buttonInfo{
-					{Code: "stream:list", Name: "查看流状态", Path: "/api/v1/media/streams", Method: "GET"},
-				}},
-				{Name: "录像回放", Code: "recordings", Path: "/media/recordings", Icon: "MdVideoLibrary", Buttons: []buttonInfo{
-					{Code: "recording:list", Name: "录像列表", Path: "/api/v1/media/recordings", Method: "GET"},
-					{Code: "recording:playback", Name: "录像回放", Path: "/api/v1/media/recordings/*/playback", Method: "POST"},
-					{Code: "recording:start", Name: "开始录像", Path: "/api/v1/media/recordings/start", Method: "POST"},
-					{Code: "recording:stop", Name: "停止录像", Path: "/api/v1/media/recordings/stop", Method: "POST"},
+				{Name: "人员分组", Code: "person-groups", Path: "/person-groups", Icon: "MdFolder", Buttons: []buttonInfo{
+					{Code: "person-group:list", Name: "分组列表", Path: "/api/v1/person-groups", Method: "GET"},
+					{Code: "person-group:create", Name: "创建分组", Path: "/api/v1/person-groups", Method: "POST"},
+					{Code: "person-group:edit", Name: "编辑分组", Path: "/api/v1/person-groups/*", Method: "PUT"},
+					{Code: "person-group:delete", Name: "删除分组", Path: "/api/v1/person-groups/*", Method: "DELETE"},
 				}},
 			},
-		},
-		{
-			Name: "智能记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive",
-			Buttons: []buttonInfo{
-				{Code: "records:recognition:list", Name: "查看识别记录", Path: "/api/v1/smart-records", Method: "GET"},
-				{Code: "records:alarm:list", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
-				{Code: "records:capture:list", Name: "查看抓拍记录", Path: "/api/v1/smart-records", Method: "GET"},
-				{Code: "records:export", Name: "导出智能记录", Path: "/api/v1/smart-records/export", Method: "GET"},
-				{Code: "records:batch-delete", Name: "批量删除智能记录", Path: "/api/v1/smart-records/batch-delete", Method: "POST"},
-				{Code: "records:export-selected", Name: "导出选定智能记录", Path: "/api/v1/smart-records/export-selected", Method: "POST"},
-				{Code: "records:category-codes:list", Name: "查看类别编码", Path: "/api/v1/smart-records/category-codes", Method: "GET"},
-			},
-			Children: nil,
 		},
 		{
 			Name: "用户管理", Code: "user-management", Path: "/user-management", Icon: "MdPeople",
@@ -647,7 +685,7 @@ func defaultMenuList() []parentMenuDef {
 			},
 		},
 		{
-			Name: "授权管理", Code: "license-management", Path: "/license-management", Icon: "MdVpnKey",
+			Name: "算法管理", Code: "algorithm-management", Path: "/algorithm-management", Icon: "MdVpnKey",
 			Children: []childMenuDef{
 				{Name: "算法授权", Code: "license", Path: "/license", Icon: "MdVpnKey", Buttons: []buttonInfo{
 					{Code: "license:fingerprint", Name: "查看设备指纹", Path: "/api/v1/license/fingerprint", Method: "GET"},
@@ -656,23 +694,11 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "license:list", Name: "授权列表", Path: "/api/v1/license", Method: "GET"},
 					{Code: "license:check", Name: "校验算法授权", Path: "/api/v1/license/check", Method: "GET"},
 				}},
-			},
-		},
-		{
-			Name: "AI视觉推理", Code: "aivision", Path: "/aivision", Icon: "MdRemoveRedEye",
-			Children: []childMenuDef{
-				{Name: "时间配置", Code: "ai-time-schedules", Path: "/ai-time-schedules", Icon: "MdTimeline", Buttons: []buttonInfo{
-					{Code: "ai-time-schedules:list", Name: "时间配置列表", Path: "/api/v1/ai-time-schedules", Method: "GET"},
-					{Code: "ai-time-schedules:create", Name: "创建时间配置", Path: "/api/v1/ai-time-schedules", Method: "POST"},
-					{Code: "ai-time-schedules:edit", Name: "编辑时间配置", Path: "/api/v1/ai-time-schedules/*", Method: "PUT"},
-					{Code: "ai-time-schedules:delete", Name: "删除时间配置", Path: "/api/v1/ai-time-schedules/*", Method: "DELETE"},
-				}},
-				{Name: "推理任务", Code: "aivisiontasks", Path: "/ai-tasks", Icon: "MdAssignment", Buttons: []buttonInfo{
-					{Code: "aivisiontasks:list", Name: "任务列表", Path: "/api/v1/aivisiontasks", Method: "GET"},
-					{Code: "aivisiontasks:create", Name: "创建任务", Path: "/api/v1/aivisiontasks", Method: "POST"},
-					{Code: "aivisiontasks:edit", Name: "编辑任务", Path: "/api/v1/aivisiontasks/*", Method: "PUT"},
-					{Code: "aivisiontasks:delete", Name: "删除任务", Path: "/api/v1/aivisiontasks/*", Method: "DELETE"},
-					{Code: "aivisiontasks:check-conflict", Name: "检查冲突", Path: "/api/v1/aivisiontasks/check-conflict", Method: "POST"},
+				{Name: "算法包管理", Code: "algorithm-packages", Path: "/algorithm-packages", Icon: "MdExtension", Buttons: []buttonInfo{
+					{Code: "algorithm-package:list", Name: "算法包列表", Path: "/api/v1/algorithmpackages", Method: "GET"},
+					{Code: "algorithm-package:upload", Name: "上传算法包", Path: "/api/v1/algorithmpackages/upload", Method: "POST"},
+					{Code: "algorithm-package:view", Name: "查看算法包", Path: "/api/v1/algorithmpackages/*", Method: "GET"},
+					{Code: "algorithm-package:delete", Name: "删除算法包", Path: "/api/v1/algorithmpackages/*", Method: "DELETE"},
 				}},
 			},
 		},
@@ -689,12 +715,6 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "file:delete", Name: "删除文件", Path: "/api/v1/files/*", Method: "DELETE"},
 					{Code: "file:view", Name: "查看文件", Path: "/api/v1/files/*", Method: "GET"},
 					{Code: "file:download", Name: "下载文件", Path: "/api/v1/files/*/download", Method: "GET"},
-				}},
-				{Name: "算法包管理", Code: "algorithm-packages", Path: "/algorithm-packages", Icon: "MdExtension", Buttons: []buttonInfo{
-					{Code: "algorithm-package:list", Name: "算法包列表", Path: "/api/v1/algorithmpackages", Method: "GET"},
-					{Code: "algorithm-package:upload", Name: "上传算法包", Path: "/api/v1/algorithmpackages/upload", Method: "POST"},
-					{Code: "algorithm-package:view", Name: "查看算法包", Path: "/api/v1/algorithmpackages/*", Method: "GET"},
-					{Code: "algorithm-package:delete", Name: "删除算法包", Path: "/api/v1/algorithmpackages/*", Method: "DELETE"},
 				}},
 				{Name: "审计日志", Code: "audit-logs", Path: "/audit-logs", Icon: "MdHistory", Buttons: []buttonInfo{
 					{Code: "audit:view", Name: "查看审计日志", Path: "/api/v1/audit-logs", Method: "GET"},
@@ -726,46 +746,107 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "feedback:batch-status", Name: "批量更新反馈状态", Path: "/api/v1/feedback/batch-status", Method: "PUT"},
 					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
 				}},
-				{Name: "系统配置", Code: "system-config", Path: "/system/config", Icon: "MdSettings", Buttons: []buttonInfo{
-					// 运行状态 Tab
-					{Code: "system:status:view", Name: "查看运行状态", Path: "/api/v1/system/status/realtime", Method: "GET"},
-					{Code: "system:status:resources", Name: "查看资源状态", Path: "/api/v1/system/status/resources", Method: "GET"},
-					{Code: "system:status:services", Name: "查看服务状态", Path: "/api/v1/system/status/services", Method: "GET"},
-					// 网络配置 Tab
-					{Code: "system:network:view", Name: "查看网络配置", Path: "/api/v1/system/network", Method: "GET"},
-					{Code: "system:network:apply", Name: "应用网络配置", Path: "/api/v1/system/network/apply", Method: "POST"},
-					{Code: "system:network:confirm", Name: "确认网络配置", Path: "/api/v1/system/network/confirm", Method: "POST"},
-					{Code: "system:network:rollback", Name: "回滚网络配置", Path: "/api/v1/system/network/rollback", Method: "POST"},
-					// 时间配置 Tab
-					{Code: "system:time:view", Name: "查看时间配置", Path: "/api/v1/system/time", Method: "GET"},
-					{Code: "system:time:manual", Name: "手动设置时间", Path: "/api/v1/system/time/manual", Method: "POST"},
-					{Code: "system:time:timezone", Name: "设置时区", Path: "/api/v1/system/time/timezone", Method: "PUT"},
-					{Code: "system:ntp:view", Name: "查看NTP配置", Path: "/api/v1/system/time/ntp", Method: "GET"},
-					{Code: "system:ntp:manage", Name: "管理NTP服务器", Path: "/api/v1/system/time/ntp/servers", Method: "POST"},
-					{Code: "system:ntp:sync", Name: "同步NTP时间", Path: "/api/v1/system/time/ntp/sync", Method: "POST"},
-					// 告警上报 Tab
-					{Code: "system:webhook:list", Name: "Webhook列表", Path: "/api/v1/system/webhook", Method: "GET"},
-					{Code: "system:webhook:create", Name: "创建Webhook", Path: "/api/v1/system/webhook", Method: "POST"},
-					{Code: "system:webhook:edit", Name: "编辑Webhook", Path: "/api/v1/system/webhook/*", Method: "PUT"},
-					{Code: "system:webhook:delete", Name: "删除Webhook", Path: "/api/v1/system/webhook/*", Method: "DELETE"},
-					{Code: "system:webhook:test", Name: "测试Webhook", Path: "/api/v1/system/webhook/*/test", Method: "POST"},
-					{Code: "system:webhook:logs", Name: "查看推送日志", Path: "/api/v1/system/webhook/logs", Method: "GET"},
-					// 存储配置 Tab
-					{Code: "system:storage:view", Name: "查看存储配置", Path: "/api/v1/system/storage/config", Method: "GET"},
-					{Code: "system:storage:edit", Name: "编辑存储配置", Path: "/api/v1/system/storage/config", Method: "PUT"},
-					{Code: "system:storage:cleanup-logs", Name: "查看清理日志", Path: "/api/v1/system/storage/cleanup-logs", Method: "GET"},
-					{Code: "system:storage:cleanup", Name: "手动触发清理", Path: "/api/v1/system/storage/cleanup/run", Method: "POST"},
-					// GB28181 配置 Tab
-					{Code: "system:gb28181:view", Name: "查看GB28181配置", Path: "/api/v1/system/gb28181/config", Method: "GET"},
+				{Name: "系统配置", Code: "system-config", Path: "/system/config", Icon: "MdSettings", SubMenus: []subMenuDef{
+					{Name: "运行状态", Code: "system-status", Buttons: []buttonInfo{
+						{Code: "system:status:view", Name: "查看运行状态", Path: "/api/v1/system/status/realtime", Method: "GET"},
+						{Code: "system:status:resources", Name: "查看资源状态", Path: "/api/v1/system/status/resources", Method: "GET"},
+						{Code: "system:status:services", Name: "查看服务状态", Path: "/api/v1/system/status/services", Method: "GET"},
+					}},
+					{Name: "网络配置", Code: "system-network", Buttons: []buttonInfo{
+						{Code: "system:network:view", Name: "查看网络配置", Path: "/api/v1/system/network", Method: "GET"},
+						{Code: "system:network:apply", Name: "应用网络配置", Path: "/api/v1/system/network/apply", Method: "POST"},
+						{Code: "system:network:confirm", Name: "确认网络配置", Path: "/api/v1/system/network/confirm", Method: "POST"},
+						{Code: "system:network:rollback", Name: "回滚网络配置", Path: "/api/v1/system/network/rollback", Method: "POST"},
+					}},
+					{Name: "时间配置", Code: "system-time", Buttons: []buttonInfo{
+						{Code: "system:time:view", Name: "查看时间配置", Path: "/api/v1/system/time", Method: "GET"},
+						{Code: "system:time:manual", Name: "手动设置时间", Path: "/api/v1/system/time/manual", Method: "POST"},
+						{Code: "system:time:timezone", Name: "设置时区", Path: "/api/v1/system/time/timezone", Method: "PUT"},
+						{Code: "system:ntp:view", Name: "查看NTP配置", Path: "/api/v1/system/time/ntp", Method: "GET"},
+						{Code: "system:ntp:manage", Name: "管理NTP服务器", Path: "/api/v1/system/time/ntp/servers", Method: "POST"},
+						{Code: "system:ntp:sync", Name: "同步NTP时间", Path: "/api/v1/system/time/ntp/sync", Method: "POST"},
+					}},
+					{Name: "告警上报", Code: "system-webhook", Buttons: []buttonInfo{
+						{Code: "system:webhook:list", Name: "Webhook列表", Path: "/api/v1/system/webhook", Method: "GET"},
+						{Code: "system:webhook:create", Name: "创建Webhook", Path: "/api/v1/system/webhook", Method: "POST"},
+						{Code: "system:webhook:edit", Name: "编辑Webhook", Path: "/api/v1/system/webhook/*", Method: "PUT"},
+						{Code: "system:webhook:delete", Name: "删除Webhook", Path: "/api/v1/system/webhook/*", Method: "DELETE"},
+						{Code: "system:webhook:test", Name: "测试Webhook", Path: "/api/v1/system/webhook/*/test", Method: "POST"},
+						{Code: "system:webhook:logs", Name: "查看推送日志", Path: "/api/v1/system/webhook/logs", Method: "GET"},
+					}},
+					{Name: "存储配置", Code: "system-storage", Buttons: []buttonInfo{
+						{Code: "system:storage:view", Name: "查看存储配置", Path: "/api/v1/system/storage/config", Method: "GET"},
+						{Code: "system:storage:edit", Name: "编辑存储配置", Path: "/api/v1/system/storage/config", Method: "PUT"},
+						{Code: "system:storage:cleanup-logs", Name: "查看清理日志", Path: "/api/v1/system/storage/cleanup-logs", Method: "GET"},
+						{Code: "system:storage:cleanup", Name: "手动触发清理", Path: "/api/v1/system/storage/cleanup/run", Method: "POST"},
+					}},
+					{Name: "GB28181配置", Code: "system-gb28181", Buttons: []buttonInfo{
+						{Code: "system:gb28181:view", Name: "查看GB28181配置", Path: "/api/v1/system/gb28181/config", Method: "GET"},
+					}},
 				}},
 			},
 		},
 	}
 }
 
-// syncPermissions 确保所有定义的权限都存在于数据库中，并分配给 admin 角色。
-// 幂等操作：已存在的权限不会重复创建，仅补齐缺失的权限。
-// 支持两级菜单结构：父菜单 → 子菜单 → 按钮。
+// ensureMenu finds or creates a menu permission, updating parent_id and sort_order if needed.
+// Returns the permission and any new permission that was created.
+func ensureMenu(tx *gorm.DB, code, name, path, icon string, parentID *string, sortOrder int) (model.Permission, model.Permission, error) {
+	var perm model.Permission
+	err := tx.Where("code = ? AND type = ?", code, "menu").First(&perm).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		perm = model.Permission{
+			Name: name, Code: code, Path: path, Icon: icon,
+			Type: "menu", ParentID: parentID, SortOrder: sortOrder,
+		}
+		if createErr := tx.Create(&perm).Error; createErr != nil {
+			return perm, perm, fmt.Errorf("create menu %s: %w", code, createErr)
+		}
+		return perm, perm, nil
+	}
+	if err != nil {
+		return perm, perm, fmt.Errorf("query menu %s: %w", code, err)
+	}
+	needUpdate := false
+	updates := map[string]interface{}{}
+	if parentID != nil && (perm.ParentID == nil || *perm.ParentID != *parentID) {
+		updates["parent_id"] = *parentID
+		needUpdate = true
+	}
+	if perm.SortOrder != sortOrder {
+		updates["sort_order"] = sortOrder
+		needUpdate = true
+	}
+	if needUpdate {
+		if updateErr := tx.Model(&perm).Updates(updates).Error; updateErr != nil {
+			return perm, perm, fmt.Errorf("update menu %s: %w", code, updateErr)
+		}
+	}
+	return perm, model.Permission{}, nil
+}
+
+// ensureButton finds or creates a button permission.
+// Returns the permission and any new permission that was created.
+func ensureButton(tx *gorm.DB, btn buttonInfo, parentID *string) (model.Permission, model.Permission, error) {
+	var perm model.Permission
+	err := tx.Where("code = ? AND type = ?", btn.Code, "button").First(&perm).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		perm = model.Permission{
+			Name: btn.Name, Code: btn.Code, Path: btn.Path, Method: btn.Method,
+			Type: "button", ParentID: parentID, SortOrder: 0,
+		}
+		if createErr := tx.Create(&perm).Error; createErr != nil {
+			return perm, perm, fmt.Errorf("create button %s: %w", btn.Code, createErr)
+		}
+		return perm, perm, nil
+	}
+	if err != nil {
+		return perm, perm, fmt.Errorf("query button %s: %w", btn.Code, err)
+	}
+	return perm, model.Permission{}, nil
+}
+
+// syncPermissions ensures all defined permissions exist and are assigned to admin role.
 func syncPermissions(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		// 获取或创建 admin 角色。
@@ -898,6 +979,76 @@ func syncPermissions(db *gorm.DB) error {
 						return fmt.Errorf("query button %s: %w", btn.Code, btnErr)
 					}
 					allDefinedPerms = append(allDefinedPerms, btnPerm)
+				}
+
+				// 查找或创建三级子菜单（Tab）及其按钮权限。
+				for k, sub := range child.SubMenus {
+					var subMenu model.Permission
+					err := tx.Where("code = ? AND type = ?", sub.Code, "menu").First(&subMenu).Error
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						subMenu = model.Permission{
+							Name:      sub.Name,
+							Code:      sub.Code,
+							Type:      "menu",
+							ParentID:  &childMenu.ID,
+							SortOrder: k + 1,
+						}
+						if createErr := tx.Create(&subMenu).Error; createErr != nil {
+							return fmt.Errorf("create sub menu %s: %w", sub.Code, createErr)
+						}
+						newPerms = append(newPerms, subMenu)
+					} else if err != nil {
+						return fmt.Errorf("query sub menu %s: %w", sub.Code, err)
+					} else {
+						// 确保 ParentID 和 sort_order 始终正确。
+						needUpdate := false
+						updates := map[string]interface{}{}
+						if subMenu.ParentID == nil || *subMenu.ParentID != childMenu.ID {
+							updates["parent_id"] = childMenu.ID
+							needUpdate = true
+						}
+						if subMenu.SortOrder != k+1 {
+							updates["sort_order"] = k + 1
+							needUpdate = true
+						}
+						if needUpdate {
+							if updateErr := tx.Model(&subMenu).Updates(updates).Error; updateErr != nil {
+								return fmt.Errorf("update sub menu %s: %w", sub.Code, updateErr)
+							}
+						}
+					}
+					allDefinedPerms = append(allDefinedPerms, subMenu)
+
+					// 查找或创建三级子菜单的按钮权限。
+					for _, btn := range sub.Buttons {
+						var btnPerm model.Permission
+						btnErr := tx.Where("code = ? AND type = ?", btn.Code, "button").First(&btnPerm).Error
+						if errors.Is(btnErr, gorm.ErrRecordNotFound) {
+							btnPerm = model.Permission{
+								Name:      btn.Name,
+								Code:      btn.Code,
+								Path:      btn.Path,
+								Method:    btn.Method,
+								Type:      "button",
+								ParentID:  &subMenu.ID,
+								SortOrder: 0,
+							}
+							if createErr := tx.Create(&btnPerm).Error; createErr != nil {
+								return fmt.Errorf("create sub button %s: %w", btn.Code, createErr)
+							}
+							newPerms = append(newPerms, btnPerm)
+						} else if btnErr != nil {
+							return fmt.Errorf("query sub button %s: %w", btn.Code, btnErr)
+						} else {
+							// 已存在的按钮，确保 ParentID 指向正确的三级子菜单。
+							if btnPerm.ParentID == nil || *btnPerm.ParentID != subMenu.ID {
+								if updateErr := tx.Model(&btnPerm).Update("parent_id", subMenu.ID).Error; updateErr != nil {
+									return fmt.Errorf("update sub button parent %s: %w", btn.Code, updateErr)
+								}
+							}
+						}
+						allDefinedPerms = append(allDefinedPerms, btnPerm)
+					}
 				}
 			}
 		}

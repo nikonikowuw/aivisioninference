@@ -3,10 +3,11 @@ package middleware
 
 import (
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -70,9 +71,8 @@ func RateLimit(rdb *redis.Client, requestsPerMinute int) gin.HandlerFunc {
 			}
 
 			c.Header("Retry-After", fmt.Sprintf("%d", int(ttl.Seconds())+1))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"code": 10042,
-				"message": "请求过于频繁，请稍后再试",
-			})
+			response.Err(c, apperrors.New(apperrors.ErrTooManyRequests, ""))
+			c.Abort()
 			return
 		}
 

@@ -38,7 +38,7 @@ func NewAlgorithmLabelMapHandler(svc *service.AlgorithmLabelMapService) *Algorit
 func (h *AlgorithmLabelMapHandler) List(c *gin.Context) {
 	var req dto.AlgorithmLabelMapListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *AlgorithmLabelMapHandler) List(c *gin.Context) {
 func (h *AlgorithmLabelMapHandler) Create(c *gin.Context) {
 	var req dto.CreateAlgorithmLabelMapRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *AlgorithmLabelMapHandler) Update(c *gin.Context) {
 	}
 	var req dto.UpdateAlgorithmLabelMapRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 

@@ -57,7 +57,7 @@ func (s *TaskService) List(ctx context.Context, req dto.TaskListRequest) ([]mode
 func (s *TaskService) GetByID(ctx context.Context, id string) (*model.Task, error) {
 	task, err := s.taskRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "任务不存在")
+		return nil, apperrors.New(apperrors.ErrTaskNotFound, "")
 	}
 	return task, nil
 }
@@ -66,11 +66,11 @@ func (s *TaskService) GetByID(ctx context.Context, id string) (*model.Task, erro
 func (s *TaskService) Cancel(ctx context.Context, id string) error {
 	task, err := s.taskRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "任务不存在")
+		return apperrors.New(apperrors.ErrTaskNotFound, "")
 	}
 
 	if task.Status != "pending" && task.Status != "running" {
-		return apperrors.New(apperrors.ErrBadRequest, "任务状态不允许取消")
+		return apperrors.New(apperrors.ErrTaskStatusNotCancelable, "")
 	}
 
 	now := time.Now()

@@ -38,7 +38,7 @@ func NewCategoryCodeHandler(svc *service.CategoryCodeService) *CategoryCodeHandl
 func (h *CategoryCodeHandler) List(c *gin.Context) {
 	var req dto.CategoryCodeListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *CategoryCodeHandler) List(c *gin.Context) {
 func (h *CategoryCodeHandler) Create(c *gin.Context) {
 	var req dto.CreateCategoryCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *CategoryCodeHandler) Update(c *gin.Context) {
 	}
 	var req dto.UpdateCategoryCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 

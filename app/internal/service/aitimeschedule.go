@@ -9,8 +9,8 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
-	"github.com/niko-admin/niko-admin/internal/repository"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
 // AITimeScheduleService 处理 AITimeSchedule 业务逻辑
@@ -37,19 +37,19 @@ func (s *AITimeScheduleService) ListAll(ctx context.Context) ([]model.AITimeSche
 func (s *AITimeScheduleService) Create(ctx context.Context, req dto.CreateAITimeScheduleRequest) (*model.AITimeSchedule, error) {
 	startDate, err := time.Parse(time.DateOnly, req.StartDate)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "开始日期格式错误，期望 YYYY-MM-DD")
+		return nil, apperrors.New(apperrors.ErrStartTimeFormat, "")
 	}
 	endDate, err := time.Parse(time.DateOnly, req.EndDate)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "结束日期格式错误，期望 YYYY-MM-DD")
+		return nil, apperrors.New(apperrors.ErrEndTimeFormat, "")
 	}
 	if endDate.Before(startDate) {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "结束日期不能早于开始日期")
+		return nil, apperrors.New(apperrors.ErrTimeRangeOrder, "")
 	}
 
 	twBytes, err := json.Marshal(req.TimeWindows)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrInternal, "序列化时间窗失败")
+		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
 	item := &model.AITimeSchedule{
@@ -79,19 +79,19 @@ func (s *AITimeScheduleService) Update(ctx context.Context, id string, req dto.U
 
 	startDate, err := time.Parse(time.DateOnly, req.StartDate)
 	if err != nil {
-		return apperrors.New(apperrors.ErrBadRequest, "开始日期格式错误，期望 YYYY-MM-DD")
+		return apperrors.New(apperrors.ErrStartTimeFormat, "")
 	}
 	endDate, err := time.Parse(time.DateOnly, req.EndDate)
 	if err != nil {
-		return apperrors.New(apperrors.ErrBadRequest, "结束日期格式错误，期望 YYYY-MM-DD")
+		return apperrors.New(apperrors.ErrEndTimeFormat, "")
 	}
 	if endDate.Before(startDate) {
-		return apperrors.New(apperrors.ErrBadRequest, "结束日期不能早于开始日期")
+		return apperrors.New(apperrors.ErrTimeRangeOrder, "")
 	}
 
 	twBytes, err := json.Marshal(req.TimeWindows)
 	if err != nil {
-		return apperrors.New(apperrors.ErrInternal, "序列化时间窗失败")
+		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
 	item.Name = req.Name

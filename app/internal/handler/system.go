@@ -80,7 +80,7 @@ func (h *SystemHandler) GetSystemInfo(c *gin.Context) {
 func (h *SystemHandler) UpdateSystemInfo(c *gin.Context) {
 	var req service.SystemInfo
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(c, apperrors.New(apperrors.ErrBadRequest, err.Error()))
+		response.Err(c, badRequestError(c, err))
 		return
 	}
 	if err := h.systemInfoSvc.UpdateSystemInfo(&req); err != nil {

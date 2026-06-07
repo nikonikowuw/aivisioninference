@@ -31,7 +31,7 @@ type ServiceStatusDetector struct {
 	rdb                   *redis.Client
 	db                    *gorm.DB
 	zlmAPIURL             string
-	cppSocketPath          string
+	cppAddr                  string
 	engineMetricsChecker  EngineMetricsChecker
 }
 
@@ -39,13 +39,13 @@ type ServiceStatusDetector struct {
 func NewServiceStatusDetector(
 	rdb *redis.Client,
 	db *gorm.DB,
-	zlmAPIURL, cppSocketPath string,
+	zlmAPIURL, cppAddr string,
 ) *ServiceStatusDetector {
 	return &ServiceStatusDetector{
 		rdb:           rdb,
 		db:            db,
 		zlmAPIURL:     zlmAPIURL,
-		cppSocketPath: cppSocketPath,
+		cppAddr: cppAddr,
 	}
 }
 
@@ -96,21 +96,21 @@ func (d *ServiceStatusDetector) SetEngineMetricsChecker(checker EngineMetricsChe
 // detectCppEngine 检测 C++ 推理引擎状态
 // 增强检测：从仅 socket 连通性检测升级为基于 IPC 心跳 + EngineMetricsStore 指标新鲜度的深度检测
 func (d *ServiceStatusDetector) detectCppEngine() ServiceStatus {
-	if d.cppSocketPath == "" {
+	if d.cppAddr == "" {
 		return ServiceStatus{
 			Name:    "cpp_engine",
 			Status:  "unknown",
-			Message: "socket path not configured",
+			Message: "engine addr not configured",
 		}
 	}
 
-	// 1. 检测 UDS socket 是否存在
-	conn, err := net.DialTimeout("unix", d.cppSocketPath, 2*time.Second)
+	// 1. 检测 TCP 连接是否可达
+	conn, err := net.DialTimeout("tcp", d.cppAddr, 2*time.Second)
 	if err != nil {
 		return ServiceStatus{
 			Name:    "cpp_engine",
 			Status:  "stopped",
-			Message: truncate(fmt.Sprintf("socket connect failed: %v", err), 200),
+			Message: truncate(fmt.Sprintf("tcp connect failed: %v", err), 200),
 		}
 	}
 	_ = conn.Close()

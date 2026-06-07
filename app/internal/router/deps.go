@@ -341,7 +341,7 @@ func provideEngineClient(cfg *Config) service.EngineClient {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	return service.NewIPCEngineClient(cfg.EngineSocketPath, timeout, zap.L())
+	return service.NewIPCEngineClient(cfg.EngineAddr, timeout, zap.L())
 }
 
 func provideAlgorithmOptions(cfg *Config) service.AlgorithmOptions {

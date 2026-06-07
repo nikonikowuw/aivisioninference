@@ -152,7 +152,7 @@ func readUploadedLogo(fileHeader *multipart.FileHeader) ([]byte, error) {
 		return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
 	}
 	if len(allBytes) < 512 {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "文件内容不完整")
+		return nil, apperrors.New(apperrors.ErrFileContentIncomplete, "")
 	}
 	return allBytes, nil
 }

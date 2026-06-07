@@ -1,5 +1,5 @@
 // Package ipc 提供 Go 控制面与 C++ 数据面之间的 IPC 通信支持。
-// 包含 UDS 通信客户端/服务端实现，以及消息分发机制。
+// 包含 TCP 通信客户端/服务端实现，以及消息分发机制。
 
 package ipc
 
@@ -50,15 +50,15 @@ type Message struct {
 // MessageHandler 消息处理器函数签名
 type MessageHandler func(msg *Message)
 
-// UDSReceiver UDS 消息接收器
+// UDSReceiver TCP 消息接收器（兼容旧命名，内部已切换为 TCP）
 // 负责：
-//   1. 连接 C++ 引擎的 UDS Server
+//   1. 连接 C++ 引擎的 TCP Server
 //   2. 接收原始字节流并解析为 Message
 //   3. 按 SignalType 分发到注册的 Handler
 //   4. 发送指令消息到 C++ 引擎
 type UDSReceiver struct {
-	socketPath string
-	conn       net.Conn
+	addr     string
+	conn     net.Conn
 	mu         sync.RWMutex
 	handlers   map[SignalType][]MessageHandler
 
@@ -75,30 +75,30 @@ type UDSReceiver struct {
 
 // UDSReceiverConfig 配置
 type UDSReceiverConfig struct {
-	SocketPath       string
+	Addr             string
 	ReconnectDelay   time.Duration
 	MaxReconnectWait time.Duration
 }
 
 // DefaultUDSReceiverConfig 默认配置
-func DefaultUDSReceiverConfig(socketPath string) UDSReceiverConfig {
+func DefaultUDSReceiverConfig(addr string) UDSReceiverConfig {
 	return UDSReceiverConfig{
-		SocketPath:       socketPath,
+		Addr:             addr,
 		ReconnectDelay:   1 * time.Second,
 		MaxReconnectWait: 30 * time.Second,
 	}
 }
 
-// NewUDSReceiver 创建 UDS 接收器
+// NewUDSReceiver 创建 TCP 接收器
 func NewUDSReceiver(cfg UDSReceiverConfig) *UDSReceiver {
 	return &UDSReceiver{
-		socketPath: cfg.SocketPath,
-		handlers:   make(map[SignalType][]MessageHandler),
-		logger:     zap.L().With(zap.String("component", "uds_receiver")),
+		addr:     cfg.Addr,
+		handlers: make(map[SignalType][]MessageHandler),
+		logger:   zap.L().With(zap.String("component", "ipc_receiver")),
 	}
 }
 
-// Connect 连接到 C++ 引擎 UDS Server
+// Connect 连接到 C++ 引擎 TCP Server
 func (r *UDSReceiver) Connect() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -107,17 +107,17 @@ func (r *UDSReceiver) Connect() error {
 		return nil
 	}
 
-	conn, err := net.DialTimeout("unix", r.socketPath, 5*time.Second)
+	conn, err := net.DialTimeout("tcp", r.addr, 5*time.Second)
 	if err != nil {
-		return fmt.Errorf("connect to UDS %s failed: %w", r.socketPath, err)
+		return fmt.Errorf("connect to engine %s failed: %w", r.addr, err)
 	}
 
 	r.conn = conn
 	r.running.Store(true)
 	go r.readLoop()
 
-	r.logger.Info("connected to C++ engine via UDS",
-		zap.String("socket_path", r.socketPath))
+	r.logger.Info("connected to C++ engine via TCP",
+		zap.String("addr", r.addr))
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (r *UDSReceiver) SendMessage(msg *Message) error {
 
 	frame := append(header, msg.Payload...)
 	if _, err := conn.Write(frame); err != nil {
-		return fmt.Errorf("write to UDS failed: %w", err)
+		return fmt.Errorf("write to engine failed: %w", err)
 	}
 
 	return nil

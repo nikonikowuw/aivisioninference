@@ -143,7 +143,7 @@ type ZLMConfig struct {
 
 // EngineConfig holds C++ inference engine connection settings.
 type EngineConfig struct {
-	SocketPath string        `mapstructure:"socket_path"`
+	Addr       string        `mapstructure:"addr"`
 	TimeoutSec int           `mapstructure:"timeout_sec"`
 }
 
@@ -300,7 +300,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("zlm.secret", "") // 必须通过环境变量 NIKO_ZLM_SECRET 设置
 
 	// Engine
-	v.SetDefault("engine.socket_path", "/tmp/aivision_ipc.sock")
+	v.SetDefault("engine.addr", "localhost:9500")
 	v.SetDefault("engine.timeout_sec", 5)
 
 	// Seed

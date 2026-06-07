@@ -34,6 +34,7 @@ type AlgorithmOptions struct {
 
 // AlgoMeta represents the metadata from algo_meta.yaml
 type AlgoMeta struct {
+	Algorithm         string   `yaml:"algorithm"`
 	AlgorithmName     string   `yaml:"algorithm_name"`
 	AlgorithmAlias    string   `yaml:"algorithm_alias"`
 	Version           string   `yaml:"version"`
@@ -41,9 +42,25 @@ type AlgoMeta struct {
 	ResultSchema      string   `yaml:"result_schema"`
 	CapabilitiesImage []string `yaml:"capabilities_image"`
 	CapabilitiesData  []string `yaml:"capabilities_data"`
-	Hardware          []string `yaml:"hardware"`
-	Description       string   `yaml:"description"`
-	AIParamsSchema    interface{} `yaml:"ai_params_schema"`
+	Capabilities      struct {
+		Image []string `yaml:"image"`
+		Data  []string `yaml:"data"`
+	} `yaml:"capabilities"`
+	Hardware       []string    `yaml:"hardware"`
+	Description    string      `yaml:"description"`
+	AIParamsSchema interface{} `yaml:"ai_params_schema"`
+}
+
+func (m *AlgoMeta) Normalize() {
+	if m.AlgorithmName == "" {
+		m.AlgorithmName = m.Algorithm
+	}
+	if len(m.CapabilitiesImage) == 0 {
+		m.CapabilitiesImage = m.Capabilities.Image
+	}
+	if len(m.CapabilitiesData) == 0 {
+		m.CapabilitiesData = m.Capabilities.Data
+	}
 }
 
 // MaxAlgoRequestBytes returns max file request bytes
@@ -245,6 +262,7 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 			if err := yaml.Unmarshal(data, &m); err != nil {
 				return nil, 0, "", fmt.Errorf("parse algo_meta.yaml failed: %w", err)
 			}
+			m.Normalize()
 			meta = &m
 		}
 

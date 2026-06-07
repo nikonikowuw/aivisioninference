@@ -1,86 +1,66 @@
-# Build & Binaries
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.history/
+
+# Go (app/)
 app/bin/
+app/pkg/
+app/dist/
 app/tmp/
-app/server
-app/migrate
-dist/
-build/
-bin/
-tmp/
+app/.env
+app/docs/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-*.test
-*.out
-*.o
-*.a
 
-# Go
-vendor/
-go.work
-go.work.sum
-.wire_gen_cache
-
-# Swagger (Auto-generated)
-app/docs/docs.go
-app/docs/swagger.json
-app/docs/swagger.yaml
-
-# Environment & Configs
-.env
-.env.local
-.env.*.local
-app/.env
-app/configs/*.local.yaml
-configs/local.yaml
-
-# IDE & OS
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# Logs & Coverage
-*.log
-logs/
-/logs/
-coverage.out
-coverage.html
-coverage.txt
-
-# Uploads & Data (Local dev)
-uploads/
-data/
-tmp/chunks/
-.docker-data/
-postgres-data/
-redis-data/
-*.db
-*.sqlite
-
-# Frontend
-web/node_modules/
+# Node/React (web/)
+node_modules/
 web/dist/
 web/build/
-web/.cache/
+web/.env*
 web/tsconfig.tsbuildinfo
-web/.env.local
-web/.env.*.local
-web/package-lock.json
-web/pnpm-lock.yaml
+.eslintcache
+.stylelintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# C++ / CMake (engine/)
+**/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
+**/*.ninja
+**/*.o
+**/*.a
+**/*.d
+**/*.so
+**/*.dylib
+**/aivision-engine
+
+# Proto / FlatBuffers
+**/generated/
+**/proto/*.pb.go
+
+# ZLM
+zlm/data/
+zlm/bin/
+zlm/build/
 
 # Docker
+.docker/
+*.log
 docker-compose.override.yml
-.env.production
-
-# AI & Specs
-.claude/
-.pi/
-.opencode/
-openspec/**
-progress.md

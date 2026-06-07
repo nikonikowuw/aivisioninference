@@ -79,14 +79,13 @@ services:
       NIKO_REDIS_HOST: redis
       NIKO_REDIS_PORT: 6379
       NIKO_JWT_SECRET: ${NIKO_JWT_SECRET:-change-me-in-production}
-      NIKO_CPP_SOCKET_PATH: /tmp/ipc/aivision_ipc.sock
+      NIKO_ENGINE_ADDR: engine:9500
       TZ: Asia/Shanghai
     ports:
       - "8080:8080"
       - "8090:8090"  # WebSocket
     volumes:
       - go_uploads:/app/uploads
-      - ipc_socket:/tmp/ipc  # 共享 UDS Socket 目录
       - ./web/dist:/app/web/dist:ro  # 前端静态文件
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
@@ -120,7 +119,6 @@ services:
       # - /dev/davinci0:/dev/davinci0
       # - /dev/davinci_manager:/dev/davinci_manager
     volumes:
-      - ipc_socket:/tmp/ipc  # 共享 UDS Socket 目录
       - engine_data:/var/lib/aivision/data
     # 启用特权模式以访问硬件（如需要）
     # cap_add:
@@ -128,10 +126,10 @@ services:
     #   - SYS_ADMIN
     command: >
       aivision-engine
-      --socket-path /tmp/ipc/aivision_ipc.sock
+      --addr 0.0.0.0:9500
       --workers 4
     healthcheck:
-      test: ["CMD", "test", "-S", "/tmp/ipc/aivision_ipc.sock"]
+      test: ["CMD", "nc", "-z", "localhost", "9500"]
       interval: 30s
       timeout: 5s
       start_period: 10s
@@ -145,8 +143,6 @@ volumes:
   redis_data:
   go_uploads:
   engine_data:
-  ipc_socket:  # UDS IPC 通信共享目录
-    driver: local
     driver_opts:
       type: tmpfs
       device: tmpfs

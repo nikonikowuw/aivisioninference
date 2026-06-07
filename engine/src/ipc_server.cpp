@@ -3,16 +3,29 @@
 
 #include "ipc/ipc_server.h"
 #include <sys/socket.h>
-#include <sys/un.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
 #include <iostream>
 #include <algorithm>
+#include <sstream>
 
 namespace aivision
 {
     namespace ipc
     {
+
+        static bool ParseAddr(const std::string &addr, std::string &host, int &port)
+        {
+            auto pos = addr.rfind(':');
+            if (pos == std::string::npos || pos == 0)
+                return false;
+            host = addr.substr(0, pos);
+            try { port = std::stoi(addr.substr(pos + 1)); }
+            catch (...) { return false; }
+            return port > 0 && port <= 65535;
+        }
 
         IPCServer::IPCServer(const IPCServerConfig &config)
             : config_(config) {}
@@ -21,28 +34,38 @@ namespace aivision
 
         bool IPCServer::Start()
         {
-            // 创建 UDS socket
-            server_fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (server_fd_ < 0)
+            // 解析 host:port
+            std::string host;
+            int port;
+            if (!ParseAddr(config_.addr, host, port))
             {
-                std::cerr << "Failed to create UDS socket" << std::endl;
+                std::cerr << "Invalid addr: " << config_.addr << std::endl;
                 return false;
             }
 
-            // 移除已存在的 socket 文件
-            unlink(config_.socket_path.c_str());
+            // 创建 TCP socket
+            server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+            if (server_fd_ < 0)
+            {
+                std::cerr << "Failed to create TCP socket" << std::endl;
+                return false;
+            }
+
+            // 允许端口复用
+            int opt = 1;
+            setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
             // 绑定地址
-            struct sockaddr_un addr;
-            memset(&addr, 0, sizeof(addr));
-            addr.sun_family = AF_UNIX;
-            strncpy(addr.sun_path, config_.socket_path.c_str(),
-                    sizeof(addr.sun_path) - 1);
+            struct sockaddr_in sin;
+            memset(&sin, 0, sizeof(sin));
+            sin.sin_family = AF_INET;
+            sin.sin_port = htons(static_cast<uint16_t>(port));
+            inet_pton(AF_INET, host.c_str(), &sin.sin_addr);
 
-            if (bind(server_fd_, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+            if (bind(server_fd_, (struct sockaddr *)&sin, sizeof(sin)) < 0)
             {
-                std::cerr << "Failed to bind UDS socket: "
-                          << config_.socket_path << std::endl;
+                std::cerr << "Failed to bind TCP socket: "
+                          << config_.addr << std::endl;
                 close(server_fd_);
                 server_fd_ = -1;
                 return false;
@@ -51,7 +74,7 @@ namespace aivision
             // 监听
             if (listen(server_fd_, config_.backlog) < 0)
             {
-                std::cerr << "Failed to listen on UDS socket" << std::endl;
+                std::cerr << "Failed to listen on TCP socket" << std::endl;
                 close(server_fd_);
                 server_fd_ = -1;
                 return false;
@@ -104,9 +127,6 @@ namespace aivision
                 }
                 client_threads_.clear();
             }
-
-            // 清理 socket 文件
-            unlink(config_.socket_path.c_str());
         }
 
         static thread_local int t_active_client_fd = -1;
@@ -161,7 +181,7 @@ namespace aivision
         {
             while (running_.load())
             {
-                struct sockaddr_un client_addr;
+                struct sockaddr_in client_addr;
                 socklen_t client_len = sizeof(client_addr);
                 int client_fd = accept(server_fd_,
                                        (struct sockaddr *)&client_addr,

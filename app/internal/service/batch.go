@@ -34,7 +34,7 @@ func runBatch(ids []string, lang string, fn func(id string) error) dto.BatchResu
 			Items: []dto.BatchItemResult{{
 				ID:      "batch",
 				Code:    apperrors.ErrBadRequest,
-				Message: localizedDefaultMessage(apperrors.ErrBadRequest, lang),
+				Message: apperrors.DefaultMessage(apperrors.ErrBadRequest, lang),
 			}},
 		}
 	}
@@ -56,18 +56,15 @@ func runBatch(ids []string, lang string, fn func(id string) error) dto.BatchResu
 
 func batchErrorMessage(err error, lang string) (int, string) {
 	if appErr, ok := err.(*apperrors.AppError); ok {
-		if appErr.IsDefaultMessage() {
-			return appErr.Code, localizedDefaultMessage(appErr.Code, lang)
+		if appErr.IsLocalizedMessage() {
+			return appErr.Code, appErr.Message
 		}
-		return appErr.Code, appErr.Message
+		return appErr.Code, apperrors.DefaultMessage(appErr.Code, lang)
 	}
 	zap.L().Warn("batch item failed with non-AppError", zap.Error(err))
-	return apperrors.ErrInternal, localizedDefaultMessage(apperrors.ErrInternal, lang)
+	return apperrors.ErrInternal, apperrors.DefaultMessage(apperrors.ErrInternal, lang)
 }
 
-func localizedDefaultMessage(code int, lang string) string {
-	return apperrors.DefaultMessage(code, lang)
-}
 
 func csvRowErrorMessage(rowNo int, message string, lang string) string {
 	switch lang {

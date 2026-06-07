@@ -93,6 +93,6 @@ zlm:
   secret: "035c73f7-bb6b-4889-a715-d9eb2d1925cc"
 
 engine:
-  socket_path: /tmp/aivision_ipc.sock
+  addr: localhost:9500
   timeout_sec: 5
 

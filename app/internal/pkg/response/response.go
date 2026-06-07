@@ -46,7 +46,7 @@ func Err(c *gin.Context, err error) {
 	}
 
 	message := appErr.Message
-	if appErr.IsDefaultMessage() {
+	if !appErr.IsLocalizedMessage() {
 		message = apperrors.DefaultMessage(appErr.Code, contextLanguage(c))
 	}
 
@@ -82,6 +82,10 @@ func contextLanguage(c *gin.Context) string {
 
 // codeToHTTPStatus maps business error codes to HTTP status codes.
 func codeToHTTPStatus(code int) int {
+	if code == apperrors.ErrResourceConflict {
+		return http.StatusConflict
+	}
+
 	switch code / 10000 {
 	case 1:
 		if code == apperrors.ErrTooManyRequests {

@@ -1,7 +1,0 @@
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/aivision-engine.dir
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/edit_cache.dir
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/rebuild_cache.dir
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/list_install_components.dir
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/install.dir
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/install/local.dir
-/Users/niko/dev/go/aivisioninference/engine/CMakeFiles/install/strip.dir

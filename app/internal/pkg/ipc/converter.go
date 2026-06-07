@@ -1,5 +1,5 @@
 // Package ipc 提供 Go 控制面与 C++ 数据面之间的 IPC 通信支持。
-// 包含 FlatBuffers 与 Go model 之间的类型转换、UDS 通信客户端等。
+// 包含 FlatBuffers 与 Go model 之间的类型转换、IPC 通信客户端等。
 package ipc
 
 import (

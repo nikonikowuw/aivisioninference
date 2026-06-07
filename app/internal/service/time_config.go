@@ -48,7 +48,7 @@ const ntpCacheTTL = 30 * time.Second
 
 // ntpCacheEntry NTP 探测缓存条目
 type ntpCacheEntry struct {
-	results []NTPServerInfo
+	results  []NTPServerInfo
 	expireAt time.Time
 }
 
@@ -155,7 +155,8 @@ func (s *TimeConfigService) GetTimezone() (string, error) {
 func (s *TimeConfigService) SetTimezone(timezone string) error {
 	// 验证时区有效性
 	if _, err := time.LoadLocation(timezone); err != nil {
-		return apperrors.Newf(apperrors.ErrInvalidTimezone, "invalid timezone: %v", err)
+		zap.L().Warn("invalid timezone", zap.String("timezone", timezone), zap.Error(err))
+		return apperrors.New(apperrors.ErrInvalidTimezone, "")
 	}
 
 	// 检查时区文件是否存在
@@ -173,14 +174,16 @@ func (s *TimeConfigService) SetTimezone(timezone string) error {
 
 	// 2. 创建临时符号链接
 	if err := os.Symlink(zoneinfoPath, tmpPath); err != nil {
-		return apperrors.Newf(apperrors.ErrInvalidTimezone, "failed to create temp symlink: %v", err)
+		zap.L().Error("failed to create temp timezone symlink", zap.String("timezone", timezone), zap.Error(err))
+		return apperrors.New(apperrors.ErrInvalidTimezone, "")
 	}
 
 	// 3. 原子 rename 替换
 	if err := os.Rename(tmpPath, "/etc/localtime"); err != nil {
 		// rename 失败时清理临时文件
 		os.Remove(tmpPath)
-		return apperrors.Newf(apperrors.ErrInvalidTimezone, "failed to replace localtime: %v", err)
+		zap.L().Error("failed to replace localtime", zap.String("timezone", timezone), zap.Error(err))
+		return apperrors.New(apperrors.ErrInvalidTimezone, "")
 	}
 
 	// 4. 更新 /etc/timezone (非关键，失败仅记录日志)
@@ -316,7 +319,8 @@ func (s *TimeConfigService) SyncNTP() error {
 		"last_sync_status": "failed",
 	})
 
-	return apperrors.Newf(apperrors.ErrTimeSyncFailed, "all NTP servers failed: %v", lastErr)
+	zap.L().Warn("all NTP servers failed", zap.Error(lastErr))
+	return apperrors.New(apperrors.ErrTimeSyncFailed, "")
 }
 
 // GetRecommendedNTPServers 获取推荐 NTP 服务器列表

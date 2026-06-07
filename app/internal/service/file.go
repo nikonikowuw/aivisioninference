@@ -72,15 +72,15 @@ func (s *FileService) MaxChunkRequestBytes() int64 {
 // InitUpload 初始化一个分片上传会话，创建临时目录并保存分片元数据
 func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest) (*model.FileChunk, error) {
 	if s.opts.MaxFileSizeBytes > 0 && req.FileSize > s.opts.MaxFileSizeBytes {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "文件大小超过限制")
+		return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
 	}
 	if isSVGFile(req.FileName) {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "不支持上传 SVG 文件")
+		return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
 	}
 	if s.opts.MaxChunkSizeBytes > 0 {
 		expectedChunks := int((req.FileSize + s.opts.MaxChunkSizeBytes - 1) / s.opts.MaxChunkSizeBytes)
 		if req.TotalChunks != expectedChunks {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "分片数量与文件大小不匹配")
+			return nil, apperrors.New(apperrors.ErrChunkCountMismatch, "")
 		}
 	}
 
@@ -119,11 +119,11 @@ func (s *FileService) InitUpload(ctx context.Context, req dto.InitUploadRequest)
 func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int, chunkData io.Reader) error {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "上传会话不存在或已过期")
+		return apperrors.New(apperrors.ErrUploadSessionNotFound, "")
 	}
 
 	if index < 0 || index >= chunk.TotalChunks {
-		return apperrors.New(apperrors.ErrBadRequest, "无效的分片索引")
+		return apperrors.New(apperrors.ErrInvalidChunkIndex, "")
 	}
 
 	// 将分片写入临时目录，文件名为 chunk_{index}，与后续 merge 逻辑匹配。
@@ -144,7 +144,7 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		if removeErr := os.Remove(chunkPath); removeErr != nil {
 			zap.L().Warn("remove oversized chunk failed", zap.String("path", chunkPath), zap.Error(removeErr))
 		}
-		return apperrors.New(apperrors.ErrBadRequest, "分片大小超过限制")
+		return apperrors.New(apperrors.ErrFileTooLarge, "")
 	}
 
 	uploaded := s.unmarshalUploadedChunks(chunk.UploadedChunks)
@@ -170,7 +170,7 @@ func (s *FileService) unmarshalUploadedChunks(data string) []int {
 func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*model.File, error) {
 	chunk, err := s.fileRepo.FindByUploadIDWithStatus(ctx, uploadID, "uploading")
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在或已过期")
+		return nil, apperrors.New(apperrors.ErrUploadSessionNotFound, "")
 	}
 
 	canceled := false
@@ -182,7 +182,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 
 	uploaded := s.unmarshalUploadedChunks(chunk.UploadedChunks)
 	if len(uploaded) != chunk.TotalChunks {
-		return nil, apperrors.New(apperrors.ErrBadRequest, fmt.Sprintf("分片不完整，已上传 %d/%d", len(uploaded), chunk.TotalChunks))
+		return nil, apperrors.New(apperrors.ErrChunkIncomplete, "")
 	}
 
 	chunkDirPath := filepath.Join(chunkDir, uploadID)
@@ -190,7 +190,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 
 	if err := ctx.Err(); err != nil {
 		canceled = true
-		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
+		return nil, apperrors.New(apperrors.ErrUploadCanceled, "")
 	}
 
 	mergedFile, err := os.Create(mergedPath)
@@ -204,7 +204,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	for i := 0; i < chunk.TotalChunks; i++ {
 		if err := ctx.Err(); err != nil {
 			canceled = true
-			return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
+			return nil, apperrors.New(apperrors.ErrUploadCanceled, "")
 		}
 		chunkPath := filepath.Join(chunkDirPath, fmt.Sprintf("chunk_%d", i))
 		chunkFile, err := os.Open(chunkPath)
@@ -226,7 +226,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 
 	if err := ctx.Err(); err != nil {
 		canceled = true
-		return nil, apperrors.New(apperrors.ErrBadRequest, "上传已取消")
+		return nil, apperrors.New(apperrors.ErrUploadCanceled, "")
 	}
 
 	mergedInfo, err := os.Stat(mergedPath)
@@ -236,7 +236,7 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	}
 	if mergedInfo.Size() != chunk.FileSize {
 		s.markUploadFailed(ctx, uploadID, chunkDirPath)
-		return nil, apperrors.New(apperrors.ErrBadRequest, "文件大小与声明不一致")
+		return nil, apperrors.New(apperrors.ErrFileSizeMismatch, "")
 	}
 
 	// 对整个合并后的文件做流式 MD5 校验，避免大文件一次性读入内存。
@@ -247,14 +247,14 @@ func (s *FileService) CompleteUpload(ctx context.Context, uploadID string) (*mod
 	}
 	if actualMD5 != chunk.MD5 {
 		s.markUploadFailed(ctx, uploadID, chunkDirPath)
-		return nil, apperrors.New(apperrors.ErrBadRequest, "文件校验失败（MD5 不匹配）")
+		return nil, apperrors.New(apperrors.ErrFileChecksumMismatch, "")
 	}
 
 	// 增强安全性：基于合并后的文件内容探测 MIME 类型，防止后缀名欺骗。
 	mimeType := detectMimeType(chunk.FileName, mergedPath)
 	if mimeType == "image/svg+xml" {
 		s.markUploadFailed(ctx, uploadID, chunkDirPath)
-		return nil, apperrors.New(apperrors.ErrBadRequest, "不支持上传 SVG 文件")
+		return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
 	}
 
 	// 按日期分目录存储，避免单个目录中文件过多影响性能。
@@ -325,7 +325,7 @@ func (s *FileService) cleanupCanceledUpload(ctx context.Context, uploadID string
 func (s *FileService) GetUploadProgress(ctx context.Context, uploadID string) (*dto.UploadProgressResponse, error) {
 	chunk, err := s.fileRepo.FindByUploadID(ctx, uploadID)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "上传会话不存在")
+		return nil, apperrors.New(apperrors.ErrUploadSessionNotFound, "")
 	}
 
 	return &dto.UploadProgressResponse{
@@ -360,7 +360,7 @@ func (s *FileService) List(ctx context.Context, req dto.FileListRequest) ([]mode
 func (s *FileService) GetByID(ctx context.Context, id string) (*model.File, error) {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "文件不存在")
+		return nil, apperrors.New(apperrors.ErrFileNotFound, "")
 	}
 	return file, nil
 }
@@ -378,13 +378,13 @@ type DownloadInfo struct {
 func (s *FileService) GetDownloadInfo(ctx context.Context, id string, rangeHeader string) (*DownloadInfo, error) {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.New(apperrors.ErrNotFound, "文件不存在")
+		return nil, apperrors.New(apperrors.ErrFileNotFound, "")
 	}
 
 	fileInfo, err := os.Stat(file.Path)
 	if err != nil {
 		zap.L().Error("file not found on disk", zap.String("id", id), zap.String("path", file.Path), zap.Error(err))
-		return nil, apperrors.New(apperrors.ErrNotFound, "文件已丢失")
+		return nil, apperrors.New(apperrors.ErrFileNotFound, "")
 	}
 
 	contentType := file.MimeType
@@ -405,7 +405,7 @@ func (s *FileService) GetDownloadInfo(ctx context.Context, id string, rangeHeade
 func (s *FileService) Delete(ctx context.Context, id string) error {
 	file, err := s.fileRepo.FindByID(ctx, id)
 	if err != nil {
-		return apperrors.New(apperrors.ErrNotFound, "文件不存在")
+		return apperrors.New(apperrors.ErrFileNotFound, "")
 	}
 
 	if err := s.fileRepo.Delete(ctx, id); err != nil {

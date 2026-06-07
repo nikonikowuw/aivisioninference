@@ -23,6 +23,7 @@ export const auditLogs = {
       "smart-records": "Smart Records",
       "device-staging": "Device Staging",
       gb28181: "GB28181",
+      license: "License",
     },
   },
   table: {
@@ -66,6 +67,7 @@ export const auditLogs = {
         "smart-records": "View smart records",
         "device-staging": "View device staging",
         gb28181: "View GB28181",
+        license: "View license",
       },
       create: {
         users: "Create user",
@@ -85,6 +87,7 @@ export const auditLogs = {
         "person-groups": "Create person group",
         "device-staging": "Import device",
         gb28181: "Create GB28181",
+        license: "Upload license",
       },
       update: {
         users: "Update user",
@@ -121,6 +124,7 @@ export const auditLogs = {
         "person-groups": "Delete person group",
         "smart-records": "Delete smart records",
         gb28181: "Delete GB28181",
+        system: "Delete system settings",
       },
       cancel: { tasks: "Cancel task" },
       upload: { "brand-logo": "Upload brand logo", avatar: "Upload avatar", algorithmpackages: "Upload algorithm package" },

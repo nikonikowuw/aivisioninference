@@ -23,6 +23,7 @@ export const auditLogs = {
       "smart-records": "Catatan Cerdas",
       "device-staging": "Perangkat Menunggu",
       gb28181: "GB28181",
+      license: "Lisensi",
     },
   },
   table: {
@@ -66,6 +67,7 @@ export const auditLogs = {
         "smart-records": "Lihat catatan cerdas",
         "device-staging": "Lihat perangkat menunggu",
         gb28181: "Lihat GB28181",
+        license: "Lihat lisensi",
       },
       create: {
         users: "Buat pengguna",
@@ -85,6 +87,7 @@ export const auditLogs = {
         "person-groups": "Buat grup orang",
         "device-staging": "Impor perangkat",
         gb28181: "Buat GB28181",
+        license: "Unggah lisensi",
       },
       update: {
         users: "Perbarui pengguna",
@@ -121,6 +124,7 @@ export const auditLogs = {
         "person-groups": "Hapus grup orang",
         "smart-records": "Hapus catatan cerdas",
         gb28181: "Hapus GB28181",
+        system: "Hapus pengaturan sistem",
       },
       cancel: { tasks: "Batalkan tugas" },
       upload: { "brand-logo": "Unggah logo merek", avatar: "Unggah avatar", algorithmpackages: "Unggah paket algoritma" },

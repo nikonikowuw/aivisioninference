@@ -23,6 +23,7 @@ export const auditLogs = {
       "smart-records": "智慧記錄",
       "device-staging": "設備待接入",
       gb28181: "GB28181",
+      license: "許可證",
     },
   },
   table: {
@@ -66,6 +67,7 @@ export const auditLogs = {
         "smart-records": "檢視智慧記錄",
         "device-staging": "檢視設備待接入",
         gb28181: "檢視GB28181",
+        license: "檢視許可證",
       },
       create: {
         users: "建立使用者",
@@ -85,6 +87,7 @@ export const auditLogs = {
         "person-groups": "建立人員分組",
         "device-staging": "匯入設備",
         gb28181: "建立GB28181",
+        license: "上傳許可證",
       },
       update: {
         users: "更新使用者",
@@ -121,6 +124,7 @@ export const auditLogs = {
         "person-groups": "刪除人員分組",
         "smart-records": "刪除智慧記錄",
         gb28181: "刪除GB28181",
+        system: "刪除系統配置",
       },
       cancel: { tasks: "取消任務" },
       upload: { "brand-logo": "上傳品牌Logo", avatar: "上傳頭像", algorithmpackages: "上傳演算法套件" },

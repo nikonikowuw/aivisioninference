@@ -23,6 +23,7 @@ export const auditLogs = {
       "smart-records": "スマートレコード",
       "device-staging": "デバイス待機",
       gb28181: "GB28181",
+      license: "ライセンス",
     },
   },
   table: {
@@ -66,6 +67,7 @@ export const auditLogs = {
         "smart-records": "スマートレコード一覧",
         "device-staging": "デバイス待機一覧",
         gb28181: "GB28181一覧",
+        license: "ライセンス表示",
       },
       create: {
         users: "ユーザー作成",
@@ -85,6 +87,7 @@ export const auditLogs = {
         "person-groups": "人物グループ作成",
         "device-staging": "デバイスインポート",
         gb28181: "GB28181作成",
+        license: "ライセンスアップロード",
       },
       update: {
         users: "ユーザー更新",
@@ -121,6 +124,7 @@ export const auditLogs = {
         "person-groups": "人物グループ削除",
         "smart-records": "スマートレコード削除",
         gb28181: "GB28181削除",
+        system: "システム設定削除",
       },
       cancel: { tasks: "タスクキャンセル" },
       upload: { "brand-logo": "ブランドロゴアップロード", avatar: "アバターアップロード", algorithmpackages: "アルゴリズムパッケージアップロード" },

@@ -1,6 +1,7 @@
 export const gb28181 = {
   common: {
     refresh: 'Segarkan',
+    search: 'Cari...',
     statusFilter: 'Filter Status',
     actions: 'Aksi',
     noData: 'Tidak ada data',
@@ -10,6 +11,7 @@ export const gb28181 = {
     catalogFailed: 'Kueri katalog gagal',
     updateSuccess: 'Berhasil diperbarui',
     deleteSuccess: 'Berhasil dihapus',
+    createSuccess: 'Berhasil dibuat',
   },
   devices: {
     title: 'Perangkat GB28181',
@@ -17,6 +19,7 @@ export const gb28181 = {
       deviceCode: 'Kode Perangkat',
       registerAddress: 'Alamat Registrasi',
       sipId: 'SIP ID',
+      sipIdPlaceholder: 'Kosongkan untuk gunakan kode perangkat',
       sipDomain: 'Domain SIP',
       sipPassword: 'Kata Sandi SIP',
       heartbeatInterval: 'Interval Detak (detik)',
@@ -27,7 +30,6 @@ export const gb28181 = {
       manufacturer: 'Produsen',
       model: 'Model',
       firmware: 'Firmware',
-      passwordPlaceholder: 'Kosongkan jika tidak diubah',
     },
     status: {
       online: 'Online',
@@ -35,6 +37,8 @@ export const gb28181 = {
       registered: 'Terdaftar',
     },
     actions: {
+      create: 'Tambah Perangkat',
+      batchDelete: 'Hapus Massal',
       edit: 'Edit',
       delete: 'Hapus',
       refreshCatalog: 'Segarkan Saluran',
@@ -45,6 +49,7 @@ export const gb28181 = {
       catalogTriggered: 'Kueri katalog dipicu',
       catalogCompleted: 'Kueri katalog selesai, {{count}} saluran ditemukan',
       deleteConfirm: 'Yakin hapus perangkat GB28181 ini?',
+      batchDeleteConfirm: 'Yakin hapus {{count}} perangkat yang dipilih?',
     },
   },
   channels: {
@@ -63,43 +68,7 @@ export const gb28181 = {
     },
   },
   live: {
-    title: 'Pratinjau Langsung GB28181',
-    playUrl: 'URL Putar',
     selectDevice: 'Pilih Perangkat',
-    selectChannel: 'Pilih Saluran',
-    startPlay: 'Mulai Pratinjau',
-    stopPlay: 'Hentikan Pratinjau',
-  },
-  playback: {
-    title: 'Putar Ulang GB28181',
-    selectTime: 'Pilih Rentang Waktu',
-    startTime: 'Waktu Mulai',
-    endTime: 'Waktu Selesai',
-    pause: 'Jeda',
-    resume: 'Lanjutkan',
-    speed: 'Kecepatan',
-    startPlayback: 'Mulai Putar Ulang',
-    stopPlayback: 'Hentikan Putar Ulang',
-  },
-  alarms: {
-    title: 'Catatan Alarm',
-    noData: 'Tidak ada catatan alarm',
-    severity: {
-      critical: 'Kritis',
-      major: 'Utama',
-      minor: 'Ringan',
-    },
-    fields: {
-      alarmType: 'Jenis Alarm',
-      alarmLevel: 'Tingkat Alarm',
-      deviceName: 'Nama Perangkat',
-      createdAt: 'Waktu Alarm',
-      rawResult: 'Data Mentah',
-    },
-    actions: {
-      export: 'Ekspor',
-      viewDetail: 'Lihat Detail',
-    },
   },
   config: {
     title: 'Konfigurasi GB28181',

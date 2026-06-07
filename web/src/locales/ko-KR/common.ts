@@ -7,6 +7,7 @@ export const common = {
     submit: "제출",
     cancel: "취소",
     save: "저장",
+    optional: "선택",
     create: "생성",
     delete: "삭제",
     edit: "수정",

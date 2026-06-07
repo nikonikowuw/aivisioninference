@@ -7,6 +7,7 @@ export const common = {
     submit: "Kirim",
     cancel: "Batal",
     save: "Simpan",
+    optional: "Opsional",
     create: "Buat",
     delete: "Hapus",
     edit: "Edit",

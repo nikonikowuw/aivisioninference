@@ -1,5 +1,4 @@
 export const gb28181 = {
-  title: 'GB28181 Device Management',
   common: {
     refresh: 'Refresh',
     search: 'Search...',
@@ -12,6 +11,7 @@ export const gb28181 = {
     catalogFailed: 'Catalog query failed',
     updateSuccess: 'Updated successfully',
     deleteSuccess: 'Deleted successfully',
+    createSuccess: 'Created successfully',
   },
   devices: {
     title: 'GB28181 Devices',
@@ -19,6 +19,7 @@ export const gb28181 = {
       deviceCode: 'Device Code',
       registerAddress: 'Register Address',
       sipId: 'SIP ID',
+      sipIdPlaceholder: 'Leave empty to use device code',
       sipDomain: 'SIP Domain',
       sipPassword: 'SIP Password',
       heartbeatInterval: 'Heartbeat Interval (s)',
@@ -36,6 +37,8 @@ export const gb28181 = {
       registered: 'Registered',
     },
     actions: {
+      create: 'Add Device',
+      batchDelete: 'Batch Delete',
       edit: 'Edit',
       delete: 'Delete',
       refreshCatalog: 'Refresh Channels',
@@ -46,6 +49,7 @@ export const gb28181 = {
       catalogTriggered: 'Catalog query triggered',
       catalogCompleted: 'Catalog query completed, {{count}} channels found',
       deleteConfirm: 'Are you sure to delete this GB28181 device?',
+      batchDeleteConfirm: 'Are you sure to delete {{count}} selected devices?',
     },
   },
   channels: {
@@ -64,43 +68,7 @@ export const gb28181 = {
     },
   },
   live: {
-    title: 'GB28181 Live Preview',
-    playUrl: 'Play URL',
     selectDevice: 'Select Device',
-    selectChannel: 'Select Channel',
-    startPlay: 'Start Preview',
-    stopPlay: 'Stop Preview',
-  },
-  playback: {
-    title: 'GB28181 Playback',
-    selectTime: 'Select Time Range',
-    startTime: 'Start Time',
-    endTime: 'End Time',
-    pause: 'Pause',
-    resume: 'Resume',
-    speed: 'Speed',
-    startPlayback: 'Start Playback',
-    stopPlayback: 'Stop Playback',
-  },
-  alarms: {
-    title: 'Alarm Records',
-    noData: 'No alarm records',
-    severity: {
-      critical: 'Critical',
-      major: 'Major',
-      minor: 'Minor',
-    },
-    fields: {
-      alarmType: 'Alarm Type',
-      alarmLevel: 'Alarm Level',
-      deviceName: 'Device Name',
-      createdAt: 'Alarm Time',
-      rawResult: 'Raw Data',
-    },
-    actions: {
-      export: 'Export',
-      viewDetail: 'View Detail',
-    },
   },
   config: {
     title: 'GB28181 Configuration',

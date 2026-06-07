@@ -1,6 +1,7 @@
 export const gb28181 = {
   common: {
     refresh: '更新',
+    search: '検索...',
     statusFilter: 'ステータスフィルター',
     actions: '操作',
     noData: 'データなし',
@@ -10,6 +11,7 @@ export const gb28181 = {
     catalogFailed: 'カタログクエリ失敗',
     updateSuccess: '更新成功',
     deleteSuccess: '削除成功',
+    createSuccess: '作成成功',
   },
   devices: {
     title: 'GB28181デバイス',
@@ -17,6 +19,7 @@ export const gb28181 = {
       deviceCode: 'デバイスコード',
       registerAddress: '登録アドレス',
       sipId: 'SIP ID',
+      sipIdPlaceholder: '空欄の場合デバイスコードを使用',
       sipDomain: 'SIPドメイン',
       sipPassword: 'SIPパスワード',
       heartbeatInterval: 'ハートビート間隔（秒）',
@@ -27,7 +30,6 @@ export const gb28181 = {
       manufacturer: 'メーカー',
       model: 'モデル',
       firmware: 'ファームウェア',
-      passwordPlaceholder: '変更しない場合は空欄',
     },
     status: {
       online: 'オンライン',
@@ -35,6 +37,8 @@ export const gb28181 = {
       registered: '登録済み',
     },
     actions: {
+      create: 'デバイス追加',
+      batchDelete: '一括削除',
       edit: '編集',
       delete: '削除',
       refreshCatalog: 'チャネル更新',
@@ -45,6 +49,7 @@ export const gb28181 = {
       catalogTriggered: 'カタログクエリ開始',
       catalogCompleted: 'カタログクエリ完了、{{count}}チャネル発見',
       deleteConfirm: 'このGB28181デバイスを削除しますか？',
+      batchDeleteConfirm: '選択した{{count}}件のデバイスを削除しますか？',
     },
   },
   channels: {
@@ -63,43 +68,7 @@ export const gb28181 = {
     },
   },
   live: {
-    title: 'GB28181ライブプレビュー',
-    playUrl: '再生URL',
     selectDevice: 'デバイス選択',
-    selectChannel: 'チャネル選択',
-    startPlay: 'プレビュー開始',
-    stopPlay: 'プレビュー停止',
-  },
-  playback: {
-    title: 'GB28181録画再生',
-    selectTime: '時間範囲選択',
-    startTime: '開始時間',
-    endTime: '終了時間',
-    pause: '一時停止',
-    resume: '再開',
-    speed: '速度',
-    startPlayback: '再生開始',
-    stopPlayback: '再生停止',
-  },
-  alarms: {
-    title: 'アラーム記録',
-    noData: 'アラーム記録なし',
-    severity: {
-      critical: '重大',
-      major: '重要',
-      minor: '軽微',
-    },
-    fields: {
-      alarmType: 'アラームタイプ',
-      alarmLevel: 'アラームレベル',
-      deviceName: 'デバイス名',
-      createdAt: 'アラーム時間',
-      rawResult: '生データ',
-    },
-    actions: {
-      export: 'エクスポート',
-      viewDetail: '詳細表示',
-    },
   },
   config: {
     title: 'GB28181設定',

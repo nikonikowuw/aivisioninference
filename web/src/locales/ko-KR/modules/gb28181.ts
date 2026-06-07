@@ -1,6 +1,7 @@
 export const gb28181 = {
   common: {
     refresh: '새로고침',
+    search: '검색...',
     statusFilter: '상태 필터',
     actions: '작업',
     noData: '데이터 없음',
@@ -10,6 +11,7 @@ export const gb28181 = {
     catalogFailed: '카탈로그 쿼리 실패',
     updateSuccess: '업데이트 성공',
     deleteSuccess: '삭제 성공',
+    createSuccess: '생성 성공',
   },
   devices: {
     title: 'GB28181 장치',
@@ -17,6 +19,7 @@ export const gb28181 = {
       deviceCode: '장치 코드',
       registerAddress: '등록 주소',
       sipId: 'SIP ID',
+      sipIdPlaceholder: '비워두면 장치 코드 사용',
       sipDomain: 'SIP 도메인',
       sipPassword: 'SIP 비밀번호',
       heartbeatInterval: '하트비트 간격(초)',
@@ -27,7 +30,6 @@ export const gb28181 = {
       manufacturer: '제조사',
       model: '모델',
       firmware: '펌웨어',
-      passwordPlaceholder: '변경하지 않으려면 비워두세요',
     },
     status: {
       online: '온라인',
@@ -35,6 +37,8 @@ export const gb28181 = {
       registered: '등록됨',
     },
     actions: {
+      create: '장치 추가',
+      batchDelete: '일괄 삭제',
       edit: '편집',
       delete: '삭제',
       refreshCatalog: '채널 새로고침',
@@ -45,6 +49,7 @@ export const gb28181 = {
       catalogTriggered: '카탈로그 쿼리 시작됨',
       catalogCompleted: '카탈로그 쿼리 완료, {{count}}개 채널 발견',
       deleteConfirm: '이 GB28181 장치를 삭제하시겠습니까?',
+      batchDeleteConfirm: '선택한 {{count}}개 장치를 삭제하시겠습니까?',
     },
   },
   channels: {
@@ -63,43 +68,7 @@ export const gb28181 = {
     },
   },
   live: {
-    title: 'GB28181 실시간 미리보기',
-    playUrl: '재생 URL',
     selectDevice: '장치 선택',
-    selectChannel: '채널 선택',
-    startPlay: '미리보기 시작',
-    stopPlay: '미리보기 중지',
-  },
-  playback: {
-    title: 'GB28181 녹화 재생',
-    selectTime: '시간 범위 선택',
-    startTime: '시작 시간',
-    endTime: '종료 시간',
-    pause: '일시정지',
-    resume: '재개',
-    speed: '속도',
-    startPlayback: '재생 시작',
-    stopPlayback: '재생 중지',
-  },
-  alarms: {
-    title: '알람 기록',
-    noData: '알람 기록 없음',
-    severity: {
-      critical: '심각',
-      major: '중요',
-      minor: '경미',
-    },
-    fields: {
-      alarmType: '알람 유형',
-      alarmLevel: '알람 레벨',
-      deviceName: '장치 이름',
-      createdAt: '알람 시간',
-      rawResult: '원시 데이터',
-    },
-    actions: {
-      export: '내보내기',
-      viewDetail: '상세 보기',
-    },
   },
   config: {
     title: 'GB28181 설정',

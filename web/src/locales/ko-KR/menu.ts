@@ -25,8 +25,6 @@ export const menu = {
   "system-config": "시스템 설정",
   "gb28181-devices": "GB28181 장치",
   "gb28181-channels": "GB28181 채널",
-  "gb28181-live": "GB28181 라이브",
-  "gb28181-playback": "GB28181 재생",
   "smart-records": "알람 기록",
 } as const;
 

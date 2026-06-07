@@ -167,29 +167,22 @@ export const permissions = {
       "storage-cleanup": "执行手动清理",
     },
   },
-    "gb28181": {
-      "list": "设备列表",
-      "view": "设备详情",
-      "edit": "编辑设备",
-      "delete": "删除设备",
-      "catalog": "触发目录查询",
-    },
-    "gb28181-channel": {
-      "list": "通道列表",
-    },
-    "gb28181-live": {
-      "start": "启动预览",
-      "stop": "停止预览",
-    },
-    "gb28181-playback": {
-      "start": "启动回放",
-      "stop": "停止回放",
-      "control": "回放控制",
-    },
-    "smart-records": {
-      "view": "查看告警记录",
-      "export": "导出告警记录",
-    },
+  gb28181: {
+    list: "设备列表",
+    view: "设备详情",
+    edit: "编辑设备",
+    delete: "删除设备",
+    "batch-delete": "批量删除设备",
+    catalog: "触发目录查询",
+    create: "创建设备",
+  },
+  "gb28181-channel": {
+    list: "通道列表",
+  },
+  "smart-records": {
+    view: "查看告警记录",
+    export: "导出告警记录",
+  },
   } as const;
 
 export default permissions;

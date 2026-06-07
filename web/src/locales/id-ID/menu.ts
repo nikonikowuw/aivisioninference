@@ -25,8 +25,6 @@ export const menu = {
   "system-config": "Konfigurasi Sistem",
   "gb28181-devices": "Perangkat GB28181",
   "gb28181-channels": "Saluran GB28181",
-  "gb28181-live": "Langsung GB28181",
-  "gb28181-playback": "Putar Ulang GB28181",
   "smart-records": "Catatan Alarm",
 } as const;
 

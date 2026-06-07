@@ -1,5 +1,4 @@
 export const gb28181 = {
-  title: 'GB28181 设备管理',
   common: {
     refresh: '刷新',
     search: '搜索...',
@@ -12,6 +11,7 @@ export const gb28181 = {
     catalogFailed: '目录查询失败',
     updateSuccess: '更新成功',
     deleteSuccess: '删除成功',
+    createSuccess: '创建成功',
   },
   devices: {
     title: 'GB28181 设备',
@@ -19,6 +19,7 @@ export const gb28181 = {
       deviceCode: '设备编码',
       registerAddress: '注册地址',
       sipId: 'SIP ID',
+      sipIdPlaceholder: '留空则自动使用设备编码',
       sipDomain: 'SIP 域',
       sipPassword: 'SIP 密码',
       heartbeatInterval: '心跳间隔(秒)',
@@ -36,6 +37,8 @@ export const gb28181 = {
       registered: '已注册',
     },
     actions: {
+      create: '添加设备',
+      batchDelete: '批量删除',
       edit: '编辑',
       delete: '删除',
       refreshCatalog: '刷新通道',
@@ -46,6 +49,7 @@ export const gb28181 = {
       catalogTriggered: '目录查询已触发',
       catalogCompleted: '目录查询完成，共 {{count}} 个通道',
       deleteConfirm: '确定删除此 GB28181 设备？',
+      batchDeleteConfirm: '确定删除选中的 {{count}} 个设备？',
     },
   },
   channels: {
@@ -64,43 +68,7 @@ export const gb28181 = {
     },
   },
   live: {
-    title: 'GB28181 实时预览',
-    playUrl: '播放地址',
     selectDevice: '选择设备',
-    selectChannel: '选择通道',
-    startPlay: '开始预览',
-    stopPlay: '停止预览',
-  },
-  playback: {
-    title: 'GB28181 录像回放',
-    selectTime: '选择时间范围',
-    startTime: '开始时间',
-    endTime: '结束时间',
-    pause: '暂停',
-    resume: '恢复',
-    speed: '倍速',
-    startPlayback: '开始回放',
-    stopPlayback: '停止回放',
-  },
-  alarms: {
-    title: '告警记录',
-    noData: '暂无告警记录',
-    severity: {
-      critical: '严重',
-      major: '重要',
-      minor: '一般',
-    },
-    fields: {
-      alarmType: '告警类型',
-      alarmLevel: '告警级别',
-      deviceName: '设备名称',
-      createdAt: '告警时间',
-      rawResult: '原始数据',
-    },
-    actions: {
-      export: '导出',
-      viewDetail: '查看详情',
-    },
   },
   config: {
     title: 'GB28181 配置',

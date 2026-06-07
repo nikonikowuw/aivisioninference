@@ -23,12 +23,14 @@ import (
 
 // SIPService handles GB28181 SIP signaling logic.
 type SIPService struct {
-	deviceRepo      *repository.DeviceRepository
-	gbDeviceRepo    *repository.GB28181DeviceRepository
-	mediaStreamRepo *repository.MediaStreamRepository
-	discoverySvc    *DeviceDiscoveryService
-	smartRecordRepo *repository.SmartRecordRepository
-	taskClient      taskClient
+	deviceRepo          *repository.DeviceRepository
+	gbDeviceRepo        *repository.GB28181DeviceRepository
+	mediaStreamRepo     *repository.MediaStreamRepository
+	discoverySvc        *DeviceDiscoveryService
+	smartRecordRepo     *repository.SmartRecordRepository
+	taskClient          taskClient
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository
+	deviceRepoV2        *repository.DeviceRepositoryV2
 
 	// GB28181 ZLM 集成字段
 	zlmClient     *zlm.Client
@@ -62,6 +64,8 @@ func NewSIPServiceWithZLM(
 	gbDeviceRepo *repository.GB28181DeviceRepository,
 	mediaStreamRepo *repository.MediaStreamRepository,
 	smartRecordRepo *repository.SmartRecordRepository,
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository,
+	deviceRepoV2 *repository.DeviceRepositoryV2,
 	taskClient taskClient,
 	zlmClient *zlm.Client,
 	streamManager *StreamManager,
@@ -71,26 +75,27 @@ func NewSIPServiceWithZLM(
 	hub *ws.Hub,
 ) *SIPService {
 	return &SIPService{
-		deviceRepo:      deviceRepo,
-		gbDeviceRepo:    gbDeviceRepo,
-		mediaStreamRepo: mediaStreamRepo,
-		smartRecordRepo: smartRecordRepo,
-		taskClient:      taskClient,
-		zlmClient:       zlmClient,
-		streamManager:   streamManager,
-		zlmBaseIP:       zlmBaseIP,
-		rtmpPort:        rtmpPort,
-		rtspPort:        rtspPort,
-		httpPort:        httpPort,
-		cache:           cache,
-		hub:             hub,
+		deviceRepo:          deviceRepo,
+		gbDeviceRepo:        gbDeviceRepo,
+		mediaStreamRepo:     mediaStreamRepo,
+		smartRecordRepo:     smartRecordRepo,
+		deviceSipConfigRepo: deviceSipConfigRepo,
+		deviceRepoV2:        deviceRepoV2,
+		taskClient:          taskClient,
+		zlmClient:           zlmClient,
+		streamManager:       streamManager,
+		zlmBaseIP:           zlmBaseIP,
+		rtmpPort:            rtmpPort,
+		rtspPort:            rtspPort,
+		httpPort:            httpPort,
+		cache:               cache,
+		hub:                 hub,
 	}
 }
 
 func (s *SIPService) SetDiscoveryService(svc *DeviceDiscoveryService) {
 	s.discoverySvc = svc
 }
-
 
 var gb28181DeviceIDRegex = regexp.MustCompile(`^\d{20}$`)
 
@@ -115,11 +120,6 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 		return errors.New(errors.ErrNotFound, fmt.Sprintf("GB28181 device not found: %s", deviceID))
 	}
 
-	// 子设备（通道）允许自动注册，但暂不处理
-	if gbDevice == nil {
-		return errors.New(errors.ErrNotFound, fmt.Sprintf("device not registered in system: %s", deviceID))
-	}
-
 	// 3. Update registration info
 	now := time.Now()
 	gbDevice.RegisterAddress = remoteIP
@@ -131,12 +131,25 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 		return fmt.Errorf("update device status: %w", err)
 	}
 
-	// 4. Sync to Device model if associated
-	if gbDevice.DeviceID != nil {
-		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOnline, "", "")
+	// 4. 同步到新数据模型 DeviceSipConfig
+	if s.deviceSipConfigRepo != nil {
+		if err := s.deviceSipConfigRepo.UpdateRegisterAddress(ctx, deviceID, remoteIP, port); err != nil {
+			zap.L().Warn("update DeviceSipConfig register address failed", zap.String("device_code", deviceID), zap.Error(err))
+		}
 	}
 
-	// 5. 触发目录查询（如果是 NVR/平台）
+	// 5. 同步到 Device 模型（如果有关联记录）
+	if gbDevice.DeviceID != nil {
+		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOnline, "", "")
+	} else {
+		// 无关联 Device 记录时，通过 ExternalKey 查找
+		key := "gb28181_nvr:" + deviceID
+		if dev, err := s.deviceRepo.FindByExternalKey(ctx, key); err == nil && dev != nil {
+			_ = s.deviceRepo.UpdateStatus(ctx, dev.ID, model.DeviceStatusOnline, "", "")
+		}
+	}
+
+	// 6. 触发目录查询（如果是 NVR/平台）
 	// 使用独立 context，HTTP 请求结束后 goroutine 仍可正常执行
 	go func() {
 		if err := s.QueryCatalog(context.Background(), gbDevice.DeviceCode); err != nil {
@@ -147,7 +160,6 @@ func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP stri
 	return nil
 }
 
-
 // HandleHeartbeat updates the heartbeat timestamp for a registered device.
 func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
@@ -157,6 +169,13 @@ func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error
 
 	if err := s.gbDeviceRepo.UpdateHeartbeat(ctx, gbDevice.ID); err != nil {
 		return fmt.Errorf("update heartbeat: %w", err)
+	}
+
+	// 同步到 DeviceSipConfig
+	if s.deviceSipConfigRepo != nil {
+		if err := s.deviceSipConfigRepo.UpdateHeartbeat(ctx, deviceID); err != nil {
+			zap.L().Debug("update DeviceSipConfig heartbeat failed", zap.String("device_code", deviceID), zap.Error(err))
+		}
 	}
 
 	if gbDevice.Status != model.GB28181StatusOnline {
@@ -353,8 +372,6 @@ func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID str
 	}
 
 	// 2. ZLM 触发设备回放推流
-	// 注意：由于没有原生的 ZLM 回放触发 API，这里模拟 StartSendRtp，实际上真正的 SIP INVITE 应该包含时间参数。
-	// 这里按任务要求只补充 StartSendRtp 调用
 	_, err = s.zlmClient.StartSendRtp(ctx, zlm.StartSendRtpRequest{
 		Vhost:   "__defaultVhost__",
 		App:     "rtp",
@@ -371,10 +388,21 @@ func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID str
 
 	// 3. StreamManager 注册
 	if s.streamManager != nil {
-		_ = s.streamManager.Acquire(ctx, deviceCode, "gb28181_playback", map[string]string{
+		if err := s.streamManager.Acquire(ctx, deviceCode, "gb28181_playback", map[string]string{
 			"zlm_stream_id": streamID,
 			"device_code":   deviceCode,
-		})
+		}); err != nil {
+			// 注册失败，回滚 ZLM 资源
+			_ = s.zlmClient.StopSendRtp(ctx, zlm.StopSendRtpRequest{
+				Vhost:  "__defaultVhost__",
+				App:    "rtp",
+				Stream: streamID,
+			})
+			_ = s.zlmClient.CloseRtpServer(ctx, streamID)
+			zap.L().Warn("StreamManager Acquire failed, rolled back ZLM resources",
+				zap.String("device", deviceCode), zap.String("stream", streamID), zap.Error(err))
+			return "", fmt.Errorf("stream manager acquire: %w", err)
+		}
 	}
 
 	zap.L().Info("GB28181 playback started",
@@ -544,7 +572,10 @@ func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 	}
 
 	if s.taskClient != nil {
-		_ = s.taskClient.Enqueue(ctx, "alarm:dispatch", rawJSON)
+		if err := s.taskClient.Enqueue(ctx, "alarm:dispatch", rawJSON); err != nil {
+			zap.L().Warn("enqueue alarm:dispatch task failed",
+				zap.String("device_id", alarm.DeviceID), zap.Error(err))
+		}
 	}
 	return nil
 }

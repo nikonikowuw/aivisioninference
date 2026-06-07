@@ -30,6 +30,15 @@ type GB28181DeviceResponse struct {
 	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
+// GB28181DeviceCreateRequest 创建请求
+type GB28181DeviceCreateRequest struct {
+	DeviceCode        string `json:"device_code" validate:"required,len=20"`
+	SipID             string `json:"sip_id" validate:"omitempty"`
+	SipDomain         string `json:"sip_domain" validate:"required"`
+	SipPassword       string `json:"sip_password" validate:"omitempty"`
+	HeartbeatInterval int    `json:"heartbeat_interval" validate:"omitempty,min=10,max=300"`
+}
+
 // GB28181DeviceUpdateRequest 更新请求
 type GB28181DeviceUpdateRequest struct {
 	SipID             *string `json:"sip_id" validate:"omitempty"`

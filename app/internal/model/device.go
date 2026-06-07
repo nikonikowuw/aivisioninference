@@ -9,6 +9,7 @@ import (
 const (
 	DeviceAccessTypeRTSP       = "rtsp"
 	DeviceAccessTypeGB28181    = "gb28181"
+	DeviceAccessTypeGB28181NVR = "gb28181_nvr"
 	DeviceAccessTypeNVRChannel = "nvr_channel"
 	DeviceAccessTypeOther      = "other"
 
@@ -26,12 +27,12 @@ const (
 // DeviceGroup 表示设备分组，支持单层分组（一个设备可属于多个分组）
 type DeviceGroup struct {
 	BaseModel
-	GroupName   string         `gorm:"type:varchar(128);not null" json:"group_name"`
-	Description string         `gorm:"type:varchar(255)" json:"description"`
-	ParentID    *string        `gorm:"type:uuid" json:"parent_id"`
-	Parent      *DeviceGroup   `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
-	Children    []DeviceGroup  `gorm:"foreignKey:ParentID" json:"children,omitempty"`
-	SortOrder   int            `gorm:"default:0" json:"sort_order"`
+	GroupName   string        `gorm:"type:varchar(128);not null" json:"group_name"`
+	Description string        `gorm:"type:varchar(255)" json:"description"`
+	ParentID    *string       `gorm:"type:uuid" json:"parent_id"`
+	Parent      *DeviceGroup  `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
+	Children    []DeviceGroup `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	SortOrder   int           `gorm:"default:0" json:"sort_order"`
 }
 
 // SortableFields 返回允许排序的字段列表
@@ -43,31 +44,31 @@ func (DeviceGroup) SortableFields() []string {
 // 一机一任务约束：每个设备只能有一个激活的推理任务
 type Device struct {
 	BaseModel
-	DeviceName        string  `gorm:"type:varchar(128);not null;index" json:"device_name"`
-	AccessType        string  `gorm:"type:varchar(16);not null;check:access_type IN ('rtsp','gb28181','nvr_channel','other')" json:"access_type"`
-	RtspURL           string  `gorm:"type:text" json:"rtsp_url,omitempty"`
-	GB28181DeviceID   string  `gorm:"type:varchar(64);index" json:"gb28181_device_id,omitempty"`
-	GB28181ChannelID  string  `gorm:"type:varchar(64)" json:"gb28181_channel_id,omitempty"`
-	Username          string  `gorm:"type:varchar(128)" json:"username,omitempty"`
-	Password          string  `gorm:"type:text" json:"-"`
-	Manufacturer      string  `gorm:"type:varchar(64)" json:"manufacturer,omitempty"`
-	Model             string  `gorm:"type:varchar(64)" json:"model,omitempty"`
-	FirmwareVersion   string  `gorm:"type:varchar(64)" json:"firmware_version,omitempty"`
-	Status            string  `gorm:"type:varchar(16);not null;default:unknown;index" json:"status"`
-	Enabled           bool    `gorm:"default:true;index" json:"enabled"`
-	Latitude          *float64 `gorm:"type:numeric(10,7)" json:"latitude,omitempty"`
-	Longitude         *float64 `gorm:"type:numeric(10,7)" json:"longitude,omitempty"`
-	LocationDesc      string  `gorm:"type:varchar(255)" json:"location_desc,omitempty"`
-	LastOnlineAt      *time.Time `json:"last_online_at,omitempty"`
-	LastOfflineAt     *time.Time `json:"last_offline_at,omitempty"`
-	LastErrorCode     string  `gorm:"type:varchar(64)" json:"last_error_code,omitempty"`
-	LastErrorMessage  string  `gorm:"type:text" json:"last_error_message,omitempty"`
-	ExternalKey       *string `gorm:"type:varchar(128);uniqueIndex" json:"external_key,omitempty"`
-	Remark            string  `gorm:"type:text" json:"remark,omitempty"`
-	Version           int     `gorm:"default:1" json:"version"`
-	AutoInfer         bool    `gorm:"default:false" json:"auto_infer"`
-	ParentNvrID       *string `gorm:"type:uuid;index" json:"parent_nvr_id,omitempty"`
-	Groups            []DeviceGroup  `gorm:"many2many:device_group_members;" json:"groups,omitempty"`
+	DeviceName       string        `gorm:"type:varchar(128);not null;index" json:"device_name"`
+	AccessType       string        `gorm:"type:varchar(16);not null;check:access_type IN ('rtsp','gb28181','nvr_channel','other')" json:"access_type"`
+	RtspURL          string        `gorm:"type:text" json:"rtsp_url,omitempty"`
+	GB28181DeviceID  string        `gorm:"type:varchar(64);index" json:"gb28181_device_id,omitempty"`
+	GB28181ChannelID string        `gorm:"type:varchar(64)" json:"gb28181_channel_id,omitempty"`
+	Username         string        `gorm:"type:varchar(128)" json:"username,omitempty"`
+	Password         string        `gorm:"type:text" json:"-"`
+	Manufacturer     string        `gorm:"type:varchar(64)" json:"manufacturer,omitempty"`
+	Model            string        `gorm:"type:varchar(64)" json:"model,omitempty"`
+	FirmwareVersion  string        `gorm:"type:varchar(64)" json:"firmware_version,omitempty"`
+	Status           string        `gorm:"type:varchar(16);not null;default:unknown;index" json:"status"`
+	Enabled          bool          `gorm:"default:true;index" json:"enabled"`
+	Latitude         *float64      `gorm:"type:numeric(10,7)" json:"latitude,omitempty"`
+	Longitude        *float64      `gorm:"type:numeric(10,7)" json:"longitude,omitempty"`
+	LocationDesc     string        `gorm:"type:varchar(255)" json:"location_desc,omitempty"`
+	LastOnlineAt     *time.Time    `json:"last_online_at,omitempty"`
+	LastOfflineAt    *time.Time    `json:"last_offline_at,omitempty"`
+	LastErrorCode    string        `gorm:"type:varchar(64)" json:"last_error_code,omitempty"`
+	LastErrorMessage string        `gorm:"type:text" json:"last_error_message,omitempty"`
+	ExternalKey      *string       `gorm:"type:varchar(128);uniqueIndex" json:"external_key,omitempty"`
+	Remark           string        `gorm:"type:text" json:"remark,omitempty"`
+	Version          int           `gorm:"default:1" json:"version"`
+	AutoInfer        bool          `gorm:"default:false" json:"auto_infer"`
+	ParentNvrID      *string       `gorm:"type:uuid;index" json:"parent_nvr_id,omitempty"`
+	Groups           []DeviceGroup `gorm:"many2many:device_group_members;" json:"groups,omitempty"`
 }
 
 // SortableFields 返回允许排序的字段列表

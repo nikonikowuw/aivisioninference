@@ -20,6 +20,9 @@ import { license } from "./modules/license";
 import smartRecords from "./modules/smart-records";
 import { persons } from "./modules/persons";
 import { gb28181 } from "./modules/gb28181";
+import { aiTasks } from './modules/ai-tasks';
+import aiTimeSchedules from './modules/ai-time-schedules';
+import algorithmpackage from './modules/algorithmpackage';
 
 export default {
   common,
@@ -44,4 +47,7 @@ export default {
   "modules/smart-records": smartRecords,
   "modules/persons": persons,
   "modules/gb28181": gb28181,
+  "modules/ai-tasks": aiTasks,
+  "modules/ai-time-schedules": aiTimeSchedules,
+  "modules/algorithmpackage": algorithmpackage,
 };

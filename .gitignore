@@ -17,6 +17,7 @@ app/dist/
 app/tmp/
 app/.env
 app/docs/
+app/server
 *.exe
 *.exe~
 *.dll

@@ -1,4 +1,5 @@
 import { request } from './api';
+import { buildQuery } from '../utils/query';
 
 // ============= GB28181 设备管理 =============
 
@@ -29,6 +30,14 @@ export interface GB28181DeviceUpdateRequest {
   heartbeat_interval?: number;
 }
 
+export interface GB28181DeviceCreateRequest {
+  device_code: string;
+  sip_id?: string;
+  sip_domain: string;
+  sip_password?: string;
+  heartbeat_interval?: number;
+}
+
 export interface CatalogTaskResponse {
   task_id: string;
 }
@@ -47,17 +56,19 @@ export interface GB28181DeviceListParams {
   status?: string;
 }
 
+type PageResult<T> = { list: T[]; total: number; page: number; page_size: number };
+
 /** GB28181 设备列表 */
 export function listGB28181Devices(params: GB28181DeviceListParams) {
-  const sp = new URLSearchParams();
-  if (params.page) sp.set('page', String(params.page));
-  if (params.page_size) sp.set('page_size', String(params.page_size));
-  if (params.keyword) sp.set('keyword', params.keyword);
-  if (params.status) sp.set('status', params.status);
-  const qs = sp.toString() ? `?${sp}` : '';
-  return request<{ list: GB28181Device[]; total: number; page: number; page_size: number }>(
-    `/gb28181/devices${qs}`,
-  );
+  return request<PageResult<GB28181Device>>(`/gb28181/devices${buildQuery({ page: params.page, page_size: params.page_size, keyword: params.keyword, status: params.status })}`);
+}
+
+/** 创建 GB28181 设备 */
+export function createGB28181Device(data: GB28181DeviceCreateRequest) {
+  return request<GB28181Device>('/gb28181/devices', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 /** GB28181 设备详情 */
@@ -78,6 +89,14 @@ export function deleteGB28181Device(id: string) {
   return request<null>(`/gb28181/devices/${id}`, { method: 'DELETE' });
 }
 
+/** 批量删除 GB28181 设备 */
+export function batchDeleteGB28181Devices(ids: string[]) {
+  return request<{ total: number; success: number; failed: number }>('/gb28181/devices/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
 /** 触发目录查询 */
 export function triggerCatalog(id: string) {
   return request<CatalogTaskResponse>(`/gb28181/devices/${id}/catalog`, { method: 'POST' });
@@ -89,8 +108,19 @@ export function getCatalogTaskStatus(taskId: string) {
 }
 
 /** 设备通道列表 */
+export interface GB28181Channel {
+  id: string;
+  gb28181_device_id: string;
+  device_name: string;
+  status: string;
+  manufacturer: string;
+  model: string;
+  channel_id: string;
+  parental_id: string;
+}
+
 export function getGB28181Channels(id: string) {
-  return request<any[]>(`/gb28181/devices/${id}/channels`);
+  return request<GB28181Channel[]>(`/gb28181/devices/${id}/channels`);
 }
 
 // ============= GB28181 媒体 =============
@@ -143,6 +173,18 @@ export function stopGB28181Playback(deviceId: string, streamId: string) {
 
 // ============= GB28181 配置 =============
 
+// ============= GB28181 NVR（统一 Device 表） =============
+
+/** GB28181 NVR 设备列表（从 Device 表查询） */
+export function listGB28181NVRs(params: GB28181DeviceListParams) {
+  return request<PageResult<GB28181Device>>(`/gb28181/nvrs${buildQuery({ page: params.page, page_size: params.page_size, keyword: params.keyword, status: params.status })}`);
+}
+
+/** 查询 NVR 下的所有通道 */
+export function getGB28181NVRChannels(nvrId: string) {
+  return request<GB28181Channel[]>(`/gb28181/nvrs/${nvrId}/channels`);
+}
+
 export function getGB28181Config() {
-  return request<Record<string, any>>('/system/gb28181/config');
+  return request<Record<string, string | number>>('/system/gb28181/config');
 }

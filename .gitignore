@@ -83,3 +83,4 @@ docker-compose.override.yml
 .pi/
 .opencode/
 openspec/**
+progress.md

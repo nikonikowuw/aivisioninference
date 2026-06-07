@@ -65,22 +65,6 @@ export const adminRoutes: RouteConfig[] = [
         component: () => import('../views/admin/gb28181/ChannelList'),
         layout: '/admin',
       },
-      {
-        id: 'gb28181-live',
-        path: '/gb28181/live',
-        i18nKey: 'menu:gb28181-live',
-        icon: 'MdOndemandVideo',
-        component: () => import('../views/admin/gb28181/LiveView'),
-        layout: '/admin',
-      },
-      {
-        id: 'gb28181-playback',
-        path: '/gb28181/playback',
-        i18nKey: 'menu:gb28181-playback',
-        icon: 'MdPlayCircleOutline',
-        component: () => import('../views/admin/gb28181/PlaybackView'),
-        layout: '/admin',
-      },
     ],
   },
   {

@@ -24,6 +24,9 @@ export const menu = {
   "mail-config": "Konfigurasi Email",
   "feedback": "Umpan Balik Pengguna",
   "system-config": "Konfigurasi Sistem",
+  "gb28181-devices": "Perangkat GB28181",
+  "gb28181-channels": "Saluran GB28181",
+  "smart-records": "Catatan Alarm",
 } as const;
 
 export default menu;

@@ -22,9 +22,6 @@ export const menu = {
   "license": "算法授权",
   "files": "文件",
   "algorithm-packages": "算法包管理",
-  license: "算法授权",
-  files: "文件",
-
   "audit-logs": "审计日志",
   tasks: "任务",
   "brand-config": "品牌配置",
@@ -34,6 +31,8 @@ export const menu = {
   "aivision": "AI视觉推理",
   "ai-time-schedules": "时间配置",
   "aivisiontasks": "推理任务",
+  "gb28181-devices": "GB28181设备",
+  "gb28181-channels": "GB28181通道",
 } as const;
 
 export default menu;

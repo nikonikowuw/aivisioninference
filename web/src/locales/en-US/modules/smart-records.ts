@@ -52,6 +52,8 @@ export const smartRecords = {
   },
   actions: {
     batchDelete: "Batch Delete",
+    export: "Export CSV",
+    viewDetail: "View Detail",
   },
   message: {
     batchDeleteConfirm: "Are you sure you want to delete {{count}} selected records?",
@@ -59,6 +61,24 @@ export const smartRecords = {
   empty: {
     noData: "No smart records",
     noPermission: "No permission to view smart records",
+  },
+  fields: {
+    recordId: "Record ID",
+    recordType: "Record Type",
+    deviceId: "Device ID",
+    deviceName: "Device Name",
+    taskName: "Task Name",
+    alarmType: "Alarm Type",
+    alarmLevel: "Alarm Level",
+    snapshotImageUrl: "Snapshot",
+    confidence: "Confidence",
+    createdAt: "Created At",
+    rawResult: "Raw Data",
+  },
+  type: {
+    alarm: "Alarm",
+    recognition: "Recognition",
+    capture: "Capture",
   },
 } as const;
 

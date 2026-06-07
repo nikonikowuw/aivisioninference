@@ -27,6 +27,8 @@ export const menu = {
   "aivision": "AI Vision",
   "ai-time-schedules": "Time Schedules",
   "aivisiontasks": "Inference Tasks",
+  "gb28181-devices": "GB28181 Devices",
+  "gb28181-channels": "GB28181 Channels",
 } as const;
 
 export default menu;

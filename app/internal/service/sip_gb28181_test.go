@@ -175,3 +175,32 @@ func TestHandleAlarm_EmptyDeviceID(t *testing.T) {
 	err := s.HandleAlarm(context.Background(), AlarmInfo{})
 	assert.Error(t, err)
 }
+
+type mockTaskClient struct {
+	enqueueCalled bool
+	lastTaskType  string
+}
+
+func (m *mockTaskClient) Enqueue(ctx context.Context, taskType string, payload interface{}) error {
+	m.enqueueCalled = true
+	m.lastTaskType = taskType
+	return nil
+}
+
+// TestHandleAlarm_Enqueue 验证告警被推入队列
+func TestHandleAlarm_Enqueue(t *testing.T) {
+	mockClient := &mockTaskClient{}
+	s := &SIPService{
+		taskClient: mockClient,
+	}
+	alarm := AlarmInfo{
+		DeviceID:   "34020000001320000001",
+		AlarmType:  "1",
+		AlarmLevel: "1",
+		AlarmTime:  "2026-06-06T10:00:00",
+	}
+	err := s.HandleAlarm(context.Background(), alarm)
+	assert.NoError(t, err)
+	assert.True(t, mockClient.enqueueCalled)
+	assert.Equal(t, "alarm:dispatch", mockClient.lastTaskType)
+}

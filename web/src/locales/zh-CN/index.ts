@@ -19,7 +19,7 @@ import system from "./modules/system";
 import { license } from "./modules/license";
 import smartRecords from "./modules/smart-records";
 import { persons } from "./modules/persons";
-
+import { gb28181 } from "./modules/gb28181";
 
 export default {
   common,
@@ -43,5 +43,5 @@ export default {
   "modules/license": license,
   "modules/smart-records": smartRecords,
   "modules/persons": persons,
-
+  "modules/gb28181": gb28181,
 };

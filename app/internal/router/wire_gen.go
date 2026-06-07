@@ -89,7 +89,9 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 	aiVisionTaskRepository := repository.NewAIVisionTaskRepository(db)
 	aiTimeScheduleRepository := repository.NewAITimeScheduleRepository(db)
 	gb28181DeviceRepository := repository.NewGB28181DeviceRepository(db)
-	sipService := provideSIPServiceWithZLM(deviceRepository, gb28181DeviceRepository, mediaStreamRepository, zlmClient, streamManager, cfg, client)
+	deviceSipConfigRepository := repository.NewDeviceSipConfigRepository(db)
+	deviceRepositoryV2 := repository.NewDeviceRepositoryV2(db)
+	sipService := provideSIPServiceWithZLM(deviceRepository, gb28181DeviceRepository, mediaStreamRepository, smartRecordRepository, deviceSipConfigRepository, deviceRepositoryV2, client, zlmClient, streamManager, cfg, cache, hub)
 	aiVisionTaskHandler := provideAIVisionTaskHandler(aiVisionTaskRepository, aiTimeScheduleRepository, sipService, streamManager)
 	aiTimeScheduleHandler := provideAITimeScheduleHandler(aiTimeScheduleRepository)
 	algorithmPackageRepository := repository.NewAlgorithmPackageRepository(db)
@@ -104,13 +106,16 @@ func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager
 		return nil, err
 	}
 	personHandler := providePersonHandler(personRepository, personGroupRepository, importTaskRepository, storage, client)
-	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, smartRecordHandler, streamManager, licenseHandler, licenseService, aiVisionTaskHandler, aiTimeScheduleHandler, algorithmPackageHandler, personHandler)
+	gb28181Handler := provideGB28181Handler(sipService, cache, hub)
+	mediaGB28181Handler := provideMediaGB28181Handler(sipService)
+	gb28181ConfigHandler := provideGB28181ConfigHandler(zlmClient)
+	routeDeps := newRouteDeps(cache, auditService, authHandler, wsHandler, userHandler, roleHandler, permissionHandler, fileHandler, auditHandler, taskHandler, brandHandler, mailHandler, feedbackHandler, dashboardHandler, deviceHandler, deviceGroupHandler, deviceStagingHandler, systemHandler, smartRecordHandler, streamManager, licenseHandler, licenseService, aiVisionTaskHandler, aiTimeScheduleHandler, algorithmPackageHandler, personHandler, gb28181Handler, mediaGB28181Handler, gb28181ConfigHandler, sipService)
 	return routeDeps, nil
 }
 
 // wire.go:
 
-var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewSmartRecordRepository, repository.NewLicenseRepository, repository.NewAIVisionTaskRepository, repository.NewAITimeScheduleRepository, repository.NewGB28181DeviceRepository, repository.NewAlgorithmPackageRepository, repository.NewPersonRepository, repository.NewPersonGroupRepository, repository.NewPersonEmbeddingRepository, repository.NewImportTaskRepository)
+var repositorySet = wire.NewSet(repository.NewUserRepository, repository.NewRoleRepository, repository.NewPermissionRepository, repository.NewAuditRepository, repository.NewFileRepository, repository.NewTaskRepository, repository.NewDashboardRepository, repository.NewBrandConfigRepository, repository.NewMailConfigRepository, repository.NewEmailTokenRepository, repository.NewInboundEmailRepository, repository.NewFeedbackRepository, repository.NewDeviceRepository, repository.NewDeviceGroupRepository, repository.NewMediaStreamRepository, repository.NewDiscoveredDeviceRepository, repository.NewSmartRecordRepository, repository.NewLicenseRepository, repository.NewAIVisionTaskRepository, repository.NewAITimeScheduleRepository, repository.NewGB28181DeviceRepository, repository.NewAlgorithmPackageRepository, repository.NewPersonRepository, repository.NewPersonGroupRepository, repository.NewPersonEmbeddingRepository, repository.NewImportTaskRepository, repository.NewDeviceSipConfigRepository, repository.NewDeviceRepositoryV2)
 
 var serviceSet = wire.NewSet(
 	provideFileStorage,
@@ -138,4 +143,7 @@ var handlerSet = wire.NewSet(handler.NewAuthHandlerWithEmail, provideWSHandler, 
 	provideLicenseHandler,
 	provideAIVisionTaskHandler,
 	provideAITimeScheduleHandler, handler.NewAlgorithmPackageHandler, providePersonHandler,
+	provideGB28181Handler,
+	provideMediaGB28181Handler,
+	provideGB28181ConfigHandler,
 )

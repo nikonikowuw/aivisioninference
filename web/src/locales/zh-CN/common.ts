@@ -7,6 +7,7 @@ export const common = {
     submit: "提交",
     cancel: "取消",
     save: "保存",
+    optional: "可选",
     create: "创建",
     delete: "删除",
     edit: "编辑",

@@ -168,6 +168,22 @@ export const permissions = {
       "storage-cleanup": "Run Manual Cleanup",
     },
   },
-} as const;
+  gb28181: {
+    list: "Device List",
+    view: "Device Detail",
+    edit: "Edit Device",
+    delete: "Delete Device",
+    "batch-delete": "Batch Delete Devices",
+    catalog: "Trigger Catalog Query",
+    create: "Create Device",
+  },
+  "gb28181-channel": {
+    list: "Channel List",
+  },
+  "smart-records": {
+    view: "View Alarm Records",
+    export: "Export Alarm Records",
+  },
+  } as const;
 
 export default permissions;

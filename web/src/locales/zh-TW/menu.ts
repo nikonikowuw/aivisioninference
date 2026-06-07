@@ -23,6 +23,9 @@ export const menu = {
   "mail-config": "郵件設定",
   "feedback": "使用者回饋",
   "system-config": "系統配置",
+  "gb28181-devices": "GB28181設備",
+  "gb28181-channels": "GB28181通道",
+  "smart-records": "告警記錄",
 } as const;
 
 export default menu;

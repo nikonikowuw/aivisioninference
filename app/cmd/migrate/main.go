@@ -75,6 +75,7 @@ func main() {
 		&model.Device{},
 		&model.DeviceGroupMember{},
 		&model.GB28181Device{},
+		&model.DeviceSipConfig{},
 		&model.DiscoveredDevice{},
 
 		// AIVisionInference: Algorithm Package Management.
@@ -143,6 +144,9 @@ func main() {
 	// Person management: add embedding error fields
 	mustExec(db, addPersonEmbeddingErrorColumnsSQL())
 	mustExec(db, addPersonImageMD5UniqueIndexSQL())
+
+	// GB28181 数据模型重构：将 gb28181_devices 数据迁移到 devices + device_sip_configs。
+	migrateGB28181ToUnifiedDevices(db)
 
 	// Migrate existing menus to multi-level structure.
 	if err := migrateMultiLevelMenu(db); err != nil {
@@ -525,6 +529,19 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "device-group:delete", Name: "删除分组", Path: "/api/v1/device-groups/*", Method: "DELETE"},
 					{Code: "device-group:view", Name: "查看分组", Path: "/api/v1/device-groups/*", Method: "GET"},
 				}},
+				// GB28181 菜单项
+				{Name: "GB28181设备", Code: "gb28181-devices", Path: "/gb28181/devices", Icon: "MdDeviceHub", Buttons: []buttonInfo{
+					{Code: "gb28181:list", Name: "设备列表", Path: "/api/v1/gb28181/devices", Method: "GET"},
+					{Code: "gb28181:create", Name: "创建设备", Path: "/api/v1/gb28181/devices", Method: "POST"},
+					{Code: "gb28181:view", Name: "设备详情", Path: "/api/v1/gb28181/devices/*", Method: "GET"},
+					{Code: "gb28181:edit", Name: "编辑设备", Path: "/api/v1/gb28181/devices/*", Method: "PUT"},
+					{Code: "gb28181:delete", Name: "删除设备", Path: "/api/v1/gb28181/devices/*", Method: "DELETE"},
+					{Code: "gb28181:batch-delete", Name: "批量删除设备", Path: "/api/v1/gb28181/devices/batch-delete", Method: "POST"},
+					{Code: "gb28181:catalog", Name: "触发目录查询", Path: "/api/v1/gb28181/devices/*/catalog", Method: "POST"},
+				}},
+				{Name: "GB28181通道", Code: "gb28181-channels", Path: "/gb28181/channels", Icon: "MdViewList", Buttons: []buttonInfo{
+					{Code: "gb28181-channel:list", Name: "通道列表", Path: "/api/v1/gb28181/devices/*/channels", Method: "GET"},
+				}},
 			},
 		},
 		{
@@ -672,6 +689,11 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "feedback:batch-status", Name: "批量更新反馈状态", Path: "/api/v1/feedback/batch-status", Method: "PUT"},
 					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
 				}},
+				// 告警记录菜单
+				{Name: "告警记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive", Buttons: []buttonInfo{
+					{Code: "smart-records:view", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
+					{Code: "smart-records:export", Name: "导出告警记录", Path: "/api/v1/smart-records/export", Method: "GET"},
+				}},
 				{Name: "系统配置", Code: "system-config", Path: "/system/config", Icon: "MdSettings", Buttons: []buttonInfo{
 					// 运行状态 Tab
 					{Code: "system:status:view", Name: "查看运行状态", Path: "/api/v1/system/status/realtime", Method: "GET"},
@@ -701,6 +723,8 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "system:storage:edit", Name: "编辑存储配置", Path: "/api/v1/system/storage/config", Method: "PUT"},
 					{Code: "system:storage:cleanup-logs", Name: "查看清理日志", Path: "/api/v1/system/storage/cleanup-logs", Method: "GET"},
 					{Code: "system:storage:cleanup", Name: "手动触发清理", Path: "/api/v1/system/storage/cleanup/run", Method: "POST"},
+					// GB28181 配置 Tab
+					{Code: "system:gb28181:view", Name: "查看GB28181配置", Path: "/api/v1/system/gb28181/config", Method: "GET"},
 				}},
 			},
 		},
@@ -878,4 +902,129 @@ func syncPermissions(db *gorm.DB) error {
 
 		return nil
 	})
+}
+
+// migrateGB28181ToUnifiedDevices 将 gb28181_devices 数据迁移到 devices + device_sip_configs。
+func migrateGB28181ToUnifiedDevices(db *gorm.DB) {
+	var count int64
+	if err := db.Raw("SELECT COUNT(*) FROM gb28181_devices").Scan(&count).Error; err != nil {
+		log.Printf("skip gb28181 migration: %v", err)
+		return
+	}
+	if count == 0 {
+		log.Println("gb28181_devices is empty, skip migration")
+		return
+	}
+	log.Printf("migrating %d GB28181 devices to unified devices table", count)
+
+	// 更新 check 约束
+	mustExec(db, "DO $$\nBEGIN\n\tIF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'devices_access_type_check' AND contype = 'c') THEN\n\t\tALTER TABLE devices DROP CONSTRAINT devices_access_type_check;\n\tEND IF;\nEND\n$$")
+	mustExec(db, "ALTER TABLE devices ADD CONSTRAINT devices_access_type_check CHECK (access_type IN ('rtsp','gb28181','gb28181_nvr','nvr_channel','other'))")
+
+	var gbDevices []struct {
+		ID                string
+		DeviceID          *string
+		DeviceCode        string
+		RegisterAddress   string
+		RegisterPort      int
+		SipID             string
+		SipDomain         string
+		SipPassword       string
+		HeartbeatInterval int
+		ChannelCount      int
+		Manufacturer      string
+		Model             string
+		Firmware          string
+		Status            string
+	}
+	if err := db.Raw("SELECT id, device_id, device_code, register_address, register_port, sip_id, sip_domain, sip_password, heartbeat_interval, channel_count, manufacturer, model, firmware, status FROM gb28181_devices").Scan(&gbDevices).Error; err != nil {
+		log.Printf("read gb28181_devices: %v", err)
+		return
+	}
+
+	for _, gb := range gbDevices {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			deviceName := gb.DeviceCode
+			if gb.Manufacturer != "" {
+				deviceName = gb.Manufacturer + " " + gb.DeviceCode
+			}
+			status := model.DeviceStatusUnknown
+			if gb.Status == "online" {
+				status = model.DeviceStatusOnline
+			} else if gb.Status == "offline" {
+				status = model.DeviceStatusOffline
+			}
+
+			device := &model.Device{
+				DeviceName:      deviceName,
+				AccessType:      model.DeviceAccessTypeGB28181NVR,
+				GB28181DeviceID: gb.DeviceCode,
+				Manufacturer:    gb.Manufacturer,
+				Model:           gb.Model,
+				FirmwareVersion: gb.Firmware,
+				Status:          status,
+				Enabled:         true,
+			}
+			key := "gb28181_nvr:" + gb.DeviceCode
+			device.ExternalKey = &key
+
+			// 幂等性：先检查是否已存在
+			var existing model.Device
+			if err := tx.Where("external_key = ?", key).First(&existing).Error; err == nil {
+				device.ID = existing.ID
+			} else if gb.DeviceID != nil && *gb.DeviceID != "" {
+				if err := tx.Where("id = ?", *gb.DeviceID).First(&existing).Error; err == nil {
+					device.ID = existing.ID
+				}
+			}
+
+			if device.ID == "" {
+				if err := tx.Create(device).Error; err != nil {
+					return fmt.Errorf("create device: %w", err)
+				}
+			} else {
+				device.CreatedAt = existing.CreatedAt
+				if err := tx.Save(device).Error; err != nil {
+					return fmt.Errorf("save device: %w", err)
+				}
+			}
+
+			sipID := gb.SipID
+			if sipID == "" {
+				sipID = gb.DeviceCode
+			}
+			hbInterval := gb.HeartbeatInterval
+			if hbInterval == 0 {
+				hbInterval = 60
+			}
+			sipConfig := &model.DeviceSipConfig{
+				DeviceID:          device.ID,
+				DeviceCode:        gb.DeviceCode,
+				SipID:             sipID,
+				SipDomain:         gb.SipDomain,
+				SipPassword:       gb.SipPassword,
+				RegisterAddress:   gb.RegisterAddress,
+				RegisterPort:      gb.RegisterPort,
+				HeartbeatInterval: hbInterval,
+				ChannelCount:      gb.ChannelCount,
+			}
+			if err := tx.Where(model.DeviceSipConfig{DeviceCode: gb.DeviceCode}).Assign(*sipConfig).FirstOrCreate(sipConfig).Error; err != nil {
+				return fmt.Errorf("create DeviceSipConfig: %w", err)
+			}
+
+			if result := tx.Model(&model.Device{}).
+				Where("gb28181_device_id = ? AND access_type IN ('gb28181', 'nvr_channel') AND parent_nvr_id IS NULL", gb.DeviceCode).
+				Update("parent_nvr_id", device.ID); result.Error != nil {
+				return fmt.Errorf("update channels: %w", result.Error)
+			} else if result.RowsAffected > 0 {
+				log.Printf("linked %d channels to NVR %s", result.RowsAffected, gb.DeviceCode)
+			}
+
+			return nil
+		})
+		if err != nil {
+			log.Printf("migrate GB28181 %s failed: %v", gb.DeviceCode, err)
+		}
+	}
+	log.Println("GB28181 migration completed")
 }

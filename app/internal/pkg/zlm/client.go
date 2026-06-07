@@ -236,3 +236,17 @@ func (c *Client) IsMediaOnline(ctx context.Context, schema, vhost, app, stream s
 	}
 	return resp.Online, nil
 }
+
+// GetServerConfig returns the server configuration
+func (c *Client) GetServerConfig(ctx context.Context) ([]map[string]interface{}, error) {
+	var resp struct {
+		ZLMRsp
+		Data []map[string]interface{} `json:"data"`
+	}
+
+	if err := c.doRequest(ctx, http.MethodGet, "getServerConfig", nil, nil, &resp); err != nil {
+		return nil, err
+	}
+
+	return resp.Data, nil
+}

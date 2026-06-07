@@ -31,7 +31,8 @@ import {
   MdFace,
   MdLabel,
   MdFileUpload,
-
+  MdDeviceHub,
+  MdViewList,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -61,7 +62,8 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdFace,
   MdLabel,
   MdUpload: MdFileUpload,
-
+  MdDeviceHub,
+  MdViewList,
 };
 
 // 菜单 code 到组件的映射
@@ -87,6 +89,8 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'license': () => import('../views/admin/license'),
   'persons': () => import('../views/admin/persons'),
   'person-groups': () => import('../views/admin/persons/groups'),
+  'gb28181-devices': () => import('../views/admin/gb28181/DeviceList'),
+  'gb28181-channels': () => import('../views/admin/gb28181/ChannelList'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();

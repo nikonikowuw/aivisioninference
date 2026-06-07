@@ -52,6 +52,8 @@ export const smartRecords = {
   },
   actions: {
     batchDelete: "Hapus Massal",
+    export: "Ekspor CSV",
+    viewDetail: "Lihat Detail",
   },
   message: {
     batchDeleteConfirm: "Yakin ingin menghapus {{count}} rekaman yang dipilih?",
@@ -59,6 +61,24 @@ export const smartRecords = {
   empty: {
     noData: "Tidak ada rekaman cerdas",
     noPermission: "Tidak memiliki izin melihat rekaman cerdas",
+  },
+  fields: {
+    recordId: "ID Catatan",
+    recordType: "Jenis Catatan",
+    deviceId: "ID Perangkat",
+    deviceName: "Nama Perangkat",
+    taskName: "Nama Tugas",
+    alarmType: "Jenis Alarm",
+    alarmLevel: "Tingkat Alarm",
+    snapshotImageUrl: "Snapshot",
+    confidence: "Kepercayaan",
+    createdAt: "Waktu Dibuat",
+    rawResult: "Data Mentah",
+  },
+  type: {
+    alarm: "Alarm",
+    recognition: "Pengenalan",
+    capture: "Tangkapan",
   },
 } as const;
 

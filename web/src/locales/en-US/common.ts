@@ -7,6 +7,7 @@ export const common = {
     submit: "Submit",
     cancel: "Cancel",
     save: "Save",
+    optional: "Optional",
     create: "Create",
     delete: "Delete",
     edit: "Edit",

@@ -99,6 +99,13 @@ func (r *DeviceRepository) FindByExternalKey(ctx context.Context, key string) (*
 	return &item, nil
 }
 
+// FindByParentNvrID 根据父 NVR ID 查询下属通道
+func (r *DeviceRepository) FindByParentNvrID(ctx context.Context, parentID string) ([]model.Device, error) {
+	var items []model.Device
+	err := r.db.WithContext(ctx).Where("parent_nvr_id = ?", parentID).Find(&items).Error
+	return items, err
+}
+
 // FindByGB28181DeviceID 根据 GB28181 设备编码查询设备
 func (r *DeviceRepository) FindByGB28181DeviceID(ctx context.Context, gbID string) (*model.Device, error) {
 	var item model.Device

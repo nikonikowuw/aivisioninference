@@ -42,6 +42,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { devicesApi, deviceGroupsApi, type Device, type DeviceGroup } from 'services/api';
+import { triggerCatalog } from 'services/gb28181';
 import { useDateFormat } from 'hooks/useDateFormat';
 import Card from 'components/card/Card';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
@@ -49,7 +50,7 @@ import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
-import { MdSettings, MdVideocam } from 'react-icons/md';
+import { MdDeviceHub, MdSettings, MdVideocam } from 'react-icons/md';
 
 const statusColor: Record<string, string> = {
   unknown: 'gray',
@@ -195,6 +196,15 @@ export default function Devices() {
       toast({ title: t('message.testError'), description: err instanceof Error ? err.message : '', status: 'error' });
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const handleRefreshCatalog = async (device: Device) => {
+    try {
+      await triggerCatalog(device.id);
+      toast({ title: '通道刷新已触发', status: 'success' });
+    } catch (err) {
+      toast({ title: tCommon('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
     }
   };
 
@@ -388,6 +398,9 @@ export default function Devices() {
                       <HStack justify="flex-end">
                         <IconButton aria-label={t('actions.edit')} icon={<EditIcon />} size="sm" variant="ghost" onClick={() => openEdit(device)} />
                         <IconButton aria-label={t('actions.test')} icon={<MdSettings />} size="sm" variant="ghost" isLoading={isTesting} onClick={() => handleTestConnection(device)} />
+                        {device.access_type === 'gb28181' && (
+                          <IconButton aria-label="刷新通道" icon={<MdDeviceHub />} size="sm" variant="ghost" colorScheme="blue" onClick={() => handleRefreshCatalog(device)} />
+                        )}
                         <IconButton aria-label={t('actions.delete')} icon={<DeleteIcon />} size="sm" variant="ghost" colorScheme="red" onClick={() => setDeleteTarget(device.id)} />
                       </HStack>
                     </Td>

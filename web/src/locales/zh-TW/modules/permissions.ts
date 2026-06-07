@@ -167,6 +167,22 @@ export const permissions = {
       "storage-cleanup": "執行手動清理",
     },
   },
-} as const;
+  gb28181: {
+    list: "設備列表",
+    view: "設備詳情",
+    edit: "編輯設備",
+    delete: "刪除設備",
+    "batch-delete": "批量刪除設備",
+    catalog: "觸發目錄查詢",
+    create: "創建設備",
+  },
+  "gb28181-channel": {
+    list: "通道列表",
+  },
+  "smart-records": {
+    view: "查看告警記錄",
+    export: "導出告警記錄",
+  },
+  } as const;
 
 export default permissions;

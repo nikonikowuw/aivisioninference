@@ -167,6 +167,22 @@ export const permissions = {
       "storage-cleanup": "수동 정리 실행",
     },
   },
-} as const;
+  gb28181: {
+    list: "장치 목록",
+    view: "장치 상세",
+    edit: "장치 편집",
+    delete: "장치 삭제",
+    "batch-delete": "일괄 삭제",
+    catalog: "카탈로그 쿼리 시작",
+    create: "장치 추가",
+  },
+  "gb28181-channel": {
+    list: "채널 목록",
+  },
+  "smart-records": {
+    view: "알람 기록 보기",
+    export: "알람 기록 내보내기",
+  },
+  } as const;
 
 export default permissions;

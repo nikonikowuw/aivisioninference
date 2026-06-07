@@ -23,12 +23,13 @@ import {
   MdSearch, MdVideocam,
 } from 'react-icons/md';
 import { deviceGroupsApi, devicesApi, request } from 'services/api';
+import { startGB28181Live } from 'services/gb28181';
 
 // ── Types ──
 interface Device { id: string; device_name: string; access_type: string; status: string; groups?: { id: string }[] }
 interface DeviceGroup { id: string; group_name: string; parent_id?: string | null }
-interface PlayResponse { url: string; protocol: string; expires: number }
-interface Tile { deviceId: string; deviceName: string; url?: string; protocol?: string; loading: boolean; error?: string }
+interface PlayResponse { url: string; protocol: string; expires?: number; stream_id?: string }
+interface Tile { deviceId: string; deviceName: string; url?: string; protocol?: string; streamId?: string; loading: boolean; error?: string }
 interface TreeNode { id: string; name: string; type: 'group' | 'device'; children: TreeNode[]; device?: Device }
 
 const LAYOUTS: Record<number, { cols: number; rows: number }> = { 1: { cols: 1, rows: 1 }, 4: { cols: 2, rows: 2 }, 9: { cols: 3, rows: 3 } };
@@ -75,7 +76,7 @@ const TreeNodeView: React.FC<{ node: TreeNode; depth: number; search: string; on
       <Box pl={`${depth * 12}px`}>
         {isDevice ? (
           <Flex p="2" pr="3" borderRadius="md" cursor="grab" _hover={{ bg: hoverBg }} align="center" gap="2"
-            draggable onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name })); e.dataTransfer.effectAllowed = 'copy'; }}
+            draggable onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name, access_type: device!.access_type })); e.dataTransfer.effectAllowed = 'copy'; }}
             onClick={() => device && onPlay(device)}>
             <IconButton aria-label={t('play')} icon={<MdPlayCircle />} size="xs" colorScheme="green" variant="ghost" flexShrink={0}
               onClick={(e) => { e.stopPropagation(); device && onPlay(device); }} />
@@ -100,7 +101,7 @@ const TreeNodeView: React.FC<{ node: TreeNode; depth: number; search: string; on
     );
   };
 
-const GridCell: React.FC<{ index: number; tile: Tile | null; onDrop: (i: number, id: string, name: string) => void; onRemove: (i: number) => void; t: any }> =
+const GridCell: React.FC<{ index: number; tile: Tile | null; onDrop: (i: number, device: Device) => void; onRemove: (i: number) => void; t: any }> =
   ({ index, tile, onDrop, onRemove, t }) => {
     const [dragOver, setDragOver] = useState(false);
     const textColor = useColorModeValue('navy.700', 'white');
@@ -110,7 +111,7 @@ const GridCell: React.FC<{ index: number; tile: Tile | null; onDrop: (i: number,
         bg={dragOver ? 'blue.50' : 'black'} transition="all 0.15s"
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); try { const d = JSON.parse(e.dataTransfer.getData('application/json')); onDrop(index, d.id, d.name); } catch { } }}>
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); try { const d = JSON.parse(e.dataTransfer.getData('application/json')); onDrop(index, { id: d.id, device_name: d.name, access_type: d.access_type || 'rtsp', status: 'unknown' }); } catch { } }}>
         {tile ? (<>
           <Flex position="absolute" top={0} left={0} right={0} zIndex={2} bg="linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)" p={1.5} px={2} justify="space-between" align="center">
             <HStack spacing={1}>
@@ -151,17 +152,24 @@ export default function LiveView() {
 
   const treeData = useMemo(() => buildTree(groups, devices), [groups, devices]);
 
+  const startPlayRequest = useCallback((device: Device): Promise<PlayResponse> => {
+    if (device.access_type === 'gb28181') {
+      return startGB28181Live(device.id);
+    }
+    return request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=auto`);
+  }, []);
+
   const playDevice = useCallback((device: Device) => {
     setTiles(prev => {
       const emptyIdx = prev.findIndex(t => t === null);
       if (emptyIdx === -1) return prev;
       const updated = [...prev];
       updated[emptyIdx] = { deviceId: device.id, deviceName: device.device_name, loading: true };
-      request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=auto`)
+      startPlayRequest(device)
         .then(data => {
           setTiles(cur => {
             const u = [...cur];
-            if (u[emptyIdx]) Object.assign(u[emptyIdx]!, { url: data.url, protocol: data.protocol, loading: false });
+            if (u[emptyIdx]) Object.assign(u[emptyIdx]!, { url: data.url, protocol: data.protocol, streamId: data.stream_id, loading: false });
             return u;
           });
         })
@@ -174,17 +182,17 @@ export default function LiveView() {
         });
       return updated;
     });
-  }, [t]);
+  }, [startPlayRequest, t]);
 
-  const handleDrop = useCallback((index: number, deviceId: string, deviceName: string) => {
+  const handleDrop = useCallback((index: number, device: Device) => {
     setTiles(prev => {
       const u = [...prev];
-      u[index] = { deviceId, deviceName, loading: true };
-      request<PlayResponse>(`/media/play?device_id=${deviceId}&protocol=auto`)
+      u[index] = { deviceId: device.id, deviceName: device.device_name, loading: true };
+      startPlayRequest(device)
         .then(data => {
           setTiles(cur => {
             const u = [...cur];
-            if (u[index]) Object.assign(u[index]!, { url: data.url, protocol: data.protocol, loading: false });
+            if (u[index]) Object.assign(u[index]!, { url: data.url, protocol: data.protocol, streamId: data.stream_id, loading: false });
             return u;
           });
         })
@@ -197,7 +205,7 @@ export default function LiveView() {
         });
       return u;
     });
-  }, [t]);
+  }, [startPlayRequest, t]);
 
   const handleRemove = useCallback((index: number) => setTiles(prev => { const u = [...prev]; u[index] = null; return [...u]; }), []);
   const handleLayoutChange = useCallback((n: number) => { setLayout(n); setTiles(prev => { const u = [...prev]; while (u.length < n) u.push(null); return u.slice(0, n); }); }, []);

@@ -167,6 +167,22 @@ export const permissions = {
       "storage-cleanup": "手動クリーンアップを実行",
     },
   },
-} as const;
+  gb28181: {
+    list: "デバイス一覧",
+    view: "デバイス詳細",
+    edit: "デバイス編集",
+    delete: "デバイス削除",
+    "batch-delete": "一括削除",
+    catalog: "カタログクエリ開始",
+    create: "デバイス追加",
+  },
+  "gb28181-channel": {
+    list: "チャネル一覧",
+  },
+  "smart-records": {
+    view: "アラーム記録表示",
+    export: "アラーム記録エクスポート",
+  },
+  } as const;
 
 export default permissions;

@@ -32,7 +32,8 @@ import { usePagination } from 'hooks/usePagination';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdDelete, MdPlayCircle, MdVideoLibrary } from 'react-icons/md';
-import { request } from 'services/api';
+import { devicesApi, request, type Device } from 'services/api';
+import { startGB28181Playback } from 'services/gb28181';
 
 interface Recording { id: string; device_id: string; file_name: string; file_size: number; start_time: string; end_time: string; record_type: string }
 interface RecordingPage { list: Recording[]; total: number; page: number; page_size: number }
@@ -51,6 +52,7 @@ export default function RecordingsView() {
   const { formatDateTime } = useDateFormat();
   const { isOpen: isPlayerOpen, onOpen: openPlayer, onClose: closePlayer } = useDisclosure();
   const [playbackUrl, setPlaybackUrl] = useState('');
+  const [playbackProtocol, setPlaybackProtocol] = useState<'hls' | 'flv' | 'webrtc'>('hls');
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter({ initialValues: { keyword: '' } });
   const fetchRecordings = useCallback((page: number, pageSize: number) => {
@@ -100,10 +102,18 @@ export default function RecordingsView() {
     }
   };
 
-  const handlePlayback = async (id: string) => {
+  const handlePlayback = async (recording: Recording) => {
     try {
-      const res = await request<{ url: string }>(`/media/recordings/${id}/playback`, { method: 'POST' });
-      setPlaybackUrl(res.url);
+      const device = await devicesApi.get(recording.device_id) as Device;
+      if (device.access_type === 'gb28181') {
+        const res = await startGB28181Playback(device.id, recording.start_time, recording.end_time);
+        setPlaybackUrl(res.url);
+        setPlaybackProtocol(res.protocol === 'webrtc' ? 'webrtc' : res.protocol === 'hls' ? 'hls' : 'flv');
+      } else {
+        const res = await request<{ url: string }>(`/media/recordings/${recording.id}/playback`, { method: 'POST' });
+        setPlaybackUrl(res.url);
+        setPlaybackProtocol('hls');
+      }
       openPlayer();
     } catch {
       toast({ title: t('playbackFailed'), status: 'error', duration: 3000 });
@@ -171,7 +181,7 @@ export default function RecordingsView() {
                     <Td><Text fontSize="sm">{formatSize(r.file_size)}</Text></Td>
                     <Td><Text fontSize="sm">{recType(r.record_type)}</Text></Td>
                     <Td textAlign="right">
-                      <Button size="xs" leftIcon={<MdPlayCircle />} colorScheme="green" onClick={() => handlePlayback(r.id)}>
+                      <Button size="xs" leftIcon={<MdPlayCircle />} colorScheme="green" onClick={() => handlePlayback(r)}>
                         {t('playback')}
                       </Button>
                     </Td>
@@ -192,7 +202,7 @@ export default function RecordingsView() {
         <ModalContent>
           <ModalHeader>{t('playbackModalTitle')}</ModalHeader>
           <ModalCloseButton />
-          <ModalBody pb={4}><Box h="400px">{playbackUrl && <VideoPlayer url={playbackUrl} protocol="hls" />}</Box></ModalBody>
+          <ModalBody pb={4}><Box h="400px">{playbackUrl && <VideoPlayer url={playbackUrl} protocol={playbackProtocol} />}</Box></ModalBody>
         </ModalContent>
       </Modal>
 

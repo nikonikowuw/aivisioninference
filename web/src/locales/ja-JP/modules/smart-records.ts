@@ -52,6 +52,8 @@ export const smartRecords = {
   },
   actions: {
     batchDelete: "一括削除",
+    export: "CSVエクスポート",
+    viewDetail: "詳細表示",
   },
   message: {
     batchDeleteConfirm: "選択した {{count}} 件のレコードを削除してもよろしいですか？",
@@ -59,6 +61,24 @@ export const smartRecords = {
   empty: {
     noData: "スマートレコードがありません",
     noPermission: "スマートレコードの閲覧権限がありません",
+  },
+  fields: {
+    recordId: "記録ID",
+    recordType: "記録タイプ",
+    deviceId: "デバイスID",
+    deviceName: "デバイス名",
+    taskName: "タスク名",
+    alarmType: "アラームタイプ",
+    alarmLevel: "アラームレベル",
+    snapshotImageUrl: "スナップショット",
+    confidence: "信頼度",
+    createdAt: "作成日時",
+    rawResult: "生データ",
+  },
+  type: {
+    alarm: "アラーム",
+    recognition: "認識",
+    capture: "キャプチャ",
   },
 } as const;
 

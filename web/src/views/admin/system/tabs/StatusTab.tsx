@@ -64,6 +64,7 @@ interface ServiceStatusResponse {
 
 export default function StatusTab() {
   const { t } = useTranslation('modules/system');
+  const { t: tGb } = useTranslation('modules/gb28181');
   const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
@@ -75,6 +76,7 @@ export default function StatusTab() {
   const [cpuHistory, setCpuHistory] = useState<HistoryPoint[]>([]);
   const [memoryHistory, setMemoryHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sipOnlineCount, setSipOnlineCount] = useState(0);
 
   useEffect(() => {
     loadStatus();
@@ -88,7 +90,7 @@ export default function StatusTab() {
   async function loadStatus() {
     setLoading(true);
     try {
-      await Promise.all([loadRealtime(), loadResources(), loadServices(), loadHistory()]);
+      await Promise.all([loadRealtime(), loadResources(), loadServices(), loadHistory(), loadSipStatus()]);
     } finally {
       setLoading(false);
     }
@@ -118,6 +120,17 @@ export default function StatusTab() {
       setServiceData(data);
     } catch (err) {
       console.error('Failed to load services:', err);
+    }
+  }
+
+  async function loadSipStatus() {
+    try {
+      await request('/system/status/sip');
+      const data = await request<{ list: unknown[]; total: number }>('/gb28181/devices?status=online&page=1&page_size=1');
+      setSipOnlineCount(data?.total || 0);
+    } catch (err) {
+      console.error('Failed to load SIP status:', err);
+      setSipOnlineCount(0);
     }
   }
 
@@ -311,6 +324,23 @@ export default function StatusTab() {
               </Flex>
               <Text fontSize="xs" fontWeight="700" color="gray.400" mt={1}>
                 {t('status.running').toUpperCase()} / {t('status.failed').toUpperCase()}
+              </Text>
+            </Flex>
+          </Card>
+        </GridItem>
+
+        <GridItem>
+          <Card p={5} h="100%" display="flex" flexDirection="column" variant="outline" border="1px solid" borderColor={borderColor} boxShadow="sm">
+            <Text color="gray.500" fontSize="xs" fontWeight="700" textTransform="uppercase" mb={2} letterSpacing="wider">
+              SIP 服务
+            </Text>
+            <Flex direction="column" align="center" justify="center" flex={1}>
+              <Text fontSize="3xl" fontWeight="800" color={sipOnlineCount > 0 ? 'green.500' : 'gray.400'}>{sipOnlineCount}</Text>
+              <Text fontSize="xs" fontWeight="700" color="gray.400" mt={1}>
+                {tGb('status.registeredDevices')}
+              </Text>
+              <Text fontSize="xs" color="blue.500" mt={2} cursor="pointer" onClick={() => window.location.href = '/admin/gb28181/devices'}>
+                {tGb('status.viewDetail')}
               </Text>
             </Flex>
           </Card>

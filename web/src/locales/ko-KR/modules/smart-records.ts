@@ -52,6 +52,8 @@ export const smartRecords = {
   },
   actions: {
     batchDelete: "일괄 삭제",
+    export: "CSV 내보내기",
+    viewDetail: "상세 보기",
   },
   message: {
     batchDeleteConfirm: "선택한 {{count}}개의 레코드를 삭제하시겠습니까?",
@@ -59,6 +61,24 @@ export const smartRecords = {
   empty: {
     noData: "스마트 레코드가 없습니다",
     noPermission: "스마트 레코드 조회 권한이 없습니다",
+  },
+  fields: {
+    recordId: "기록 ID",
+    recordType: "기록 유형",
+    deviceId: "장치 ID",
+    deviceName: "장치 이름",
+    taskName: "작업 이름",
+    alarmType: "알람 유형",
+    alarmLevel: "알람 레벨",
+    snapshotImageUrl: "스냅샷",
+    confidence: "신뢰도",
+    createdAt: "생성 시간",
+    rawResult: "원시 데이터",
+  },
+  type: {
+    alarm: "알람",
+    recognition: "인식",
+    capture: "캡처",
   },
 } as const;
 

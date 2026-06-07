@@ -49,6 +49,22 @@ export const adminRoutes: RouteConfig[] = [
         component: () => import('../views/admin/devices/device-staging'),
         layout: '/admin',
       },
+      {
+        id: 'gb28181-devices',
+        path: '/gb28181/devices',
+        i18nKey: 'menu:gb28181-devices',
+        icon: 'MdDeviceHub',
+        component: () => import('../views/admin/gb28181/DeviceList'),
+        layout: '/admin',
+      },
+      {
+        id: 'gb28181-channels',
+        path: '/gb28181/channels',
+        i18nKey: 'menu:gb28181-channels',
+        icon: 'MdViewList',
+        component: () => import('../views/admin/gb28181/ChannelList'),
+        layout: '/admin',
+      },
     ],
   },
   {
@@ -91,6 +107,8 @@ export const adminRoutes: RouteConfig[] = [
     icon: 'MdNotificationsActive',
     component: () => import('../views/admin/smart-records'),
     layout: '/admin',
+  },
+  {
     id: 'person-management',
     path: '/person-management',
     i18nKey: 'menu:person-management',
@@ -114,7 +132,6 @@ export const adminRoutes: RouteConfig[] = [
         layout: '/admin',
       },
     ],
-
   },
   {
     id: 'user-management',

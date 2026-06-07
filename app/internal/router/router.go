@@ -339,7 +339,7 @@ func (r *Router) setupRoutes() {
 	}
 
 	// Media streaming (ZLM webhooks - internal, no auth)
-	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager)
+	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager, deps.SIPService)
 	// Register ZLM webhooks at root level with secret validation
 	zlmGroup := r.engine.Group("")
 	zlmGroup.Use(middleware.ZLMWebhookAuth(r.config.ZLMSecret))
@@ -361,6 +361,54 @@ func (r *Router) setupRoutes() {
 	mediaPlayGroup.Use(middleware.Auth(r.jwtManager))
 	mediaPlayHandler.RegisterRoutes(mediaPlayGroup)
 	mediaRecordingHandler.RegisterRoutes(mediaPlayGroup)
+
+	// GB28181 设备管理路由
+	if deps.GB28181Handler != nil {
+		gb28181 := authorized.Group("/gb28181")
+		{
+			gb28181.GET("/devices", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.List)
+			gb28181.POST("/devices", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Create)
+			gb28181.POST("/devices/batch-delete", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.BatchDelete)
+			gb28181.GET("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetByID)
+			gb28181.PUT("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Update)
+			gb28181.DELETE("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Delete)
+			gb28181.POST("/devices/:id/catalog", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.TriggerCatalog)
+			gb28181.GET("/devices/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetChannels)
+			gb28181.GET("/catalog-tasks/:task_id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetCatalogTaskStatus)
+			// 新数据模型接口（Device 表）
+			gb28181.GET("/nvrs", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.ListNVRs)
+			gb28181.GET("/nvrs/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetNVRChannels)
+		}
+	}
+
+	// GB28181 媒体路由
+	if deps.MediaGB28181Handler != nil {
+		mediaGB28181 := authorized.Group("/media/gb28181")
+		{
+			mediaGB28181.POST("/live/start", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StartLive)
+			mediaGB28181.POST("/live/stop", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StopLive)
+			mediaGB28181.POST("/playback/start", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StartPlayback)
+			mediaGB28181.POST("/playback/control", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.PlaybackControl)
+			mediaGB28181.POST("/playback/stop", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StopPlayback)
+		}
+	}
+
+	// Smart Records 路由
+	if deps.SmartRecordHandler != nil {
+		smartRecords := authorized.Group("/smart-records")
+		{
+			smartRecords.GET("", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.List)
+			smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportCSV)
+		}
+	}
+
+	// GB28181 配置路由
+	if deps.GB28181ConfigHandler != nil {
+		gbConfig := authorized.Group("/system/gb28181")
+		{
+			gbConfig.GET("/config", middleware.RBAC(rbacCache, r.db), deps.GB28181ConfigHandler.GetConfig)
+		}
+	}
 
 	// Swagger UI (non-production only)
 	if r.config.AppEnv != "prod" {
@@ -464,7 +512,10 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	engineClient := provideEngineClient(cfg)
 	streamManager := provideStreamManager(engineClient, deviceRepo, mediaStreamRepo)
 	// 由于 Asynq worker 自身消费任务队列，这里传入 nil taskClient 避免循环依赖（worker 内的 SIPService 不需要再派发任务）。
-	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, zlmClient, streamManager, cfg, nil)
+	smartRecordRepo := repository.NewSmartRecordRepository(db)
+	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)
+	deviceRepoV2 := repository.NewDeviceRepositoryV2(db)
+	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil)
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, sipSvc, streamManager)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)

@@ -51,6 +51,10 @@ type RouteDeps struct {
 	AITimeScheduleHandler   *handler.AITimeScheduleHandler
 	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
 	PersonHandler        *handler.PersonHandler
+	GB28181Handler       *handler.GB28181Handler
+	MediaGB28181Handler  *handler.MediaGB28181Handler
+	GB28181ConfigHandler *handler.GB28181ConfigHandler
+	SIPService           *service.SIPService
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -199,6 +203,10 @@ func newRouteDeps(
 	aiTimeScheduleHandler *handler.AITimeScheduleHandler,
 	algorithmPackageHandler *handler.AlgorithmPackageHandler,
 	personHandler *handler.PersonHandler,
+	gb28181Handler *handler.GB28181Handler,
+	mediaGB28181Handler *handler.MediaGB28181Handler,
+	gb28181ConfigHandler *handler.GB28181ConfigHandler,
+	sipService *service.SIPService,
 ) *RouteDeps {
 	return &RouteDeps{
 		RBACCache:            permCache,
@@ -227,6 +235,10 @@ func newRouteDeps(
 		AITimeScheduleHandler:   aiTimeScheduleHandler,
 		AlgorithmPackageHandler: algorithmPackageHandler,
 		PersonHandler:        personHandler,
+		GB28181Handler:       gb28181Handler,
+		MediaGB28181Handler:  mediaGB28181Handler,
+		GB28181ConfigHandler: gb28181ConfigHandler,
+		SIPService:           sipService,
 	}
 }
 
@@ -276,30 +288,36 @@ func provideSIPServiceWithZLM(
 	deviceRepo *repository.DeviceRepository,
 	gbDeviceRepo *repository.GB28181DeviceRepository,
 	mediaStreamRepo *repository.MediaStreamRepository,
+	smartRecordRepo *repository.SmartRecordRepository,
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository,
+	deviceRepoV2 *repository.DeviceRepositoryV2,
+	taskClient *task.Client,
 	zlmClient *zlm.Client,
 	streamManager *service.StreamManager,
 	cfg *Config,
-	taskClient *task.Client,
+	cache cache.Cache,
+	hub *ws.Hub,
 ) *service.SIPService {
 	zlmBaseIP := cfg.ZLMExternalIP
 	if zlmBaseIP == "" {
 		zlmBaseIP = cfg.ZLMAPIURL
 	}
+	rtmpPort := defaultPort(cfg.ZLMRTMPPort, 1935)
+	rtspPort := defaultPort(cfg.ZLMRTSPPort, 554)
+	httpPort := defaultPort(cfg.ZLMHTTPPort, 80)
 	return service.NewSIPServiceWithZLM(
 		deviceRepo, gbDeviceRepo, mediaStreamRepo,
+		smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, taskClient,
 		zlmClient, streamManager, zlmBaseIP,
-		defaultPort(cfg.ZLMRTMPPort, 1935),
-		defaultPort(cfg.ZLMRTSPPort, 554),
-		defaultPort(cfg.ZLMHTTPPort, 80),
-		taskClient,
+		rtmpPort, rtspPort, httpPort,
+		cache, hub,
 	)
 }
 
-func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.StreamManager) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler, *handler.DeviceStagingHandler) {
+func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.StreamManager, sipSvc *service.SIPService) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler, *handler.DeviceStagingHandler) {
 	zlmClient := provideZLMClient(cfg)
 	deviceRepo := repository.NewDeviceRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
-	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
 	recordingRepo := repository.NewRecordingRepository(db)
 	stagingRepo := repository.NewDiscoveredDeviceRepository(db)
 
@@ -307,7 +325,6 @@ func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.Strea
 	stagingSvc := service.NewDeviceStagingService(stagingRepo, deviceRepo)
 	discoverySvc := service.NewDeviceDiscoveryService(stagingSvc, onvifScanner, nil)
 
-	sipSvc := service.NewSIPService(deviceRepo, gbDeviceRepo, mediaStreamRepo)
 	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, streamManager, cfg.ZLMAPIURL, cfg.ZLMSecret)
 	recordingSvc := service.NewRecordingService(recordingRepo, zlmClient)
 
@@ -344,4 +361,20 @@ func providePersonHandler(
 ) *handler.PersonHandler {
 	personSvc := service.NewPersonService(personRepo, groupRepo, importTaskRepo, fileStorage, taskClient)
 	return handler.NewPersonHandler(personSvc)
+}
+
+func provideGB28181Handler(sipSvc *service.SIPService, c cache.Cache, hub *ws.Hub) *handler.GB28181Handler {
+	return handler.NewGB28181Handler(sipSvc, c, hub)
+}
+
+func provideMediaGB28181Handler(sipSvc *service.SIPService) *handler.MediaGB28181Handler {
+	return handler.NewMediaGB28181Handler(sipSvc)
+}
+
+func provideSmartRecordHandler(svc *service.SmartRecordService) *handler.SmartRecordHandler {
+	return handler.NewSmartRecordHandler(svc)
+}
+
+func provideGB28181ConfigHandler(zlmClient *zlm.Client) *handler.GB28181ConfigHandler {
+	return handler.NewGB28181ConfigHandler(zlmClient)
 }

@@ -66,12 +66,6 @@ function getDescendantIds(nodes: Permission[], id: string): Set<string> {
   return new Set();
 }
 
-function getExpandableIds(nodes: Permission[]): string[] {
-  return nodes.flatMap((node) => {
-    if (!node.children?.length) return [];
-    return [node.id, ...getExpandableIds(node.children)];
-  });
-}
 
 const PermissionRow = ({ 
   node, 
@@ -235,11 +229,7 @@ export default function Permissions() {
     return filterTree(tree, filters.keyword, filters.type);
   }, [tree, filters.keyword, filters.type]);
 
-  useEffect(() => {
-    if (tree.length > 0 && expandedIds.size === 0) {
-      setExpandedIds(new Set(getExpandableIds(tree)));
-    }
-  }, [tree, expandedIds.size]);
+  // 默认全部收起，用户手动点击展开
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {

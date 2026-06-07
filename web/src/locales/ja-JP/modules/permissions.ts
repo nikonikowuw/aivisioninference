@@ -1,7 +1,7 @@
 export const permissions = {
   title: "権限管理",
   table: {
-    totalCount: "全 {{count}} 件",
+    totalCount: "{{count}} 件",
     columns: {
       name: "権限名",
       code: "権限コード",
@@ -24,7 +24,7 @@ export const permissions = {
     },
     parentId: {
       label: "親権限",
-      placeholder: "親権限を選択してください",
+      placeholder: "親権限を選択",
       none: "なし（トップレベル）",
     },
   },
@@ -34,7 +34,8 @@ export const permissions = {
     deleteTitle: "権限を削除",
   },
   message: {
-    deleteConfirm: "この権限とそのすべての子権限を削除してもよろしいですか？",
+    deleteConfirm:
+      "この権限とすべての子権限を削除しますか？",
     emptyData: "権限データがありません",
   },
   codes: {
@@ -84,19 +85,19 @@ export const permissions = {
       "batch-delete": "ファイルを一括削除",
     },
     audit: {
-      view: "操作ログを表示",
-      export: "操作ログをエクスポート",
+      view: "監査ログを表示",
+      export: "監査ログをエクスポート",
     },
     "audit-log": {
-      view: "操作ログを表示",
-      export: "操作ログをエクスポート",
+      view: "監査ログを表示",
+      export: "監査ログをエクスポート",
     },
     task: {
       list: "タスク一覧",
       create: "タスクを作成",
       cancel: "タスクをキャンセル",
       view: "タスク詳細を表示",
-      update: "タスクを更新",
+      update: "タスクを編集",
       delete: "タスクを削除",
       export: "タスクをエクスポート",
       "batch-cancel": "タスクを一括キャンセル",
@@ -104,21 +105,21 @@ export const permissions = {
     "brand-config": {
       view: "ブランド設定を表示",
       edit: "ブランド設定を編集",
-      "upload-logo": "ブランド Logo をアップロード",
+      "upload-logo": "ブランドロゴをアップロード",
     },
     "mail-config": {
       view: "メール設定を表示",
       edit: "メール設定を編集",
-      "test-smtp": "SMTPテスト",
-      "test-imap": "IMAPテスト",
+      "test-smtp": "SMTPをテスト",
+      "test-imap": "IMAPをテスト",
       "sync-imap": "フィードバックメールを同期",
-      update: "メール設定を更新",
-      test: "メール設定テスト",
-      sync: "メール同期",
+      update: "メール設定を編集",
+      test: "メール設定をテスト",
+      sync: "メールを同期",
     },
     feedback: {
       view: "フィードバックを表示",
-      "update-status": "フィードバックステータスを更新",
+      "update-status": "フィードバック状態を更新",
       update: "フィードバックを編集",
       export: "フィードバックをエクスポート",
       "batch-status": "フィードバック状態を一括更新",
@@ -152,37 +153,134 @@ export const permissions = {
       stop: "録画停止",
     },
     system: {
-      "time-view": "システム時刻を表示",
-      "time-update": "システム時刻を設定",
-      "ntp-update": "NTPサーバーを設定",
-      "status-view": "システムステータスを表示",
-      "network-view": "ネットワーク設定を表示",
-      "network-update": "ネットワーク設定を更新",
-      "webhook-view": "Webhookを表示",
-      "webhook-create": "Webhookを作成",
-      "webhook-delete": "Webhookを削除",
-      "webhook-test": "Webhookをテスト",
-      "storage-view": "ストレージ設定を表示",
-      "storage-update": "ストレージ設定を更新",
-      "storage-cleanup": "手動クリーンアップを実行",
+      status: {
+        view: "システムステータスを表示",
+        resources: "リソースステータスを表示",
+        services: "サービスステータスを表示",
+      },
+      network: {
+        view: "ネットワーク設定を表示",
+        apply: "ネットワーク設定を適用",
+        confirm: "ネットワーク設定を確認",
+        rollback: "ネットワーク設定をロールバック",
+      },
+      time: {
+        view: "時刻設定を表示",
+        manual: "手動時刻設定",
+        timezone: "タイムゾーンを設定",
+      },
+      ntp: {
+        view: "NTP設定を表示",
+        manage: "NTPサーバーを管理",
+        sync: "NTP時刻を同期",
+      },
+      webhook: {
+        list: "Webhook一覧",
+        create: "Webhookを作成",
+        edit: "Webhookを編集",
+        delete: "Webhookを削除",
+        test: "Webhookをテスト",
+        logs: "プッシュログを表示",
+      },
+      storage: {
+        view: "ストレージ設定を表示",
+        edit: "ストレージ設定を編集",
+        "cleanup-logs": "クリーンアップログを表示",
+        cleanup: "手動クリーンアップを実行",
+      },
+      gb28181: {
+        view: "GB28181設定を表示",
+      },
+    },
+    records: {
+      recognition: {
+        list: "認識記録を表示",
+      },
+      alarm: {
+        list: "アラーム記録を表示",
+      },
+      capture: {
+        list: "キャプチャ記録を表示",
+      },
+      export: "スマート記録をエクスポート",
+      "batch-delete": "スマート記録を一括削除",
+      "export-selected": "選択したスマート記録をエクスポート",
+      "category-codes": {
+        list: "カテゴリコードを表示",
+      },
+    },
+    stream: {
+      list: "ストリームステータスを表示",
+    },
+    person: {
+      list: "人物一覧",
+      create: "人物を作成",
+      export: "人物をエクスポート",
+      "batch-delete": "人物を一括削除",
+      "batch-toggle": "人物を一括有効/無効",
+      "batch-retry-embedding": "特徴抽出を一括再実行",
+      edit: "人物を編集",
+      delete: "人物を削除",
+      view: "人物詳細を表示",
+      "retry-embedding": "特徴抽出を再実行",
+    },
+    "person-group": {
+      list: "グループ一覧",
+      create: "グループを作成",
+      edit: "グループを編集",
+      delete: "グループを削除",
+    },
+    "device-staging": {
+      list: "保留リスト",
+      import: "デバイスをインポート",
+      ignore: "デバイスを無視",
+      "batch-import": "一括インポート",
+      "batch-ignore": "一括無視",
+      scan: "ONVIFスキャン",
+    },
+    gb28181: {
+      list: "デバイス一覧",
+      create: "デバイス追加",
+      view: "デバイス詳細",
+      edit: "デバイス編集",
+      delete: "デバイス削除",
+      "batch-delete": "一括削除",
+      catalog: "カタログクエリ開始",
+    },
+    "gb28181-channel": {
+      list: "チャネル一覧",
+    },
+    "smart-records": {
+      view: "スマート記録を表示",
+      export: "スマート記録をエクスポート",
+    },
+    "algorithm-package": {
+      list: "アルゴリズムパッケージ一覧",
+      upload: "アルゴリズムパッケージをアップロード",
+      view: "アルゴリズムパッケージを表示",
+      delete: "アルゴリズムパッケージを削除",
+    },
+    license: {
+      fingerprint: "デバイスフィンガープリントを表示",
+      upload: "ライセンスファイルをアップロード",
+      active: "アクティブライセンスを表示",
+      list: "ライセンス一覧",
+      check: "アルゴリズムライセンスを確認",
+    },
+    "ai-time-schedules": {
+      list: "タイムスケジュール一覧",
+      create: "タイムスケジュールを作成",
+      edit: "タイムスケジュールを編集",
+      delete: "タイムスケジュールを削除",
+    },
+    aivisiontasks: {
+      list: "推論タスク一覧",
+      create: "推論タスクを作成",
+      edit: "推論タスクを編集",
+      delete: "推論タスクを削除",
+      "check-conflict": "タスク衝突を確認",
     },
   },
-  gb28181: {
-    list: "デバイス一覧",
-    view: "デバイス詳細",
-    edit: "デバイス編集",
-    delete: "デバイス削除",
-    "batch-delete": "一括削除",
-    catalog: "カタログクエリ開始",
-    create: "デバイス追加",
-  },
-  "gb28181-channel": {
-    list: "チャネル一覧",
-  },
-  "smart-records": {
-    view: "アラーム記録表示",
-    export: "アラーム記録エクスポート",
-  },
-  } as const;
+} as const;
 
 export default permissions;

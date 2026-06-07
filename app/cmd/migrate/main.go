@@ -148,6 +148,9 @@ func main() {
 	// GB28181 数据模型重构：将 gb28181_devices 数据迁移到 devices + device_sip_configs。
 	migrateGB28181ToUnifiedDevices(db)
 
+	// 清理数据库中重复的智能记录菜单（旧版系统管理下的告警记录子菜单）。
+	cleanupDuplicateSmartRecordsMenu(db)
+
 	// Migrate existing menus to multi-level structure.
 	if err := migrateMultiLevelMenu(db); err != nil {
 		log.Fatalf("migrate multi-level menu: %v", err)
@@ -271,6 +274,40 @@ func addAuditLogActionTypeColumnSQL() string {
 	return `
 	ALTER TABLE audit_logs
 		ADD COLUMN IF NOT EXISTS action_type varchar(128);`
+}
+
+// cleanupDuplicateSmartRecordsMenu 删除数据库中已存在的重复智能记录菜单。
+// 旧版迁移在系统管理下注册了 Code 为 "smart-records" 的告警记录子菜单，
+// 与独立顶级菜单 "智能记录" (同 Code) 冲突。此函数清理重复项。
+func cleanupDuplicateSmartRecordsMenu(db *gorm.DB) {
+	// 找到系统管理父菜单。
+	var systemMgmt model.Permission
+	if err := db.Where("code = ? AND type = ?", "system-management", "menu").First(&systemMgmt).Error; err != nil {
+		return // 系统管理菜单不存在，无需清理。
+	}
+
+	// 查找系统管理下 Code 为 smart-records 的子菜单（重复项）。
+	var dup model.Permission
+	if err := db.Where("code = ? AND type = ? AND parent_id = ?", "smart-records", "menu", systemMgmt.ID).First(&dup).Error; err != nil {
+		return // 无重复记录，无需清理。
+	}
+
+	log.Printf("Cleaning up duplicate smart-records menu (id=%d) under system-management", dup.ID)
+
+	// 先删除该菜单下的按钮权限。
+	if err := db.Where("parent_id = ? AND type = ?", dup.ID, "button").Delete(&model.Permission{}).Error; err != nil {
+		log.Printf("Warning: failed to delete button permissions under duplicate smart-records: %v", err)
+	}
+	// 删除角色-权限关联。
+	if err := db.Where("permission_id = ?", dup.ID).Delete(&model.RolePermission{}).Error; err != nil {
+		log.Printf("Warning: failed to delete role-permission associations: %v", err)
+	}
+	// 删除重复菜单本身。
+	if err := db.Delete(&dup).Error; err != nil {
+		log.Printf("Warning: failed to delete duplicate smart-records menu: %v", err)
+	} else {
+		log.Printf("Removed duplicate smart-records menu (id=%d) from system-management", dup.ID)
+	}
 }
 
 // migrateMultiLevelMenu 将已有的平铺菜单迁移为两级结构。
@@ -688,11 +725,6 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "feedback:export", Name: "导出反馈", Path: "/api/v1/feedback/export", Method: "GET"},
 					{Code: "feedback:batch-status", Name: "批量更新反馈状态", Path: "/api/v1/feedback/batch-status", Method: "PUT"},
 					{Code: "feedback:update-status", Name: "更新反馈状态", Path: "/api/v1/feedback/*/status", Method: "PUT"},
-				}},
-				// 告警记录菜单
-				{Name: "告警记录", Code: "smart-records", Path: "/smart-records", Icon: "MdNotificationsActive", Buttons: []buttonInfo{
-					{Code: "smart-records:view", Name: "查看告警记录", Path: "/api/v1/smart-records", Method: "GET"},
-					{Code: "smart-records:export", Name: "导出告警记录", Path: "/api/v1/smart-records/export", Method: "GET"},
 				}},
 				{Name: "系统配置", Code: "system-config", Path: "/system/config", Icon: "MdSettings", Buttons: []buttonInfo{
 					// 运行状态 Tab

@@ -256,14 +256,8 @@ export default function PermissionTree({ tree, selectedIds, onChange }: Permissi
   const topNodeTextColor = useColorModeValue('navy.700', 'white');
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [hasInitialized, setHasInitialized] = useState(false);
 
-  useEffect(() => {
-    if (tree.length > 0 && !hasInitialized) {
-      setExpandedIds(new Set(tree.map((node) => node.id)));
-      setHasInitialized(true);
-    }
-  }, [tree, hasInitialized]);
+  // 默认全部收起，用户手动点击展开
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {

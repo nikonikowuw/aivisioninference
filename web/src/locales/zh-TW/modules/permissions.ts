@@ -1,7 +1,7 @@
 export const permissions = {
   title: "權限管理",
   table: {
-    totalCount: "共 {{count}} 項",
+    totalCount: "{{count}} 項",
     columns: {
       name: "權限名",
       code: "權限代碼",
@@ -34,8 +34,9 @@ export const permissions = {
     deleteTitle: "刪除權限",
   },
   message: {
-    deleteConfirm: "確定要刪除該權限及其所有子權限嗎？",
-    emptyData: "暫無權限數據",
+    deleteConfirm:
+      "確定要刪除該權限及其所有子權限嗎？",
+    emptyData: "暫無權限資料",
   },
   codes: {
     dashboard: {
@@ -104,7 +105,7 @@ export const permissions = {
     "brand-config": {
       view: "檢視品牌設定",
       edit: "編輯品牌設定",
-      "upload-logo": "上傳品牌 Logo",
+      "upload-logo": "上傳品牌Logo",
     },
     "mail-config": {
       view: "檢視郵件設定",
@@ -152,37 +153,134 @@ export const permissions = {
       stop: "停止錄影",
     },
     system: {
-      "time-view": "查看系統時間",
-      "time-update": "設置系統時間",
-      "ntp-update": "設置NTP伺服器",
-      "status-view": "查看系統狀態",
-      "network-view": "查看網路配置",
-      "network-update": "更新網路配置",
-      "webhook-view": "查看Webhook",
-      "webhook-create": "創建Webhook",
-      "webhook-delete": "刪除Webhook",
-      "webhook-test": "測試Webhook",
-      "storage-view": "查看儲存配置",
-      "storage-update": "更新儲存配置",
-      "storage-cleanup": "執行手動清理",
+      status: {
+        view: "查看運行狀態",
+        resources: "查看資源狀態",
+        services: "查看服務狀態",
+      },
+      network: {
+        view: "查看網路配置",
+        apply: "應用網路配置",
+        confirm: "確認網路配置",
+        rollback: "回滾網路配置",
+      },
+      time: {
+        view: "查看時間配置",
+        manual: "手動設置時間",
+        timezone: "設置時區",
+      },
+      ntp: {
+        view: "查看NTP配置",
+        manage: "管理NTP伺服器",
+        sync: "同步NTP時間",
+      },
+      webhook: {
+        list: "Webhook列表",
+        create: "創建Webhook",
+        edit: "編輯Webhook",
+        delete: "刪除Webhook",
+        test: "測試Webhook",
+        logs: "查看推送日誌",
+      },
+      storage: {
+        view: "查看儲存配置",
+        edit: "編輯儲存配置",
+        "cleanup-logs": "查看清理日誌",
+        cleanup: "手動觸發清理",
+      },
+      gb28181: {
+        view: "查看GB28181配置",
+      },
+    },
+    records: {
+      recognition: {
+        list: "查看識別記錄",
+      },
+      alarm: {
+        list: "查看告警記錄",
+      },
+      capture: {
+        list: "查看抓拍記錄",
+      },
+      export: "匯出智慧記錄",
+      "batch-delete": "批次刪除智慧記錄",
+      "export-selected": "匯出選定智慧記錄",
+      "category-codes": {
+        list: "查看類別編碼",
+      },
+    },
+    stream: {
+      list: "查看串流狀態",
+    },
+    person: {
+      list: "人員列表",
+      create: "新增人員",
+      export: "匯出人員",
+      "batch-delete": "批次刪除人員",
+      "batch-toggle": "批次啟禁用人員",
+      "batch-retry-embedding": "批次重提特徵",
+      edit: "編輯人員",
+      delete: "刪除人員",
+      view: "檢視人員",
+      "retry-embedding": "重提特徵",
+    },
+    "person-group": {
+      list: "分組列表",
+      create: "創建分組",
+      edit: "編輯分組",
+      delete: "刪除分組",
+    },
+    "device-staging": {
+      list: "待接入列表",
+      import: "匯入設備",
+      ignore: "忽略設備",
+      "batch-import": "批次匯入",
+      "batch-ignore": "批次忽略",
+      scan: "ONVIF掃描",
+    },
+    gb28181: {
+      list: "設備列表",
+      create: "創建設備",
+      view: "設備詳情",
+      edit: "編輯設備",
+      delete: "刪除設備",
+      "batch-delete": "批次刪除設備",
+      catalog: "觸發目錄查詢",
+    },
+    "gb28181-channel": {
+      list: "通道列表",
+    },
+    "smart-records": {
+      view: "查看智慧記錄",
+      export: "匯出智慧記錄",
+    },
+    "algorithm-package": {
+      list: "演算法包列表",
+      upload: "上傳演算法包",
+      view: "檢視演算法包",
+      delete: "刪除演算法包",
+    },
+    license: {
+      fingerprint: "查看裝置指紋",
+      upload: "上傳授權檔案",
+      active: "查看目前授權",
+      list: "授權列表",
+      check: "校驗演算法授權",
+    },
+    "ai-time-schedules": {
+      list: "時間配置列表",
+      create: "創建時間配置",
+      edit: "編輯時間配置",
+      delete: "刪除時間配置",
+    },
+    aivisiontasks: {
+      list: "推論任務列表",
+      create: "創建推論任務",
+      edit: "編輯推論任務",
+      delete: "刪除推論任務",
+      "check-conflict": "檢查任務衝突",
     },
   },
-  gb28181: {
-    list: "設備列表",
-    view: "設備詳情",
-    edit: "編輯設備",
-    delete: "刪除設備",
-    "batch-delete": "批量刪除設備",
-    catalog: "觸發目錄查詢",
-    create: "創建設備",
-  },
-  "gb28181-channel": {
-    list: "通道列表",
-  },
-  "smart-records": {
-    view: "查看告警記錄",
-    export: "導出告警記錄",
-  },
-  } as const;
+} as const;
 
 export default permissions;

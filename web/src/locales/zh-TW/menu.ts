@@ -8,7 +8,10 @@ export const menu = {
   "live-view": "即時預覽",
   "recordings": "錄影回放",
   "stream-status": "流狀態看板",
-
+  "smart-records": "智慧記錄",
+  "person-management": "人員管理",
+  persons: "人員",
+  "person-groups": "人員分組",
   "user-management": "用戶管理",
   "users": "用戶",
   "roles": "角色",
@@ -17,15 +20,18 @@ export const menu = {
   "license-management": "授權管理",
   "license": "演算法授權",
   "files": "文件",
+  "algorithm-packages": "演算法包管理",
   "audit-logs": "審計日誌",
   "tasks": "任務",
   "brand-config": "品牌設定",
   "mail-config": "郵件設定",
   "feedback": "使用者回饋",
   "system-config": "系統配置",
+  "aivision": "AI 視覺推理",
+  "ai-time-schedules": "時間配置",
+  "aivisiontasks": "推理任務",
   "gb28181-devices": "GB28181設備",
   "gb28181-channels": "GB28181通道",
-  "smart-records": "告警記錄",
 } as const;
 
 export default menu;

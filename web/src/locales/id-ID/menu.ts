@@ -8,8 +8,10 @@ export const menu = {
   "live-view": "Tampilan Langsung",
   "recordings": "Putar Ulang Rekaman",
   "stream-status": "Status Aliran",
-
-
+  "smart-records": "Catatan Pintar",
+  "person-management": "Manajemen Orang",
+  persons: "Orang",
+  "person-groups": "Grup Orang",
   "user-management": "Manajemen Pengguna",
   "users": "Pengguna",
   "roles": "Peran",
@@ -18,15 +20,18 @@ export const menu = {
   "license-management": "Manajemen Lisensi",
   "license": "Lisensi Algoritma",
   "files": "File",
+  "algorithm-packages": "Paket Algoritma",
   "audit-logs": "Log Audit",
   "tasks": "Tugas",
   "brand-config": "Konfigurasi Merek",
   "mail-config": "Konfigurasi Email",
   "feedback": "Umpan Balik Pengguna",
   "system-config": "Konfigurasi Sistem",
+  "aivision": "AI Vision",
+  "ai-time-schedules": "Jadwal Waktu",
+  "aivisiontasks": "Tugas Inferensi",
   "gb28181-devices": "Perangkat GB28181",
   "gb28181-channels": "Saluran GB28181",
-  "smart-records": "Catatan Alarm",
 } as const;
 
 export default menu;

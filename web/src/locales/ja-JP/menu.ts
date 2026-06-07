@@ -8,8 +8,10 @@ export const menu = {
   "live-view": "ライブビュー",
   "recordings": "録画再生",
   "stream-status": "配信ステータス",
-
-
+  "smart-records": "スマート記録",
+  "person-management": "人物管理",
+  persons: "人物",
+  "person-groups": "人物グループ",
   "user-management": "ユーザー管理",
   "users": "ユーザー",
   "roles": "ロール",
@@ -18,15 +20,18 @@ export const menu = {
   "license-management": "ライセンス管理",
   "license": "アルゴリズムライセンス",
   "files": "ファイル",
+  "algorithm-packages": "アルゴリズムパッケージ",
   "audit-logs": "操作ログ",
   "tasks": "タスク",
   "brand-config": "ブランド設定",
   "mail-config": "メール設定",
   "feedback": "フィードバック",
   "system-config": "システム設定",
+  "aivision": "AI ビジョン",
+  "ai-time-schedules": "タイムスケジュール",
+  "aivisiontasks": "推論タスク",
   "gb28181-devices": "GB28181デバイス",
   "gb28181-channels": "GB28181チャネル",
-  "smart-records": "アラーム記録",
 } as const;
 
 export default menu;

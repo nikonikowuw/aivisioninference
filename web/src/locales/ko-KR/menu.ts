@@ -8,8 +8,6 @@ export const menu = {
   "live-view": "라이브 뷰",
   "recordings": "녹화 재생",
   "stream-status": "스트림 상태",
-
-
   "user-management": "사용자 관리",
   "users": "사용자",
   "roles": "역할",
@@ -26,7 +24,14 @@ export const menu = {
   "system-config": "시스템 설정",
   "gb28181-devices": "GB28181 장치",
   "gb28181-channels": "GB28181 채널",
-  "smart-records": "알람 기록",
+  "smart-records": "스마트 기록",
+  "person-management": "인물 관리",
+  "persons": "인물",
+  "person-groups": "인물 그룹",
+  "algorithm-packages": "알고리즘 패키지",
+  "aivision": "AI 비전",
+  "ai-time-schedules": "AI 시간 예약",
+  "aivisiontasks": "AI 추론 작업",
 } as const;
 
 export default menu;

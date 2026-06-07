@@ -52,6 +52,46 @@ const (
 	ActionUpdateDeviceGroups = "action.update.device-groups"
 	ActionDeleteDeviceGroups = "action.delete.device-groups"
 
+	ActionViewAlgoPackages       = "action.view.algorithmpackages"
+	ActionCreateAlgoPackages     = "action.create.algorithmpackages"
+	ActionUpdateAlgoPackages     = "action.update.algorithmpackages"
+	ActionDeleteAlgoPackages     = "action.delete.algorithmpackages"
+	ActionUploadAlgoPackages     = "action.upload.algorithmpackages"
+
+	ActionViewAITasks       = "action.view.ai-tasks"
+	ActionCreateAITasks     = "action.create.ai-tasks"
+	ActionUpdateAITasks     = "action.update.ai-tasks"
+	ActionDeleteAITasks     = "action.delete.ai-tasks"
+
+	ActionViewAITimeSchedules       = "action.view.ai-time-schedules"
+	ActionCreateAITimeSchedules     = "action.create.ai-time-schedules"
+	ActionUpdateAITimeSchedules     = "action.update.ai-time-schedules"
+	ActionDeleteAITimeSchedules     = "action.delete.ai-time-schedules"
+
+	ActionViewPersons         = "action.view.persons"
+	ActionCreatePersons       = "action.create.persons"
+	ActionUpdatePersons       = "action.update.persons"
+	ActionDeletePersons       = "action.delete.persons"
+	ActionImportPersons       = "action.import.persons"
+
+	ActionViewPersonGroups         = "action.view.person-groups"
+	ActionCreatePersonGroups       = "action.create.person-groups"
+	ActionUpdatePersonGroups       = "action.update.person-groups"
+	ActionDeletePersonGroups       = "action.delete.person-groups"
+
+	ActionViewSmartRecords       = "action.view.smart-records"
+	ActionDeleteSmartRecords     = "action.delete.smart-records"
+	ActionExportSmartRecords     = "action.export.smart-records"
+
+	ActionViewDeviceStaging       = "action.view.device-staging"
+	ActionImportDeviceStaging     = "action.import.device-staging"
+	ActionIgnoreDeviceStaging     = "action.ignore.device-staging"
+
+	ActionViewGB28181       = "action.view.gb28181"
+	ActionCreateGB28181     = "action.create.gb28181"
+	ActionUpdateGB28181     = "action.update.gb28181"
+	ActionDeleteGB28181     = "action.delete.gb28181"
+
 	resultKeyPrefix   = "result."
 	resourceKeyPrefix = "resource."
 	methodKeyPrefix   = "method."
@@ -109,6 +149,39 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.device-groups":  "Delete device group",
 		"result.success":             "Success",
 		"result.failed":              "Failed",
+	
+		"action.view.algorithmpackages":          "View algorithm packages",
+		"action.create.algorithmpackages":          "Create algorithm package",
+		"action.update.algorithmpackages":          "Update algorithm package",
+		"action.delete.algorithmpackages":          "Delete algorithm package",
+		"action.upload.algorithmpackages":          "Upload algorithm package",
+		"action.view.ai-tasks":          "View AI tasks",
+		"action.create.ai-tasks":          "Create AI task",
+		"action.update.ai-tasks":          "Update AI task",
+		"action.delete.ai-tasks":          "Delete AI task",
+		"action.view.ai-time-schedules":          "View AI time schedules",
+		"action.create.ai-time-schedules":          "Create AI time schedule",
+		"action.update.ai-time-schedules":          "Update AI time schedule",
+		"action.delete.ai-time-schedules":          "Delete AI time schedule",
+		"action.view.persons":          "View persons",
+		"action.create.persons":          "Create person",
+		"action.update.persons":          "Update person",
+		"action.delete.persons":          "Delete person",
+		"action.import.persons":          "Import persons",
+		"action.view.person-groups":          "View person groups",
+		"action.create.person-groups":          "Create person group",
+		"action.update.person-groups":          "Update person group",
+		"action.delete.person-groups":          "Delete person group",
+		"action.view.smart-records":          "View smart records",
+		"action.delete.smart-records":          "Delete smart records",
+		"action.export.smart-records":          "Export smart records",
+		"action.view.device-staging":          "View device staging",
+		"action.import.device-staging":          "Import device",
+		"action.ignore.device-staging":          "Ignore device",
+		"action.view.gb28181":          "View GB28181",
+		"action.create.gb28181":          "Create GB28181",
+		"action.update.gb28181":          "Update GB28181",
+		"action.delete.gb28181":          "Delete GB28181",
 	},
 	"zh": {
 		"action.view.users":          "查看用户",
@@ -160,6 +233,39 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.device-groups":  "删除设备分组",
 		"result.success":             "成功",
 		"result.failed":              "失败",
+	
+		"action.view.algorithmpackages":          "查看算法包",
+		"action.create.algorithmpackages":          "创建算法包",
+		"action.update.algorithmpackages":          "更新算法包",
+		"action.delete.algorithmpackages":          "删除算法包",
+		"action.upload.algorithmpackages":          "上传算法包",
+		"action.view.ai-tasks":          "查看AI任务",
+		"action.create.ai-tasks":          "创建AI任务",
+		"action.update.ai-tasks":          "更新AI任务",
+		"action.delete.ai-tasks":          "删除AI任务",
+		"action.view.ai-time-schedules":          "查看时间配置",
+		"action.create.ai-time-schedules":          "创建时间配置",
+		"action.update.ai-time-schedules":          "更新时间配置",
+		"action.delete.ai-time-schedules":          "删除时间配置",
+		"action.view.persons":          "查看人员",
+		"action.create.persons":          "创建人员",
+		"action.update.persons":          "更新人员",
+		"action.delete.persons":          "删除人员",
+		"action.import.persons":          "导入人员",
+		"action.view.person-groups":          "查看人员分组",
+		"action.create.person-groups":          "创建人员分组",
+		"action.update.person-groups":          "更新人员分组",
+		"action.delete.person-groups":          "删除人员分组",
+		"action.view.smart-records":          "查看智能记录",
+		"action.delete.smart-records":          "删除智能记录",
+		"action.export.smart-records":          "导出智能记录",
+		"action.view.device-staging":          "查看设备待接入",
+		"action.import.device-staging":          "导入设备",
+		"action.ignore.device-staging":          "忽略设备",
+		"action.view.gb28181":          "查看GB28181",
+		"action.create.gb28181":          "创建GB28181",
+		"action.update.gb28181":          "更新GB28181",
+		"action.delete.gb28181":          "删除GB28181",
 	},
 	"zh-tw": {
 		"action.view.users":          "檢視使用者",
@@ -211,6 +317,39 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.device-groups":  "刪除設備分組",
 		"result.success":             "成功",
 		"result.failed":              "失敗",
+	
+		"action.view.algorithmpackages":          "檢視演算法套件",
+		"action.create.algorithmpackages":          "建立演算法套件",
+		"action.update.algorithmpackages":          "更新演算法套件",
+		"action.delete.algorithmpackages":          "刪除演算法套件",
+		"action.upload.algorithmpackages":          "上傳演算法套件",
+		"action.view.ai-tasks":          "檢視AI任務",
+		"action.create.ai-tasks":          "建立AI任務",
+		"action.update.ai-tasks":          "更新AI任務",
+		"action.delete.ai-tasks":          "刪除AI任務",
+		"action.view.ai-time-schedules":          "檢視時間設定",
+		"action.create.ai-time-schedules":          "建立時間設定",
+		"action.update.ai-time-schedules":          "更新時間設定",
+		"action.delete.ai-time-schedules":          "刪除時間設定",
+		"action.view.persons":          "檢視人員",
+		"action.create.persons":          "建立人員",
+		"action.update.persons":          "更新人員",
+		"action.delete.persons":          "刪除人員",
+		"action.import.persons":          "匯入人員",
+		"action.view.person-groups":          "檢視人員分組",
+		"action.create.person-groups":          "建立人員分組",
+		"action.update.person-groups":          "更新人員分組",
+		"action.delete.person-groups":          "刪除人員分組",
+		"action.view.smart-records":          "檢視智慧記錄",
+		"action.delete.smart-records":          "刪除智慧記錄",
+		"action.export.smart-records":          "匯出智慧記錄",
+		"action.view.device-staging":          "檢視設備待接入",
+		"action.import.device-staging":          "匯入設備",
+		"action.ignore.device-staging":          "忽略設備",
+		"action.view.gb28181":          "檢視GB28181",
+		"action.create.gb28181":          "建立GB28181",
+		"action.update.gb28181":          "更新GB28181",
+		"action.delete.gb28181":          "刪除GB28181",
 	},
 	"id": {
 		"action.view.users":          "Lihat pengguna",
@@ -262,6 +401,39 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.device-groups":  "Hapus grup perangkat",
 		"result.success":             "Berhasil",
 		"result.failed":              "Gagal",
+	
+		"action.view.algorithmpackages":          "Lihat paket algoritma",
+		"action.create.algorithmpackages":          "Buat paket algoritma",
+		"action.update.algorithmpackages":          "Perbarui paket algoritma",
+		"action.delete.algorithmpackages":          "Hapus paket algoritma",
+		"action.upload.algorithmpackages":          "Unggah paket algoritma",
+		"action.view.ai-tasks":          "Lihat tugas AI",
+		"action.create.ai-tasks":          "Buat tugas AI",
+		"action.update.ai-tasks":          "Perbarui tugas AI",
+		"action.delete.ai-tasks":          "Hapus tugas AI",
+		"action.view.ai-time-schedules":          "Lihat jadwal waktu AI",
+		"action.create.ai-time-schedules":          "Buat jadwal waktu AI",
+		"action.update.ai-time-schedules":          "Perbarui jadwal waktu AI",
+		"action.delete.ai-time-schedules":          "Hapus jadwal waktu AI",
+		"action.view.persons":          "Lihat orang",
+		"action.create.persons":          "Buat orang",
+		"action.update.persons":          "Perbarui orang",
+		"action.delete.persons":          "Hapus orang",
+		"action.import.persons":          "Impor orang",
+		"action.view.person-groups":          "Lihat grup orang",
+		"action.create.person-groups":          "Buat grup orang",
+		"action.update.person-groups":          "Perbarui grup orang",
+		"action.delete.person-groups":          "Hapus grup orang",
+		"action.view.smart-records":          "Lihat catatan cerdas",
+		"action.delete.smart-records":          "Hapus catatan cerdas",
+		"action.export.smart-records":          "Ekspor catatan cerdas",
+		"action.view.device-staging":          "Lihat perangkat menunggu",
+		"action.import.device-staging":          "Impor perangkat",
+		"action.ignore.device-staging":          "Abaikan perangkat",
+		"action.view.gb28181":          "Lihat GB28181",
+		"action.create.gb28181":          "Buat GB28181",
+		"action.update.gb28181":          "Perbarui GB28181",
+		"action.delete.gb28181":          "Hapus GB28181",
 	},
 	"ja": {
 		"action.view.users":          "ユーザー一覧表示",
@@ -313,6 +485,39 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.device-groups":  "デバイスグループ削除",
 		"result.success":             "成功",
 		"result.failed":              "失敗",
+	
+		"action.view.algorithmpackages":          "アルゴリズムパッケージ一覧",
+		"action.create.algorithmpackages":          "アルゴリズムパッケージ作成",
+		"action.update.algorithmpackages":          "アルゴリズムパッケージ更新",
+		"action.delete.algorithmpackages":          "アルゴリズムパッケージ削除",
+		"action.upload.algorithmpackages":          "アルゴリズムパッケージアップロード",
+		"action.view.ai-tasks":          "AIタスク一覧",
+		"action.create.ai-tasks":          "AIタスク作成",
+		"action.update.ai-tasks":          "AIタスク更新",
+		"action.delete.ai-tasks":          "AIタスク削除",
+		"action.view.ai-time-schedules":          "時間設定一覧",
+		"action.create.ai-time-schedules":          "時間設定作成",
+		"action.update.ai-time-schedules":          "時間設定更新",
+		"action.delete.ai-time-schedules":          "時間設定削除",
+		"action.view.persons":          "人物一覧",
+		"action.create.persons":          "人物作成",
+		"action.update.persons":          "人物更新",
+		"action.delete.persons":          "人物削除",
+		"action.import.persons":          "人物インポート",
+		"action.view.person-groups":          "人物グループ一覧",
+		"action.create.person-groups":          "人物グループ作成",
+		"action.update.person-groups":          "人物グループ更新",
+		"action.delete.person-groups":          "人物グループ削除",
+		"action.view.smart-records":          "スマートレコード一覧",
+		"action.delete.smart-records":          "スマートレコード削除",
+		"action.export.smart-records":          "スマートレコードエクスポート",
+		"action.view.device-staging":          "デバイス待機一覧",
+		"action.import.device-staging":          "デバイスインポート",
+		"action.ignore.device-staging":          "デバイス無視",
+		"action.view.gb28181":          "GB28181一覧",
+		"action.create.gb28181":          "GB28181作成",
+		"action.update.gb28181":          "GB28181更新",
+		"action.delete.gb28181":          "GB28181削除",
 	},
 	"ko": {
 		"action.view.users":          "사용자 목록 보기",
@@ -364,6 +569,39 @@ var actionStorage = map[string]map[string]string{
 		"action.delete.device-groups":  "장치 그룹 삭제",
 		"result.success":             "성공",
 		"result.failed":              "실패",
+	
+		"action.view.algorithmpackages":          "알고리즘 패키지 목록",
+		"action.create.algorithmpackages":          "알고리즘 패키지 생성",
+		"action.update.algorithmpackages":          "알고리즘 패키지 수정",
+		"action.delete.algorithmpackages":          "알고리즘 패키지 삭제",
+		"action.upload.algorithmpackages":          "알고리즘 패키지 업로드",
+		"action.view.ai-tasks":          "AI 작업 목록",
+		"action.create.ai-tasks":          "AI 작업 생성",
+		"action.update.ai-tasks":          "AI 작업 수정",
+		"action.delete.ai-tasks":          "AI 작업 삭제",
+		"action.view.ai-time-schedules":          "시간 설정 목록",
+		"action.create.ai-time-schedules":          "시간 설정 생성",
+		"action.update.ai-time-schedules":          "시간 설정 수정",
+		"action.delete.ai-time-schedules":          "시간 설정 삭제",
+		"action.view.persons":          "인물 목록",
+		"action.create.persons":          "인물 생성",
+		"action.update.persons":          "인물 수정",
+		"action.delete.persons":          "인물 삭제",
+		"action.import.persons":          "인물 가져오기",
+		"action.view.person-groups":          "인물 그룹 목록",
+		"action.create.person-groups":          "인물 그룹 생성",
+		"action.update.person-groups":          "인물 그룹 수정",
+		"action.delete.person-groups":          "인물 그룹 삭제",
+		"action.view.smart-records":          "스마트 레코드 목록",
+		"action.delete.smart-records":          "스마트 레코드 삭제",
+		"action.export.smart-records":          "스마트 레코드 내보내기",
+		"action.view.device-staging":          "장치 대기 목록",
+		"action.import.device-staging":          "장치 가져오기",
+		"action.ignore.device-staging":          "장치 무시",
+		"action.view.gb28181":          "GB28181 목록",
+		"action.create.gb28181":          "GB28181 생성",
+		"action.update.gb28181":          "GB28181 수정",
+		"action.delete.gb28181":          "GB28181 삭제",
 	},
 }
 
@@ -382,6 +620,15 @@ var resourceStorage = map[string]map[string]string{
 		"resource.audit-logs":    "Audit Logs",
 		"resource.devices":       "Devices",
 		"resource.device-groups": "Device Groups",
+	
+		"resource.algorithmpackages": "Algorithm Packages",
+		"resource.ai-tasks": "AI Tasks",
+		"resource.ai-time-schedules": "AI Time Schedules",
+		"resource.persons": "Persons",
+		"resource.person-groups": "Person Groups",
+		"resource.smart-records": "Smart Records",
+		"resource.device-staging": "Device Staging",
+		"resource.gb28181": "GB28181",
 	},
 	"zh": {
 		"resource.users":         "用户",
@@ -396,6 +643,15 @@ var resourceStorage = map[string]map[string]string{
 		"resource.audit-logs":    "审计日志",
 		"resource.devices":       "设备",
 		"resource.device-groups": "设备分组",
+	
+		"resource.algorithmpackages": "算法包",
+		"resource.ai-tasks": "AI任务",
+		"resource.ai-time-schedules": "时间配置",
+		"resource.persons": "人员",
+		"resource.person-groups": "人员分组",
+		"resource.smart-records": "智能记录",
+		"resource.device-staging": "设备待接入",
+		"resource.gb28181": "GB28181",
 	},
 	"zh-tw": {
 		"resource.users":         "使用者",
@@ -410,6 +666,15 @@ var resourceStorage = map[string]map[string]string{
 		"resource.audit-logs":    "稽核日誌",
 		"resource.devices":       "設備",
 		"resource.device-groups": "設備分組",
+	
+		"resource.algorithmpackages": "演算法套件",
+		"resource.ai-tasks": "AI任務",
+		"resource.ai-time-schedules": "時間設定",
+		"resource.persons": "人員",
+		"resource.person-groups": "人員分組",
+		"resource.smart-records": "智慧記錄",
+		"resource.device-staging": "設備待接入",
+		"resource.gb28181": "GB28181",
 	},
 	"id": {
 		"resource.users":         "Pengguna",
@@ -424,6 +689,15 @@ var resourceStorage = map[string]map[string]string{
 		"resource.audit-logs":    "Log Audit",
 		"resource.devices":       "Perangkat",
 		"resource.device-groups": "Grup Perangkat",
+	
+		"resource.algorithmpackages": "Paket Algoritma",
+		"resource.ai-tasks": "Tugas AI",
+		"resource.ai-time-schedules": "Jadwal Waktu AI",
+		"resource.persons": "Orang",
+		"resource.person-groups": "Grup Orang",
+		"resource.smart-records": "Catatan Cerdas",
+		"resource.device-staging": "Perangkat Menunggu",
+		"resource.gb28181": "GB28181",
 	},
 	"ja": {
 		"resource.users":         "ユーザー",
@@ -438,6 +712,15 @@ var resourceStorage = map[string]map[string]string{
 		"resource.audit-logs":    "監査ログ",
 		"resource.devices":       "デバイス",
 		"resource.device-groups": "デバイスグループ",
+	
+		"resource.algorithmpackages": "アルゴリズムパッケージ",
+		"resource.ai-tasks": "AIタスク",
+		"resource.ai-time-schedules": "時間設定",
+		"resource.persons": "人物",
+		"resource.person-groups": "人物グループ",
+		"resource.smart-records": "スマートレコード",
+		"resource.device-staging": "デバイス待機",
+		"resource.gb28181": "GB28181",
 	},
 	"ko": {
 		"resource.users":         "사용자",
@@ -452,6 +735,15 @@ var resourceStorage = map[string]map[string]string{
 		"resource.audit-logs":    "감사 로그",
 		"resource.devices":       "장치",
 		"resource.device-groups": "장치 그룹",
+	
+		"resource.algorithmpackages": "알고리즘 패키지",
+		"resource.ai-tasks": "AI 작업",
+		"resource.ai-time-schedules": "시간 설정",
+		"resource.persons": "인물",
+		"resource.person-groups": "인물 그룹",
+		"resource.smart-records": "스마트 레코드",
+		"resource.device-staging": "장치 대기",
+		"resource.gb28181": "GB28181",
 	},
 }
 

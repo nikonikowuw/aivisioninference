@@ -877,14 +877,14 @@ export interface AIVisionTaskConflictCheck {
 }
 
 export const aiVisionTasksApi = {
-  ...crud<AIVisionTask, AIVisionTaskListParams>('ai-vision-tasks'),
+  ...crud<AIVisionTask, AIVisionTaskListParams>('ai-tasks'),
   checkConflict: (data: AIVisionTaskConflictCheck) =>
-    request<{ conflict: boolean; message?: string }>('/ai-vision-tasks/check-conflict', {
+    request<{ conflict: boolean; message?: string }>('/ai-tasks/check-conflict', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   batchDelete: (ids: string[]) =>
-    request<BatchResult>('/ai-vision-tasks/batch-delete', {
+    request<BatchResult>('/ai-tasks/batch-delete', {
       method: 'POST',
       body: JSON.stringify({ ids }),
     }),

@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <iostream>
@@ -384,6 +385,10 @@ bool VideoToolboxPipeline::CreateFormatDescription() {
 bool VideoToolboxPipeline::InitDecoder() {
     if (!format_desc_) return false;
 
+    CFMutableDictionaryRef decoderSpec = CFDictionaryCreateMutable(kCFAllocatorDefault, 1,
+        &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(decoderSpec, kVTVideoDecoderSpecification_RequireHardwareAcceleratedVideoDecoder, kCFBooleanTrue);
+
     CFMutableDictionaryRef outDict = CFDictionaryCreateMutable(kCFAllocatorDefault, 2,
         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     int32_t pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
@@ -399,15 +404,16 @@ bool VideoToolboxPipeline::InitDecoder() {
     cb.decompressionOutputRefCon = this;
 
     OSStatus status = VTDecompressionSessionCreate(
-        kCFAllocatorDefault, format_desc_, nullptr, outDict, &cb, &decode_session_);
+        kCFAllocatorDefault, format_desc_, decoderSpec, outDict, &cb, &decode_session_);
+    CFRelease(decoderSpec);
     CFRelease(outDict);
     if (status != noErr) {
         std::cerr << "[VideoToolbox] Decompression session failed: " << status << std::endl;
-        last_status_ = HALStatus::Error(HALStatusCode::DecodeFailed, "VTDecompressionSessionCreate failed");
+        last_status_ = HALStatus::Error(HALStatusCode::DecodeFailed, "VideoToolbox hardware decoder unavailable");
         return false;
     }
     decoder_initialized_ = true;
-    std::cout << "[VideoToolbox] Decompression session created" << std::endl;
+    std::cout << "[VideoToolbox] Hardware decompression session created" << std::endl;
     return true;
 }
 
@@ -419,7 +425,7 @@ void VideoToolboxPipeline::DestroyDecoder() {
 
 void VideoToolboxPipeline::DecodeCallback(void* refcon, void* /*source*/, OSStatus status,
                                           VTDecodeInfoFlags /*flags*/, CVImageBufferRef img,
-                                          CMTime pts, CMTime /*duration*/) {
+                                          CMTime /*pts*/, CMTime /*duration*/) {
     if (status != noErr || !img) return;
     auto* self = static_cast<VideoToolboxPipeline*>(refcon);
     if (!self->frame_callback_) return;
@@ -439,14 +445,26 @@ void VideoToolboxPipeline::DecodeCallback(void* refcon, void* /*source*/, OSStat
 
 bool VideoToolboxPipeline::FeedNalToDecoder(const uint8_t* data, size_t size) {
     if (!decoder_initialized_ || !data || size == 0) return false;
-    const uint8_t start_code[] = {0x00, 0x00, 0x00, 0x01};
+    if (size > 0xFFFFFFFFu) return false;
+
+    uint32_t nal_length = static_cast<uint32_t>(size);
+    const uint8_t length_prefix[] = {
+        static_cast<uint8_t>((nal_length >> 24) & 0xFF),
+        static_cast<uint8_t>((nal_length >> 16) & 0xFF),
+        static_cast<uint8_t>((nal_length >> 8) & 0xFF),
+        static_cast<uint8_t>(nal_length & 0xFF),
+    };
 
     CMBlockBufferRef block = nullptr;
     OSStatus s = CMBlockBufferCreateWithMemoryBlock(kCFAllocatorDefault, nullptr, size + 4,
         kCFAllocatorDefault, nullptr, 0, size + 4, 0, &block);
     if (s != noErr) return false;
-    CMBlockBufferReplaceDataBytes(start_code, block, 0, 4);
-    CMBlockBufferReplaceDataBytes(data, block, 4, size);
+    s = CMBlockBufferReplaceDataBytes(length_prefix, block, 0, 4);
+    if (s == noErr) s = CMBlockBufferReplaceDataBytes(data, block, 4, size);
+    if (s != noErr) {
+        CFRelease(block);
+        return false;
+    }
 
     CMSampleBufferRef sample = nullptr;
     const size_t sample_size = size + 4;
@@ -465,10 +483,10 @@ bool VideoToolboxPipeline::FeedNalToDecoder(const uint8_t* data, size_t size) {
 // VTCompressionSession
 // ============================================================
 
-static void EncodeOutputCallback(void* refcon, void* /*src*/, OSStatus status,
+static void EncodeOutputCallback(void* /*refcon*/, void* src, OSStatus status,
                                   VTEncodeInfoFlags /*flags*/, CMSampleBufferRef sb) {
-    if (status != noErr || !sb) return;
-    auto* output = static_cast<std::vector<uint8_t>*>(refcon);
+    if (status != noErr || !sb || !src) return;
+    auto* output = static_cast<std::vector<uint8_t>*>(src);
     CMBlockBufferRef block = CMSampleBufferGetDataBuffer(sb);
     if (!block) return;
     char* ptr = nullptr;
@@ -523,7 +541,7 @@ bool VideoToolboxPipeline::EncodeFrameEx(HwBufferPtr frame, uint8_t* data, size_
     CMTime pts = CMTimeMake(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(), 1000000);
     VTEncodeInfoFlags flags = 0;
-    OSStatus s = VTCompressionSessionEncodeFrame(encode_session_, cvpb, pts, kCMTimeInvalid, nullptr, nullptr, &flags);
+    OSStatus s = VTCompressionSessionEncodeFrame(encode_session_, cvpb, pts, kCMTimeInvalid, nullptr, &output, &flags);
     if (s == noErr) s = VTCompressionSessionCompleteFrames(encode_session_, kCMTimeInvalid);
     encode_output_ = nullptr;
 

@@ -48,18 +48,74 @@ make -j4
 
 ## 配置
 
-引擎配置 JSON 中指定 `hal_so_path`:
+引擎启动时按 `默认值 < .env < 环境变量 < 命令行参数` 加载配置。默认读取当前工作目录 `.env`，也可以通过 `NIKO_ENGINE_ENV_FILE` 或 `--env-file` 指定文件。HAL 可以直接指定动态库路径，也可以指定平台名由引擎映射默认库路径。
 
-```json
-{
-    "device_id": "camera01",
-    "hal_so_path": "/usr/lib/aivision/libaivision-hal-rkmpp.so",
-    "hal_config": {
-        "rga_enable": true,
-        "rga_output_width": 640,
-        "rga_output_height": 480
-    }
-}
+### HAL 平台选择
+
+| 平台 | 平台名/别名 | 默认 HAL 库 |
+|------|-------------|-------------|
+| Apple Silicon/macOS | `macos`, `mac`, `apple`, `mseries`, `videotoolbox` | `libaivision-hal-macos-videotoolbox.dylib` |
+| Rockchip | `rkmpp`, `rknn`, `rockchip`, `rk3568`, `rk3588` | `libaivision-hal-rkmpp.so` |
+| 华为昇腾 | `ascend`, `atlas`, `huawei`, `cann` | `libaivision-hal-ascend.so` |
+
+默认 HAL 目录为 `/usr/local/lib/aivision`，可通过 `NIKO_ENGINE_HAL_DIR` 覆盖。
+
+```bash
+# Apple Silicon/macOS
+NIKO_ENGINE_HAL_PLATFORM=macos aivision-engine
+
+# Rockchip/RK3568/RK3588
+NIKO_ENGINE_HAL_PLATFORM=rkmpp aivision-engine
+
+# 华为昇腾（需要提供对应 HAL 实现）
+NIKO_ENGINE_HAL_PLATFORM=ascend aivision-engine
+
+# 显式指定动态库路径优先级最高
+NIKO_ENGINE_HAL_SO=/opt/aivision/lib/libaivision-hal-rkmpp.so aivision-engine
+```
+
+### .env 示例
+
+```ini
+NIKO_ENGINE_IPC_ADDR=0.0.0.0:9500
+NIKO_ENGINE_WORKERS=4
+NIKO_ENGINE_HAL_PLATFORM=macos
+NIKO_ENGINE_HAL_DIR=/usr/local/lib/aivision
+NIKO_ENGINE_HAL_CONFIG={"rga_enable":true,"rga_output_width":640,"rga_output_height":480}
+NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK=true
+NIKO_ENGINE_RTSP_PUSH=rtsp://localhost:10554
+```
+
+```bash
+# 默认读取当前目录 .env
+aivision-engine
+
+# 指定 .env 文件
+NIKO_ENGINE_ENV_FILE=/etc/aivision/engine.env aivision-engine
+aivision-engine --env-file /etc/aivision/engine.env
+```
+
+### 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `NIKO_ENGINE_ENV_FILE` | `.env` 文件路径 |
+| `NIKO_ENGINE_IPC_ADDR` / `NIKO_ENGINE_ADDR` | IPC 监听地址 |
+| `NIKO_ENGINE_WORKERS` | Worker 线程数 |
+| `NIKO_ENGINE_HAL_PLATFORM` | 主 HAL 平台名 |
+| `NIKO_ENGINE_HAL_SO` | 主 HAL 动态库路径，优先于平台名 |
+| `NIKO_ENGINE_FALLBACK_HAL_PLATFORM` | 备用 HAL 平台名 |
+| `NIKO_ENGINE_FALLBACK_HAL_SO` | 备用 HAL 动态库路径，优先于备用平台名 |
+| `NIKO_ENGINE_HAL_DIR` | 平台名映射时使用的 HAL 库目录 |
+| `NIKO_ENGINE_HAL_CONFIG` | HAL 配置 JSON |
+| `NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK` | 是否允许 FFmpeg fallback，支持 `true/false` |
+
+命令行也支持同名能力：
+
+```bash
+aivision-engine --hal-platform macos
+aivision-engine --hal-platform rkmpp --fallback-hal-platform macos
+aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config '{"rga_enable":true}'
 ```
 
 ## RGA 配置项

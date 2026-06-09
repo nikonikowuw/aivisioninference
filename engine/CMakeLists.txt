@@ -283,6 +283,9 @@ endif()
 
 install(TARGETS aivision-engine DESTINATION bin)
 install(TARGETS aivision-hal-rkmpp DESTINATION lib/aivision)
+if(APPLE)
+    install(TARGETS aivision-hal-macos-videotoolbox DESTINATION lib/aivision)
+endif()
 install(FILES ${INSTALL_HEADERS} DESTINATION include/aivision-engine)
 
 # 安装 RK3568 相关工具

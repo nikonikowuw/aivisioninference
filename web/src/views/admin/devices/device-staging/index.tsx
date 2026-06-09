@@ -28,6 +28,10 @@ import {
   Icon,
   VStack,
   Code,
+  FormControl,
+  FormLabel,
+  Input,
+  Switch,
 } from '@chakra-ui/react';
 import { DeleteIcon, DownloadIcon, ViewIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
@@ -207,6 +211,21 @@ export default function DeviceStaging() {
   const [detailDevice, setDetailDevice] = useState<DiscoveredDevice | null>(null);
   const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
 
+  // 导入设备模态框状态
+  const [importDeviceId, setImportDeviceId] = useState<string | null>(null);
+  const [importDeviceName, setImportDeviceName] = useState('');
+  const [importUsername, setImportUsername] = useState('');
+  const [importPassword, setImportPassword] = useState('');
+  const [importEnableInfer, setImportEnableInfer] = useState(true);
+  const [isImporting, setIsImporting] = useState(false);
+  const { isOpen: isImportOpen, onOpen: onImportOpen, onClose: onImportClose } = useDisclosure();
+
+  // 批量导入模态框状态
+  const [batchImportUsername, setBatchImportUsername] = useState('');
+  const [batchImportPassword, setBatchImportPassword] = useState('');
+  const [batchImportEnableInfer, setBatchImportEnableInfer] = useState(true);
+  const { isOpen: isBatchImportOpen, onOpen: onBatchImportOpen, onClose: onBatchImportClose } = useDisclosure();
+
   useEffect(() => {
     load({ page: 1 });
   }, [searchTrigger, load]);
@@ -225,25 +244,97 @@ export default function DeviceStaging() {
     }
   };
 
-  const handleImport = (id: string) => 
-    runAction(() => deviceStagingApi.import(id), t('message.importSuccess'), t('message.importFailed'));
+  const handleImport = (id: string) => {
+    // 找到设备信息
+    const device = devices.find(d => d.id === id);
+    setImportDeviceId(id);
+    setImportDeviceName(device?.device_name || '');
+    setImportUsername('');
+    setImportPassword('');
+    setImportEnableInfer(true);
+    onImportOpen();
+  };
+
+  const handleImportSubmit = async () => {
+    if (!importDeviceId || !importUsername || !importPassword) {
+      toast({ title: t('message.credentialsRequired'), status: 'warning' });
+      return;
+    }
+    setIsImporting(true);
+    try {
+      await deviceStagingApi.import(importDeviceId, {
+        username: importUsername,
+        password: importPassword,
+        device_name: importDeviceName,
+        enable_infer: importEnableInfer,
+      });
+      toast({ title: t('message.importSuccess'), status: 'success' });
+      onImportClose();
+      refresh();
+    } catch (err) {
+      toast({
+        title: t('message.importFailed'),
+        description: err instanceof Error ? err.message : '',
+        status: 'error',
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleIgnore = (id: string) =>
     runAction(() => deviceStagingApi.ignore(id), t('message.ignoreSuccess'), t('message.ignoreFailed'));
 
   const handleBatchAction = async () => {
     if (!batchAction || selectedIds.length === 0) return;
+    
+    if (batchAction === 'import') {
+      // 打开批量导入模态框
+      setBatchImportUsername('');
+      setBatchImportPassword('');
+      setBatchImportEnableInfer(true);
+      onBatchImportOpen();
+      return;
+    }
+    
+    // 忽略操作直接执行
     setIsBatching(true);
     await runAction(
-      () => batchAction === 'import' 
-        ? deviceStagingApi.batchImport(selectedIds) 
-        : deviceStagingApi.batchIgnore(selectedIds),
-      batchAction === 'import' ? t('message.batchImportSuccess') : t('message.batchIgnoreSuccess'),
-      batchAction === 'import' ? t('message.batchImportFailed') : t('message.batchIgnoreFailed')
+      () => deviceStagingApi.batchIgnore(selectedIds),
+      t('message.batchIgnoreSuccess'),
+      t('message.batchIgnoreFailed')
     );
     setSelectedIds([]);
     setIsBatching(false);
     setBatchAction(null);
+  };
+
+  const handleBatchImportSubmit = async () => {
+    if (!batchImportUsername || !batchImportPassword) {
+      toast({ title: t('message.credentialsRequired'), status: 'warning' });
+      return;
+    }
+    setIsBatching(true);
+    try {
+      await deviceStagingApi.batchImport(selectedIds, {
+        username: batchImportUsername,
+        password: batchImportPassword,
+        enable_infer: batchImportEnableInfer,
+      });
+      toast({ title: t('message.batchImportSuccess'), status: 'success' });
+      onBatchImportClose();
+      setSelectedIds([]);
+      setBatchAction(null);
+      refresh();
+    } catch (err) {
+      toast({
+        title: t('message.batchImportFailed'),
+        description: err instanceof Error ? err.message : '',
+        status: 'error',
+      });
+    } finally {
+      setIsBatching(false);
+    }
   };
 
   const handleScanONVIF = async () => {
@@ -528,6 +619,117 @@ export default function DeviceStaging() {
           <ModalFooter>
             <Button variant="ghost" onClick={onDetailClose}>
               {tCommon('close')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 单个设备导入模态框 */}
+      <Modal isOpen={isImportOpen} onClose={onImportClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{t('import.title')}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <FormControl>
+                <FormLabel>{t('fields.deviceName')}</FormLabel>
+                <Input
+                  value={importDeviceName}
+                  onChange={(e) => setImportDeviceName(e.target.value)}
+                  placeholder={t('import.deviceNamePlaceholder')}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t('fields.username')}</FormLabel>
+                <Input
+                  value={importUsername}
+                  onChange={(e) => setImportUsername(e.target.value)}
+                  placeholder={t('import.usernamePlaceholder')}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t('fields.password')}</FormLabel>
+                <Input
+                  type="password"
+                  value={importPassword}
+                  onChange={(e) => setImportPassword(e.target.value)}
+                  placeholder={t('import.passwordPlaceholder')}
+                />
+              </FormControl>
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb="0">{t('fields.enableInfer')}</FormLabel>
+                <Switch
+                  isChecked={importEnableInfer}
+                  onChange={(e) => setImportEnableInfer(e.target.checked)}
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onImportClose}>
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              colorScheme="green"
+              onClick={handleImportSubmit}
+              isLoading={isImporting}
+              loadingText={tCommon('loading')}
+            >
+              {tCommon('confirm')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* 批量导入模态框 */}
+      <Modal isOpen={isBatchImportOpen} onClose={onBatchImportClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{t('import.batchTitle', { count: selectedIds.length })}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <Text fontSize="sm" color="gray.500">
+                {t('import.batchDescription')}
+              </Text>
+              <FormControl isRequired>
+                <FormLabel>{t('fields.username')}</FormLabel>
+                <Input
+                  value={batchImportUsername}
+                  onChange={(e) => setBatchImportUsername(e.target.value)}
+                  placeholder={t('import.usernamePlaceholder')}
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>{t('fields.password')}</FormLabel>
+                <Input
+                  type="password"
+                  value={batchImportPassword}
+                  onChange={(e) => setBatchImportPassword(e.target.value)}
+                  placeholder={t('import.passwordPlaceholder')}
+                />
+              </FormControl>
+              <FormControl display="flex" alignItems="center">
+                <FormLabel mb="0">{t('fields.enableInfer')}</FormLabel>
+                <Switch
+                  isChecked={batchImportEnableInfer}
+                  onChange={(e) => setBatchImportEnableInfer(e.target.checked)}
+                />
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onBatchImportClose}>
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              colorScheme="green"
+              onClick={handleBatchImportSubmit}
+              isLoading={isBatching}
+              loadingText={tCommon('loading')}
+            >
+              {tCommon('confirm')}
             </Button>
           </ModalFooter>
         </ModalContent>

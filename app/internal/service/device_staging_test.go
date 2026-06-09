@@ -74,8 +74,15 @@ func (m *mockStagingRepo) MarkImported(ctx context.Context, id, deviceID string)
 	return nil
 }
 
-func (m *mockStagingRepo) FindByDeviceCode(ctx context.Context, code string) (*model.DiscoveredDevice, error) {
-	return nil, nil
+func (m *mockStagingRepo) ResetByDeviceID(ctx context.Context, deviceID string) error {
+	for _, item := range m.items {
+		if item.MatchedDeviceID != nil && *item.MatchedDeviceID == deviceID && item.Status == model.StatusImported {
+			item.Status = model.StatusPending
+			item.ImportedAt = nil
+			item.MatchedDeviceID = nil
+		}
+	}
+	return nil
 }
 
 func TestDeviceStaging_Upsert(t *testing.T) {

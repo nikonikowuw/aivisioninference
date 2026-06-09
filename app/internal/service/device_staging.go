@@ -14,6 +14,7 @@ type discoveredDeviceRepo interface {
 	BatchUpdateStatus(ctx context.Context, ids []string, status string) error
 	FindByID(ctx context.Context, id string) (*model.DiscoveredDevice, error)
 	MarkImported(ctx context.Context, id, deviceID string) error
+	ResetByDeviceID(ctx context.Context, deviceID string) error
 }
 
 type DeviceStagingService struct {
@@ -40,10 +41,10 @@ func (s *DeviceStagingService) BatchIgnore(ctx context.Context, ids []string) er
 	return s.repo.BatchUpdateStatus(ctx, ids, model.StatusIgnored)
 }
 
-func (s *DeviceStagingService) BatchImport(ctx context.Context, ids []string) error {
+func (s *DeviceStagingService) BatchImport(ctx context.Context, ids []string, username, password string, enableInfer *bool) error {
 	var errs []string
 	for _, id := range ids {
-		if err := s.ImportSingle(ctx, id); err != nil {
+		if err := s.ImportSingle(ctx, id, username, password, "", enableInfer); err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", id, err))
 		}
 	}
@@ -53,7 +54,7 @@ func (s *DeviceStagingService) BatchImport(ctx context.Context, ids []string) er
 	return nil
 }
 
-func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string) error {
+func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string, username, password, deviceName string, enableInfer *bool) error {
 	item, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err
@@ -63,17 +64,32 @@ func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string) erro
 		return nil
 	}
 
+	// 验证凭证
+	if username == "" || password == "" {
+		return fmt.Errorf("username and password are required")
+	}
+
 	// 转化为 Device 并保存
 	device := &model.Device{
-		DeviceName:      item.DeviceName,
+		DeviceName:      deviceName,
 		AccessType:      item.AccessType,
 		RtspURL:         item.AccessURL,
+		Username:        username,
+		Password:        password,
 		GB28181DeviceID: item.GB28181Code,
 		Manufacturer:    item.Manufacturer,
 		Model:           item.Model,
 		FirmwareVersion: item.FirmwareVersion,
 		Status:          model.DeviceStatusUnknown,
 		Enabled:         true,
+	}
+
+	// 设置自动推理
+	if enableInfer != nil {
+		autoInfer := *enableInfer
+		device.AutoInfer = autoInfer
+	} else {
+		device.AutoInfer = true // 默认启用
 	}
 
 	// 补全默认名称
@@ -83,6 +99,11 @@ func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string) erro
 		} else {
 			device.DeviceName = "Discovered_" + id[:8]
 		}
+	}
+
+	// 注入凭证到 RTSP URL
+	if device.AccessType == model.DeviceAccessTypeRTSP && device.RtspURL != "" {
+		device.RtspURL = injectCredentialsToRTSP(device.RtspURL, username, password)
 	}
 
 	// 设置 ExternalKey 用于唯一约束去重
@@ -110,5 +131,22 @@ func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string) erro
 	}
 
 	return s.repo.MarkImported(ctx, id, device.ID)
+}
+
+// injectCredentialsToRTSP 将凭证注入到 RTSP URL 中
+// 输入: rtsp://192.168.1.100:554/Streaming/Channels/101
+// 输出: rtsp://admin:password@192.168.1.100:554/Streaming/Channels/101
+func injectCredentialsToRTSP(rtspURL, username, password string) string {
+	const prefix = "rtsp://"
+	if !strings.HasPrefix(rtspURL, prefix) {
+		return rtspURL
+	}
+
+	// 移除已有凭证（如果有）并注入新的
+	authority := rtspURL[len(prefix):]
+	if idx := strings.Index(authority, "@"); idx >= 0 {
+		authority = authority[idx+1:]
+	}
+	return prefix + username + ":" + password + "@" + authority
 }
 

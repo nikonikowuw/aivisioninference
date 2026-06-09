@@ -107,3 +107,15 @@ func (r *DiscoveredDeviceRepository) MarkImported(ctx context.Context, id, devic
 			"matched_device_id": &deviceID,
 		}).Error
 }
+
+// ResetByDeviceID 重置关联指定设备ID的待接入设备状态为 pending
+// 用于设备被删除时，将关联的待接入设备重新变为可导入状态
+func (r *DiscoveredDeviceRepository) ResetByDeviceID(ctx context.Context, deviceID string) error {
+	return r.db.WithContext(ctx).Model(&model.DiscoveredDevice{}).
+		Where("matched_device_id = ? AND status = ?", deviceID, model.StatusImported).
+		Updates(map[string]interface{}{
+			"status":            model.StatusPending,
+			"imported_at":       nil,
+			"matched_device_id": nil,
+		}).Error
+}

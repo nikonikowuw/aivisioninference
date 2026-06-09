@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/niko-admin/niko-admin/internal/dto"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -62,14 +63,12 @@ func (h *DeviceStagingHandler) ScanONVIF(c *gin.Context) {
 }
 
 func (h *DeviceStagingHandler) BatchImport(c *gin.Context) {
-	var req struct {
-		IDs []string `json:"ids"`
-	}
+	var req dto.BatchImportDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Err(c, badRequestError(c, err))
 		return
 	}
-	if err := h.svc.BatchImport(c.Request.Context(), req.IDs); err != nil {
+	if err := h.svc.BatchImport(c.Request.Context(), req.IDs, req.Username, req.Password, req.EnableInfer); err != nil {
 		response.Err(c, apperrors.New(apperrors.ErrInternal, "批量导入部分失败"))
 		return
 	}
@@ -93,7 +92,14 @@ func (h *DeviceStagingHandler) BatchIgnore(c *gin.Context) {
 
 func (h *DeviceStagingHandler) Import(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.svc.ImportSingle(c.Request.Context(), id); err != nil {
+
+	var req dto.ImportDeviceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Err(c, badRequestError(c, err))
+		return
+	}
+
+	if err := h.svc.ImportSingle(c.Request.Context(), id, req.Username, req.Password, req.DeviceName, req.EnableInfer); err != nil {
 		response.Err(c, apperrors.New(apperrors.ErrInternal, "导入设备失败"))
 		return
 	}

@@ -17,6 +17,9 @@ export const deviceStaging = {
     ignoredAt: '忽略时间',
     createdAt: '发现时间',
     actions: '操作',
+    username: '用户名',
+    password: '密码',
+    enableInfer: '启用自动推理',
   },
   source: {
     onvif: 'ONVIF',
@@ -56,12 +59,21 @@ export const deviceStaging = {
     scanONVIFFailed: 'ONVIF 扫描失败',
     noSelection: '请先选择设备',
     operationFailed: '操作失败',
+    credentialsRequired: '请输入摄像头用户名和密码',
   },
   detail: {
     title: '设备详情',
     basicInfo: '基本信息',
     networkInfo: '网络信息',
     extraInfo: '附加信息',
+  },
+  import: {
+    title: '导入设备',
+    batchTitle: '批量导入 {{count}} 个设备',
+    batchDescription: '批量导入将使用相同的用户名和密码',
+    deviceNamePlaceholder: '可选，留空使用默认名称',
+    usernamePlaceholder: '请输入摄像头用户名',
+    passwordPlaceholder: '请输入摄像头密码',
   },
   empty: {
     title: '暂无待接入设备',

@@ -67,6 +67,19 @@ func (s *MediaService) VerifyPlayAuth(ctx context.Context, app, stream, params s
 // streamType: "main" for main stream, "sub" for sub-stream.
 // For RTSP devices, this will automatically start pulling the stream via StreamManager.
 func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, streamType string) (string, error) {
+	app := "live"
+	stream := deviceID
+	if streamType == "sub" || streamType == "auxiliary" {
+		stream = deviceID + "_sub"
+	}
+
+	if s.zlmClient != nil {
+		items, err := s.zlmClient.GetMediaList(ctx, zlm.GetMediaListRequest{App: app, Stream: stream})
+		if err == nil && len(items) > 0 {
+			return s.buildPlayURL(protocol, app, stream), nil
+		}
+	}
+
 	// 1. 通过 StreamManager 获取流引用
 	err := s.streamManager.Acquire(ctx, deviceID, "play", map[string]string{
 		"protocol":    protocol,
@@ -83,35 +96,29 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		return "", errors.New(errors.ErrStreamStateNotFound, "")
 	}
 
-	app := "live"
-	stream := deviceID
-	if streamType == "sub" || streamType == "auxiliary" {
-		stream = deviceID + "_sub"
-	}
+	return s.buildPlayURL(protocol, app, stream), nil
+}
 
-	// Generate signed token
+func (s *MediaService) buildPlayURL(protocol, app, stream string) string {
 	token := s.GeneratePlayToken(stream, "anonymous", 30*time.Minute)
 
-	// 解析 zlmBaseURL 获取主机名
 	host := s.zlmBaseURL
 	if u, err := url.Parse(s.zlmBaseURL); err == nil && u.Hostname() != "" {
 		host = u.Hostname()
 	}
-	// 清理可能的协议前缀
 	host = strings.TrimPrefix(host, "http://")
 	host = strings.TrimPrefix(host, "https://")
-	// 移除端口（如果有）
 	if idx := strings.Index(host, ":"); idx > 0 {
 		host = host[:idx]
 	}
 
 	switch protocol {
 	case "flv":
-		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", host, app, stream, token), nil
+		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", host, app, stream, token)
 	case "hls":
-		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", host, app, stream, token), nil
-	default: // auto, webrtc
-		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", host, app, stream, token), nil
+		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", host, app, stream, token)
+	default:
+		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", host, app, stream, token)
 	}
 }
 

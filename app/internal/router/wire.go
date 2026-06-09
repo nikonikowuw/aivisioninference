@@ -43,6 +43,8 @@ var repositorySet = wire.NewSet(
 	repository.NewAlgorithmPackageRepository,
 	repository.NewPersonRepository,
 	repository.NewPersonGroupRepository,
+	repository.NewPersonTagRepository,
+	repository.NewPersonTagRelationRepository,
 	repository.NewPersonEmbeddingRepository,
 	repository.NewImportTaskRepository,
 	repository.NewDeviceSipConfigRepository,

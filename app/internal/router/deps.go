@@ -356,11 +356,13 @@ func provideAlgorithmOptions(cfg *Config) service.AlgorithmOptions {
 func providePersonHandler(
 	personRepo *repository.PersonRepository,
 	groupRepo *repository.PersonGroupRepository,
+	tagRepo *repository.PersonTagRepository,
+	tagRelationRepo *repository.PersonTagRelationRepository,
 	importTaskRepo *repository.ImportTaskRepository,
 	fileStorage storage.Storage,
 	taskClient *task.Client,
 ) *handler.PersonHandler {
-	personSvc := service.NewPersonService(personRepo, groupRepo, importTaskRepo, fileStorage, taskClient)
+	personSvc := service.NewPersonService(personRepo, groupRepo, tagRepo, tagRelationRepo, importTaskRepo, fileStorage, taskClient)
 	return handler.NewPersonHandler(personSvc)
 }
 

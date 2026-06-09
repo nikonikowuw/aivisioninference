@@ -124,6 +124,30 @@ func (h *SmartRecordHandler) BatchDelete(c *gin.Context) {
 	response.OK(c, h.svc.BatchDelete(c.Request.Context(), req.IDs))
 }
 
+// UpdateAlarmStatus 更新告警记录处理状态。
+//
+// @Summary      更新告警处理状态
+// @Tags         智能记录
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "记录 ID"
+// @Param        body  body  dto.UpdateSmartRecordAlarmStatusRequest  true  "处理状态"
+// @Success      200   {object}  dto.Response
+// @Router       /smart-records/{id}/alarm-status [put]
+// @Security     BearerAuth
+func (h *SmartRecordHandler) UpdateAlarmStatus(c *gin.Context) {
+	var req dto.UpdateSmartRecordAlarmStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	if err := h.svc.UpdateAlarmStatus(c.Request.Context(), c.Param("id"), req.Status); err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
 // ExportSelectedCSV 按选定 ID 列表导出智能记录 CSV。
 //
 // @Summary      导出选定智能记录 CSV

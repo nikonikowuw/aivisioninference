@@ -416,6 +416,7 @@ export interface SmartRecord {
   identity_id?: string;
   alarm_type?: string;
   alarm_level?: string;
+  alarm_status?: 'unhandled' | 'handled';
   alarm_major?: string;
   snapshot_image_url?: string;
   target_crop_url?: string;
@@ -428,11 +429,13 @@ export interface SmartRecord {
 export interface SmartRecordListParams extends CrudListParams {
   type?: SmartRecordType;
   device_id?: string;
+  group_id?: string;
   task_id?: string;
   device_name?: string;
   task_name?: string;
   alarm_type?: string;
   alarm_level?: string;
+  alarm_status?: string;
   person_name?: string;
   business_tag?: string;
   category_code?: string | number;
@@ -722,6 +725,11 @@ export const smartRecordsApi = {
     }),
   exportSelected: (ids: string[]) =>
     downloadFilePost('/smart-records/export-selected', 'smart-records-selected.csv', { ids }),
+  updateAlarmStatus: (id: string, status: 'unhandled' | 'handled') =>
+    request<void>(`/smart-records/${id}/alarm-status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
   listCategoryCodes: () =>
     request<CategoryCodeOption[]>('/smart-records/category-codes'),
 };
@@ -1262,11 +1270,7 @@ export const personsApi = {
     return request<PaginatedData<Person>>(`/persons${query}`);
   },
   get: (id: string) => request<Person>(`/persons/${id}`),
-  /**
-   * 创建人员。支持两种模式：
-   * - FormData（传统 multipart 直传）
-   * - JSON body with image_url（分片上传后关联）
-   */
+  /** 创建人员。支持 FormData（直传）或 JSON with image_url（分片上传后关联） */
   create: (data: FormData | Record<string, unknown>) => {
     if (data instanceof FormData) {
       return request<Person>('/persons', { method: 'POST', body: data });
@@ -1277,11 +1281,7 @@ export const personsApi = {
       body: JSON.stringify(data),
     });
   },
-  /**
-   * 更新人员。支持两种模式：
-   * - FormData（传统 multipart 直传）
-   * - JSON body with image_url（分片上传后关联）
-   */
+  /** 更新人员。支持 FormData（直传）或 JSON with image_url（分片上传后关联） */
   update: (id: string, data: FormData | Record<string, unknown>) => {
     if (data instanceof FormData) {
       return request<Person>(`/persons/${id}`, { method: 'PUT', body: data });
@@ -1331,6 +1331,33 @@ export const personGroupsApi = {
     request(`/person-groups/${id}`, { method: 'DELETE' }),
 };
 
+// PersonTag types and API
+export interface PersonTag {
+  id: string;
+  tag_name: string;
+  color: string;
+  sort_order: number;
+  person_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const personTagsApi = {
+  list: () => request<PersonTag[]>('/person-tags'),
+  create: (data: Partial<PersonTag>) =>
+    request<PersonTag>('/person-tags', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: Partial<PersonTag>) =>
+    request<PersonTag>(`/person-tags/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request(`/person-tags/${id}`, { method: 'DELETE' }),
+};
+
 export const personImportsApi = {
   list: (params?: CrudListParams) => {
     const query = buildQuery(params || {});
@@ -1346,9 +1373,7 @@ export const personImportsApi = {
       body: formData,
     });
   },
-  /**
-   * 通过已上传文件 URL 创建导入任务（分片上传后调用）。
-   */
+  /** 通过已上传文件 URL 创建导入任务（分片上传后调用） */
   createByUrl: (fileUrl: string, overwrite?: boolean) =>
     request<PersonImportTask>('/person-import-tasks/by-url', {
       method: 'POST',
@@ -1358,13 +1383,11 @@ export const personImportsApi = {
 
 /**
  * 并行分片上传文件，返回后端文件路径。
- * 复用 /files/upload/init → /chunk → /complete 基础设施，
- * 通过 Promise.all 实现多线程并行上传。
+ * 复用 /files/upload/init → /chunk → /complete 基础设施。
  *
  * @param file        待上传文件
  * @param concurrency 并行上传分片数，默认 3
  * @param onProgress  进度回调 (0-100)
- * @returns 后端文件路径（如 uploads/2026/06/07/xxx.jpg）
  */
 export async function chunkedUpload(
   file: File,

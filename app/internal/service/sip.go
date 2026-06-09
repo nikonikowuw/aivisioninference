@@ -328,7 +328,7 @@ func (s *SIPService) StartLiveStream(ctx context.Context, deviceCode, streamID s
 			"device_code":   deviceCode,
 		})
 	}
-	return fmt.Sprintf("rtmp://%s:%d/live/%s", s.zlmBaseIP, s.rtmpPort, streamID), nil
+	return fmt.Sprintf("http://%s:%d/live/%s/hls.m3u8", s.zlmBaseIP, s.httpPort, streamID), nil
 }
 
 // StopLiveStream 停止 GB28181 实时预览

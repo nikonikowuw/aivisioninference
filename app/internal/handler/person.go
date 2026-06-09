@@ -474,3 +474,84 @@ func (h *PersonHandler) ImportByURL(c *gin.Context) {
 	}
 	response.OK(c, item)
 }
+
+// --- 标签管理 ---
+
+// ListTags 查询标签列表。
+// @Summary      标签列表
+// @Tags         人员标签
+// @Produce      json
+// @Success      200  {object}  dto.Response{data=[]dto.PersonTagResponse}
+// @Router       /person-tags [get]
+// @Security     BearerAuth
+func (h *PersonHandler) ListTags(c *gin.Context) {
+	items, err := h.svc.ListTags(c.Request.Context())
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, items)
+}
+
+// CreateTag 创建标签。
+// @Summary      创建标签
+// @Tags         人员标签
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.PersonTagCreateRequest  true  "标签信息"
+// @Success      200   {object}  dto.Response{data=dto.PersonTagResponse}
+// @Router       /person-tags [post]
+// @Security     BearerAuth
+func (h *PersonHandler) CreateTag(c *gin.Context) {
+	var req dto.PersonTagCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	item, err := h.svc.CreateTag(c.Request.Context(), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, item)
+}
+
+// UpdateTag 更新标签。
+// @Summary      更新标签
+// @Tags         人员标签
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string  true  "标签 ID"
+// @Param        body  body  dto.PersonTagUpdateRequest  true  "标签信息"
+// @Success      200   {object}  dto.Response{data=dto.PersonTagResponse}
+// @Router       /person-tags/{id} [put]
+// @Security     BearerAuth
+func (h *PersonHandler) UpdateTag(c *gin.Context) {
+	var req dto.PersonTagUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	item, err := h.svc.UpdateTag(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, item)
+}
+
+// DeleteTag 删除标签。
+// @Summary      删除标签
+// @Tags         人员标签
+// @Produce      json
+// @Param        id  path  string  true  "标签 ID"
+// @Success      200  {object}  dto.Response
+// @Router       /person-tags/{id} [delete]
+// @Security     BearerAuth
+func (h *PersonHandler) DeleteTag(c *gin.Context) {
+	if err := h.svc.DeleteTag(c.Request.Context(), c.Param("id")); err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, nil)
+}

@@ -84,8 +84,11 @@ func (m *mockDeviceRepo) ListEnabled(ctx context.Context) ([]model.Device, error
 
 // mockStreamRepo 用于测试的 streamRepo 模拟实现
 type mockStreamRepo struct {
-	streams map[string]*model.MediaStream
-	mu      sync.Mutex
+	streams          map[string]*model.MediaStream
+	mu               sync.Mutex
+	lastFindCtxErr   error
+	lastUpdateCtxErr error
+	updateCh         chan struct{}
 }
 
 func newMockStreamRepo() *mockStreamRepo {
@@ -95,6 +98,7 @@ func newMockStreamRepo() *mockStreamRepo {
 func (m *mockStreamRepo) FindByStream(ctx context.Context, app, stream, vhost string) (*model.MediaStream, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.lastFindCtxErr = ctx.Err()
 	item := m.streams[stream]
 	return item, nil
 }
@@ -107,6 +111,15 @@ func (m *mockStreamRepo) Create(ctx context.Context, item *model.MediaStream) er
 }
 
 func (m *mockStreamRepo) UpdateStatus(ctx context.Context, id, status string) error {
+	m.mu.Lock()
+	m.lastUpdateCtxErr = ctx.Err()
+	m.mu.Unlock()
+	if m.updateCh != nil {
+		select {
+		case m.updateCh <- struct{}{}:
+		default:
+		}
+	}
 	return nil
 }
 
@@ -250,6 +263,48 @@ func TestListStreams(t *testing.T) {
 
 	_ = sm.Release(ctx, dev1, "play")
 	_ = sm.Release(ctx, dev2, "infer")
+}
+
+func TestReleaseUsesBackgroundContextForAsyncStatusUpdate(t *testing.T) {
+	deviceRepo := newMockDeviceRepo()
+	streamRepo := newMockStreamRepo()
+	streamRepo.updateCh = make(chan struct{}, 1)
+	mockClient := &MockEngineClient{}
+	sm := NewStreamManager(mockClient, deviceRepo, streamRepo, zap.NewNop())
+
+	ctx := context.Background()
+	devID := "dev-release-canceled-ctx"
+	_ = sm.deviceRepo.Create(ctx, &model.Device{
+		BaseModel: model.BaseModel{ID: devID},
+		RtspURL:   "rtsp://192.168.1.100:554/stream",
+	})
+
+	err := sm.Acquire(ctx, devID, "detect", nil)
+	assert.NoError(t, err)
+
+	streamRepo.mu.Lock()
+	streamRepo.streams[devID] = &model.MediaStream{BaseModel: model.BaseModel{ID: "stream-release-canceled-ctx"}, ZLMStream: devID}
+	streamRepo.mu.Unlock()
+
+	requestCtx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	err = sm.Release(requestCtx, devID, "detect")
+	assert.NoError(t, err)
+
+	select {
+	case <-streamRepo.updateCh:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for async stream status update")
+	}
+
+	streamRepo.mu.Lock()
+	findCtxErr := streamRepo.lastFindCtxErr
+	updateCtxErr := streamRepo.lastUpdateCtxErr
+	streamRepo.mu.Unlock()
+
+	assert.NoError(t, findCtxErr)
+	assert.NoError(t, updateCtxErr)
 }
 
 func TestListStreams_FilterInactive(t *testing.T) {

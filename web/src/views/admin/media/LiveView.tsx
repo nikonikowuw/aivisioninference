@@ -63,7 +63,7 @@ const LiveView: React.FC = () => {
 
     try {
       const data = await request<PlayResponse>(
-        `/media/play?device_id=${encodeURIComponent(deviceId)}&protocol=auto`
+        `/media/play?device_id=${encodeURIComponent(deviceId)}&protocol=hls`
       );
       setTiles(prev => {
         const updated = [...prev];

@@ -135,10 +135,21 @@ func (r *PersonRepository) ExistsByImageMD5(ctx context.Context, md5, excludeID 
 // ReplaceGroups 替换人员分组关联。
 func (r *PersonRepository) ReplaceGroups(ctx context.Context, personID string, groupIDs []string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("person_record_id = ?", personID).Delete(&model.PersonGroupMember{}).Error; err != nil { return err }
+		if err := tx.Where("person_record_id = ?", personID).Delete(&model.PersonGroupMember{}).Error; err != nil {
+			return err
+		}
+		if len(groupIDs) == 0 {
+			return nil
+		}
+		members := make([]model.PersonGroupMember, 0, len(groupIDs))
 		for _, id := range groupIDs {
-			if id == "" { continue }
-			if err := tx.Create(&model.PersonGroupMember{PersonRecordID: personID, GroupID: id}).Error; err != nil { return err }
+			if id == "" {
+				continue
+			}
+			members = append(members, model.PersonGroupMember{PersonRecordID: personID, GroupID: id})
+		}
+		if len(members) > 0 {
+			return tx.Create(&members).Error
 		}
 		return nil
 	})
@@ -204,3 +215,98 @@ func (r *ImportTaskRepository) Update(ctx context.Context, item *model.ImportTas
 	}).Error
 }
 func (r *ImportTaskRepository) List(ctx context.Context, req dto.PageRequest) ([]model.ImportTask, int64, error) { var total int64; q := r.db.WithContext(ctx).Model(&model.ImportTask{}).Where("task_type = ?", model.ImportTaskTypePerson); if err := q.Count(&total).Error; err != nil { return nil, 0, err }; var items []model.ImportTask; err := q.Scopes(scopes.OrderBy(req.Sort, req.Order, model.ImportTask{}.SortableFields()...), scopes.OrderByDefault(), scopes.Paginate(req.GetPage(), req.GetPageSize())).Find(&items).Error; return items, total, err }
+
+// PersonTagRepository 处理人员标签持久化。
+type PersonTagRepository struct{ db *gorm.DB }
+
+// NewPersonTagRepository 创建人员标签 Repository。
+func NewPersonTagRepository(db *gorm.DB) *PersonTagRepository { return &PersonTagRepository{db: db} }
+
+// Create 创建标签。
+func (r *PersonTagRepository) Create(ctx context.Context, item *model.PersonTag) error {
+	return r.db.WithContext(ctx).Create(item).Error
+}
+
+// FindByID 根据 ID 查询标签。
+func (r *PersonTagRepository) FindByID(ctx context.Context, id string) (*model.PersonTag, error) {
+	var item model.PersonTag
+	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	return &item, err
+}
+
+// Update 更新标签。
+func (r *PersonTagRepository) Update(ctx context.Context, item *model.PersonTag) error {
+	return r.db.WithContext(ctx).Save(item).Error
+}
+
+// Delete 删除标签。
+func (r *PersonTagRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.PersonTag{}, "id = ?", id).Error
+}
+
+// List 查询标签列表。
+func (r *PersonTagRepository) List(ctx context.Context) ([]model.PersonTag, error) {
+	var items []model.PersonTag
+	err := r.db.WithContext(ctx).Order("sort_order ASC").Order("created_at DESC").Find(&items).Error
+	return items, err
+}
+
+// BatchCountPersons 批量查询每个标签关联的人员数量。
+func (r *PersonTagRepository) BatchCountPersons(ctx context.Context) (map[string]int64, error) {
+	counts := make(map[string]int64)
+	var rows []struct {
+		TagID string `gorm:"column:tag_id"`
+		Count int64  `gorm:"column:count"`
+	}
+	err := r.db.WithContext(ctx).Model(&model.PersonTagRelation{}).Select("tag_id, COUNT(*) as count").Group("tag_id").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		counts[row.TagID] = row.Count
+	}
+	return counts, nil
+}
+
+// CountPersons 查询单个标签关联的人员数量。
+func (r *PersonTagRepository) CountPersons(ctx context.Context, id string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.PersonTagRelation{}).Where("tag_id = ?", id).Count(&count).Error
+	return count, err
+}
+
+// PersonTagRelationRepository 处理人员与标签关联持久化。
+type PersonTagRelationRepository struct{ db *gorm.DB }
+
+// NewPersonTagRelationRepository 创建人员标签关联 Repository。
+func NewPersonTagRelationRepository(db *gorm.DB) *PersonTagRelationRepository { return &PersonTagRelationRepository{db: db} }
+
+// BatchCreate 批量创建人员标签关联。
+func (r *PersonTagRelationRepository) BatchCreate(ctx context.Context, personID string, tagIDs []string) error {
+	if len(tagIDs) == 0 {
+		return nil
+	}
+	relations := make([]model.PersonTagRelation, 0, len(tagIDs))
+	for _, tagID := range tagIDs {
+		if tagID == "" {
+			continue
+		}
+		relations = append(relations, model.PersonTagRelation{PersonRecordID: personID, TagID: tagID})
+	}
+	if len(relations) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Create(&relations).Error
+}
+
+// DeleteByPersonRecordID 删除人员的所有标签关联。
+func (r *PersonTagRelationRepository) DeleteByPersonRecordID(ctx context.Context, personID string) error {
+	return r.db.WithContext(ctx).Where("person_record_id = ?", personID).Delete(&model.PersonTagRelation{}).Error
+}
+
+// ListTagIDsByPerson 查询人员关联的标签 ID 列表。
+func (r *PersonTagRelationRepository) ListTagIDsByPerson(ctx context.Context, personID string) ([]string, error) {
+	var ids []string
+	err := r.db.WithContext(ctx).Model(&model.PersonTagRelation{}).Where("person_record_id = ?", personID).Pluck("tag_id", &ids).Error
+	return ids, err
+}

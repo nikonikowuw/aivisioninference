@@ -21,13 +21,13 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { DeleteIcon, DownloadIcon } from '@chakra-ui/icons';
+import { CheckIcon, DeleteIcon, DownloadIcon } from '@chakra-ui/icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from 'contexts/AuthContext';
-import { smartRecordsApi, devicesApi, tasksApi, type SmartRecord, type SmartRecordType, type CategoryCodeOption } from 'services/api';
-import type { Device, Task } from 'services/api';
+import { smartRecordsApi, devicesApi, deviceGroupsApi, tasksApi, type SmartRecord, type SmartRecordType, type CategoryCodeOption } from 'services/api';
+import type { Device, DeviceGroup, Task } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
@@ -49,6 +49,11 @@ const statusColor: Record<string, string> = {
   high: 'orange',
   medium: 'yellow',
   low: 'blue',
+};
+
+const alarmStatusColor: Record<string, string> = {
+  unhandled: 'blue',
+  handled: 'green',
 };
 
 function formatPercent(value?: number | null): string {
@@ -79,7 +84,9 @@ export default function SmartRecords() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<'delete' | null>(null);
   const [isBatching, setIsBatching] = useState(false);
+  const [updatingAlarmStatusId, setUpdatingAlarmStatusId] = useState<string | null>(null);
   const [deviceOptions, setDeviceOptions] = useState<{ value: string; label: string }[]>([]);
+  const [deviceGroupOptions, setDeviceGroupOptions] = useState<{ value: string; label: string }[]>([]);
   const [taskOptions, setTaskOptions] = useState<{ value: string; label: string }[]>([]);
   const [categoryCodeOptions, setCategoryCodeOptions] = useState<{ value: string; label: string }[]>([]);
 
@@ -113,7 +120,7 @@ export default function SmartRecords() {
     }
   }, [activeType, requestedType, searchParams, setSearchParams]);
 
-  // 加载设备列表和任务列表供下拉选择
+  // 加载设备、设备分组和任务列表供下拉选择
   useEffect(() => {
     devicesApi.list({ page: 1, page_size: 500 }).then((res) => {
       setDeviceOptions(
@@ -123,6 +130,15 @@ export default function SmartRecords() {
         })),
       );
     }).catch(() => setDeviceOptions([]));
+
+    deviceGroupsApi.list({ page: 1, page_size: 500 }).then((res) => {
+      setDeviceGroupOptions(
+        res.list.map((group: DeviceGroup) => ({
+          value: group.id,
+          label: group.group_name,
+        })),
+      );
+    }).catch(() => setDeviceGroupOptions([]));
 
     tasksApi.list({ page: 1, page_size: 500 }).then((res) => {
       setTaskOptions(
@@ -172,24 +188,26 @@ export default function SmartRecords() {
     load({ page: 1 });
   }, [activeType, searchTrigger, load]);
 
-  // 设备/任务下拉选项（所有 Tab 共享）
-  const baseSelectConfigs = useMemo<SelectConfig[]>(() => {
-    const configs: SelectConfig[] = [
-      {
-        name: 'device_id',
-        label: t('filters.deviceName'),
-        placeholder: t('filters.devicePlaceholder'),
-        options: [{ value: '', label: t('filters.allDevices') }, ...deviceOptions],
-      },
-      {
-        name: 'task_id',
-        label: t('filters.taskName'),
-        placeholder: t('filters.taskPlaceholder'),
-        options: [{ value: '', label: t('filters.allTasks') }, ...taskOptions],
-      },
-    ];
-    return configs;
-  }, [deviceOptions, taskOptions, t]);
+  const baseSelectConfigs = useMemo<SelectConfig[]>(() => [
+    {
+      name: 'device_id',
+      label: t('filters.deviceName'),
+      placeholder: t('filters.devicePlaceholder'),
+      options: [{ value: '', label: t('filters.allDevices') }, ...deviceOptions],
+    },
+    {
+      name: 'group_id',
+      label: t('filters.deviceGroup'),
+      placeholder: t('filters.deviceGroupPlaceholder'),
+      options: [{ value: '', label: t('filters.allDeviceGroups') }, ...deviceGroupOptions],
+    },
+    {
+      name: 'task_id',
+      label: t('filters.taskName'),
+      placeholder: t('filters.taskPlaceholder'),
+      options: [{ value: '', label: t('filters.allTasks') }, ...taskOptions],
+    },
+  ], [deviceGroupOptions, deviceOptions, taskOptions, t]);
 
   const inputConfigs = useMemo<InputConfig[]>(() => {
     if (activeType === 'recognition') {
@@ -214,6 +232,11 @@ export default function SmartRecords() {
             label: t('filters.alarmType'),
             options: ['intrusion', 'cross_line', 'region', 'unknown'].map((type) => ({ value: type, label: t(`alarmType.${type}`) })),
           },
+          {
+            name: 'alarm_status',
+            label: t('filters.alarmStatus'),
+            options: ['unhandled', 'handled'].map((status) => ({ value: status, label: t(`status.${status}`) })),
+          },
         ]
       : [];
 
@@ -229,15 +252,16 @@ export default function SmartRecords() {
     return [...baseSelectConfigs, ...alarmConfigs, ...captureConfigs];
   }, [activeType, baseSelectConfigs, categoryCodeOptions, t]);
 
-  // 基础列：checkbox、snapshot、target、deviceName、captureTime、taskName
-  // 按 activeType 追加：recognition (+person, +personImage, +similarity)、alarm (+alarmType, +alarmLevel, +status)、capture (+category, +confidence)
   const columnCount = useMemo(() => {
-    const base = 6; // checkbox + 5 base columns
-    if (activeType === 'recognition') return base + 3;
-    if (activeType === 'alarm') return base + 3;
-    if (activeType === 'capture') return base + 2;
-    return base;
-  }, [activeType]);
+    const baseColumns = 6;
+    if (activeType === 'recognition') return baseColumns + 3;
+    if (activeType === 'capture') return baseColumns + 2;
+    if (activeType === 'alarm') {
+      const actionColumn = hasPermission(permissionCodes, 'records:alarm:update_status') ? 1 : 0;
+      return baseColumns + 3 + actionColumn;
+    }
+    return baseColumns;
+  }, [activeType, permissionCodes]);
 
   const handleTabChange = (index: number) => {
     const nextType = visibleTypes[index];
@@ -264,17 +288,33 @@ export default function SmartRecords() {
     }
   };
 
-  // 批量选择逻辑
-  const pageIds = records.map((r) => r.record_id);
-  const selectedOnPage = pageIds.filter((id) => selectedIds.includes(id));
+  const handleAlarmStatusUpdate = async (record: SmartRecord) => {
+    if (!hasPermission(permissionCodes, 'records:alarm:update_status')) return;
+    setUpdatingAlarmStatusId(record.record_id);
+    try {
+      await smartRecordsApi.updateAlarmStatus(record.record_id, 'handled');
+      toast({ title: tCommon('message.updateSuccess'), status: 'success' });
+      refresh();
+    } catch (err) {
+      toast({ title: tCommon('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
+    } finally {
+      setUpdatingAlarmStatusId(null);
+    }
+  };
+
+  const pageIds = records.map((record) => record.record_id);
+  const selectedIdsSet = new Set(selectedIds);
+  const selectedOnPage = pageIds.filter((id) => selectedIdsSet.has(id));
   const isAllSelected = pageIds.length > 0 && selectedOnPage.length === pageIds.length;
   const isIndeterminate = selectedOnPage.length > 0 && !isAllSelected;
 
   const toggleAll = () => {
     setSelectedIds((prev) => {
-      const allSelected = pageIds.every((id) => prev.includes(id));
+      const prevSet = new Set(prev);
+      const pageIdsSet = new Set(pageIds);
+      const allSelected = pageIds.every((id) => prevSet.has(id));
       if (allSelected) {
-        return prev.filter((id) => !pageIds.includes(id));
+        return prev.filter((id) => !pageIdsSet.has(id));
       }
       return Array.from(new Set([...prev, ...pageIds]));
     });
@@ -385,6 +425,7 @@ export default function SmartRecords() {
               {activeType === 'alarm' && <Th>{t('table.alarmType')}</Th>}
               {activeType === 'alarm' && <Th>{t('table.alarmLevel')}</Th>}
               {activeType === 'alarm' && <Th>{t('table.status')}</Th>}
+              {activeType === 'alarm' && hasPermission(permissionCodes, 'records:alarm:update_status') && <Th>{t('table.actions')}</Th>}
               {activeType === 'capture' && <Th>{t('table.category')}</Th>}
               {activeType === 'capture' && <Th>{t('table.confidence')}</Th>}
               <Th>{t('table.taskName')}</Th>
@@ -403,15 +444,35 @@ export default function SmartRecords() {
                 {activeType === 'recognition' && <Td>{record.person_name || '-'}</Td>}
                 {activeType === 'recognition' && <Td><RecordImage src={record.person_image_url} alt={t('table.personImage')} /></Td>}
                 {activeType === 'recognition' && <Td>{formatPercent(record.similarity)}</Td>}
-                {activeType === 'alarm' && <Td>{record.alarm_type || '-'}</Td>}
+                {activeType === 'alarm' && <Td>{record.alarm_type ? t(`alarmType.${record.alarm_type}`, { defaultValue: record.alarm_type }) : '-'}</Td>}
                 {activeType === 'alarm' && (
                   <Td>
-                    {record.alarm_level ? <Badge colorScheme={statusColor[record.alarm_level] || 'gray'}>{record.alarm_level}</Badge> : '-'}
+                    {record.alarm_level ? (
+                      <Badge colorScheme={statusColor[record.alarm_level] || 'gray'}>
+                        {t(`alarmLevel.${record.alarm_level}`, { defaultValue: record.alarm_level })}
+                      </Badge>
+                    ) : '-'}
                   </Td>
                 )}
                 {activeType === 'alarm' && (
                   <Td>
-                    <Badge colorScheme="blue">{t('status.unhandled')}</Badge>
+                    <Badge colorScheme={alarmStatusColor[record.alarm_status || 'unhandled'] || 'gray'}>
+                      {t(`status.${record.alarm_status || 'unhandled'}`, { defaultValue: record.alarm_status || 'unhandled' })}
+                    </Badge>
+                  </Td>
+                )}
+                {activeType === 'alarm' && hasPermission(permissionCodes, 'records:alarm:update_status') && (
+                  <Td>
+                    {(record.alarm_status || 'unhandled') === 'unhandled' ? (
+                      <Button
+                        size="sm"
+                        leftIcon={<CheckIcon />}
+                        onClick={() => handleAlarmStatusUpdate(record)}
+                        isLoading={updatingAlarmStatusId === record.record_id}
+                      >
+                        {t('actions.markHandled')}
+                      </Button>
+                    ) : '-'}
                   </Td>
                 )}
                 {activeType === 'capture' && <Td>{record.category_name || record.category_code?.toString() || '-'}</Td>}

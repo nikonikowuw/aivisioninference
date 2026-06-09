@@ -12,11 +12,13 @@ type SmartRecordListRequest struct {
 	Keyword       string     `form:"keyword"`
 	RecordType    string     `form:"type"`
 	DeviceID      string     `form:"device_id"`
+	GroupID       string     `form:"group_id"`
 	TaskID        string     `form:"task_id"`
 	DeviceName    string     `form:"device_name"`
 	TaskName      string     `form:"task_name"`
 	AlarmType     string     `form:"alarm_type"`
 	AlarmLevel    string     `form:"alarm_level"`
+	AlarmStatus   string     `form:"alarm_status"`
 	PersonName    string     `form:"person_name"`
 	BusinessTag   string     `form:"business_tag"`
 	CategoryCode  *int       `form:"category_code"`
@@ -28,6 +30,11 @@ type SmartRecordListRequest struct {
 	EndTime       string     `form:"end_time"`
 	FromTime      *time.Time `form:"-" json:"-"`
 	ToTime        *time.Time `form:"-" json:"-"`
+}
+
+// UpdateSmartRecordAlarmStatusRequest 是告警记录处理状态更新请求。
+type UpdateSmartRecordAlarmStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=unhandled handled"`
 }
 
 // CategoryCodeOption 表示类别下拉选项，供前端下拉选择使用。
@@ -77,6 +84,9 @@ func (r *SmartRecordListRequest) FilterScopes() []scopes.Scope {
 	}
 	if r.AlarmLevel != "" {
 		sc = append(sc, scopes.Eq("alarm_level", r.AlarmLevel))
+	}
+	if r.AlarmStatus != "" {
+		sc = append(sc, scopes.Eq("alarm_status", r.AlarmStatus))
 	}
 	if r.PersonName != "" {
 		sc = append(sc, scopes.Like("person_name", r.PersonName))

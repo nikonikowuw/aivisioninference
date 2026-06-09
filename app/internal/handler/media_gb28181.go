@@ -35,14 +35,14 @@ func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
 		return
 	}
 
-	gbDevice, err := h.sipSvc.GetGB28181DeviceByID(c.Request.Context(), req.DeviceID)
+	deviceCode, err := h.sipSvc.ResolveGB28181DeviceCode(c.Request.Context(), req.DeviceID)
 	if err != nil {
 		attachError(c, err)
 		return
 	}
 
 	streamID := uuid.New().String()
-	url, err := h.sipSvc.StartLiveStream(c.Request.Context(), gbDevice.DeviceCode, streamID)
+	url, err := h.sipSvc.StartLiveStream(c.Request.Context(), deviceCode, streamID)
 	if err != nil {
 		attachError(c, err)
 		return
@@ -50,7 +50,7 @@ func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
 
 	response.OK(c, dto.PlayResponse{
 		URL:      url,
-		Protocol: "rtmp",
+		Protocol: "hls",
 		StreamID: streamID,
 	})
 }

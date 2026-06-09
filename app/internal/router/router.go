@@ -332,6 +332,7 @@ func (r *Router) setupRoutes() {
 			smartRecords.GET("/category-codes", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ListCategoryCodes)
 			smartRecords.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.BatchDelete)
 			smartRecords.POST("/export-selected", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportSelectedCSV)
+			smartRecords.PUT("/:id/alarm-status", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.UpdateAlarmStatus)
 		}
 	}
 
@@ -453,6 +454,15 @@ func (r *Router) setupRoutes() {
 		personGroups.POST("", middleware.RBAC(rbacCache, r.db), personHandler.CreateGroup)
 		personGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.UpdateGroup)
 		personGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteGroup)
+	}
+
+	// Person Tags
+	personTags := authorized.Group("/person-tags")
+	{
+		personTags.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListTags)
+		personTags.POST("", middleware.RBAC(rbacCache, r.db), personHandler.CreateTag)
+		personTags.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.UpdateTag)
+		personTags.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteTag)
 	}
 
 	// Person Import Tasks

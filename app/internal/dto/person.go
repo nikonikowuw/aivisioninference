@@ -41,6 +41,7 @@ type PersonCreateRequest struct {
 	Phone      string   `json:"phone" form:"phone" binding:"omitempty,max=32"`
 	IDNumber   string   `json:"id_number" form:"id_number" binding:"omitempty,max=64"`
 	GroupIDs   []string `json:"group_ids" form:"group_ids"`
+	TagIDs     []string `json:"tag_ids" form:"tag_ids"`
 	Enabled    *bool    `json:"enabled" form:"enabled"`
 	Remark     string   `json:"remark" form:"remark" binding:"omitempty,max=1000"`
 	// ImageURL 通过分片上传后获得的图片存储路径，优先于 multipart 文件上传。
@@ -55,6 +56,7 @@ type PersonUpdateRequest struct {
 	Phone      string   `json:"phone" form:"phone" binding:"omitempty,max=32"`
 	IDNumber   string   `json:"id_number" form:"id_number" binding:"omitempty,max=64"`
 	GroupIDs   []string `json:"group_ids" form:"group_ids"`
+	TagIDs     []string `json:"tag_ids" form:"tag_ids"`
 	Enabled    *bool    `json:"enabled" form:"enabled"`
 	Remark     string   `json:"remark" form:"remark" binding:"omitempty,max=1000"`
 	// ImageURL 通过分片上传后获得的图片存储路径，优先于 multipart 文件上传。
@@ -137,4 +139,29 @@ type PersonImportTaskResponse struct {
 	Status        string `json:"status"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+}
+
+// PersonTagCreateRequest 创建标签请求。
+type PersonTagCreateRequest struct {
+	TagName   string `json:"tag_name" binding:"required,min=1,max=64"`
+	Color     string `json:"color" binding:"omitempty,max=16"`
+	SortOrder int    `json:"sort_order"`
+}
+
+// PersonTagUpdateRequest 更新标签请求。
+type PersonTagUpdateRequest struct {
+	TagName   string `json:"tag_name" binding:"omitempty,min=1,max=64"`
+	Color     string `json:"color" binding:"omitempty,max=16"`
+	SortOrder int    `json:"sort_order"`
+}
+
+// PersonTagResponse 标签响应。
+type PersonTagResponse struct {
+	ID          string `json:"id"`
+	TagName     string `json:"tag_name"`
+	Color       string `json:"color"`
+	SortOrder   int    `json:"sort_order"`
+	PersonCount int64  `json:"person_count"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }

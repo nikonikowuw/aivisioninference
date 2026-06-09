@@ -117,4 +117,26 @@ func (ImportTask) SortableFields() []string {
 	return []string{"created_at", "task_type", "status"}
 }
 
+// PersonTag 表示人员标签，扁平结构，带颜色标识
+// 用于对人员进行分类标记（如 VIP、访客、黑名单等）。
+type PersonTag struct {
+	BaseModel
+	TagName   string `gorm:"type:varchar(64);not null;uniqueIndex" json:"tag_name"`
+	Color     string `gorm:"type:varchar(16);default:#1890ff" json:"color"`
+	SortOrder int    `gorm:"default:0" json:"sort_order"`
+}
+
+// SortableFields 返回允许排序的字段列表
+func (PersonTag) SortableFields() []string {
+	return []string{"created_at", "sort_order", "tag_name"}
+}
+
+// PersonTagRelation 是人员与标签多对多关系的关联表
+// 一条人员记录可挂载多个标签，一个标签可关联多条人员记录。
+type PersonTagRelation struct {
+	PersonRecordID string    `gorm:"type:uuid;primaryKey" json:"person_record_id"`
+	TagID          string    `gorm:"type:uuid;primaryKey" json:"tag_id"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
 

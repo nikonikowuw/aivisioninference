@@ -29,10 +29,7 @@ func (r *SmartRecordRepository) Create(ctx context.Context, record *model.SmartR
 func (r *SmartRecordRepository) FindByID(ctx context.Context, id string) (*model.SmartRecord, error) {
 	var record model.SmartRecord
 	err := r.db.WithContext(ctx).First(&record, "record_id = ?", id).Error
-	if err != nil {
-		return nil, err
-	}
-	return &record, nil
+	return &record, err
 }
 
 // baseQuery 构建智能记录的基础查询：应用筛选条件、关联表 JOIN 和额外过滤。
@@ -88,6 +85,14 @@ func (r *SmartRecordRepository) BatchDelete(ctx context.Context, ids []string) e
 	return r.db.WithContext(ctx).Where("record_id IN ?", ids).Delete(&model.SmartRecord{}).Error
 }
 
+// UpdateAlarmStatus 更新告警记录处理状态。
+func (r *SmartRecordRepository) UpdateAlarmStatus(ctx context.Context, id string, status string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.SmartRecord{}).
+		Where("record_id = ? AND record_type = ?", id, model.RecordTypeAlarm).
+		Update("alarm_status", status).Error
+}
+
 // FindByIDs 根据 ID 列表查询智能记录（含底库图 JOIN）。
 func (r *SmartRecordRepository) FindByIDs(ctx context.Context, ids []string) ([]model.SmartRecord, error) {
 	if len(ids) == 0 {
@@ -134,6 +139,12 @@ func (r *SmartRecordRepository) applyExtraFilters(query *gorm.DB, req dto.SmartR
 	}
 	if req.BusinessTag != "" {
 		query = query.Where("? = ANY(business_tags)", req.BusinessTag)
+	}
+	if req.GroupID != "" {
+		query = query.Where(
+			"EXISTS (SELECT 1 FROM device_group_members dgm WHERE dgm.device_id = smart_records.device_id AND dgm.group_id = ?)",
+			req.GroupID,
+		)
 	}
 	return query
 }

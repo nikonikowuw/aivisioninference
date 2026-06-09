@@ -69,6 +69,18 @@ func (s *SmartRecordService) BatchDelete(ctx context.Context, ids []string) *dto
 	}
 }
 
+// UpdateAlarmStatus 更新告警记录处理状态。
+func (s *SmartRecordService) UpdateAlarmStatus(ctx context.Context, id string, status string) error {
+	if status != "unhandled" && status != "handled" {
+		return apperrors.New(apperrors.ErrBadRequest, "")
+	}
+	if err := s.repo.UpdateAlarmStatus(ctx, id, status); err != nil {
+		zap.L().Error("update smart record alarm status failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
+	return nil
+}
+
 // ExportSelectedCSV 按选定 ID 列表导出智能记录 CSV。
 func (s *SmartRecordService) ExportSelectedCSV(ctx context.Context, ids []string) ([]byte, error) {
 	if len(ids) == 0 {

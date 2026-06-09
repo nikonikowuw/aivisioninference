@@ -73,7 +73,25 @@ type importTaskRepo interface {
 	List(ctx context.Context, req dto.PageRequest) ([]model.ImportTask, int64, error)
 }
 
-// imageExtSet 安全图片扩展名集合，用于校验和 MIME 类型映射。
+// personTagRepo 标签持久化接口。
+type personTagRepo interface {
+	Create(ctx context.Context, item *model.PersonTag) error
+	FindByID(ctx context.Context, id string) (*model.PersonTag, error)
+	Update(ctx context.Context, item *model.PersonTag) error
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context) ([]model.PersonTag, error)
+	BatchCountPersons(ctx context.Context) (map[string]int64, error)
+	CountPersons(ctx context.Context, id string) (int64, error)
+}
+
+// personTagRelationRepo 标签关联持久化接口。
+type personTagRelationRepo interface {
+	BatchCreate(ctx context.Context, personID string, tagIDs []string) error
+	DeleteByPersonRecordID(ctx context.Context, personID string) error
+	ListTagIDsByPerson(ctx context.Context, personID string) ([]string, error)
+}
+
+// 安全图片扩展名集合
 var imageExtSet = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
@@ -83,16 +101,18 @@ var imageExtSet = map[string]bool{
 
 // PersonService 处理人员管理的业务逻辑。
 type PersonService struct {
-	personRepo     personRepo
-	groupRepo      personGroupRepo
-	importTaskRepo importTaskRepo
-	storage        storage.Storage
-	taskClient     taskClient
+	personRepo         personRepo
+	groupRepo          personGroupRepo
+	tagRepo            personTagRepo
+	tagRelationRepo    personTagRelationRepo
+	importTaskRepo     importTaskRepo
+	storage            storage.Storage
+	taskClient         taskClient
 }
 
 // NewPersonService 创建人员 Service。
-func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient) *PersonService {
-	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient}
+func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, tagRepo personTagRepo, tagRelationRepo personTagRelationRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient) *PersonService {
+	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, tagRepo: tagRepo, tagRelationRepo: tagRelationRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient}
 }
 
 // List 查询人员列表。
@@ -143,7 +163,7 @@ func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest,
 			return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
 		}
 		ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" {
+		if !imageExtSet[ext] {
 			return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
 		}
 		file, err := fileHeader.Open()
@@ -223,6 +243,13 @@ func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest,
 		}
 	}
 
+	// 处理标签关联
+	if len(req.TagIDs) > 0 && s.tagRelationRepo != nil {
+		if err := s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs); err != nil {
+			zap.L().Error("create person tag relations failed", zap.String("person_id", person.ID), zap.Error(err))
+		}
+	}
+
 	// 投递特征提取任务
 	if err := s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID}); err != nil {
 		// 特征提取任务投递失败不影响人员创建主流程，记录告警日志供运维介入
@@ -288,7 +315,7 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 			return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
 		}
 		ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" {
+		if !imageExtSet[ext] {
 			return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
 		}
 		file, err := fileHeader.Open()
@@ -337,6 +364,21 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 		if err := s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs); err != nil {
 			zap.L().Error("replace person groups failed", zap.String("person_id", person.ID), zap.Error(err))
 			return nil, apperrors.New(apperrors.ErrInternal, "")
+		}
+	}
+
+	// 处理标签关联
+	if req.TagIDs != nil && s.tagRelationRepo != nil {
+		// 先删除旧关联，再创建新关联
+		if err := s.tagRelationRepo.DeleteByPersonRecordID(ctx, person.ID); err != nil {
+			zap.L().Error("delete person tag relations failed", zap.String("person_id", person.ID), zap.Error(err))
+			return nil, apperrors.New(apperrors.ErrInternal, "")
+		}
+		if len(req.TagIDs) > 0 {
+			if err := s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs); err != nil {
+				zap.L().Error("create person tag relations failed", zap.String("person_id", person.ID), zap.Error(err))
+				return nil, apperrors.New(apperrors.ErrInternal, "")
+			}
 		}
 	}
 
@@ -499,11 +541,6 @@ func (s *PersonService) ExportExcel(ctx context.Context, req dto.PersonListReque
 		zap.L().Error("write excel failed", zap.Error(err))
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
-	// 如果导出达到上限，在末尾添加提示行
-	if len(items) >= exportBatchSize {
-		hintRow := len(items) + 3
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", hintRow), fmt.Sprintf("⚠ 已导出上限 %d 条，请使用更精确的过滤条件导出完整数据", exportBatchSize))
-	}
 	return nil
 }
 
@@ -568,6 +605,68 @@ func (s *PersonService) DeleteGroup(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrNotFound, "")
 	}
 	return s.groupRepo.Delete(ctx, id)
+}
+
+// ListTags 查询标签列表。
+func (s *PersonService) ListTags(ctx context.Context) ([]dto.PersonTagResponse, error) {
+	tags, err := s.tagRepo.List(ctx)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	counts, err := s.tagRepo.BatchCountPersons(ctx)
+	if err != nil {
+		counts = make(map[string]int64)
+		for _, t := range tags {
+			c, _ := s.tagRepo.CountPersons(ctx, t.ID)
+			counts[t.ID] = c
+		}
+	}
+	result := make([]dto.PersonTagResponse, len(tags))
+	for i, t := range tags {
+		result[i] = toTagResponse(&t, counts[t.ID])
+	}
+	return result, nil
+}
+
+// CreateTag 创建标签。
+func (s *PersonService) CreateTag(ctx context.Context, req dto.PersonTagCreateRequest) (*dto.PersonTagResponse, error) {
+	tag := &model.PersonTag{TagName: req.TagName, Color: req.Color, SortOrder: req.SortOrder}
+	if tag.Color == "" {
+		tag.Color = "#1890ff"
+	}
+	if err := s.tagRepo.Create(ctx, tag); err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	resp := toTagResponse(tag, 0)
+	return &resp, nil
+}
+
+// UpdateTag 更新标签。
+func (s *PersonService) UpdateTag(ctx context.Context, id string, req dto.PersonTagUpdateRequest) (*dto.PersonTagResponse, error) {
+	tag, err := s.tagRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrNotFound, "")
+	}
+	if req.TagName != "" {
+		tag.TagName = req.TagName
+	}
+	if req.Color != "" {
+		tag.Color = req.Color
+	}
+	tag.SortOrder = req.SortOrder
+	if err := s.tagRepo.Update(ctx, tag); err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	resp := toTagResponse(tag, 0)
+	return &resp, nil
+}
+
+// DeleteTag 删除标签。
+func (s *PersonService) DeleteTag(ctx context.Context, id string) error {
+	if _, err := s.tagRepo.FindByID(ctx, id); err != nil {
+		return apperrors.New(apperrors.ErrNotFound, "")
+	}
+	return s.tagRepo.Delete(ctx, id)
 }
 
 // ListImportTasks 查询导入任务列表。
@@ -695,10 +794,8 @@ func toPersonResponse(p *model.Person) dto.PersonResponse {
 		CreatedAt:                p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:                p.UpdatedAt.Format(time.RFC3339),
 	}
-	if len(p.Groups) > 0 {
-		for _, g := range p.Groups {
-			resp.Groups = append(resp.Groups, dto.PersonGroupResponse{ID: g.ID, GroupName: g.GroupName, Description: g.Description, ParentID: safeStr(g.ParentID), SortOrder: g.SortOrder})
-		}
+	for _, g := range p.Groups {
+		resp.Groups = append(resp.Groups, dto.PersonGroupResponse{ID: g.ID, GroupName: g.GroupName, Description: g.Description, ParentID: safeStr(g.ParentID), SortOrder: g.SortOrder})
 	}
 	return resp
 }
@@ -709,6 +806,15 @@ func toGroupResponse(g *model.PersonGroup, personCount int64) dto.PersonGroupRes
 		ID: g.ID, GroupName: g.GroupName, Description: g.Description,
 		ParentID: safeStr(g.ParentID), SortOrder: g.SortOrder, PersonCount: personCount,
 		CreatedAt: g.CreatedAt.Format(time.RFC3339), UpdatedAt: g.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+// toTagResponse 将标签模型转换为响应 DTO。
+func toTagResponse(t *model.PersonTag, personCount int64) dto.PersonTagResponse {
+	return dto.PersonTagResponse{
+		ID: t.ID, TagName: t.TagName, Color: t.Color,
+		SortOrder: t.SortOrder, PersonCount: personCount,
+		CreatedAt: t.CreatedAt.Format(time.RFC3339), UpdatedAt: t.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

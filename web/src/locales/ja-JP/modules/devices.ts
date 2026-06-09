@@ -65,6 +65,7 @@ export const devices = {
     importDone: 'インポートが完了しました：成功 {{success}} 件、失敗 {{failed}} 件',
     importFailed: 'インポートに失敗しました',
     invalidCsvFile: 'CSVファイルのみサポートされています',
+    testingConnection: 'ストリーム到達可能性をテスト中、お待ちください...',
   },
 } as const;
 

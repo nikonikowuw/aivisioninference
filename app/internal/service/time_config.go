@@ -118,7 +118,7 @@ func (s *TimeConfigService) SetManualTime(t time.Time) error {
 	// 使用 unix 设置系统时间
 	tv := unix.Timeval{
 		Sec:  t.Unix(),
-		Usec: int32(t.Nanosecond() / 1000),
+		Usec: int64(t.Nanosecond() / 1000),
 	}
 
 	if err := unix.Settimeofday(&tv); err != nil {

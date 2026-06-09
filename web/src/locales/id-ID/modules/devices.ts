@@ -65,6 +65,7 @@ export const devices = {
     importDone: 'Impor selesai: {{success}} berhasil, {{failed}} gagal',
     importFailed: 'Impor gagal',
     invalidCsvFile: 'Hanya mendukung file CSV',
+    testingConnection: 'Menguji jangkauan streaming, harap tunggu...',
   },
 } as const;
 

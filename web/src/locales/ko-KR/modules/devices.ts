@@ -65,6 +65,7 @@ export const devices = {
     importDone: '가져오기 완료: 성공 {{success}}건, 실패 {{failed}}건',
     importFailed: '가져오기 실패',
     invalidCsvFile: 'CSV 파일만 지원됩니다',
+    testingConnection: '스트림 도달 가능성 테스트 중, 잠시 기다려 주세요...',
   },
 } as const;
 

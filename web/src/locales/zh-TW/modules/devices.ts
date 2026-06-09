@@ -65,6 +65,7 @@ export const devices = {
     importDone: '匯入完成，成功 {{success}} 條，失敗 {{failed}} 條',
     importFailed: '匯入失敗',
     invalidCsvFile: '僅支援 CSV 檔案',
+    testingConnection: '正在測試流可達性，請稍候...',
   },
 } as const;
 

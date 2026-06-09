@@ -65,6 +65,7 @@ export const devices = {
     importDone: 'Import completed: {{success}} succeeded, {{failed}} failed',
     importFailed: 'Import failed',
     invalidCsvFile: 'CSV files only',
+    testingConnection: 'Testing stream reachability, please wait...',
   },
 } as const;
 

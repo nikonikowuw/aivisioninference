@@ -364,11 +364,15 @@ func (m *StreamManager) GetStream(ctx context.Context, deviceID string) *StreamS
 	return actual.(*StreamState)
 }
 
-// ListStreams 列出所有流状态
+// ListStreams 列出所有活跃流状态（过滤掉无引用的 inactive 流）
 func (m *StreamManager) ListStreams(ctx context.Context) []*StreamState {
 	results := make([]*StreamState, 0)
 	m.streams.Range(func(key, value interface{}) bool {
-		results = append(results, value.(*StreamState))
+		state := value.(*StreamState)
+		// 只返回有活跃引用或处于活跃状态的流
+		if state.RefCount.Load() > 0 || state.Status == "active" || state.Status == "pulling" || state.Status == "error" {
+			results = append(results, state)
+		}
 		return true
 	})
 	return results

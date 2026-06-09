@@ -68,21 +68,23 @@ type taskClient interface {
 
 // DeviceService 处理设备管理的业务逻辑
 type DeviceService struct {
-	deviceRepo    deviceRepo
-	cache         cache
-	taskClient    taskClient
-	zlmClient     zlmClient
-	streamManager *StreamManager
+	deviceRepo          deviceRepo
+	discoveredDeviceRepo discoveredDeviceRepo
+	cache               cache
+	taskClient          taskClient
+	zlmClient           zlmClient
+	streamManager       *StreamManager
 }
 
 // NewDeviceService 创建并返回一个新的 DeviceService 实例
-func NewDeviceService(repo deviceRepo, cache cache, taskClient taskClient, zlmClient zlmClient, streamManager *StreamManager) *DeviceService {
+func NewDeviceService(repo deviceRepo, discoveredDeviceRepo discoveredDeviceRepo, cache cache, taskClient taskClient, zlmClient zlmClient, streamManager *StreamManager) *DeviceService {
 	return &DeviceService{
-		deviceRepo:    repo,
-		cache:         cache,
-		taskClient:    taskClient,
-		zlmClient:     zlmClient,
-		streamManager: streamManager,
+		deviceRepo:           repo,
+		discoveredDeviceRepo: discoveredDeviceRepo,
+		cache:                cache,
+		taskClient:           taskClient,
+		zlmClient:            zlmClient,
+		streamManager:        streamManager,
 	}
 }
 
@@ -335,6 +337,11 @@ func (s *DeviceService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 重置关联的待接入设备状态为 pending
+	if err := s.discoveredDeviceRepo.ResetByDeviceID(ctx, id); err != nil {
+		zap.L().Warn("reset discovered device status failed", zap.String("device_id", id), zap.Error(err))
+	}
+
 	// 关闭 ZLM 中对应的代理流
 	_ = s.zlmClient.CloseStream(ctx, zlm.CloseStreamRequest{
 		Vhost:  "__defaultVhost__",
@@ -367,6 +374,13 @@ func (s *DeviceService) BatchDelete(ctx context.Context, ids []string) *dto.Batc
 		return &dto.BatchResult{
 			Total: len(ids), Success: 0, Failed: len(ids),
 			Items: batchErrorItems(ids, apperrors.ErrInternal, ""),
+		}
+	}
+
+	// 批量重置关联的待接入设备状态为 pending
+	for _, id := range validIDs {
+		if err := s.discoveredDeviceRepo.ResetByDeviceID(ctx, id); err != nil {
+			zap.L().Warn("reset discovered device status failed", zap.String("device_id", id), zap.Error(err))
 		}
 	}
 
@@ -445,8 +459,6 @@ func classifyConnectionError(err error) int {
 		return apperrors.ErrConnectionFailed
 	}
 }
-
-// 移除不再需要的 testRTSPConnection 和 testGB28181Connection 方法(逻辑已整合到 SM 或不需要了)
 
 // ExportCSV 导出设备列表为 CSV
 func (s *DeviceService) ExportCSV(ctx context.Context, req dto.DeviceListRequest) ([]byte, error) {

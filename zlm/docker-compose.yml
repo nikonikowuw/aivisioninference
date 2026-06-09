@@ -1,12 +1,12 @@
 services:
   zlmediakit:
-    image: zlmediakit/zlmediakit:latest
+    image: zlmediakit/zlmediakit:master
     container_name: zlmediakit
     restart: always
     network_mode: host
     volumes:
-      - ./zlm/config/config.ini:/opt/media/conf/config.ini
-      - ./zlm/data/www:/opt/media/www
-      - ./zlm/data/record:/opt/media/record
+      - ./config/config.ini:/opt/media/conf/config.ini
+      - ./data/www:/opt/media/www
+      - ./data/record:/opt/media/record
     environment:
       - TZ=Asia/Shanghai

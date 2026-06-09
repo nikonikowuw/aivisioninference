@@ -251,3 +251,26 @@ func TestListStreams(t *testing.T) {
 	_ = sm.Release(ctx, dev1, "play")
 	_ = sm.Release(ctx, dev2, "infer")
 }
+
+func TestListStreams_FilterInactive(t *testing.T) {
+	sm := setupTestSM()
+	ctx := context.Background()
+
+	// 创建设备并 Acquire 后 Release
+	devID := "dev-filter-test"
+	_ = sm.deviceRepo.Create(ctx, &model.Device{
+		BaseModel: model.BaseModel{ID: devID},
+		RtspURL:   "rtsp://192.168.1.100:554/stream",
+	})
+
+	err := sm.Acquire(ctx, devID, "detect", nil)
+	assert.NoError(t, err)
+
+	// Release 后应该变成 inactive
+	err = sm.Release(ctx, devID, "detect")
+	assert.NoError(t, err)
+
+	// ListStreams 应该过滤掉无引用的 inactive 流
+	streams := sm.ListStreams(ctx)
+	assert.Equal(t, 0, len(streams))
+}

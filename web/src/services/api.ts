@@ -1116,14 +1116,17 @@ export const deviceStagingApi = {
     const query = buildQuery(params || {});
     return request<PaginatedData<DiscoveredDevice>>(`/device-staging${query}`);
   },
-  import: (id: string) =>
-    request(`/device-staging/${id}/import`, { method: 'POST' }),
+  import: (id: string, data: { username: string; password: string; device_name?: string; enable_infer?: boolean }) =>
+    request(`/device-staging/${id}/import`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   ignore: (id: string) =>
     request(`/device-staging/${id}/ignore`, { method: 'POST' }),
-  batchImport: (ids: string[]) =>
+  batchImport: (ids: string[], data: { username: string; password: string; enable_infer?: boolean }) =>
     request('/device-staging/batch-import', {
       method: 'POST',
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ ids, ...data }),
     }),
   batchIgnore: (ids: string[]) =>
     request('/device-staging/batch-ignore', {

@@ -137,12 +137,51 @@ func (m *MockZLMClient) IsMediaOnline(ctx context.Context, schema, vhost, app, s
 	return args.Bool(0), args.Error(1)
 }
 
+// MockDiscoveredDeviceRepo is a mock of discoveredDeviceRepo interface
+type MockDiscoveredDeviceRepo struct {
+	mock.Mock
+}
+
+func (m *MockDiscoveredDeviceRepo) Upsert(ctx context.Context, item *model.DiscoveredDevice) error {
+	args := m.Called(ctx, item)
+	return args.Error(0)
+}
+
+func (m *MockDiscoveredDeviceRepo) List(ctx context.Context, source, status, keyword string, page, pageSize int) ([]model.DiscoveredDevice, int64, error) {
+	args := m.Called(ctx, source, status, keyword, page, pageSize)
+	return args.Get(0).([]model.DiscoveredDevice), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockDiscoveredDeviceRepo) BatchUpdateStatus(ctx context.Context, ids []string, status string) error {
+	args := m.Called(ctx, ids, status)
+	return args.Error(0)
+}
+
+func (m *MockDiscoveredDeviceRepo) FindByID(ctx context.Context, id string) (*model.DiscoveredDevice, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.DiscoveredDevice), args.Error(1)
+}
+
+func (m *MockDiscoveredDeviceRepo) MarkImported(ctx context.Context, id, deviceID string) error {
+	args := m.Called(ctx, id, deviceID)
+	return args.Error(0)
+}
+
+func (m *MockDiscoveredDeviceRepo) ResetByDeviceID(ctx context.Context, deviceID string) error {
+	args := m.Called(ctx, deviceID)
+	return args.Error(0)
+}
+
 func TestDeviceService_Integration_Workflow(t *testing.T) {
 	mockRepo := new(MockDeviceRepo)
+	mockDiscoveredRepo := new(MockDiscoveredDeviceRepo)
 	mockCache := new(MockCache)
 	mockTask := new(MockTaskClient)
 	mockZLM := new(MockZLMClient)
-	svc := NewDeviceService(mockRepo, mockCache, mockTask, mockZLM, nil)
+	svc := NewDeviceService(mockRepo, mockDiscoveredRepo, mockCache, mockTask, mockZLM, nil)
 
 	ctx := context.Background()
 

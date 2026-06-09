@@ -40,7 +40,7 @@ const LAYOUTS: Record<number, { cols: number }> = {
 const LiveView: React.FC = () => {
   const { t } = useTranslation('modules/media');
   const [tiles, setTiles] = useState<StreamTile[]>([]);
-  const [layout, setLayout] = useState<number>(4);
+  const [layout, setLayout] = useState<number>(1);
   const toast = useToast();
 
   const addTile = async (deviceId: string) => {

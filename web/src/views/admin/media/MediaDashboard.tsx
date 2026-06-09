@@ -141,8 +141,8 @@ export default function LiveView() {
   const toast = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
-  const [tiles, setTiles] = useState<(Tile | null)[]>([null, null, null, null]);
-  const [layout, setLayout] = useState(4);
+  const [tiles, setTiles] = useState<(Tile | null)[]>([null]);
+  const [layout, setLayout] = useState(1);
   const [search, setSearch] = useState('');
 
   useEffect(() => {

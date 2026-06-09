@@ -159,7 +159,12 @@ export default function Devices() {
         toast({ title: t('message.updateSuccess'), status: 'success' });
       } else {
         await devicesApi.create(form as any);
-        toast({ title: t('message.createSuccess'), status: 'success' });
+        toast({ 
+          title: t('message.createSuccess'), 
+          description: t('message.testingConnection'),
+          status: 'success', 
+          duration: 5000,
+        });
       }
       onClose();
       refresh();
@@ -192,6 +197,8 @@ export default function Devices() {
         description: result.message,
         status: result.success ? 'success' : 'error',
       });
+      // 测试完成后刷新列表以更新设备状态
+      refresh();
     } catch (err) {
       toast({ title: t('message.testError'), description: err instanceof Error ? err.message : '', status: 'error' });
     } finally {

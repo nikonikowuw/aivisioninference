@@ -32,9 +32,18 @@ func (r *MediaStreamRepository) FindByDeviceID(ctx context.Context, deviceID str
 
 // FindByStream finds a media stream by ZLM stream identifier.
 func (r *MediaStreamRepository) FindByStream(ctx context.Context, app, stream, vhost string) (*model.MediaStream, error) {
-	var item model.MediaStream
-	err := r.db.WithContext(ctx).Where("zlm_app = ? AND zlm_stream = ? AND zlm_vhost = ?", app, stream, vhost).First(&item).Error
-	return &item, err
+	var items []model.MediaStream
+	err := r.db.WithContext(ctx).
+		Where("zlm_app = ? AND zlm_stream = ? AND zlm_vhost = ?", app, stream, vhost).
+		Limit(1).
+		Find(&items).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
 }
 
 // UpdateStatus updates the media stream status.

@@ -24,6 +24,70 @@ find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 
 # ============================================================
+# Rockchip MPP/RGA 硬件加速
+#
+# 使用方法:
+#   # 开发机 (x86_64):  stub 模式，不做硬件加速
+#   cmake .. -DAIVISION_WITH_RKMPP=OFF
+#
+#   # RK3568 目标机: 本地编译，自动检测 MPP/RGA
+#   cmake .. -DAIVISION_WITH_RKMPP=ON
+#
+#   # 交叉编译: 需要 SDK sysroot 包含 MPP/RGA
+#   cmake .. -DAIVISION_WITH_RKMPP=ON \
+#            -DRK_SDK_PATH=/path/to/sysroot \
+#            -DCMAKE_TOOLCHAIN_FILE=cmake/rk3568-toolchain.cmake
+# ============================================================
+
+option(AIVISION_WITH_RKMPP "Enable Rockchip MPP/RGA hardware acceleration" OFF)
+
+if(AIVISION_WITH_RKMPP)
+    # 如果指定了 RK_SDK_PATH，优先在该路径下查找
+    set(_rkmpp_search_hints)
+    set(_rkmpp_search_paths)
+    if(DEFINED RK_SDK_PATH)
+        list(APPEND _rkmpp_search_hints ${RK_SDK_PATH}/usr/include ${RK_SDK_PATH}/usr/local/include)
+        list(APPEND _rkmpp_search_paths ${RK_SDK_PATH}/usr/lib ${RK_SDK_PATH}/usr/lib/aarch64-linux-gnu)
+    endif()
+
+    # 查找 MPP 库 (支持多种命名变体)
+    find_library(ROCKCHIP_MPP_LIB
+        NAMES rockchip_mpp mpp rockchip_mpp_static
+        PATHS /usr/lib /usr/lib/aarch64-linux-gnu /usr/lib/arm-linux-gnueabihf /usr/local/lib
+              ${_rkmpp_search_paths}
+    )
+    find_path(ROCKCHIP_MPP_INCLUDE
+        NAMES rockchip/rk_mpi.h
+        PATHS /usr/include /usr/local/include
+        HINTS ${_rkmpp_search_hints}
+    )
+
+    # 查找 RGA 库
+    find_library(RGA_LIB
+        NAMES rga librga
+        PATHS /usr/lib /usr/lib/aarch64-linux-gnu /usr/lib/arm-linux-gnueabihf /usr/local/lib
+              ${_rkmpp_search_paths}
+    )
+    find_path(RGA_INCLUDE
+        NAMES im2d.hpp im2d.h
+        PATHS /usr/include /usr/local/include /usr/include/librga
+        HINTS ${_rkmpp_search_hints}
+    )
+
+    if(ROCKCHIP_MPP_LIB AND ROCKCHIP_MPP_INCLUDE)
+        message(STATUS "Found Rockchip MPP: ${ROCKCHIP_MPP_LIB}")
+    else()
+        message(FATAL_ERROR "Rockchip MPP not found! Install rockchip-mpp-dev on RK3568, or set -DRK_SDK_PATH for cross-compile")
+    endif()
+
+    if(RGA_LIB AND RGA_INCLUDE)
+        message(STATUS "Found RGA: ${RGA_LIB}")
+    else()
+        message(FATAL_ERROR "RGA not found! Install librga-dev on RK3568, or set -DRK_SDK_PATH for cross-compile")
+    endif()
+endif()
+
+# ============================================================
 # 源文件
 # ============================================================
 
@@ -121,7 +185,23 @@ target_link_libraries(aivision-engine PRIVATE
 
 target_link_libraries(aivision-hal-rkmpp PRIVATE
     Threads::Threads
+    dl
 )
+
+if(AIVISION_WITH_RKMPP AND ROCKCHIP_MPP_LIB AND RGA_LIB)
+    target_compile_definitions(aivision-hal-rkmpp PRIVATE AIVISION_WITH_RKMPP)
+    target_include_directories(aivision-hal-rkmpp PRIVATE
+        ${ROCKCHIP_MPP_INCLUDE}
+        ${RGA_INCLUDE}
+    )
+    target_link_libraries(aivision-hal-rkmpp PRIVATE
+        ${ROCKCHIP_MPP_LIB}
+        ${RGA_LIB}
+    )
+    message(STATUS "RKMPP/RGA enabled for aivision-hal-rkmpp")
+else()
+    message(STATUS "RKMPP disabled (stub mode)")
+endif()
 
 if(APPLE)
 target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
@@ -144,8 +224,57 @@ if(NOT APPLE)
 endif()
 
 # ============================================================
+# 测试
+# ============================================================
+
+if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
+    enable_testing()
+
+    add_executable(test_rkmpp_pipeline
+        tests/test_rkmpp_pipeline.cpp
+        src/hal/rockchip/rkmpp_pipeline.cpp
+        src/pipeline/hw_buffer.cpp
+    )
+
+    target_include_directories(test_rkmpp_pipeline PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    target_link_libraries(test_rkmpp_pipeline PRIVATE
+        Threads::Threads
+        dl
+    )
+
+    if(AIVISION_WITH_RKMPP AND ROCKCHIP_MPP_LIB AND RGA_LIB)
+        target_compile_definitions(test_rkmpp_pipeline PRIVATE AIVISION_WITH_RKMPP)
+        target_include_directories(test_rkmpp_pipeline PRIVATE
+            ${ROCKCHIP_MPP_INCLUDE}
+            ${RGA_INCLUDE}
+        )
+        target_link_libraries(test_rkmpp_pipeline PRIVATE
+            ${ROCKCHIP_MPP_LIB}
+            ${RGA_LIB}
+        )
+    endif()
+
+    add_test(NAME rkmpp_pipeline COMMAND test_rkmpp_pipeline)
+endif()
+
+# ============================================================
 # 安装
 # ============================================================
 
 install(TARGETS aivision-engine DESTINATION bin)
+install(TARGETS aivision-hal-rkmpp DESTINATION lib/aivision)
 install(FILES ${ENGINE_HEADERS} DESTINATION include/aivision-engine)
+
+# 安装 RK3568 相关工具
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/rk3568-toolchain.cmake
+    DESTINATION share/aivision-engine/cmake
+)
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-rk3568.sh
+    DESTINATION share/aivision-engine/scripts
+    PERMISSIONS OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE
+)

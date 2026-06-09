@@ -16,10 +16,21 @@ namespace aivision
     namespace pipeline
     {
 
+        enum class HwBufferMemoryType
+        {
+            Unknown = 0,
+            DMABuf,
+            CVPixelBuffer,
+            HostMemory,
+        };
+
         /// 硬件缓冲区描述符 — 用于在解码器、NPU、算法 .so 之间零拷贝传递。
-        /// 关键约束：dma_fd 仅在同一进程内有效，不跨进程传递。
+        /// 关键约束：平台原生句柄仅在同一进程内有效，不跨进程传递。
         struct HwBufferDesc
         {
+            /// 内存类型
+            HwBufferMemoryType memory_type = HwBufferMemoryType::Unknown;
+
             /// DMA 文件描述符 (来自 V4L2 / DRM 等)
             int dma_fd = -1;
 
@@ -40,6 +51,9 @@ namespace aivision
 
             /// 物理地址 (某些 NPU 需要)
             uint64_t phys_addr = 0;
+
+            /// 平台原生缓冲句柄，例如 macOS CVPixelBufferRef/IOSurfaceRef
+            void *native_handle = nullptr;
         };
 
         /// HwBuffer — RAII 包装 DMA 缓冲区
@@ -65,7 +79,7 @@ namespace aivision
             const HwBufferDesc &Desc() const { return desc_; }
 
             /// 检查是否有效
-            bool IsValid() const { return desc_.dma_fd >= 0; }
+            bool IsValid() const { return desc_.dma_fd >= 0 || desc_.native_handle != nullptr; }
 
             /// 释放底层资源 (手动触发)
             void Release();

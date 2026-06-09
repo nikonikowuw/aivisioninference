@@ -35,18 +35,16 @@ namespace aivision
 
         void HwBuffer::Release()
         {
-            if (desc_.dma_fd >= 0)
+            if (release_cb_ && (desc_.dma_fd >= 0 || desc_.native_handle != nullptr))
             {
-                if (release_cb_)
-                {
-                    release_cb_(desc_);
-                }
-                else
-                {
-                    close(desc_.dma_fd);
-                }
-                desc_.dma_fd = -1;
+                release_cb_(desc_);
             }
+            else if (desc_.dma_fd >= 0)
+            {
+                close(desc_.dma_fd);
+            }
+            desc_.dma_fd = -1;
+            desc_.native_handle = nullptr;
             if (desc_.dma_buf_fd >= 0)
             {
                 close(desc_.dma_buf_fd);

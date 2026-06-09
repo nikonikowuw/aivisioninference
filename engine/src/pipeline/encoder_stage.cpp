@@ -72,13 +72,16 @@ void EncoderStage::Loop() {
 
         // 2. 调用硬件编码器
         size_t out_size = 0;
-        if (hal_->EncodeFrame(frame.buffer, buffer.data(), buffer.size(), out_size)) {
+        EncodedPacketDesc desc;
+        if (hal_->EncodeFrameEx(frame.buffer, buffer.data(), buffer.size(), out_size, desc)) {
             EncodedPacket pkt;
             pkt.data.assign(buffer.data(), buffer.data() + out_size);
-            pkt.timestamp_ns = frame.timestamp_ns;
-            // 简单判断是否为 I 帧 (针对 H.264 NALU 类型 5)
-            // 实际应由 HAL 返回或解析 NALU header
-            pkt.is_key_frame = (out_size > 4 && (buffer[4] & 0x1F) == 5);
+            pkt.timestamp_ns = desc.pts_ns != 0 ? desc.pts_ns : frame.timestamp_ns;
+            pkt.dts_ns = desc.dts_ns;
+            pkt.codec = desc.codec == VideoCodec::Unknown ? VideoCodec::H264 : desc.codec;
+            pkt.extra_data = std::move(desc.extra_data);
+            // 简单判断是否为 I 帧 (针对 H.264 NALU 类型 5)，优先使用 HAL 元数据
+            pkt.is_key_frame = desc.is_key_frame || (out_size > 4 && (buffer[4] & 0x1F) == 5);
 
             // 3. 入包队列
             {

@@ -17,8 +17,11 @@ namespace pipeline {
 /// 编码后的数据包
 struct EncodedPacket {
     std::vector<uint8_t> data;
-    uint64_t timestamp_ns;
-    bool is_key_frame;
+    uint64_t timestamp_ns = 0;
+    uint64_t dts_ns = 0;
+    bool is_key_frame = false;
+    VideoCodec codec = VideoCodec::H264;
+    std::vector<uint8_t> extra_data;
 };
 
 /// 编码 Stage — 从队列取帧并调用硬件编码器

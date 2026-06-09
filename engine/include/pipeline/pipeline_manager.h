@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <sys/types.h>
+
 #include "pipeline.h"
 #include "hal.h"
 
@@ -25,11 +27,20 @@ namespace aivision
             size_t queue_capacity;
         };
 
+        /// Pipeline 管理器配置
+        struct PipelineManagerConfig
+        {
+            std::string hal_so_path;
+            std::string hal_config_json = "{}";
+            std::string rtsp_push_server = "rtsp://localhost:10554";
+            bool enable_ffmpeg_fallback = false;
+        };
+
         /// Pipeline 管理器 — 负责所有流的生命周期管理
         class PipelineManager
         {
         public:
-            PipelineManager();
+            explicit PipelineManager(PipelineManagerConfig config = {});
             ~PipelineManager();
 
             /// 创建并启动 Pipeline
@@ -67,12 +78,18 @@ namespace aivision
             std::unique_ptr<Stage> CreateInferenceStage(const std::string &device_id);
             std::unique_ptr<Stage> CreatePlaybackStage(const std::string &device_id);
 
+            std::string BuildPushURL(const std::string &device_id) const;
+            bool StartFFmpegFallback(const std::string &device_id, const std::string &rtsp_url);
+            void StopFFmpegFallback(const std::string &device_id);
+
+            PipelineManagerConfig config_;
             mutable std::mutex mutex_;
             std::map<std::string, std::unique_ptr<Pipeline>> pipelines_;
 
             // HAL 管理器，供所有 Pipeline 共享或每个 Pipeline 独立？
             // 设计上 IMediaPipeline 是一路流一个实例。
             std::map<std::string, std::unique_ptr<HALManager>> hal_managers_;
+            std::map<std::string, pid_t> ffmpeg_fallbacks_;
         };
 
     } // namespace pipeline

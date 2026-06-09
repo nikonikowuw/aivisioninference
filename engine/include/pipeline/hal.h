@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "hw_buffer.h"
 
@@ -19,6 +20,63 @@ namespace aivision
 {
     namespace pipeline
     {
+
+        enum class HALStatusCode
+        {
+            OK = 0,
+            InvalidConfig,
+            Unsupported,
+            ResourceExhausted,
+            OpenStreamFailed,
+            DecodeFailed,
+            EncodeFailed,
+            InternalError,
+        };
+
+        enum class VideoCodec
+        {
+            Unknown = 0,
+            H264,
+            H265,
+            MJPEG,
+        };
+
+        struct HALStatus
+        {
+            HALStatusCode code = HALStatusCode::OK;
+            std::string message;
+
+            bool Ok() const { return code == HALStatusCode::OK; }
+            static HALStatus Success() { return {}; }
+            static HALStatus Error(HALStatusCode code, std::string message)
+            {
+                HALStatus status;
+                status.code = code;
+                status.message = std::move(message);
+                return status;
+            }
+        };
+
+        struct HALCapabilities
+        {
+            std::string platform;
+            std::vector<VideoCodec> decode_codecs;
+            std::vector<VideoCodec> encode_codecs;
+            uint32_t max_streams = 0;
+            uint32_t max_width = 0;
+            uint32_t max_height = 0;
+            bool supports_zero_copy = false;
+            bool supports_hardware_encode = false;
+        };
+
+        struct EncodedPacketDesc
+        {
+            VideoCodec codec = VideoCodec::Unknown;
+            uint64_t pts_ns = 0;
+            uint64_t dts_ns = 0;
+            bool is_key_frame = false;
+            std::vector<uint8_t> extra_data;
+        };
 
         /// 媒体帧回调
         using FrameCallback = std::function<void(HwBufferPtr frame)>;
@@ -83,11 +141,26 @@ namespace aivision
             /// data 为输出缓冲区，size 为输入缓冲区大小，out_size 为实际编码后大小。
             virtual bool EncodeFrame(HwBufferPtr frame, uint8_t *data, size_t size, size_t &out_size) { return false; }
 
+            /// 编码一帧并返回跨平台编码元数据。老 HAL 可只实现 EncodeFrame。
+            virtual bool EncodeFrameEx(HwBufferPtr frame, uint8_t *data, size_t size, size_t &out_size, EncodedPacketDesc &desc)
+            {
+                bool ok = EncodeFrame(std::move(frame), data, size, out_size);
+                if (ok && desc.codec == VideoCodec::Unknown)
+                    desc.codec = VideoCodec::H264;
+                return ok;
+            }
+
             /// 销毁编码器
             virtual void EncodeDestroy() {}
 
             /// 解码器类型
             virtual int GetDecodeHWType() const = 0;
+
+            /// 平台能力
+            virtual HALCapabilities GetCapabilities() const { return {}; }
+
+            /// 最近一次错误
+            virtual HALStatus GetLastStatus() const { return HALStatus::Success(); }
         };
 
         /// 流水线工厂函数类型 (每个动态库导出此函数)

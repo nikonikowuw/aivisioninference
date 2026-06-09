@@ -33,7 +33,12 @@ namespace aivision
         worker_pool_ = std::make_unique<pipeline::WorkerPool>(pipeline::WorkerPoolConfig{config.worker_count});
 
         hal_mgr_ = std::make_unique<pipeline::HALManager>();
-        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>();
+        pipeline::PipelineManagerConfig pipeline_config;
+        pipeline_config.hal_so_path = config.hal_so_path;
+        pipeline_config.hal_config_json = config.hal_config_json;
+        pipeline_config.rtsp_push_server = config.rtsp_push_server;
+        pipeline_config.enable_ffmpeg_fallback = config.enable_ffmpeg_fallback;
+        pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(pipeline_config);
         algo_mgr_ = std::make_unique<algo::AlgoManager>();
 
         metrics_reporter_ = std::make_unique<monitor::MetricsReporter>(
@@ -132,6 +137,7 @@ namespace aivision
         REGISTER_HANDLER(202, HandleStreamStop);
         REGISTER_HANDLER(203, HandleStreamPlaybackStart);
         REGISTER_HANDLER(204, HandleStreamPlaybackStop);
+        REGISTER_HANDLER(205, HandleStreamStatus);
         REGISTER_HANDLER(206, HandleStartSelfCheck);
 
 #undef REGISTER_HANDLER
@@ -201,6 +207,20 @@ namespace aivision
         if (end == std::string::npos)
             end = json.size();
         return json.substr(start, end - start);
+    }
+
+    bool InferenceEngine::ExtractJsonBoolField(const std::string &json, const std::string &field_name, bool default_value)
+    {
+        std::string value = ExtractJsonField(json, field_name);
+        if (value.empty())
+            return default_value;
+        value.erase(std::remove_if(value.begin(), value.end(), ::isspace), value.end());
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (value == "true" || value == "1")
+            return true;
+        if (value == "false" || value == "0")
+            return false;
+        return default_value;
     }
 
     namespace {
@@ -364,16 +384,22 @@ namespace aivision
         // 解析 JSON payload (Go 端使用 JSON 序列化)
         std::string device_id;
         std::string stream_url;
-        
+        bool enable_infer = false;
+        bool enable_playback = false;
+
         if (payload && size > 0)
         {
             std::string json_str(reinterpret_cast<const char*>(payload), size);
-            device_id = ExtractJsonField(json_str, "DeviceID");
-            stream_url = ExtractJsonField(json_str, "StreamURL");
+            device_id = ExtractJsonField(json_str, "device_id");
+            stream_url = ExtractJsonField(json_str, "stream_url");
+            enable_infer = ExtractJsonBoolField(json_str, "enable_infer", false);
+            enable_playback = ExtractJsonBoolField(json_str, "enable_playback", false);
         }
 
         std::cout << "[IPC] StreamStart device_id=" << device_id
-                  << ", stream_url=" << stream_url << std::endl;
+                  << ", stream_url=" << stream_url
+                  << ", enable_infer=" << enable_infer
+                  << ", enable_playback=" << enable_playback << std::endl;
 
         if (device_id.empty() || stream_url.empty())
         {
@@ -388,27 +414,22 @@ namespace aivision
             return;
         }
 
-        // 调用 ZLM addStreamProxy 拉取 RTSP 流
-        std::string play_url = AddStreamProxy(device_id, stream_url);
-        if (play_url.empty())
+        bool started = pipeline_mgr_->CreatePipeline(device_id, stream_url, enable_infer, enable_playback);
+        if (!started)
         {
-            std::cerr << "[IPC] Failed to add stream proxy for device: " << device_id << std::endl;
-            flatbuffers::FlatBufferBuilder fbb(256);
-            auto device_id_str = fbb.CreateString(device_id);
-            auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
-            fbb.Finish(resp);
-            int client_fd = ipc_server_->GetActiveClientFd();
-            if (client_fd >= 0)
-                ipc_server_->SendResponse(client_fd, 301, fbb.GetBufferPointer(), fbb.GetSize());
-            return;
+            std::cerr << "[IPC] Failed to create hardware pipeline for device: " << device_id << std::endl;
         }
 
-        // TODO: 调用 pipeline_mgr_->CreatePipeline(device_id, stream_url, enable_infer, enable_playback);
-
-        // 返回成功响应，包含播放 URL
+        std::string play_url = config_.rtsp_push_server;
+        if (play_url.empty())
+            play_url = "rtsp://localhost:10554";
+        if (!play_url.empty() && play_url.back() == '/')
+            play_url.pop_back();
+        play_url += "/live/" + device_id;
         flatbuffers::FlatBufferBuilder fbb(512);
         auto device_id_str = fbb.CreateString(device_id);
-        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, true);
+        auto play_url_str = fbb.CreateString(started ? play_url : "");
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, started, 0, 0, 0, play_url_str);
         fbb.Finish(resp);
 
         int client_fd = ipc_server_->GetActiveClientFd();
@@ -416,6 +437,7 @@ namespace aivision
         {
             ipc_server_->SendResponse(client_fd, 301, fbb.GetBufferPointer(), fbb.GetSize());
             std::cout << "[IPC] StreamStart response sent for device: " << device_id
+                      << ", started=" << started
                       << ", play_url=" << play_url << std::endl;
         }
         else
@@ -434,7 +456,7 @@ namespace aivision
         if (payload && size > 0)
         {
             std::string json_str(reinterpret_cast<const char*>(payload), size);
-            device_id = ExtractJsonField(json_str, "DeviceID");
+            device_id = ExtractJsonField(json_str, "device_id");
         }
 
         // 如果 JSON 解析失败，尝试作为纯字符串
@@ -445,13 +467,10 @@ namespace aivision
 
         std::cout << "[IPC] StreamStop device_id=" << device_id << std::endl;
 
-        // 调用 ZLM closeStream 停止拉流
         if (!device_id.empty())
         {
-            CloseStreamProxy(device_id);
+            pipeline_mgr_->DestroyPipeline(device_id);
         }
-
-        // TODO: 调用 pipeline_mgr_->DestroyPipeline(device_id);
 
         // 发送响应
         flatbuffers::FlatBufferBuilder fbb(256);
@@ -472,44 +491,44 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StreamPlaybackStart" << std::endl;
 
-        // 解析 JSON payload
         std::string device_id;
+        std::string stream_url;
         if (payload && size > 0)
         {
-            std::string json_str(reinterpret_cast<const char*>(payload), size);
-            // 简单解析 device_id
-            size_t pos = json_str.find("\"DeviceID\"");
-            if (pos != std::string::npos)
+            std::string json_str(reinterpret_cast<const char *>(payload), size);
+            device_id = ExtractJsonField(json_str, "device_id");
+            stream_url = ExtractJsonField(json_str, "stream_url");
+            if (device_id.empty())
+                device_id = std::string(reinterpret_cast<const char *>(payload), size);
+        }
+
+        std::cout << "[IPC] StreamPlaybackStart device_id=" << device_id
+                  << ", stream_url=" << stream_url << std::endl;
+
+        bool started = false;
+        if (!device_id.empty())
+        {
+            if (pipeline_mgr_->GetPipeline(device_id))
             {
-                size_t start = json_str.find(":", pos);
-                if (start != std::string::npos)
-                {
-                    start = json_str.find("\"", start + 1);
-                    if (start != std::string::npos)
-                    {
-                        size_t end = json_str.find("\"", start + 1);
-                        if (end != std::string::npos)
-                        {
-                            device_id = json_str.substr(start + 1, end - start - 1);
-                        }
-                    }
-                }
+                started = pipeline_mgr_->EnablePlayback(device_id);
+            }
+            else if (!stream_url.empty())
+            {
+                started = pipeline_mgr_->CreatePipeline(device_id, stream_url, false, true);
             }
         }
 
-        if (device_id.empty())
-        {
-            device_id = std::string(reinterpret_cast<const char*>(payload), size);
-        }
+        std::string play_url = config_.rtsp_push_server;
+        if (play_url.empty())
+            play_url = "rtsp://localhost:10554";
+        if (!play_url.empty() && play_url.back() == '/')
+            play_url.pop_back();
+        play_url += "/live/" + device_id;
 
-        std::cout << "[IPC] StreamPlaybackStart device_id=" << device_id << std::endl;
-
-        // TODO: 实际启用播放
-
-        // 发送响应
         flatbuffers::FlatBufferBuilder fbb(256);
         auto device_id_str = fbb.CreateString(device_id);
-        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, true);
+        auto play_url_str = started ? fbb.CreateString(play_url) : 0;
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, started, 0, 0, 0, play_url_str);
         fbb.Finish(resp);
 
         int client_fd = ipc_server_->GetActiveClientFd();
@@ -556,7 +575,10 @@ namespace aivision
 
         std::cout << "[IPC] StreamPlaybackStop device_id=" << device_id << std::endl;
 
-        // TODO: 实际停止播放
+        if (!device_id.empty())
+        {
+            pipeline_mgr_->DestroyPipeline(device_id);
+        }
 
         // 发送响应
         flatbuffers::FlatBufferBuilder fbb(256);
@@ -569,6 +591,40 @@ namespace aivision
         {
             ipc_server_->SendResponse(client_fd, 304, fbb.GetBufferPointer(), fbb.GetSize());
             std::cout << "[IPC] StreamPlaybackStop response sent for device: " << device_id << std::endl;
+        }
+    }
+
+    void InferenceEngine::HandleStreamStatus(const uint8_t *payload, size_t size, uint64_t seq)
+    {
+        (void)seq;
+        std::string device_id;
+        if (payload && size > 0)
+        {
+            std::string json_str(reinterpret_cast<const char *>(payload), size);
+            device_id = ExtractJsonField(json_str, "device_id");
+            if (device_id.empty())
+                device_id = std::string(reinterpret_cast<const char *>(payload), size);
+        }
+
+        auto *pipeline = pipeline_mgr_->GetPipeline(device_id);
+        bool running = pipeline != nullptr;
+        std::string play_url = config_.rtsp_push_server;
+        if (play_url.empty())
+            play_url = "rtsp://localhost:10554";
+        if (!play_url.empty() && play_url.back() == '/')
+            play_url.pop_back();
+        play_url += "/live/" + device_id;
+
+        flatbuffers::FlatBufferBuilder fbb(512);
+        auto device_id_str = fbb.CreateString(device_id);
+        auto play_url_str = fbb.CreateString(running ? play_url : "");
+        auto resp = aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, running, 0, 0, 0, play_url_str);
+        fbb.Finish(resp);
+
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 305, fbb.GetBufferPointer(), fbb.GetSize());
         }
     }
 

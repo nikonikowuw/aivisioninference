@@ -35,6 +35,7 @@ set(ENGINE_SOURCES
     src/pipeline/ring_queue.cpp
     src/pipeline/worker_pool.cpp
     src/pipeline/snapshot.cpp
+    src/pipeline/hal.cpp
     src/pipeline/pipeline.cpp
     src/pipeline/pipeline_manager.cpp
     src/pipeline/encoder_stage.cpp
@@ -83,10 +84,28 @@ endif()
 
 add_executable(aivision-engine ${ENGINE_SOURCES})
 
+add_library(aivision-hal-rkmpp SHARED
+    src/hal/rockchip/rkmpp_pipeline.cpp
+    src/pipeline/hw_buffer.cpp
+)
+
+add_library(aivision-hal-macos-videotoolbox SHARED
+    src/hal/macos/videotoolbox_pipeline.cpp
+    src/pipeline/hw_buffer.cpp
+)
+
 target_include_directories(aivision-engine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${FLATBUFFERS_INCLUDE_DIRS}
+)
+
+target_include_directories(aivision-hal-rkmpp PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_include_directories(aivision-hal-macos-videotoolbox PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(aivision-engine PRIVATE
@@ -95,6 +114,24 @@ target_link_libraries(aivision-engine PRIVATE
     dl
     ${CURL_LIBRARIES}
 )
+
+target_link_libraries(aivision-hal-rkmpp PRIVATE
+    Threads::Threads
+)
+
+target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
+    Threads::Threads
+    dl
+)
+
+if(APPLE)
+    target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
+        "-framework VideoToolbox"
+        "-framework CoreMedia"
+        "-framework CoreVideo"
+        "-framework CoreFoundation"
+    )
+endif()
 
 if(NOT APPLE)
     target_link_libraries(aivision-engine PRIVATE rt)

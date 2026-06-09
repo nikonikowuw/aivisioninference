@@ -43,7 +43,9 @@ static void PrintUsage(const char *prog)
     std::cout << "  --workers N          Worker thread count (default: 4)" << std::endl;
     std::cout << "  --hal-so PATH        HAL platform pipeline .so path" << std::endl;
     std::cout << "  --hal-config JSON    HAL configuration JSON" << std::endl;
+    std::cout << "  --enable-ffmpeg-fallback  Use FFmpeg relay when HAL is unavailable or failed" << std::endl;
     std::cout << "  --metrics-ms N       Metrics report interval in ms (default: 5000)" << std::endl;
+    std::cout << "  --rtsp-push URL      RTSP publish base URL (default: rtsp://localhost:10554)" << std::endl;
     std::cout << "  --zlm-url URL        ZLM API URL (default: http://localhost:80)" << std::endl;
     std::cout << "  --zlm-secret SECRET  ZLM API secret" << std::endl;
     std::cout << "  --version            Print version and exit" << std::endl;
@@ -84,9 +86,17 @@ int main(int argc, char *argv[])
         {
             config.hal_config_json = argv[++i];
         }
+        else if (arg == "--enable-ffmpeg-fallback")
+        {
+            config.enable_ffmpeg_fallback = true;
+        }
         else if (arg == "--metrics-ms" && i + 1 < argc)
         {
             config.metrics_interval_ms = static_cast<uint32_t>(std::stoul(argv[++i]));
+        }
+        else if (arg == "--rtsp-push" && i + 1 < argc)
+        {
+            config.rtsp_push_server = argv[++i];
         }
         else if (arg == "--zlm-url" && i + 1 < argc)
         {

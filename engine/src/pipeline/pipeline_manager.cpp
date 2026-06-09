@@ -2,14 +2,20 @@
 #include "pipeline/inference_stage.h"
 #include "pipeline/encoder_stage.h"
 #include "pipeline/rtsp_push_stage.h"
+#include <chrono>
+#include <csignal>
 #include <iostream>
+#include <sys/wait.h>
+#include <thread>
+#include <unistd.h>
 
 namespace aivision
 {
     namespace pipeline
     {
 
-        PipelineManager::PipelineManager() {}
+        PipelineManager::PipelineManager(PipelineManagerConfig config)
+            : config_(std::move(config)) {}
 
         PipelineManager::~PipelineManager()
         {
@@ -32,11 +38,56 @@ namespace aivision
             // 1. 创建 Pipeline 实例
             auto pipeline = std::make_unique<Pipeline>(device_id);
 
-            // 2. 创建并启动 HAL (拉流/解码)
-            // 注意：这里需要配合 HALManager。目前简单处理。
+            // 2. 创建并启动 HAL (拉流/硬件解码)，必要时使用 FFmpeg 兜底转推
             auto hal = std::make_unique<HALManager>();
-            // TODO: 从配置中获取 hal_so_path
-            // if (!hal->LoadPipeline(hal_so_path, hal_config)) { ... }
+            if (config_.hal_so_path.empty())
+            {
+                std::cerr << "HAL .so path is not configured for device " << device_id << std::endl;
+                if (!config_.enable_ffmpeg_fallback)
+                    return false;
+                if (!StartFFmpegFallback(device_id, rtsp_url))
+                    return false;
+                pipelines_[device_id] = std::move(pipeline);
+                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
+                return true;
+            }
+            if (!hal->LoadPipeline(config_.hal_so_path, config_.hal_config_json))
+            {
+                std::cerr << "Failed to load HAL pipeline for device " << device_id << std::endl;
+                if (!config_.enable_ffmpeg_fallback || !StartFFmpegFallback(device_id, rtsp_url))
+                    return false;
+                pipelines_[device_id] = std::move(pipeline);
+                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
+                return true;
+            }
+            auto *media_pipeline = hal->GetPipeline();
+            if (!media_pipeline)
+            {
+                std::cerr << "HAL pipeline is null for device " << device_id << std::endl;
+                return false;
+            }
+            media_pipeline->SetFrameCallback([queue = pipeline->GetQueue(), device_id](HwBufferPtr frame) {
+                if (!queue || !frame)
+                    return;
+                FrameContext ctx;
+                ctx.buffer = std::move(frame);
+                ctx.timestamp_ns = static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count());
+                ctx.task_id = device_id;
+                queue->Push(std::move(ctx));
+            });
+            if (!media_pipeline->Start(rtsp_url))
+            {
+                std::cerr << "Failed to start HAL stream for device " << device_id
+                          << ", url=" << rtsp_url << std::endl;
+                if (!config_.enable_ffmpeg_fallback || !StartFFmpegFallback(device_id, rtsp_url))
+                    return false;
+                pipelines_[device_id] = std::move(pipeline);
+                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
+                return true;
+            }
 
             // 3. 根据参数添加初始 Stage
             if (enable_infer)
@@ -46,12 +97,21 @@ namespace aivision
 
             if (enable_playback)
             {
-                // pipeline->AddStage(CreatePlaybackStage(device_id));
+                std::string push_url = BuildPushURL(device_id);
+
+                auto encoder = std::make_shared<EncoderStage>(media_pipeline);
+                auto pusher = std::make_shared<RtspPushStage>(push_url, encoder);
+                if (!pipeline->AddStage(encoder) || !pipeline->AddStage(pusher))
+                {
+                    media_pipeline->Stop();
+                    return false;
+                }
             }
 
             // 4. 启动 Pipeline
             if (!pipeline->Start())
             {
+                media_pipeline->Stop();
                 return false;
             }
 
@@ -73,6 +133,12 @@ namespace aivision
             }
 
             it->second->Stop();
+            StopFFmpegFallback(device_id);
+            auto hal_it = hal_managers_.find(device_id);
+            if (hal_it != hal_managers_.end() && hal_it->second->GetPipeline())
+            {
+                hal_it->second->GetPipeline()->Stop();
+            }
             pipelines_.erase(it);
             hal_managers_.erase(device_id);
 
@@ -93,7 +159,7 @@ namespace aivision
             auto it_hal = hal_managers_.find(device_id);
             if (it_hal == hal_managers_.end()) return false;
             
-            std::string push_url = "rtsp://zlm:554/live/" + device_id;
+            std::string push_url = BuildPushURL(device_id);
             
             // 1. 创建编码 Stage (shared_ptr 供 RtspPushStage 引用)
             auto encoder = std::make_shared<EncoderStage>(it_hal->second->GetPipeline());
@@ -178,8 +244,87 @@ namespace aivision
             {
                 p->Stop();
             }
+            for (auto &[id, hal] : hal_managers_)
+            {
+                if (hal && hal->GetPipeline())
+                    hal->GetPipeline()->Stop();
+            }
+            for (auto &[id, pid] : ffmpeg_fallbacks_)
+            {
+                (void)id;
+                if (pid > 0)
+                {
+                    kill(pid, SIGTERM);
+                    waitpid(pid, nullptr, 0);
+                }
+            }
             pipelines_.clear();
             hal_managers_.clear();
+            ffmpeg_fallbacks_.clear();
+        }
+
+        std::string PipelineManager::BuildPushURL(const std::string &device_id) const
+        {
+            std::string push_url = config_.rtsp_push_server;
+            if (push_url.empty())
+                push_url = "rtsp://localhost:10554";
+            if (!push_url.empty() && push_url.back() == '/')
+                push_url.pop_back();
+            return push_url + "/live/" + device_id;
+        }
+
+        bool PipelineManager::StartFFmpegFallback(const std::string &device_id, const std::string &rtsp_url)
+        {
+            std::string push_url = BuildPushURL(device_id);
+            pid_t pid = fork();
+            if (pid < 0)
+            {
+                std::cerr << "Failed to fork FFmpeg fallback for device " << device_id << std::endl;
+                return false;
+            }
+
+            if (pid == 0)
+            {
+                execlp("ffmpeg", "ffmpeg",
+                       "-hide_banner", "-loglevel", "warning",
+                       "-rtsp_transport", "tcp",
+                       "-i", rtsp_url.c_str(),
+                       "-an", "-c:v", "copy",
+                       "-f", "rtsp", "-rtsp_transport", "tcp",
+                       push_url.c_str(),
+                       static_cast<char *>(nullptr));
+                _exit(127);
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            int status = 0;
+            pid_t exited = waitpid(pid, &status, WNOHANG);
+            if (exited == pid)
+            {
+                std::cerr << "FFmpeg fallback exited immediately for device " << device_id
+                          << ", status=" << status << std::endl;
+                return false;
+            }
+
+            ffmpeg_fallbacks_[device_id] = pid;
+            std::cout << "FFmpeg fallback started for device: " << device_id
+                      << ", pid=" << pid
+                      << ", push_url=" << push_url << std::endl;
+            return true;
+        }
+
+        void PipelineManager::StopFFmpegFallback(const std::string &device_id)
+        {
+            auto it = ffmpeg_fallbacks_.find(device_id);
+            if (it == ffmpeg_fallbacks_.end())
+                return;
+            pid_t pid = it->second;
+            if (pid > 0)
+            {
+                kill(pid, SIGTERM);
+                waitpid(pid, nullptr, 0);
+            }
+            ffmpeg_fallbacks_.erase(it);
         }
 
         std::unique_ptr<Stage> PipelineManager::CreateInferenceStage(const std::string &device_id)

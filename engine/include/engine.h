@@ -44,6 +44,9 @@ namespace aivision
         /// HAL 配置 (JSON)
         std::string hal_config_json = "{}";
 
+        /// 是否允许无 HAL 或 HAL 启动失败时使用 FFmpeg 兜底转推
+        bool enable_ffmpeg_fallback = false;
+
         /// Metrics 上报间隔 (毫秒)
         uint32_t metrics_interval_ms = 5000;
 
@@ -51,8 +54,8 @@ namespace aivision
         std::string encoder_config_json =
             R"({"codec":"h264", "bitrate":4000000, "fps":25, "gop":50})";
 
-        /// RTSP 推流目标服务器地址 (如 "rtsp://zlm:554")
-        std::string rtsp_push_server = "rtsp://zlm:554";
+        /// RTSP 推流目标服务器地址 (如 "rtsp://localhost:10554")
+        std::string rtsp_push_server = "rtsp://localhost:10554";
 
         /// ZLM API URL (如 "http://localhost:80")
         std::string zlm_api_url = "http://localhost:80";
@@ -132,6 +135,9 @@ namespace aivision
         /// 处理 StreamPlaybackStop 指令
         void HandleStreamPlaybackStop(const uint8_t *payload, size_t size, uint64_t seq);
 
+        /// 处理 StreamStatus 指令
+        void HandleStreamStatus(const uint8_t *payload, size_t size, uint64_t seq);
+
         /// 处理 StartSelfCheck 指令
         void HandleStartSelfCheck(const uint8_t *payload, size_t size, uint64_t seq);
 
@@ -144,6 +150,9 @@ namespace aivision
 
         /// 解析简单的 JSON 字段
         std::string ExtractJsonField(const std::string &json, const std::string &field_name);
+
+        /// 解析简单的 JSON 布尔字段
+        bool ExtractJsonBoolField(const std::string &json, const std::string &field_name, bool default_value);
 
         EngineConfig config_;
         std::atomic<bool> running_{false};

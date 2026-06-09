@@ -76,4 +76,5 @@ enum DecodeHWType:byte {
     RKMPP = 1,
     DVPP = 2,
     FFmpeg = 3,
+    VideoToolbox = 4,
 }

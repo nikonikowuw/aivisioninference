@@ -6,7 +6,8 @@
 import { Suspense, lazy, ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Route } from 'react-router-dom';
-import { Icon } from '@chakra-ui/react';
+import { Icon, Center, Spinner } from '@chakra-ui/react';
+import ErrorBoundary from '../components/ErrorBoundary';
 import {
   MdHome,
   MdPeople,
@@ -127,6 +128,17 @@ function pruneLazyCache(activeKeys: string[]) {
   });
 }
 
+const WrappedComponent = ({ LazyComponent }: { LazyComponent: any }) => {
+  const { t } = useTranslation('common');
+  return (
+    <Suspense fallback={<Center h="100vh"><Spinner size="xl" color="brand.500" /></Center>}>
+      <ErrorBoundary>
+        <LazyComponent />
+      </ErrorBoundary>
+    </Suspense>
+  );
+};
+
 function createLazyComponent(
   key: string,
   importer: () => Promise<{ default: ComponentType<any> }>
@@ -135,16 +147,11 @@ function createLazyComponent(
   if (cached) return cached;
 
   const LazyComponent = lazy(importer);
-  const Wrapped = function (props: any) {
-    const { t } = useTranslation('common');
-    return (
-      <Suspense fallback={<div>{t('status.loading')}</div>}>
-        <LazyComponent {...props} />
-      </Suspense>
-    );
-  };
-  lazyCache.set(key, Wrapped);
-  return Wrapped;
+  // FinalComponent 是一个稳定的 HOC，包裹 ErrorBoundary + Suspense
+  const FinalComponent = (props: any) => <WrappedComponent {...props} LazyComponent={LazyComponent} />;
+  
+  lazyCache.set(key, FinalComponent);
+  return FinalComponent;
 }
 
 // 动态导入图标

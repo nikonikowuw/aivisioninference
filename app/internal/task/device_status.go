@@ -13,11 +13,13 @@ import (
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/niko-admin/niko-admin/internal/repository"
+	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 // 设备状态监控任务类型
 const (
 	TypeDeviceStatusCheck = "device:status_check" // 设备状态定时检查任务
+	TypeDeviceDetect      = "device:detect"       // 设备即时连接探测任务
 )
 
 // DeviceStatusCheckPayload 设备状态检查任务载荷
@@ -25,23 +27,78 @@ type DeviceStatusCheckPayload struct {
 	BatchSize int `json:"batch_size"` // 每批检查的设备数量
 }
 
+// DeviceDetectPayload 设备即时探测任务载荷
+type DeviceDetectPayload struct {
+	ID string `json:"id"` // 设备 ID
+}
+
 // DeviceStatusHandler 处理设备状态相关的后台任务
 type DeviceStatusHandler struct {
-	deviceRepo *repository.DeviceRepository
-	zlmClient  *zlm.Client
+	deviceRepo    *repository.DeviceRepository
+	zlmClient     *zlm.Client
+	streamManager *service.StreamManager
 }
 
 // NewDeviceStatusHandler 创建设备状态任务处理器
-func NewDeviceStatusHandler(deviceRepo *repository.DeviceRepository, zlmClient *zlm.Client) *DeviceStatusHandler {
+func NewDeviceStatusHandler(deviceRepo *repository.DeviceRepository, zlmClient *zlm.Client, streamManager *service.StreamManager) *DeviceStatusHandler {
 	return &DeviceStatusHandler{
-		deviceRepo: deviceRepo,
-		zlmClient:  zlmClient,
+		deviceRepo:    deviceRepo,
+		zlmClient:     zlmClient,
+		streamManager: streamManager,
 	}
 }
 
 // RegisterHandlers 注册设备状态相关的任务处理函数
 func (h *DeviceStatusHandler) RegisterHandlers(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeDeviceStatusCheck, h.handleDeviceStatusCheck)
+	mux.HandleFunc(TypeDeviceDetect, h.handleDeviceDetect)
+}
+
+// handleDeviceDetect 处理设备即时探测任务
+func (h *DeviceStatusHandler) handleDeviceDetect(ctx context.Context, t *asynq.Task) error {
+	var payload DeviceDetectPayload
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	if payload.ID == "" {
+		return fmt.Errorf("device id is required")
+	}
+
+	zap.L().Info("executing instant device detection", zap.String("device_id", payload.ID))
+
+	// 使用 StreamManager 进行连接探测 (模拟 TestConnection 逻辑)
+	// 如果 StreamManager 为空，则回退到基础检查
+	if h.streamManager != nil {
+		err := h.streamManager.Acquire(ctx, payload.ID, "detect", nil)
+		testSuccess := err == nil
+
+		// 探测完成后释放
+		defer func() {
+			_ = h.streamManager.Release(ctx, payload.ID, "detect")
+		}()
+
+		newStatus := model.DeviceStatusOffline
+		if testSuccess {
+			newStatus = model.DeviceStatusOnline
+		}
+
+		if err := h.deviceRepo.UpdateStatus(ctx, payload.ID, newStatus, "", ""); err != nil {
+			return fmt.Errorf("update device status: %w", err)
+		}
+
+		zap.L().Info("instant device detection completed",
+			zap.String("device_id", payload.ID),
+			zap.String("status", newStatus))
+		return nil
+	}
+
+	// 回退逻辑
+	device, err := h.deviceRepo.FindByID(ctx, payload.ID)
+	if err != nil {
+		return err
+	}
+	return h.checkDeviceStatus(ctx, device, &checkStats{})
 }
 
 // handleDeviceStatusCheck 处理设备状态定时检查任务

@@ -92,6 +92,7 @@ export default function Devices() {
     load,
     changePage,
     changePageSize,
+    setList,
   } = usePagination<Device>(fetchDevices);
 
   const [allGroups, setAllGroups] = useState<DeviceGroup[]>([]);
@@ -107,7 +108,73 @@ export default function Devices() {
   const [isBatching, setIsBatching] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isTesting, setIsTesting] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const importInputRef = useRef<HTMLInputElement>(null);
+  const pollTimerRef = useRef<any>(null);
+
+  // 改进轮询逻辑：不重新加载整个列表，而是只查询特定设备并局部更新
+  useEffect(() => {
+    if (pendingIds.size === 0) {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (!pollTimerRef.current) {
+      pollTimerRef.current = setInterval(async () => {
+        const ids = Array.from(pendingIds);
+        const updates = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              // 关键：只获取单个设备的状态详情
+              const device = await devicesApi.get(id);
+              return { id, device };
+            } catch (err) {
+              return { id, device: null };
+            }
+          })
+        );
+
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          let listChanged = false;
+          
+          setList((currentList) => {
+            const newList = [...currentList];
+            updates.forEach(({ id, device }) => {
+              if (device && device.status !== 'unknown') {
+                const index = newList.findIndex((d) => d.id === id);
+                if (index !== -1) {
+                  newList[index] = { ...newList[index], ...device };
+                  listChanged = true;
+                }
+                next.delete(id);
+              }
+            });
+            return listChanged ? newList : currentList;
+          });
+          return next;
+        });
+      }, 2000);
+    }
+
+    return () => {
+      if (pollTimerRef.current && pendingIds.size === 0) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [pendingIds, setList]);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     load({ page: 1 });
@@ -157,17 +224,30 @@ export default function Devices() {
       if (editing) {
         await devicesApi.update(editing.id, form);
         toast({ title: t('message.updateSuccess'), status: 'success' });
+        // 更新成功后静默加载当前页，不显示全屏 Spinner
+        load({ silent: true });
       } else {
-        await devicesApi.create(form as any);
+        const newDevice = await devicesApi.create(form as any);
         toast({ 
           title: t('message.createSuccess'), 
           description: t('message.testingConnection'),
           status: 'success', 
           duration: 5000,
         });
+        
+        // 关键：先通过静默加载把新设备加载出来
+        await load({ page: 1, silent: true });
+        
+        // 如果新设备在第一页，加入轮询
+        if (newDevice && newDevice.id) {
+          setPendingIds(prev => {
+            const next = new Set(prev);
+            next.add(newDevice.id);
+            return next;
+          });
+        }
       }
       onClose();
-      refresh();
     } catch (err) {
       toast({ title: tCommon('message.operationFailed'), description: err instanceof Error ? err.message : '', status: 'error' });
     }
@@ -371,13 +451,13 @@ export default function Devices() {
               </Tr>
             </Thead>
             <Tbody>
-              {pageLoading ? (
+              {(pageLoading && devices.length === 0) ? (
                 <Tr><Td colSpan={8}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : devices.length === 0 ? (
                 <Tr><Td colSpan={8}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
               ) : (
                 devices.map((device) => (
-                  <Tr key={device.id}>
+                  <Tr key={device.id} opacity={(pageLoading && !pendingIds.has(device.id)) ? 0.6 : 1} transition="opacity 0.2s">
                     <Td pe="10px">
                       <Checkbox isChecked={selectedIds.includes(device.id)} onChange={() => toggleOne(device.id)} />
                     </Td>
@@ -395,7 +475,10 @@ export default function Devices() {
                     </Td>
                     <Td>
                       <Badge colorScheme={statusColor[device.status]} variant="solid">
-                        {t(`status.${device.status}`)}
+                        <HStack spacing={1}>
+                          {(device.status === 'unknown' || pendingIds.has(device.id)) && <Spinner size="xs" />}
+                          <Text>{t(`status.${device.status}`)}</Text>
+                        </HStack>
                       </Badge>
                     </Td>
                     <Td><Text fontSize="sm">{device.manufacturer || '-'}</Text></Td>

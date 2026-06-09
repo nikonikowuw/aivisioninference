@@ -116,25 +116,41 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 	})
 	state := actual.(*StreamState)
 
-	// 先注册消费者（在锁外，无需互斥）
-	consumer := &ConsumerInfo{
-		Reason:    reason,
-		RefAt:     time.Now(),
-		Metadata:  metadata,
-		LastAlive: time.Now(),
-	}
-	state.Consumers.Store(reason, consumer)
-
-	// 锁内完成 RefCount 判断 + engine 调用，防止并发 Acquire 重复启动流
+	// 锁内完成逻辑，保证并发安全
 	state.mu.Lock()
-	newCount := state.RefCount.Add(1)
+	defer state.mu.Unlock()
+
+	// 检查该 reason 是否已经存在，如果已存在则只刷新活跃时间，不增加引用计数
+	if c, exists := state.Consumers.Load(reason); exists {
+		consumer := c.(*ConsumerInfo)
+		consumer.LastAlive = time.Now()
+		// 如果是重复请求 play 且当前流正常，直接返回即可
+		if state.Status == "active" || state.Status == "pulling" {
+			return nil
+		}
+	} else {
+		// 注册新的消费者
+		consumer := &ConsumerInfo{
+			Reason:    reason,
+			RefAt:     time.Now(),
+			Metadata:  metadata,
+			LastAlive: time.Now(),
+		}
+		state.Consumers.Store(reason, consumer)
+	}
+
+	newCount := int32(0)
+	state.Consumers.Range(func(key, value interface{}) bool {
+		newCount++
+		return true
+	})
+	state.RefCount.Store(newCount)
 
 	if newCount == 1 {
 		dev, err := m.deviceRepo.FindByID(ctx, deviceID)
 		if err != nil {
-			state.RefCount.Add(-1)
 			state.Consumers.Delete(reason)
-			state.mu.Unlock()
+			m.recalculateRefCount(state)
 			return err
 		}
 
@@ -147,19 +163,16 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 
 		info, err := m.engine.StartStream(ctx, req)
 		if err != nil {
-			state.RefCount.Add(-1)
 			state.Consumers.Delete(reason)
-			state.mu.Unlock()
+			m.recalculateRefCount(state)
 			return err
 		}
 
 		state.Status = info.Status
 		state.PlayURLRtsp = info.PlayURL
-		state.mu.Unlock()
 
 		go m.syncToDatabase(ctx, state, reason)
 	} else {
-		state.mu.Unlock()
 		if reason == "play" {
 			dev, err := m.deviceRepo.FindByID(ctx, deviceID)
 			if err != nil {
@@ -173,12 +186,33 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 			})
 			if err != nil {
 				m.logger.Warn("start playback failed", zap.Error(err), zap.String("device_id", deviceID))
-				return err
+				// 如果是由于之前状态残留导致 StartPlayback 失败，尝试完全重置状态并退回启动
+				m.logger.Info("attempting to recover stream by starting over", zap.String("device_id", deviceID))
+				info, retryErr := m.engine.StartStream(ctx, StreamStartRequest{
+					DeviceID:       deviceID,
+					RtspURL:        strings.TrimSpace(dev.RtspURL),
+					EnableInfer:    false,
+					EnablePlayback: true,
+				})
+				if retryErr != nil {
+					return err // 返回原始错误
+				}
+				state.Status = info.Status
+				state.PlayURLRtsp = info.PlayURL
 			}
 		}
 	}
 
 	return nil
+}
+
+func (m *StreamManager) recalculateRefCount(state *StreamState) {
+	count := int32(0)
+	state.Consumers.Range(func(key, value interface{}) bool {
+		count++
+		return true
+	})
+	state.RefCount.Store(count)
 }
 
 func (m *StreamManager) syncToDatabase(ctx context.Context, state *StreamState, reason string) {
@@ -205,15 +239,18 @@ func (m *StreamManager) Release(ctx context.Context, deviceID, reason string) er
 	}
 	state := actual.(*StreamState)
 
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	state.Consumers.Delete(reason)
-	newCount := state.RefCount.Add(-1)
+	m.recalculateRefCount(state)
+	newCount := state.RefCount.Load()
 
 	if newCount <= 0 {
 		if err := m.engine.StopStream(ctx, deviceID); err != nil {
 			m.logger.Error("stop engine stream failed", zap.Error(err), zap.String("device_id", deviceID))
 		}
 		state.Status = "inactive"
-		state.RefCount.Store(0)
 
 		go func() {
 			stream, err := m.streamRepo.FindByStream(ctx, "live", deviceID, "__defaultVhost__")

@@ -147,7 +147,7 @@ export default function License() {
     } catch (err) {
       toast({
         title: t('upload.failed'),
-        description: err instanceof Error ? err.message : '',
+        description: err instanceof Error ? err.message : String(err || ''),
         status: 'error',
       });
     } finally {

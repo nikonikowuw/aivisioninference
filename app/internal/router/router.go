@@ -487,7 +487,6 @@ func NewAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
 func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	deviceRepo := repository.NewDeviceRepository(db)
 	zlmClient := provideZLMClient(cfg)
-	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient)
 
 	storageSvc := service.NewStorageService(db, rdb)
 	cronCleanupHandler := task.NewCronCleanupHandler(storageSvc)
@@ -500,6 +499,8 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
 	engineClient := provideEngineClient(cfg)
 	streamManager := provideStreamManager(engineClient, deviceRepo, mediaStreamRepo)
+
+	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient, streamManager)
 	// 由于 Asynq worker 自身消费任务队列，这里传入 nil taskClient 避免循环依赖（worker 内的 SIPService 不需要再派发任务）。
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)

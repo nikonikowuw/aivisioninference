@@ -159,7 +159,7 @@ export default function StreamStatus() {
                 </Tr>
               ) : (
                 safeStreams.map((stream) => (
-                  <Tr key={stream.device_id}>
+                  <Tr key={stream.device_id || `${stream.app}-${stream.stream}`}>
                     <Td>
                       <VStack align="start" spacing={0}>
                         <Text color={textColor} fontWeight="bold" fontSize="sm">
@@ -182,8 +182,8 @@ export default function StreamStatus() {
                     </Td>
                     <Td>
                       <HStack wrap="wrap" spacing={1}>
-                        {stream.consumers && Object.values(stream.consumers).map((c, i) => (
-                          <Tooltip key={i} label={t('streamStatus.refTime', { time: formatDateTime(c.ref_at) })}>
+                        {stream.consumers && Object.entries(stream.consumers).map(([key, c]) => (
+                          <Tooltip key={key} label={t('streamStatus.refTime', { time: formatDateTime(c.ref_at) })}>
                             <Badge size="sm" variant="subtle" colorScheme="blue" textTransform="none">
                               {c.reason}
                             </Badge>

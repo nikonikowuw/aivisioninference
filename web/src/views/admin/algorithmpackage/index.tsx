@@ -61,6 +61,8 @@ export default function AlgorithmPackages() {
   const secondaryTextColor = useColorModeValue('gray.600', 'gray.400');
   const bgCard = useColorModeValue('white', 'navy.800');
   const bgUpload = useColorModeValue('gray.50', 'navy.900');
+  const bgUploadHover = useColorModeValue('gray.100', 'navy.950');
+  const bgCode = useColorModeValue('gray.50', 'navy.900');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
 
@@ -143,7 +145,7 @@ export default function AlgorithmPackages() {
     } catch (err) {
       toast({
         title: t('message.uploadFailed'),
-        description: err instanceof Error ? err.message : '',
+        description: err instanceof Error ? err.message : String(err || ''),
         status: 'error',
       });
     } finally {
@@ -167,7 +169,7 @@ export default function AlgorithmPackages() {
     } catch (err) {
       toast({
         title: t('message.deleteFailed'),
-        description: err instanceof Error ? err.message : '',
+        description: err instanceof Error ? err.message : String(err || ''),
         status: 'error',
       });
     } finally {
@@ -250,7 +252,7 @@ export default function AlgorithmPackages() {
           p="40px"
           cursor={uploading ? 'not-allowed' : 'pointer'}
           transition="all 0.2s"
-          _hover={{ borderColor: 'brand.500', bg: useColorModeValue('gray.100', 'navy.950') }}
+          _hover={{ borderColor: 'brand.500', bg: bgUploadHover }}
           mb="24px"
           textAlign="center"
         >
@@ -439,7 +441,7 @@ export default function AlgorithmPackages() {
                               <Button size="xs" leftIcon={<MdContentCopy />} onClick={() => copyToClipboard(pkg.result_schema)}>Copy</Button>
                             )}
                           </Flex>
-                          <Code p="10px" borderRadius="8px" fontSize="xs" w="100%" maxH="200px" overflowY="auto" display="block" whiteSpace="pre-wrap" bg={useColorModeValue('gray.50', 'navy.900')}>
+                          <Code p="10px" borderRadius="8px" fontSize="xs" w="100%" maxH="200px" overflowY="auto" display="block" whiteSpace="pre-wrap" bg={bgCode}>
                             {formatSchema(pkg.result_schema) || t('card.noSchema')}
                           </Code>
                         </Box>
@@ -450,7 +452,7 @@ export default function AlgorithmPackages() {
                               <Button size="xs" leftIcon={<MdContentCopy />} onClick={() => copyToClipboard(JSON.stringify(pkg.ai_params_schema))}>Copy</Button>
                             )}
                           </Flex>
-                          <Code p="10px" borderRadius="8px" fontSize="xs" w="100%" maxH="200px" overflowY="auto" display="block" whiteSpace="pre-wrap" bg={useColorModeValue('gray.50', 'navy.900')}>
+                          <Code p="10px" borderRadius="8px" fontSize="xs" w="100%" maxH="200px" overflowY="auto" display="block" whiteSpace="pre-wrap" bg={bgCode}>
                             {pkg.ai_params_schema ? JSON.stringify(pkg.ai_params_schema, null, 2) : t('card.noSchema')}
                           </Code>
                         </Box>

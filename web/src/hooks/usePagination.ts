@@ -10,6 +10,7 @@ interface PaginatedResult<T> {
 interface LoadOptions {
   page?: number;
   pageSize?: number;
+  silent?: boolean;
 }
 
 export function usePagination<T>(
@@ -36,7 +37,10 @@ export function usePagination<T>(
     const id = ++requestIdRef.current;
     const p = opts?.page ?? pageRef.current;
     const ps = opts?.pageSize ?? pageSizeRef.current;
-    setPageLoading(true);
+    const silent = opts?.silent ?? false;
+    
+    if (!silent) setPageLoading(true);
+    
     try {
       const data = await fetcherRef.current(p, ps);
       if (id !== requestIdRef.current) return;
@@ -49,7 +53,7 @@ export function usePagination<T>(
       toast({ title: t('common:message.loadFailed'), status: 'error' });
     } finally {
       if (id === requestIdRef.current) {
-        setPageLoading(false);
+        if (!silent) setPageLoading(false);
         if (initialRef.current) {
           initialRef.current = false;
           setInitialLoading(false);
@@ -76,5 +80,6 @@ export function usePagination<T>(
     load,
     changePage,
     changePageSize,
+    setList,
   };
 }

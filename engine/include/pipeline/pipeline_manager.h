@@ -33,7 +33,7 @@ namespace aivision
             std::string hal_so_path;
             std::string hal_config_json = "{}";
             std::string rtsp_push_server = "rtsp://localhost:10554";
-            bool enable_ffmpeg_fallback = false;
+            bool enable_ffmpeg_fallback = true;
         };
 
         /// Pipeline 管理器 — 负责所有流的生命周期管理

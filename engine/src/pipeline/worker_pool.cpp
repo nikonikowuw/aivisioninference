@@ -52,6 +52,7 @@ namespace aivision
 
         void WorkerPool::WorkerLoop(uint32_t worker_id)
         {
+            (void)worker_id;
             while (running_.load())
             {
                 // 检查是否暂停 (热更新排空)

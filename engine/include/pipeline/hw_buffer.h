@@ -7,9 +7,12 @@
 //   2. 使用自定义删除器的 shared_ptr 实现引用计数自动回收。
 //   3. HwBufferDesc 结构体包含 dma_fd，可在进程内传递（不跨进程）。
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <string>
 
 namespace aivision
 {
@@ -120,9 +123,9 @@ namespace aivision
 
         private:
             struct Impl;
+            uint64_t total_bytes_;
             std::unique_ptr<Impl> impl_;
             std::atomic<uint64_t> used_bytes_{0};
-            uint64_t total_bytes_;
         };
 
     } // namespace pipeline

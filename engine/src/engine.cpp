@@ -113,6 +113,8 @@ namespace aivision
             return;
         running_.store(false);
 
+        if (pipeline_mgr_)
+            pipeline_mgr_->StopAll();
         if (metrics_reporter_)
             metrics_reporter_->Stop();
         if (worker_pool_)
@@ -145,6 +147,7 @@ namespace aivision
 
     void InferenceEngine::HandleStartStream(const uint8_t *payload, size_t size, uint64_t seq)
     {
+        (void)payload; (void)size; (void)seq;
         // TODO: 解析 FlatBuffers 指令
         // pipeline_mgr_->CreatePipeline(device_id, rtsp_url, enable_infer, enable_playback);
         std::cout << "[IPC] Received StartStream" << std::endl;
@@ -152,6 +155,7 @@ namespace aivision
 
     void InferenceEngine::HandleStopStream(const uint8_t *payload, size_t size, uint64_t seq)
     {
+        (void)payload; (void)size; (void)seq;
         // TODO: 解析 FlatBuffers 指令
         // pipeline_mgr_->DestroyPipeline(device_id);
         std::cout << "[IPC] Received StopStream" << std::endl;
@@ -159,16 +163,19 @@ namespace aivision
 
     void InferenceEngine::HandleUpdateAlgoConfig(const uint8_t *payload, size_t size, uint64_t seq)
     {
+        (void)payload; (void)size; (void)seq;
         std::cout << "[IPC] Received UpdateAlgoConfig" << std::endl;
     }
 
     void InferenceEngine::HandleHeartbeat(const uint8_t *payload, size_t size, uint64_t seq)
     {
+        (void)payload; (void)size; (void)seq;
         // heartbeat_->OnHeartbeat(seq);
     }
 
     void InferenceEngine::HandleShutdown(const uint8_t *payload, size_t size, uint64_t seq)
     {
+        (void)payload; (void)size; (void)seq;
         std::cout << "[IPC] Received Shutdown command" << std::endl;
         Shutdown();
     }
@@ -544,33 +551,14 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StreamPlaybackStop" << std::endl;
 
-        // 解析 JSON payload
+        // 解析 JSON payload（与其他 Stream 处理器保持一致）
         std::string device_id;
         if (payload && size > 0)
         {
             std::string json_str(reinterpret_cast<const char*>(payload), size);
-            size_t pos = json_str.find("\"DeviceID\"");
-            if (pos != std::string::npos)
-            {
-                size_t start = json_str.find(":", pos);
-                if (start != std::string::npos)
-                {
-                    start = json_str.find("\"", start + 1);
-                    if (start != std::string::npos)
-                    {
-                        size_t end = json_str.find("\"", start + 1);
-                        if (end != std::string::npos)
-                        {
-                            device_id = json_str.substr(start + 1, end - start - 1);
-                        }
-                    }
-                }
-            }
-        }
-
-        if (device_id.empty())
-        {
-            device_id = std::string(reinterpret_cast<const char*>(payload), size);
+            device_id = ExtractJsonField(json_str, "device_id");
+            if (device_id.empty())
+                device_id = std::string(reinterpret_cast<const char*>(payload), size);
         }
 
         std::cout << "[IPC] StreamPlaybackStop device_id=" << device_id << std::endl;
@@ -860,8 +848,8 @@ namespace aivision
         // 6. Build response flatbuffer
         flatbuffers::FlatBufferBuilder fbb(1024);
         
-        aivision::ipc::SelfCheckStatus status = success ? aivision::ipc::SelfCheckStatus::Passed 
-                                                        : aivision::ipc::SelfCheckStatus::Failed;
+        aivision::ipc::SelfCheckStatus status = success ? aivision::ipc::SelfCheckStatus_Passed 
+                                                        : aivision::ipc::SelfCheckStatus_Failed;
 
         auto response_offset = aivision::ipc::CreateAlgoLoadResultMsgDirect(
             fbb,

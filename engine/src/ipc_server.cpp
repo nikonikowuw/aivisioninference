@@ -9,6 +9,7 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
+#include <mutex>
 #include <sstream>
 
 namespace aivision
@@ -166,6 +167,7 @@ namespace aivision
         bool IPCServer::SendMessage(uint16_t signal_type,
                                     flatbuffers::FlatBufferBuilder &fbb)
         {
+            (void)signal_type; (void)fbb;
             // TODO: 包装 IPCEnvelope 并发送到 Go 侧
             return true;
         }
@@ -173,6 +175,7 @@ namespace aivision
         bool IPCServer::BroadcastMessage(uint16_t signal_type,
                                          flatbuffers::FlatBufferBuilder &fbb)
         {
+            (void)signal_type; (void)fbb;
             // TODO: 广播到所有已连接的客户端
             return true;
         }

@@ -89,10 +89,12 @@ add_library(aivision-hal-rkmpp SHARED
     src/pipeline/hw_buffer.cpp
 )
 
+if(APPLE)
 add_library(aivision-hal-macos-videotoolbox SHARED
     src/hal/macos/videotoolbox_pipeline.cpp
     src/pipeline/hw_buffer.cpp
 )
+endif()
 
 target_include_directories(aivision-engine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -104,9 +106,11 @@ target_include_directories(aivision-hal-rkmpp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+if(APPLE)
 target_include_directories(aivision-hal-macos-videotoolbox PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+endif()
 
 target_link_libraries(aivision-engine PRIVATE
     flatbuffers::flatbuffers
@@ -119,10 +123,12 @@ target_link_libraries(aivision-hal-rkmpp PRIVATE
     Threads::Threads
 )
 
+if(APPLE)
 target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
     Threads::Threads
     dl
 )
+endif()
 
 if(APPLE)
     target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE

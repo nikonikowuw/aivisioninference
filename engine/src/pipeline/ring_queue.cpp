@@ -79,7 +79,7 @@ namespace aivision
             }
             FrameContext frame = std::move(queue_.front());
             queue_.pop();
-            return std::move(frame);
+            return frame;
         }
 
         size_t RingQueue::Size() const

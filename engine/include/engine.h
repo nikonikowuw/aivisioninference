@@ -45,7 +45,7 @@ namespace aivision
         std::string hal_config_json = "{}";
 
         /// 是否允许无 HAL 或 HAL 启动失败时使用 FFmpeg 兜底转推
-        bool enable_ffmpeg_fallback = false;
+        bool enable_ffmpeg_fallback = true;
 
         /// Metrics 上报间隔 (毫秒)
         uint32_t metrics_interval_ms = 5000;

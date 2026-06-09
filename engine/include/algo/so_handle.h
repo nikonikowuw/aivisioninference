@@ -9,6 +9,7 @@
 //   4. 支持移动语义 (不可拷贝)。
 
 #include <atomic>
+#include <stdexcept>
 #include <string>
 #include <functional>
 #include <vector>

@@ -287,6 +287,8 @@ namespace aivision
             {
                 execlp("ffmpeg", "ffmpeg",
                        "-hide_banner", "-loglevel", "warning",
+                       "-analyzeduration", "5000000",
+                       "-probesize", "10000000",
                        "-rtsp_transport", "tcp",
                        "-i", rtsp_url.c_str(),
                        "-an", "-c:v", "copy",
@@ -329,12 +331,14 @@ namespace aivision
 
         std::unique_ptr<Stage> PipelineManager::CreateInferenceStage(const std::string &device_id)
         {
+            (void)device_id;
             // 占位，任务 7.x 中实现
             return nullptr;
         }
 
         std::unique_ptr<Stage> PipelineManager::CreatePlaybackStage(const std::string &device_id)
         {
+            (void)device_id;
             // 占位，任务 8/9 中实现
             return nullptr;
         }

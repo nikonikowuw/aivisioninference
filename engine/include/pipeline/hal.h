@@ -135,11 +135,11 @@ namespace aivision
             // ============================================================
 
             /// 初始化编码器
-            virtual bool EncodeInit(const std::string &config_json) { return false; }
+            virtual bool EncodeInit(const std::string &config_json) { (void)config_json; return false; }
 
             /// 编码一帧。输入 YUV (DMA Buffer)，输出 H.264/H.265 NALU 包。
             /// data 为输出缓冲区，size 为输入缓冲区大小，out_size 为实际编码后大小。
-            virtual bool EncodeFrame(HwBufferPtr frame, uint8_t *data, size_t size, size_t &out_size) { return false; }
+            virtual bool EncodeFrame(HwBufferPtr frame, uint8_t *data, size_t size, size_t &out_size) { (void)frame; (void)data; (void)size; (void)out_size; return false; }
 
             /// 编码一帧并返回跨平台编码元数据。老 HAL 可只实现 EncodeFrame。
             virtual bool EncodeFrameEx(HwBufferPtr frame, uint8_t *data, size_t size, size_t &out_size, EncodedPacketDesc &desc)

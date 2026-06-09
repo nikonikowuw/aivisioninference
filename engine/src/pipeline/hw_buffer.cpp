@@ -2,6 +2,7 @@
 #include "pipeline/hw_buffer.h"
 #include <unistd.h>
 #include <iostream>
+#include <mutex>
 
 namespace aivision
 {

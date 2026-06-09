@@ -15,6 +15,23 @@
 
 namespace aivision
 {
+    namespace
+    {
+        std::string PayloadToString(const uint8_t *payload, size_t size)
+        {
+            if (!payload || size == 0)
+                return "";
+            return std::string(reinterpret_cast<const char *>(payload), size);
+        }
+
+        std::string BuildLivePlayURL(const std::string &base_url, const std::string &device_id)
+        {
+            std::string play_url = base_url.empty() ? "rtsp://localhost:10554" : base_url;
+            if (!play_url.empty() && play_url.back() == '/')
+                play_url.pop_back();
+            return play_url + "/live/" + device_id;
+        }
+    }
 
     InferenceEngine::InferenceEngine(const EngineConfig &config)
         : config_(config)
@@ -74,6 +91,11 @@ namespace aivision
 
     void InferenceEngine::Run()
     {
+        Run({});
+    }
+
+    void InferenceEngine::Run(const std::function<bool()> &should_stop)
+    {
         if (!initialized_.load())
         {
             if (!Initialize())
@@ -81,11 +103,13 @@ namespace aivision
         }
 
         running_.store(true);
+        shutdown_called_.store(false);
 
         // 启动 IPC Server
         if (!ipc_server_->Start())
         {
             std::cerr << "Failed to start IPC Server" << std::endl;
+            running_.store(false);
             return;
         }
 
@@ -98,6 +122,11 @@ namespace aivision
         // 主循环 (等待 Shutdown 或外部信号)
         while (running_.load())
         {
+            if (should_stop && should_stop())
+            {
+                running_.store(false);
+                break;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
@@ -109,8 +138,10 @@ namespace aivision
 
     void InferenceEngine::Shutdown()
     {
-        if (!running_.load())
+        bool expected = false;
+        if (!shutdown_called_.compare_exchange_strong(expected, true))
             return;
+
         running_.store(false);
 
         if (pipeline_mgr_)
@@ -388,20 +419,11 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StreamStart" << std::endl;
 
-        // 解析 JSON payload (Go 端使用 JSON 序列化)
-        std::string device_id;
-        std::string stream_url;
-        bool enable_infer = false;
-        bool enable_playback = false;
-
-        if (payload && size > 0)
-        {
-            std::string json_str(reinterpret_cast<const char*>(payload), size);
-            device_id = ExtractJsonField(json_str, "device_id");
-            stream_url = ExtractJsonField(json_str, "stream_url");
-            enable_infer = ExtractJsonBoolField(json_str, "enable_infer", false);
-            enable_playback = ExtractJsonBoolField(json_str, "enable_playback", false);
-        }
+        std::string payload_str = PayloadToString(payload, size);
+        std::string device_id = ExtractJsonField(payload_str, "device_id");
+        std::string stream_url = ExtractJsonField(payload_str, "stream_url");
+        bool enable_infer = ExtractJsonBoolField(payload_str, "enable_infer", false);
+        bool enable_playback = ExtractJsonBoolField(payload_str, "enable_playback", false);
 
         std::cout << "[IPC] StreamStart device_id=" << device_id
                   << ", stream_url=" << stream_url
@@ -427,12 +449,7 @@ namespace aivision
             std::cerr << "[IPC] Failed to create hardware pipeline for device: " << device_id << std::endl;
         }
 
-        std::string play_url = config_.rtsp_push_server;
-        if (play_url.empty())
-            play_url = "rtsp://localhost:10554";
-        if (!play_url.empty() && play_url.back() == '/')
-            play_url.pop_back();
-        play_url += "/live/" + device_id;
+        std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
         flatbuffers::FlatBufferBuilder fbb(512);
         auto device_id_str = fbb.CreateString(device_id);
         auto play_url_str = fbb.CreateString(started ? play_url : "");
@@ -445,7 +462,7 @@ namespace aivision
             ipc_server_->SendResponse(client_fd, 301, fbb.GetBufferPointer(), fbb.GetSize());
             std::cout << "[IPC] StreamStart response sent for device: " << device_id
                       << ", started=" << started
-                      << ", play_url=" << play_url << std::endl;
+                      << ", play_url=" << (started ? play_url : "") << std::endl;
         }
         else
         {
@@ -458,18 +475,11 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StreamStop" << std::endl;
 
-        // 解析 JSON payload
-        std::string device_id;
-        if (payload && size > 0)
+        std::string payload_str = PayloadToString(payload, size);
+        std::string device_id = ExtractJsonField(payload_str, "device_id");
+        if (device_id.empty())
         {
-            std::string json_str(reinterpret_cast<const char*>(payload), size);
-            device_id = ExtractJsonField(json_str, "device_id");
-        }
-
-        // 如果 JSON 解析失败，尝试作为纯字符串
-        if (device_id.empty() && payload && size > 0)
-        {
-            device_id = std::string(reinterpret_cast<const char*>(payload), size);
+            device_id = payload_str;
         }
 
         std::cout << "[IPC] StreamStop device_id=" << device_id << std::endl;
@@ -498,15 +508,12 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StreamPlaybackStart" << std::endl;
 
-        std::string device_id;
-        std::string stream_url;
-        if (payload && size > 0)
+        std::string payload_str = PayloadToString(payload, size);
+        std::string device_id = ExtractJsonField(payload_str, "device_id");
+        std::string stream_url = ExtractJsonField(payload_str, "stream_url");
+        if (device_id.empty())
         {
-            std::string json_str(reinterpret_cast<const char *>(payload), size);
-            device_id = ExtractJsonField(json_str, "device_id");
-            stream_url = ExtractJsonField(json_str, "stream_url");
-            if (device_id.empty())
-                device_id = std::string(reinterpret_cast<const char *>(payload), size);
+            device_id = payload_str;
         }
 
         std::cout << "[IPC] StreamPlaybackStart device_id=" << device_id
@@ -525,12 +532,7 @@ namespace aivision
             }
         }
 
-        std::string play_url = config_.rtsp_push_server;
-        if (play_url.empty())
-            play_url = "rtsp://localhost:10554";
-        if (!play_url.empty() && play_url.back() == '/')
-            play_url.pop_back();
-        play_url += "/live/" + device_id;
+        std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
 
         flatbuffers::FlatBufferBuilder fbb(256);
         auto device_id_str = fbb.CreateString(device_id);
@@ -551,14 +553,11 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StreamPlaybackStop" << std::endl;
 
-        // 解析 JSON payload（与其他 Stream 处理器保持一致）
-        std::string device_id;
-        if (payload && size > 0)
+        std::string payload_str = PayloadToString(payload, size);
+        std::string device_id = ExtractJsonField(payload_str, "device_id");
+        if (device_id.empty())
         {
-            std::string json_str(reinterpret_cast<const char*>(payload), size);
-            device_id = ExtractJsonField(json_str, "device_id");
-            if (device_id.empty())
-                device_id = std::string(reinterpret_cast<const char*>(payload), size);
+            device_id = payload_str;
         }
 
         std::cout << "[IPC] StreamPlaybackStop device_id=" << device_id << std::endl;
@@ -585,23 +584,16 @@ namespace aivision
     void InferenceEngine::HandleStreamStatus(const uint8_t *payload, size_t size, uint64_t seq)
     {
         (void)seq;
-        std::string device_id;
-        if (payload && size > 0)
+        std::string payload_str = PayloadToString(payload, size);
+        std::string device_id = ExtractJsonField(payload_str, "device_id");
+        if (device_id.empty())
         {
-            std::string json_str(reinterpret_cast<const char *>(payload), size);
-            device_id = ExtractJsonField(json_str, "device_id");
-            if (device_id.empty())
-                device_id = std::string(reinterpret_cast<const char *>(payload), size);
+            device_id = payload_str;
         }
 
         auto *pipeline = pipeline_mgr_->GetPipeline(device_id);
         bool running = pipeline != nullptr;
-        std::string play_url = config_.rtsp_push_server;
-        if (play_url.empty())
-            play_url = "rtsp://localhost:10554";
-        if (!play_url.empty() && play_url.back() == '/')
-            play_url.pop_back();
-        play_url += "/live/" + device_id;
+        std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
 
         flatbuffers::FlatBufferBuilder fbb(512);
         auto device_id_str = fbb.CreateString(device_id);

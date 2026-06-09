@@ -1,18 +1,13 @@
 // aivision-engine — C++ 推理数据面引擎入口。
 // 控制面 (Go) 与数据面 (C++) 分离架构的数据面进程。
 
-#include <iostream>
 #include <csignal>
 #include <cstdlib>
-#include <chrono>
-#include <thread>
+#include <iostream>
 
 #include "engine.h"
 
 using namespace aivision;
-
-// 全局引擎指针 (用于信号处理)
-static InferenceEngine *g_engine = nullptr;
 
 // 信号标志 (async-signal-safe)
 static volatile sig_atomic_t g_signal_received = 0;
@@ -21,10 +16,6 @@ static volatile sig_atomic_t g_signal_received = 0;
 static void SignalHandler(int sig)
 {
     g_signal_received = sig;
-    if (g_engine)
-    {
-        g_engine->RequestShutdown();
-    }
 }
 
 // 打印版本信息
@@ -122,7 +113,6 @@ int main(int argc, char *argv[])
 
     // 创建并初始化引擎
     InferenceEngine engine(config);
-    g_engine = &engine;
 
     if (!engine.Initialize())
     {
@@ -134,7 +124,7 @@ int main(int argc, char *argv[])
               << config.ipc_addr << "..." << std::endl;
 
     // 运行主循环 (阻塞)
-    engine.Run();
+    engine.Run([]() { return g_signal_received != 0; });
 
     // 检查信号标志 (async-signal-safe)
     if (g_signal_received)
@@ -142,7 +132,8 @@ int main(int argc, char *argv[])
         std::cerr << "Received signal " << g_signal_received << ", shutting down..." << std::endl;
     }
 
+    engine.Shutdown();
+
     std::cout << "Engine shut down gracefully" << std::endl;
-    g_engine = nullptr;
     return 0;
 }

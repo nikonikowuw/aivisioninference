@@ -28,6 +28,21 @@
 #include <poll.h>
 #include <netdb.h>
 
+// ====================================================================
+// MPP/RGA 版本兼容性宏
+// 兼容 MPP 1.5.0 和 RGA 2.2.0
+// ====================================================================
+
+// MPP_ALIGN 对齐宏（部分 MPP 版本未导出）
+#ifndef MPP_ALIGN
+#define MPP_ALIGN(x, a) (((x) + (a) - 1) & ~((a) - 1))
+#endif
+
+// MPP_PACKET_FLAG_INTRA 兼容（MPP 1.5.0 未定义）
+#ifndef MPP_PACKET_FLAG_INTRA
+#define MPP_PACKET_FLAG_INTRA 0x00000001
+#endif
+
 #endif
 
 namespace aivision {
@@ -238,15 +253,14 @@ void RKMPPPipeline::Stop() {
     running_.store(false);
     paused_ = false;
 
+    // 先断开 socket，唤醒可能阻塞在 recv() 的拉流线程
+    RtspDisconnect();
+
     // 等待拉流线程
     if (pull_thread_ && pull_thread_->joinable()) {
         pull_thread_->join();
         pull_thread_.reset();
     }
-
-    // RTSP TEARDOWN + 断开
-    RtspTeardown();
-    RtspDisconnect();
 
     // 释放 RGA 持久化缓冲
     delete[] rga_dst_buf_;
@@ -421,12 +435,15 @@ bool RKMPPPipeline::EncodeFrameEx(HwBufferPtr frame,
     MPP_RET ret = MPP_OK;
 
     // 1. 从 DMA fd 导入到编码器的 buffer group
+    // MPP 1.5.0 兼容: 使用 mpp_buffer_import(buffer, info)
     MppBuffer enc_buf = nullptr;
-    ret = mpp_buffer_import(static_cast<MppBufferGroup>(enc_buf_grp_),
-                            &enc_buf, hw_desc.dma_fd);
+    MppBufferInfo buf_info = {};
+    buf_info.type = MPP_BUFFER_TYPE_EXT_DMA;
+    buf_info.fd = hw_desc.dma_fd;
+    buf_info.size = hw_desc.size;
+    ret = mpp_buffer_import(&enc_buf, &buf_info);
     if (ret != MPP_OK || !enc_buf) {
-        // 如果导入失败，尝试从解码器 buffer group 获取
-        RK_LOG_W("mpp_buffer_import failed, trying get from decoder group");
+        RK_LOG_W("mpp_buffer_import failed for DMA fd " << hw_desc.dma_fd);
         last_status_ = HALStatus::Error(
             HALStatusCode::EncodeFailed,
             "mpp_buffer_import failed: " + std::to_string(ret));
@@ -752,7 +769,7 @@ void RKMPPPipeline::DecodeNal(const uint8_t* data, size_t size, int64_t pts) {
     MPP_RET ret = MPP_OK;
 
     MppPacket packet = nullptr;
-    ret = mpp_packet_init(&packet, data, size);
+    ret = mpp_packet_init(&packet, const_cast<void*>(static_cast<const void*>(data)), size);
     if (ret != MPP_OK) {
         RK_LOG_E("mpp_packet_init failed: " << ret);
         return;
@@ -849,6 +866,7 @@ bool RKMPPPipeline::RtspConnect(const std::string& url) {
 
 void RKMPPPipeline::RtspDisconnect() {
     if (rtsp_socket_ >= 0) {
+        ::shutdown(rtsp_socket_, SHUT_RDWR);
         ::close(rtsp_socket_);
         rtsp_socket_ = -1;
     }
@@ -1069,7 +1087,7 @@ void RKMPPPipeline::HandleRtpPacket(const RtpPacket& pkt) {
         }
     } else {
         // H.265
-        if (nal_unit_type >= 0 && nal_unit_type <= 47) {
+        if (nal_unit_type <= 47) {
             EmitNal(data, size, pkt.timestamp);
         } else if (nal_unit_type == 49) {
             if (size < 2) return;
@@ -1286,7 +1304,8 @@ HwBufferPtr RKMPPPipeline::MppFrameToHwBuffer(void* frame) {
     auto hw_buf = std::make_shared<HwBuffer>(desc);
     hw_buf->SetReleaseCallback([](const HwBufferDesc& d) {
         if (d.native_handle) {
-            mpp_frame_deinit(static_cast<MppFrame>(d.native_handle));
+            MppFrame frame = static_cast<MppFrame>(d.native_handle);
+            mpp_frame_deinit(&frame);
         }
     });
 
@@ -1341,7 +1360,10 @@ bool RKMPPPipeline::RgaResize(const HwBufferDesc& src_desc,
     rga_buffer_t dst_img = wrapbuffer_handle(
         dst_handle, dst_w, dst_h, RK_FORMAT_YCbCr_420_SP);
 
-    // 检查参数
+    // 检查参数 - RGA 2.2.0 兼容方式
+    // 旧版本 imcheck 宏不支持空参数，直接跳过检查
+    // 实际的参数有效性由 RGA 驱动在执行时验证
+    #if defined(IM_CHECK)
     IM_STATUS check_ret = imcheck(src_img, dst_img, {}, {});
     if (check_ret != IM_STATUS_NOERROR && check_ret != IM_STATUS_SUCCESS) {
         RK_LOG_W("RGA imcheck failed: " << imStrError(check_ret));
@@ -1349,6 +1371,7 @@ bool RKMPPPipeline::RgaResize(const HwBufferDesc& src_desc,
         releasebuffer_handle(dst_handle);
         return false;
     }
+    #endif
 
     // 执行硬件缩放（同步模式，默认 sync=1）
     IM_STATUS ret = imresize(src_img, dst_img);

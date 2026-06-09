@@ -6,11 +6,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <algorithm>
 #include <cstring>
 #include <iostream>
-#include <algorithm>
 #include <mutex>
-#include <sstream>
 
 namespace aivision
 {
@@ -96,6 +95,7 @@ namespace aivision
             // 关闭 server_fd 使 accept() 返回错误退出循环
             if (server_fd_ >= 0)
             {
+                shutdown(server_fd_, SHUT_RDWR);
                 close(server_fd_);
                 server_fd_ = -1;
             }
@@ -105,6 +105,7 @@ namespace aivision
                 std::lock_guard<std::mutex> lock(clients_mutex_);
                 for (int fd : client_fds_)
                 {
+                    shutdown(fd, SHUT_RDWR);
                     close(fd);
                 }
                 client_fds_.clear();
@@ -118,15 +119,18 @@ namespace aivision
 
             // 等待所有客户端处理线程退出
             {
-                std::lock_guard<std::mutex> lock(threads_mutex_);
-                for (auto &t : client_threads_)
+                std::vector<std::unique_ptr<std::thread>> threads;
+                {
+                    std::lock_guard<std::mutex> lock(threads_mutex_);
+                    threads.swap(client_threads_);
+                }
+                for (auto &t : threads)
                 {
                     if (t && t->joinable())
                     {
                         t->join();
                     }
                 }
-                client_threads_.clear();
             }
         }
 
@@ -267,25 +271,31 @@ namespace aivision
             const uint8_t *payload = buffer + kMinMessageSize;
             size_t payload_size = payload_len;
 
-            // 查找并分发到注册的 Handler
-            std::lock_guard<std::mutex> lock(handlers_mutex_);
-            auto it = handlers_.find(cmd_type);
-            if (it != handlers_.end())
+            CommandHandler handler;
             {
-                try
+                std::lock_guard<std::mutex> lock(handlers_mutex_);
+                auto it = handlers_.find(cmd_type);
+                if (it != handlers_.end())
                 {
-                    it->second(payload, payload_size, 0);
-                }
-                catch (const std::exception &e)
-                {
-                    std::cerr << "[IPC] Handler exception for cmd_type="
-                              << cmd_type << ": " << e.what() << std::endl;
-                    return false;
+                    handler = it->second;
                 }
             }
-            else
+
+            if (!handler)
             {
                 std::cerr << "[IPC] No handler for cmd_type=" << cmd_type << std::endl;
+                return true;
+            }
+
+            try
+            {
+                handler(payload, payload_size, 0);
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "[IPC] Handler exception for cmd_type="
+                          << cmd_type << ": " << e.what() << std::endl;
+                return false;
             }
 
             return true;

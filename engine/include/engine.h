@@ -11,6 +11,7 @@
 //   6. 处理 Go 控制面指令 (启动/停止流、热更新等)。
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -76,6 +77,9 @@ namespace aivision
 
         /// 启动引擎 (阻塞，直到收到 Shutdown 信号)
         void Run();
+
+        /// 启动引擎 (阻塞，直到收到 Shutdown 信号或外部退出条件)
+        void Run(const std::function<bool()> &should_stop);
 
         /// 停止引擎
         void Shutdown();
@@ -157,6 +161,7 @@ namespace aivision
         EngineConfig config_;
         std::atomic<bool> running_{false};
         std::atomic<bool> initialized_{false};
+        std::atomic<bool> shutdown_called_{false};
 
         // 组件
         std::unique_ptr<ipc::IPCServer> ipc_server_;

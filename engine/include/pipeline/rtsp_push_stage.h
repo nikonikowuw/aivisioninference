@@ -1,13 +1,14 @@
 #ifndef AIVISION_PIPELINE_RTSP_PUSH_STAGE_H
 #define AIVISION_PIPELINE_RTSP_PUSH_STAGE_H
 
-#include "pipeline.h"
 #include "encoder_stage.h"
-#include <thread>
+#include "pipeline.h"
+
 #include <atomic>
-#include <string>
-#include <memory>
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <thread>
 
 namespace aivision {
 namespace pipeline {
@@ -29,7 +30,7 @@ public:
 private:
     void Loop();
     bool Connect();
-    void Disconnect();
+    void Disconnect(bool send_teardown = true);
     bool SendPacket(const EncodedPacket& pkt);
     bool SendRequest(const std::string& request);
     bool ReadResponse(int& status_code, std::string& response);
@@ -38,7 +39,6 @@ private:
 
     std::string push_url_;
     std::shared_ptr<EncoderStage> encoder_;
-    StageContext ctx_;
     
     std::atomic<bool> running_{false};
     std::atomic<bool> connected_{false};
@@ -46,7 +46,6 @@ private:
     
     int socket_fd_ = -1;
     std::string host_;
-    std::string path_;
     uint16_t port_ = 554;
     uint32_t cseq_ = 1;
     std::string session_;

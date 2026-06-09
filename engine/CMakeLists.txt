@@ -70,7 +70,7 @@ if(AIVISION_WITH_RKMPP)
     )
     find_path(RGA_INCLUDE
         NAMES im2d.hpp im2d.h
-        PATHS /usr/include /usr/local/include /usr/include/librga
+        PATHS /usr/include /usr/local/include /usr/include/librga /usr/include/rga
         HINTS ${_rkmpp_search_hints}
     )
 
@@ -111,7 +111,7 @@ set(ENGINE_SOURCES
     src/monitor/metrics_reporter.cpp
 )
 
-set(ENGINE_HEADERS
+set(INSTALL_HEADERS
     include/engine.h
     include/ipc/transport.h
     include/ipc/ipc_server.h
@@ -154,15 +154,14 @@ add_library(aivision-hal-rkmpp SHARED
 )
 
 if(APPLE)
-add_library(aivision-hal-macos-videotoolbox SHARED
-    src/hal/macos/videotoolbox_pipeline.cpp
-    src/pipeline/hw_buffer.cpp
-)
+    add_library(aivision-hal-macos-videotoolbox SHARED
+        src/hal/macos/videotoolbox_pipeline.cpp
+        src/pipeline/hw_buffer.cpp
+    )
 endif()
 
 target_include_directories(aivision-engine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${FLATBUFFERS_INCLUDE_DIRS}
 )
 
@@ -171,9 +170,9 @@ target_include_directories(aivision-hal-rkmpp PRIVATE
 )
 
 if(APPLE)
-target_include_directories(aivision-hal-macos-videotoolbox PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+    target_include_directories(aivision-hal-macos-videotoolbox PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
 endif()
 
 target_link_libraries(aivision-engine PRIVATE
@@ -204,14 +203,9 @@ else()
 endif()
 
 if(APPLE)
-target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
-    Threads::Threads
-    dl
-)
-endif()
-
-if(APPLE)
     target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
+        Threads::Threads
+        dl
         "-framework VideoToolbox"
         "-framework CoreMedia"
         "-framework CoreVideo"
@@ -266,7 +260,7 @@ endif()
 
 install(TARGETS aivision-engine DESTINATION bin)
 install(TARGETS aivision-hal-rkmpp DESTINATION lib/aivision)
-install(FILES ${ENGINE_HEADERS} DESTINATION include/aivision-engine)
+install(FILES ${INSTALL_HEADERS} DESTINATION include/aivision-engine)
 
 # 安装 RK3568 相关工具
 install(FILES

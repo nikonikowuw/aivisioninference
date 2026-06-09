@@ -1,6 +1,6 @@
 // MetricsReporter 实现
 #include "monitor/metrics_reporter.h"
-#include <algorithm>
+
 #include <iostream>
 
 namespace aivision
@@ -28,6 +28,7 @@ namespace aivision
         void MetricsReporter::Stop()
         {
             running_.store(false);
+            stop_cv_.notify_all();
             if (reporter_thread_ && reporter_thread_->joinable())
             {
                 reporter_thread_->join();
@@ -38,21 +39,16 @@ namespace aivision
         {
             while (running_.load())
             {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(config_.report_interval_ms));
-
-                if (!running_.load())
+                std::unique_lock<std::mutex> lock(stop_mutex_);
+                if (stop_cv_.wait_for(
+                        lock,
+                        std::chrono::milliseconds(config_.report_interval_ms),
+                        [this]() { return !running_.load(); }))
+                {
                     break;
+                }
 
                 auto metrics = CollectMetrics();
-
-                // 将指标推送到 Go 控制面 (通过 IPC)
-                if (ipc_server_)
-                {
-                    // TODO: 构造 EngineMetricsMsg FlatBuffers 并发送
-                    // auto fbb = BuildEngineMetricsMsg(metrics);
-                    // ipc_server_->SendMessage(0x0203, fbb);
-                }
 
                 // 触发外部回调 (如有注册)
                 if (metrics_cb_)
@@ -105,26 +101,9 @@ namespace aivision
             }
 
             // TODO: 采集 AlgoManager 状态 (NPU 内存使用等)
-
-            if (algo_mgr_)
-            {
-                // metrics.npu_used_bytes = algo_mgr_->GetNPUMemoryUsage();
-            }
+            (void)algo_mgr_;
 
             return metrics;
-        }
-
-        uint32_t MetricsReporter::CalculateP95(
-            const std::vector<uint32_t> &latencies)
-        {
-            if (latencies.empty())
-                return 0;
-            auto sorted = latencies;
-            std::sort(sorted.begin(), sorted.end());
-            size_t idx = sorted.size() * 95 / 100;
-            if (idx >= sorted.size())
-                idx = sorted.size() - 1;
-            return sorted[idx];
         }
 
         EngineMetrics MetricsReporter::CollectNow()

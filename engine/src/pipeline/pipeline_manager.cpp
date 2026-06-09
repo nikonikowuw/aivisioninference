@@ -4,6 +4,7 @@
 #include "pipeline/rtsp_push_stage.h"
 #include <chrono>
 #include <csignal>
+#include <cerrno>
 #include <iostream>
 #include <sys/wait.h>
 #include <thread>
@@ -13,6 +14,26 @@ namespace aivision
 {
     namespace pipeline
     {
+        namespace
+        {
+            void TerminateChildProcess(pid_t pid)
+            {
+                if (pid <= 0)
+                    return;
+
+                kill(pid, SIGTERM);
+                for (int i = 0; i < 20; ++i)
+                {
+                    pid_t result = waitpid(pid, nullptr, WNOHANG);
+                    if (result == pid || (result < 0 && errno == ECHILD))
+                        return;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+
+                kill(pid, SIGKILL);
+                waitpid(pid, nullptr, 0);
+            }
+        }
 
         PipelineManager::PipelineManager(PipelineManagerConfig config)
             : config_(std::move(config)) {}
@@ -37,28 +58,26 @@ namespace aivision
 
             // 1. 创建 Pipeline 实例
             auto pipeline = std::make_unique<Pipeline>(device_id);
+            auto create_ffmpeg_fallback = [&]() {
+                if (!config_.enable_ffmpeg_fallback || !StartFFmpegFallback(device_id, rtsp_url))
+                    return false;
+
+                pipelines_[device_id] = std::move(pipeline);
+                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
+                return true;
+            };
 
             // 2. 创建并启动 HAL (拉流/硬件解码)，必要时使用 FFmpeg 兜底转推
             auto hal = std::make_unique<HALManager>();
             if (config_.hal_so_path.empty())
             {
                 std::cerr << "HAL .so path is not configured for device " << device_id << std::endl;
-                if (!config_.enable_ffmpeg_fallback)
-                    return false;
-                if (!StartFFmpegFallback(device_id, rtsp_url))
-                    return false;
-                pipelines_[device_id] = std::move(pipeline);
-                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
-                return true;
+                return create_ffmpeg_fallback();
             }
             if (!hal->LoadPipeline(config_.hal_so_path, config_.hal_config_json))
             {
                 std::cerr << "Failed to load HAL pipeline for device " << device_id << std::endl;
-                if (!config_.enable_ffmpeg_fallback || !StartFFmpegFallback(device_id, rtsp_url))
-                    return false;
-                pipelines_[device_id] = std::move(pipeline);
-                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
-                return true;
+                return create_ffmpeg_fallback();
             }
             auto *media_pipeline = hal->GetPipeline();
             if (!media_pipeline)
@@ -82,11 +101,7 @@ namespace aivision
             {
                 std::cerr << "Failed to start HAL stream for device " << device_id
                           << ", url=" << rtsp_url << std::endl;
-                if (!config_.enable_ffmpeg_fallback || !StartFFmpegFallback(device_id, rtsp_url))
-                    return false;
-                pipelines_[device_id] = std::move(pipeline);
-                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
-                return true;
+                return create_ffmpeg_fallback();
             }
 
             // 3. 根据参数添加初始 Stage
@@ -157,20 +172,14 @@ namespace aivision
 
             // 获取 HAL
             auto it_hal = hal_managers_.find(device_id);
-            if (it_hal == hal_managers_.end()) return false;
-            
+            if (it_hal == hal_managers_.end())
+                return false;
+
             std::string push_url = BuildPushURL(device_id);
-            
-            // 1. 创建编码 Stage (shared_ptr 供 RtspPushStage 引用)
             auto encoder = std::make_shared<EncoderStage>(it_hal->second->GetPipeline());
-            
-            // 2. 创建推流 Stage (shared_ptr 引用 encoder)
             auto pusher = std::make_shared<RtspPushStage>(push_url, encoder);
-            
-            if (!p->AddStage(encoder)) return false;
-            if (!p->AddStage(pusher)) return false;
-            
-            return true;
+
+            return p->AddStage(encoder) && p->AddStage(pusher);
         }
 
         bool PipelineManager::DisablePlayback(const std::string &device_id)
@@ -240,23 +249,21 @@ namespace aivision
         void PipelineManager::StopAll()
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            for (auto &[id, p] : pipelines_)
+            for (auto &[device_id, p] : pipelines_)
             {
+                (void)device_id;
                 p->Stop();
             }
-            for (auto &[id, hal] : hal_managers_)
+            for (auto &[device_id, hal] : hal_managers_)
             {
+                (void)device_id;
                 if (hal && hal->GetPipeline())
                     hal->GetPipeline()->Stop();
             }
-            for (auto &[id, pid] : ffmpeg_fallbacks_)
+            for (auto &[device_id, pid] : ffmpeg_fallbacks_)
             {
-                (void)id;
-                if (pid > 0)
-                {
-                    kill(pid, SIGTERM);
-                    waitpid(pid, nullptr, 0);
-                }
+                (void)device_id;
+                TerminateChildProcess(pid);
             }
             pipelines_.clear();
             hal_managers_.clear();
@@ -321,11 +328,7 @@ namespace aivision
             if (it == ffmpeg_fallbacks_.end())
                 return;
             pid_t pid = it->second;
-            if (pid > 0)
-            {
-                kill(pid, SIGTERM);
-                waitpid(pid, nullptr, 0);
-            }
+            TerminateChildProcess(pid);
             ffmpeg_fallbacks_.erase(it);
         }
 

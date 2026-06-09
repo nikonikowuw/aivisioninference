@@ -9,9 +9,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "ipc/ipc_server.h"
 #include "pipeline/worker_pool.h"
@@ -99,9 +103,6 @@ namespace aivision
             /// 采集一次指标
             EngineMetrics CollectMetrics();
 
-            /// 计算 P95 延迟
-            static uint32_t CalculateP95(const std::vector<uint32_t> &latencies);
-
             ipc::IPCServer *ipc_server_;
             pipeline::WorkerPool *worker_pool_;
             pipeline::HwBufferPool *buffer_pool_;
@@ -111,6 +112,8 @@ namespace aivision
             MetricsReporterConfig config_;
             std::atomic<bool> running_{false};
             std::unique_ptr<std::thread> reporter_thread_;
+            std::mutex stop_mutex_;
+            std::condition_variable stop_cv_;
 
             /// 外部指标回调
             MetricsCallback metrics_cb_;

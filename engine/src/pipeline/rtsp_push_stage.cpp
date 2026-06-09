@@ -8,7 +8,6 @@
 #include <netdb.h>
 #include <random>
 #include <sstream>
-#include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -37,14 +36,13 @@ std::string Trim(const std::string& value) {
     return value.substr(start, end - start + 1);
 }
 
-bool ParseRtspUrl(const std::string& url, std::string& host, uint16_t& port, std::string& path) {
+bool ParseRtspUrl(const std::string& url, std::string& host, uint16_t& port) {
     constexpr const char* prefix = "rtsp://";
     if (url.rfind(prefix, 0) != 0) return false;
 
     std::string rest = url.substr(std::strlen(prefix));
     size_t slash = rest.find('/');
     std::string authority = slash == std::string::npos ? rest : rest.substr(0, slash);
-    path = slash == std::string::npos ? "/" : rest.substr(slash);
     if (authority.empty()) return false;
 
     size_t colon = authority.rfind(':');
@@ -118,7 +116,7 @@ RtspPushStage::~RtspPushStage() {
 }
 
 bool RtspPushStage::Init(const StageContext& ctx) {
-    ctx_ = ctx;
+    (void)ctx;
     return encoder_ != nullptr;
 }
 
@@ -132,10 +130,10 @@ bool RtspPushStage::Run() {
 void RtspPushStage::Stop() {
     if (!running_.load()) return;
     running_.store(false);
+    Disconnect(false);
     if (thread_ && thread_->joinable()) {
         thread_->join();
     }
-    Disconnect();
 }
 
 void RtspPushStage::PushFrame(const FrameContext& frame) {
@@ -171,7 +169,7 @@ void RtspPushStage::Loop() {
 
 bool RtspPushStage::Connect() {
     Disconnect();
-    if (!ParseRtspUrl(push_url_, host_, port_, path_)) {
+    if (!ParseRtspUrl(push_url_, host_, port_)) {
         std::cerr << "[RTSP] Invalid push URL: " << push_url_ << std::endl;
         return false;
     }
@@ -264,15 +262,16 @@ bool RtspPushStage::Connect() {
     return true;
 }
 
-void RtspPushStage::Disconnect() {
+void RtspPushStage::Disconnect(bool send_teardown) {
     if (socket_fd_ >= 0) {
-        if (!session_.empty()) {
+        if (send_teardown && !session_.empty()) {
             std::ostringstream teardown;
             teardown << "TEARDOWN " << push_url_ << " RTSP/1.0\r\n"
                      << "CSeq: " << cseq_++ << "\r\n"
                      << "Session: " << session_ << "\r\n\r\n";
             SendRequest(teardown.str());
         }
+        ::shutdown(socket_fd_, SHUT_RDWR);
         ::close(socket_fd_);
         socket_fd_ = -1;
     }

@@ -81,6 +81,15 @@ export const gb28181 = {
     heartbeatInterval: '心跳间隔',
     syncInterval: '同步间隔',
     readOnly: '只读（修改需重启 ZLM 服务）',
+    restartHint: '保存后需重启 ZLM 服务才能完全生效',
+    saved: 'GB28181 配置已保存',
+    saveFailed: '保存 GB28181 配置失败',
+    fields: {
+      'sip.port': 'SIP 端口',
+      'sip.id': 'SIP ID',
+      'sip.domain': 'SIP 域',
+      'sip.password': 'SIP 密码',
+    },
   },
   status: {
     sipService: 'SIP 服务',

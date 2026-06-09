@@ -12,11 +12,9 @@ Thumbs.db
 
 # Go (app/)
 app/bin/
-app/pkg/
 app/dist/
 app/tmp/
 app/.env
-app/docs/
 app/server
 *.exe
 *.exe~
@@ -43,7 +41,6 @@ pnpm-debug.log*
 **/CMakeFiles/
 **/CMakeCache.txt
 **/cmake_install.cmake
-**/Makefile
 **/*.ninja
 **/*.o
 **/*.a

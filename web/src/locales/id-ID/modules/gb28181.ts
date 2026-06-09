@@ -81,6 +81,15 @@ export const gb28181 = {
     heartbeatInterval: 'Interval Detak',
     syncInterval: 'Interval Sinkronisasi',
     readOnly: 'Hanya baca (restart ZLM untuk mengubah)',
+    restartHint: 'Restart ZLM setelah menyimpan agar semua perubahan berlaku',
+    saved: 'Konfigurasi GB28181 berhasil disimpan',
+    saveFailed: 'Gagal menyimpan konfigurasi GB28181',
+    fields: {
+      'sip.port': 'Port SIP',
+      'sip.id': 'SIP ID',
+      'sip.domain': 'Domain SIP',
+      'sip.password': 'Kata Sandi SIP',
+    },
   },
   status: {
     sipService: 'Layanan SIP',

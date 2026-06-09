@@ -185,6 +185,15 @@ export function getGB28181NVRChannels(nvrId: string) {
   return request<GB28181Channel[]>(`/gb28181/nvrs/${nvrId}/channels`);
 }
 
+export type GB28181Config = Record<string, string | number | boolean>;
+
 export function getGB28181Config() {
-  return request<Record<string, string | number>>('/system/gb28181/config');
+  return request<GB28181Config>('/system/gb28181/config');
+}
+
+export function updateGB28181Config(data: GB28181Config) {
+  return request<GB28181Config>('/system/gb28181/config', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }

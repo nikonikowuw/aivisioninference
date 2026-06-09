@@ -81,6 +81,15 @@ export const gb28181 = {
     heartbeatInterval: '하트비트 간격',
     syncInterval: '동기화 간격',
     readOnly: '읽기 전용 (변경 시 ZLM 재시작 필요)',
+    restartHint: '저장 후 모든 변경 사항을 적용하려면 ZLM 서비스를 재시작해야 합니다',
+    saved: 'GB28181 설정이 저장되었습니다',
+    saveFailed: 'GB28181 설정 저장 실패',
+    fields: {
+      'sip.port': 'SIP 포트',
+      'sip.id': 'SIP ID',
+      'sip.domain': 'SIP 도메인',
+      'sip.password': 'SIP 비밀번호',
+    },
   },
   status: {
     sipService: 'SIP 서비스',

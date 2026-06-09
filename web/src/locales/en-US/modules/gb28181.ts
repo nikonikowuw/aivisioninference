@@ -81,6 +81,15 @@ export const gb28181 = {
     heartbeatInterval: 'Heartbeat Interval',
     syncInterval: 'Sync Interval',
     readOnly: 'Read only (restart ZLM to modify)',
+    restartHint: 'Restart ZLM after saving for all changes to take effect',
+    saved: 'GB28181 configuration saved',
+    saveFailed: 'Failed to save GB28181 configuration',
+    fields: {
+      'sip.port': 'SIP Port',
+      'sip.id': 'SIP ID',
+      'sip.domain': 'SIP Domain',
+      'sip.password': 'SIP Password',
+    },
   },
   status: {
     sipService: 'SIP Service',

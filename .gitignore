@@ -16,6 +16,7 @@ app/dist/
 app/tmp/
 app/.env
 app/server
+app/docs/
 *.exe
 *.exe~
 *.dll
@@ -54,6 +55,10 @@ pnpm-debug.log*
 **/proto/*.pb.go
 **/proto/flatbuf/*_generated.h
 **/include/proto/*_generated.h
+app/internal/pkg/ipc/fbs/
+
+# Wire (auto-generated dependency injection)
+**/wire_gen.go
 
 # ZLM
 zlm/data/

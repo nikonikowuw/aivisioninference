@@ -131,12 +131,13 @@ func provideDeviceStagingHandler(
 
 func provideDeviceHandler(
 	deviceRepo *repository.DeviceRepository,
+	discoveredDeviceRepo *repository.DiscoveredDeviceRepository,
 	permCache cache.Cache,
 	taskClient *task.Client,
 	zlmClient *zlm.Client,
 	streamManager *service.StreamManager,
 ) *handler.DeviceHandler {
-	deviceSvc := service.NewDeviceService(deviceRepo, permCache, taskClient, zlmClient, streamManager)
+	deviceSvc := service.NewDeviceService(deviceRepo, discoveredDeviceRepo, permCache, taskClient, zlmClient, streamManager)
 	return handler.NewDeviceHandler(deviceSvc)
 }
 

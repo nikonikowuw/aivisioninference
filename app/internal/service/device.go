@@ -68,12 +68,12 @@ type taskClient interface {
 
 // DeviceService 处理设备管理的业务逻辑
 type DeviceService struct {
-	deviceRepo          deviceRepo
+	deviceRepo           deviceRepo
 	discoveredDeviceRepo discoveredDeviceRepo
-	cache               cache
-	taskClient          taskClient
-	zlmClient           zlmClient
-	streamManager       *StreamManager
+	cache                cache
+	taskClient           taskClient
+	zlmClient            zlmClient
+	streamManager        *StreamManager
 }
 
 // NewDeviceService 创建并返回一个新的 DeviceService 实例
@@ -165,7 +165,6 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		key := "gb28181:" + req.GB28181DeviceID + ":" + req.GB28181ChannelID
 		item.ExternalKey = &key
 	}
-
 
 	// 密码加密
 	if req.Password != "" {
@@ -747,7 +746,7 @@ func (s *DeviceGroupService) Delete(ctx context.Context, id string) error {
 // ---------- 辅助函数 ----------
 
 func toDeviceListResponse(item *model.Device) dto.DeviceListResponse {
-	return dto.DeviceListResponse{
+	resp := dto.DeviceListResponse{
 		ID:           item.ID,
 		DeviceName:   item.DeviceName,
 		AccessType:   item.AccessType,
@@ -757,6 +756,15 @@ func toDeviceListResponse(item *model.Device) dto.DeviceListResponse {
 		CreatedAt:    item.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    item.UpdatedAt.Format(time.RFC3339),
 	}
+	if item.LastOnlineAt != nil {
+		s := item.LastOnlineAt.Format(time.RFC3339)
+		resp.LastOnlineAt = &s
+	}
+	if item.LastOfflineAt != nil {
+		s := item.LastOfflineAt.Format(time.RFC3339)
+		resp.LastOfflineAt = &s
+	}
+	return resp
 }
 
 func toDeviceResponse(item *model.Device) *dto.DeviceResponse {

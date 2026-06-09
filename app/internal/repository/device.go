@@ -137,10 +137,16 @@ func (r *DeviceRepository) Update(ctx context.Context, item *model.Device) error
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
-// UpdateStatus 更新设备状态和最近错误信息
+// UpdateStatus 更新设备状态、在线时间和最近错误信息
 func (r *DeviceRepository) UpdateStatus(ctx context.Context, id, status, errorCode, errorMessage string) error {
+	now := time.Now()
 	updates := map[string]interface{}{
 		"status": status,
+	}
+	if status == model.DeviceStatusOnline {
+		updates["last_online_at"] = now
+	} else if status == model.DeviceStatusOffline {
+		updates["last_offline_at"] = now
 	}
 	if errorCode != "" {
 		updates["last_error_code"] = errorCode

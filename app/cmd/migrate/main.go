@@ -782,6 +782,7 @@ func defaultMenuList() []parentMenuDef {
 					}},
 					{Name: "GB28181配置", Code: "system-gb28181", Buttons: []buttonInfo{
 						{Code: "system:gb28181:view", Name: "查看GB28181配置", Path: "/api/v1/system/gb28181/config", Method: "GET"},
+						{Code: "system:gb28181:edit", Name: "编辑GB28181配置", Path: "/api/v1/system/gb28181/config", Method: "PUT"},
 					}},
 				}},
 			},

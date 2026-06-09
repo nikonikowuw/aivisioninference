@@ -46,10 +46,10 @@ type BoundingBoxJSON struct {
 
 // InferenceResultJSON 表示推理结果的 JSON 扩展字段。
 type InferenceResultJSON struct {
-	Detections []BoundingBoxJSON  `json:"detections,omitempty"`
-	AlarmType  string             `json:"alarm_type,omitempty"`
-	AlarmLevel string             `json:"alarm_level,omitempty"`
-	Extra      map[string]any     `json:"extra,omitempty"`
+	Detections []BoundingBoxJSON `json:"detections,omitempty"`
+	AlarmType  string            `json:"alarm_type,omitempty"`
+	AlarmLevel string            `json:"alarm_level,omitempty"`
+	Extra      map[string]any    `json:"extra,omitempty"`
 }
 
 // ============================================================
@@ -93,14 +93,16 @@ func FlatBuffersToRegionJSON(fbData []byte) datatypes.JSON {
 // ============================================================
 
 type StartStreamParams struct {
-	TaskID            string
-	StreamURL         string
-	DecodeHWType      int
-	DeviceID          string
-	DeviceName        string
-	MaxReconnects     int
-	ReconnectInterval int
-	Algorithms        []AlgoBindingParams
+	TaskID            string              `json:"task_id"`
+	StreamURL         string              `json:"stream_url"`
+	DecodeHWType      int                 `json:"decode_hw_type"`
+	DeviceID          string              `json:"device_id"`
+	DeviceName        string              `json:"device_name"`
+	EnableInfer       bool                `json:"enable_infer"`
+	EnablePlayback    bool                `json:"enable_playback"`
+	MaxReconnects     int                 `json:"max_reconnects"`
+	ReconnectInterval int                 `json:"reconnect_interval"`
+	Algorithms        []AlgoBindingParams `json:"algorithms"`
 }
 
 type AlgoBindingParams struct {
@@ -143,17 +145,17 @@ func InferTaskToStartStream(task *model.InferTask, algorithms []model.InferTaskA
 
 	for _, algo := range algorithms {
 		binding := AlgoBindingParams{
-			AlgoName:       algo.AlgoName,
-			AlgoVersion:    algo.AlgoVersion,
-			PackageID:      algo.PackageID,
-			AlgoParamsJSON: string(algo.AIParams),
-			ROIRegions:     algo.ROIRegions,
-			MarkRegions:    algo.MarkRegions,
-			LineRegions:    algo.LineRegions,
+			AlgoName:        algo.AlgoName,
+			AlgoVersion:     algo.AlgoVersion,
+			PackageID:       algo.PackageID,
+			AlgoParamsJSON:  string(algo.AIParams),
+			ROIRegions:      algo.ROIRegions,
+			MarkRegions:     algo.MarkRegions,
+			LineRegions:     algo.LineRegions,
 			ScheduleEnabled: algo.ScheduleEnabled,
-			ScheduleStart:  algo.ScheduleStart,
-			ScheduleEnd:    algo.ScheduleEnd,
-			SortOrder:      algo.SortOrder,
+			ScheduleStart:   algo.ScheduleStart,
+			ScheduleEnd:     algo.ScheduleEnd,
+			SortOrder:       algo.SortOrder,
 		}
 
 		if maps, ok := labelMaps[algo.PackageID]; ok {
@@ -227,19 +229,19 @@ func InferenceResultToSmartRecord(params *InferenceResultParams, taskName, devic
 	}
 
 	record := &model.SmartRecord{
-		RecordType:        params.RecordType,
-		CaptureTime:       nanosToTime(params.FrameTS),
-		TaskID:            &params.TaskID,
-		TaskName:          taskName,
-		DeviceID:          &params.DeviceID,
-		DeviceName:        deviceName,
-		AlgorithmName:     params.AlgoName,
-		AlgorithmVersion:  algoVersion,
-		AlarmType:         params.AlarmType,
-		AlarmLevel:        params.AlarmLevel,
-		TriggeredLineIDs:  params.TriggeredIDs,
-		SnapshotImageURL:  params.SnapshotPath,
-		TargetCropURL:     params.CropPath,
+		RecordType:         params.RecordType,
+		CaptureTime:        nanosToTime(params.FrameTS),
+		TaskID:             &params.TaskID,
+		TaskName:           taskName,
+		DeviceID:           &params.DeviceID,
+		DeviceName:         deviceName,
+		AlgorithmName:      params.AlgoName,
+		AlgorithmVersion:   algoVersion,
+		AlarmType:          params.AlarmType,
+		AlarmLevel:         params.AlarmLevel,
+		TriggeredLineIDs:   params.TriggeredIDs,
+		SnapshotImageURL:   params.SnapshotPath,
+		TargetCropURL:      params.CropPath,
 		BackgroundImageURL: params.BackgroundPath,
 	}
 
@@ -296,43 +298,41 @@ func FlatBuffersToStreamStatus(fbData []byte) *StreamStatusParams {
 		return nil
 	}
 
-	// 尝试解析为信封
-	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
-	if env != nil && env.SignalType() != fbs.SignalTypeUnknown {
-		payload := env.PayloadBytes()
-		if len(payload) == 0 {
+	parseStatus := func(data []byte) *StreamStatusParams {
+		status := fbs.GetRootAsStreamStatusRspMsg(data, 0)
+		if status == nil {
 			return nil
 		}
-
-		if env.SignalType() == fbs.SignalTypeStreamStatusReport {
-			status := fbs.GetRootAsStreamStatusRspMsg(payload, 0)
-			if status != nil {
-				statusStr := "unknown"
-				if status.IsRunning() {
-					statusStr = "running"
-				}
-				return &StreamStatusParams{
-					DeviceID: string(status.DeviceId()),
-					PlayURL:  string(status.PlaybackUrl()),
-					Status:   statusStr,
-				}
-			}
+		deviceID := string(status.DeviceId())
+		playURL := string(status.PlaybackUrl())
+		if deviceID == "" && playURL == "" && !status.IsRunning() {
+			return nil
 		}
-		return nil
-	}
-
-	// FlatBuffers root table 直接作为 StreamStatusRspMsg
-	status := fbs.GetRootAsStreamStatusRspMsg(fbData, 0)
-	if status != nil {
 		statusStr := "unknown"
 		if status.IsRunning() {
 			statusStr = "running"
 		}
 		return &StreamStatusParams{
-			DeviceID: string(status.DeviceId()),
-			PlayURL:  string(status.PlaybackUrl()),
+			DeviceID: deviceID,
+			PlayURL:  playURL,
 			Status:   statusStr,
 		}
+	}
+
+	// C++ 引擎当前直接返回 StreamStatusRspMsg，必须优先按直接响应解析；
+	// 否则 direct table 可能被误识别为 IPCEnvelope，导致 payload 为空。
+	if params := parseStatus(fbData); params != nil {
+		return params
+	}
+
+	// 兼容带 IPCEnvelope 的异步状态上报。
+	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
+	if env != nil && env.SignalType() == fbs.SignalTypeStreamStatusReport {
+		payload := env.PayloadBytes()
+		if len(payload) == 0 {
+			return nil
+		}
+		return parseStatus(payload)
 	}
 
 	return nil

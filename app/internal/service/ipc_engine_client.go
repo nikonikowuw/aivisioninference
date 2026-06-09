@@ -31,7 +31,7 @@ type StreamStatus struct {
 type EngineClient interface {
 	StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error)
 	StopStream(ctx context.Context, deviceID string) error
-	StartPlayback(ctx context.Context, deviceID string) (string, error)
+	StartPlayback(ctx context.Context, req StreamStartRequest) (string, error)
 	StopPlayback(ctx context.Context, deviceID string) error
 	GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error)
 	StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error
@@ -52,8 +52,8 @@ func (m *MockEngineClient) StopStream(ctx context.Context, deviceID string) erro
 	return nil
 }
 
-func (m *MockEngineClient) StartPlayback(ctx context.Context, deviceID string) (string, error) {
-	return "rtsp://mock-engine:554/live/" + deviceID, nil
+func (m *MockEngineClient) StartPlayback(ctx context.Context, req StreamStartRequest) (string, error) {
+	return "rtsp://mock-engine:554/live/" + req.DeviceID, nil
 }
 
 func (m *MockEngineClient) StopPlayback(ctx context.Context, deviceID string) error {

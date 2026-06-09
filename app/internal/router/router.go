@@ -51,17 +51,17 @@ type Config struct {
 	LocalUploadDir            string
 	LocalPublicURL            string
 	// Storage 存储配置
-	StorageType               string `yaml:"storage_type" mapstructure:"storage_type"` // "local" 或 "oss"
-	OSSEndpoint               string `yaml:"oss_endpoint" mapstructure:"oss_endpoint"`
-	OSSAccessKey              string `yaml:"oss_access_key" mapstructure:"oss_access_key"`
-	OSSSecretKey              string `yaml:"oss_secret_key" mapstructure:"oss_secret_key"`
-	OSSBucket                 string `yaml:"oss_bucket" mapstructure:"oss_bucket"`
-	OSSUseSSL                 bool   `yaml:"oss_use_ssl" mapstructure:"oss_use_ssl"`
-	OSSDomain                 string `yaml:"oss_domain" mapstructure:"oss_domain"`
-	ZLMAPIURL                 string
-	ZLMSecret                 string
-	EngineAddr                string
-	EngineTimeoutSec          int
+	StorageType      string `yaml:"storage_type" mapstructure:"storage_type"` // "local" 或 "oss"
+	OSSEndpoint      string `yaml:"oss_endpoint" mapstructure:"oss_endpoint"`
+	OSSAccessKey     string `yaml:"oss_access_key" mapstructure:"oss_access_key"`
+	OSSSecretKey     string `yaml:"oss_secret_key" mapstructure:"oss_secret_key"`
+	OSSBucket        string `yaml:"oss_bucket" mapstructure:"oss_bucket"`
+	OSSUseSSL        bool   `yaml:"oss_use_ssl" mapstructure:"oss_use_ssl"`
+	OSSDomain        string `yaml:"oss_domain" mapstructure:"oss_domain"`
+	ZLMAPIURL        string
+	ZLMSecret        string
+	EngineAddr       string
+	EngineTimeoutSec int
 	// GB28181 GB/T 28181 配置
 	GB28181Enabled        bool          `yaml:"gb28181_enabled" mapstructure:"gb28181_enabled"`
 	GB28181Domain         string        `yaml:"gb28181_domain" mapstructure:"gb28181_domain"`
@@ -395,6 +395,7 @@ func (r *Router) setupRoutes() {
 		gbConfig := authorized.Group("/system/gb28181")
 		{
 			gbConfig.GET("/config", middleware.RBAC(rbacCache, r.db), deps.GB28181ConfigHandler.GetConfig)
+			gbConfig.PUT("/config", middleware.RBAC(rbacCache, r.db), deps.GB28181ConfigHandler.UpdateConfig)
 		}
 	}
 
@@ -430,7 +431,7 @@ func (r *Router) setupRoutes() {
 	{
 		personsImage.GET("/:filename", personHandler.ViewImage)
 	}
-	
+
 	persons := authorized.Group("/persons")
 	{
 		persons.GET("", middleware.RBAC(rbacCache, r.db), personHandler.List)

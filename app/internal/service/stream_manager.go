@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -139,7 +140,7 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 
 		req := StreamStartRequest{
 			DeviceID:       deviceID,
-			RtspURL:        dev.RtspURL,
+			RtspURL:        strings.TrimSpace(dev.RtspURL),
 			EnableInfer:    reason == "infer",
 			EnablePlayback: reason == "play",
 		}
@@ -160,9 +161,19 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 	} else {
 		state.mu.Unlock()
 		if reason == "play" {
-			_, err := m.engine.StartPlayback(ctx, deviceID)
+			dev, err := m.deviceRepo.FindByID(ctx, deviceID)
+			if err != nil {
+				m.logger.Warn("load playback device failed", zap.Error(err), zap.String("device_id", deviceID))
+				return err
+			}
+			_, err = m.engine.StartPlayback(ctx, StreamStartRequest{
+				DeviceID:       deviceID,
+				RtspURL:        dev.RtspURL,
+				EnablePlayback: true,
+			})
 			if err != nil {
 				m.logger.Warn("start playback failed", zap.Error(err), zap.String("device_id", deviceID))
+				return err
 			}
 		}
 	}
@@ -172,13 +183,13 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 
 func (m *StreamManager) syncToDatabase(ctx context.Context, state *StreamState, reason string) {
 	item := &model.MediaStream{
-		DeviceID:    state.DeviceID,
-		ZLMApp:      "live",
-		ZLMStream:   state.DeviceID,
-		ZLMSchema:   "rtsp",
-		PlayURLRtsp: state.PlayURLRtsp,
-		Status:      "active",
-		ConsumerCount: 1,
+		DeviceID:           state.DeviceID,
+		ZLMApp:             "live",
+		ZLMStream:          state.DeviceID,
+		ZLMSchema:          "rtsp",
+		PlayURLRtsp:        state.PlayURLRtsp,
+		Status:             "active",
+		ConsumerCount:      1,
 		LastConsumerReason: reason,
 	}
 	_ = m.streamRepo.Create(ctx, item)
@@ -362,7 +373,6 @@ func (m *StreamManager) ListStreams(ctx context.Context) []*StreamState {
 	})
 	return results
 }
-
 
 // StartBackgroundTasks 启动后台任务
 func (m *StreamManager) StartBackgroundTasks(ctx context.Context) {

@@ -250,3 +250,13 @@ func (c *Client) GetServerConfig(ctx context.Context) ([]map[string]interface{},
 
 	return resp.Data, nil
 }
+
+// SetServerConfig updates server configuration items.
+func (c *Client) SetServerConfig(ctx context.Context, config map[string]interface{}) error {
+	params := url.Values{}
+	for key, value := range config {
+		params.Set(key, fmt.Sprintf("%v", value))
+	}
+
+	return c.doRequest(ctx, http.MethodGet, "setServerConfig", params, nil, nil)
+}

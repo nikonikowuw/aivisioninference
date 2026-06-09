@@ -85,9 +85,11 @@ func (c *IPCEngineClient) StartStream(ctx context.Context, req StreamStartReques
 
 	// 构建 FlatBuffers payload
 	params := &ipc.StartStreamParams{
-		DeviceID:    req.DeviceID,
-		StreamURL:   req.RtspURL,
-		DecodeHWType: 0, // Auto
+		DeviceID:       req.DeviceID,
+		StreamURL:      req.RtspURL,
+		DecodeHWType:   0, // Auto
+		EnableInfer:    req.EnableInfer,
+		EnablePlayback: req.EnablePlayback,
 	}
 	fbData := ipc.StartStreamParamsToFlatBuffers(params)
 
@@ -99,16 +101,21 @@ func (c *IPCEngineClient) StartStream(ctx context.Context, req StreamStartReques
 
 	// 解析返回的 StreamInfo
 	status := ipc.FlatBuffersToStreamStatus(resp)
-	if status != nil {
-		return StreamInfo{
-			DeviceID: req.DeviceID,
-			Status:   status.Status,
-		}, nil
+	if status == nil {
+		return StreamInfo{}, fmt.Errorf("invalid stream status response")
+	}
+	if status.Status != "running" {
+		return StreamInfo{}, fmt.Errorf("engine failed to start stream")
 	}
 
+	playURL := status.PlayURL
+	if playURL == "" {
+		playURL = "rtsp://engine:554/live/" + req.DeviceID
+	}
 	return StreamInfo{
 		DeviceID: req.DeviceID,
 		Status:   "active",
+		PlayURL:  playURL,
 	}, nil
 }
 
@@ -123,17 +130,32 @@ func (c *IPCEngineClient) StopStream(ctx context.Context, deviceID string) error
 }
 
 // StartPlayback 发送 StreamPlaybackStart 指令
-func (c *IPCEngineClient) StartPlayback(ctx context.Context, deviceID string) (string, error) {
-	c.logger.Info("IPC: StartPlayback", zap.String("device_id", deviceID))
+func (c *IPCEngineClient) StartPlayback(ctx context.Context, req StreamStartRequest) (string, error) {
+	c.logger.Info("IPC: StartPlayback", zap.String("device_id", req.DeviceID))
 
-	// 203 = StreamPlaybackStart
-	payload := []byte(deviceID)
-	_, err := c.sendCommand(ctx, 203, payload)
+	params := &ipc.StartStreamParams{
+		DeviceID:       req.DeviceID,
+		StreamURL:      req.RtspURL,
+		DecodeHWType:   0,
+		EnablePlayback: true,
+	}
+	payload := ipc.StartStreamParamsToFlatBuffers(params)
+	resp, err := c.sendCommand(ctx, 203, payload)
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("rtsp://engine:554/live/%s", deviceID), nil
+	status := ipc.FlatBuffersToStreamStatus(resp)
+	if status == nil {
+		return "", fmt.Errorf("invalid playback status response")
+	}
+	if status.Status != "running" {
+		return "", fmt.Errorf("engine failed to start playback")
+	}
+	if status.PlayURL != "" {
+		return status.PlayURL, nil
+	}
+	return fmt.Sprintf("rtsp://engine:554/live/%s", req.DeviceID), nil
 }
 
 // StopPlayback 发送 StreamPlaybackStop 指令

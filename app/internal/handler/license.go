@@ -94,7 +94,7 @@ func (h *LicenseHandler) GetActive(c *gin.Context) {
 	result, err := h.svc.GetActive(c.Request.Context())
 	if err != nil {
 		// 未上传或未找到有效授权是正常空状态，避免前端启动时出现 HTTP 404 资源错误。
-		if appErr, ok := err.(*errors.AppError); ok && appErr.Code == errors.ErrNotFound {
+		if appErr, ok := err.(*errors.AppError); ok && (appErr.Code == errors.ErrNotFound || appErr.Code == errors.ErrLicenseNotFound) {
 			response.OK(c, nil)
 			return
 		}

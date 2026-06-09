@@ -33,8 +33,9 @@ static void PrintUsage(const char *prog)
     std::cout << "  --addr HOST:PORT     IPC listen address (default: 0.0.0.0:9500)" << std::endl;
     std::cout << "  --workers N          Worker thread count (default: 4)" << std::endl;
     std::cout << "  --hal-so PATH        HAL platform pipeline .so path" << std::endl;
+    std::cout << "  --fallback-hal-so PATH  Fallback HAL .so path; must decode and output frames for inference" << std::endl;
     std::cout << "  --hal-config JSON    HAL configuration JSON" << std::endl;
-    std::cout << "  --disable-ffmpeg-fallback  Disable FFmpeg relay fallback (enabled by default)" << std::endl;
+    std::cout << "  --disable-ffmpeg-fallback  Disable playback-only FFmpeg relay fallback (enabled by default)" << std::endl;
     std::cout << "  --metrics-ms N       Metrics report interval in ms (default: 5000)" << std::endl;
     std::cout << "  --rtsp-push URL      RTSP publish base URL (default: rtsp://localhost:10554)" << std::endl;
     std::cout << "  --zlm-url URL        ZLM API URL (default: http://localhost:80)" << std::endl;
@@ -72,6 +73,10 @@ int main(int argc, char *argv[])
         else if (arg == "--hal-so" && i + 1 < argc)
         {
             config.hal_so_path = argv[++i];
+        }
+        else if (arg == "--fallback-hal-so" && i + 1 < argc)
+        {
+            config.fallback_hal_so_path = argv[++i];
         }
         else if (arg == "--hal-config" && i + 1 < argc)
         {

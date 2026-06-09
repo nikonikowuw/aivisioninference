@@ -27,11 +27,12 @@ import {
   AccordionPanel,
   AccordionIcon,
 } from '@chakra-ui/react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { aiVisionTasksApi, devicesApi, algoPackagesApi, aiTimeSchedulesApi, type AIVisionTask, type Device, type AlgorithmPackage, type AITimeSchedule, type ROIRegion, type MarkRegion, type LineRegion } from 'services/api';
+import { aiVisionTasksApi, devicesApi, algoPackagesApi, aiTimeSchedulesApi, mediaApi, type AIVisionTask, type Device, type AlgorithmPackage, type AITimeSchedule, type ROIRegion, type MarkRegion, type LineRegion } from 'services/api';
 import DynamicParamsForm from 'components/DynamicParamsForm';
 import RegionCanvas from 'components/RegionCanvas';
+import VideoPlayer from 'components/VideoPlayer';
 
 interface TaskFormModalProps {
   isOpen: boolean;
@@ -52,9 +53,14 @@ interface FormData {
   line_regions: LineRegion[];
 }
 
+const edgeNodeOptions = [
+  { id: '00000000-0000-4000-8000-000000000001', labelKey: 'form.defaultNode' },
+  { id: '00000000-0000-4000-8000-000000000002', labelKey: 'form.highPerformanceNode' },
+];
+
 const defaultForm: FormData = {
   name: '',
-  target_node_id: '',
+  target_node_id: edgeNodeOptions[0].id,
   algo_package_id: '',
   device_channel_id: '',
   schedule_id: '',
@@ -71,6 +77,9 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
   const [schedules, setSchedules] = useState<AITimeSchedule[]>([]);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [regionVideoUrl, setRegionVideoUrl] = useState('');
+  const [regionVideoError, setRegionVideoError] = useState<string | null>(null);
+  const regionDeviceIdRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const toast = useToast();
@@ -114,6 +123,53 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
+  const stopRegionPlay = useCallback((deviceId = regionDeviceIdRef.current) => {
+    if (!deviceId) return;
+    mediaApi.stopPlay(deviceId).catch(() => {});
+    if (regionDeviceIdRef.current === deviceId) {
+      regionDeviceIdRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen || !form.device_channel_id) {
+      stopRegionPlay();
+      setRegionVideoUrl('');
+      setRegionVideoError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const deviceId = form.device_channel_id;
+    setRegionVideoUrl('');
+    setRegionVideoError(null);
+
+    if (regionDeviceIdRef.current && regionDeviceIdRef.current !== deviceId) {
+      stopRegionPlay();
+    }
+
+    mediaApi.getPlayUrl({ device_id: deviceId, protocol: 'auto' })
+      .then(data => {
+        if (cancelled) {
+          stopRegionPlay(deviceId);
+          return;
+        }
+        regionDeviceIdRef.current = deviceId;
+        setRegionVideoUrl(data.url);
+      })
+      .catch((err: any) => {
+        if (!cancelled) setRegionVideoError(err?.message || t('canvas.waitingStream'));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, form.device_channel_id, stopRegionPlay, t]);
+
+  useEffect(() => () => {
+    stopRegionPlay();
+  }, [stopRegionPlay]);
+
   // 获取当前选中的算法包
   const selectedAlgo = algos.find(a => a.id === form.algo_package_id);
   // 获取当前选中的时间配置
@@ -123,6 +179,7 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
     if (!form.name.trim()) { toast({ title: t('message.nameRequired'), status: 'warning' }); return; }
     if (!form.device_channel_id) { toast({ title: t('message.deviceRequired'), status: 'warning' }); return; }
     if (!form.algo_package_id) { toast({ title: t('message.algorithmRequired'), status: 'warning' }); return; }
+    if (!form.target_node_id) { toast({ title: t('message.nodeRequired'), status: 'warning' }); return; }
     if (!form.schedule_id) { toast({ title: t('message.scheduleRequired'), status: 'warning' }); return; }
 
     setSubmitting(true);
@@ -245,8 +302,9 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
                   <FormControl isRequired flex={1}>
                     <FormLabel fontSize="sm">{t('fields.node')}</FormLabel>
                     <Select value={form.target_node_id} onChange={e => updateField('target_node_id', e.target.value)} size="md">
-                      <option value="node-1">{t('form.defaultNode')}</option>
-                      <option value="node-2">{t('form.highPerformanceNode')}</option>
+                      {edgeNodeOptions.map(node => (
+                        <option key={node.id} value={node.id}>{t(node.labelKey)}</option>
+                      ))}
                     </Select>
                   </FormControl>
                 </HStack>
@@ -321,6 +379,21 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
                   <AccordionIcon />
                 </AccordionButton>
                 <AccordionPanel px={0} pb={4}>
+                  {regionVideoError && (
+                    <Alert status="warning" borderRadius="md" mb={3}>
+                      <AlertIcon />
+                      <AlertDescription>{regionVideoError}</AlertDescription>
+                    </Alert>
+                  )}
+                  {regionVideoUrl && (
+                    <Box position="absolute" w="1px" h="1px" opacity={0} pointerEvents="none" overflow="hidden">
+                      <VideoPlayer
+                        url={regionVideoUrl}
+                        videoRef={videoRef}
+                        fallbackConfig={{ showProtocol: false }}
+                      />
+                    </Box>
+                  )}
                   <RegionCanvas
                     videoRef={videoRef}
                     roiRegions={form.roi_regions}

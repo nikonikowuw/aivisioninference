@@ -2,6 +2,7 @@ package task
 
 import (
 	"context"
+	"errors"
 
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
@@ -17,6 +18,10 @@ func (h *Handler) handleAIVisionTaskPatrol(ctx context.Context, t *asynq.Task) e
 
 	err := h.aiVisionTaskSvc.PatrolTasks(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			zap.L().Info("aivision task patrol skipped because context is done", zap.Error(err))
+			return nil
+		}
 		zap.L().Error("failed to patrol aivision tasks", zap.Error(err))
 		return err
 	}

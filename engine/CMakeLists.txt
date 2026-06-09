@@ -23,6 +23,12 @@ find_package(Threads REQUIRED)
 # CURL
 find_package(CURL REQUIRED)
 
+# FFmpeg + OpenCV software fallback decoder is required.
+# 推理 fallback 必须能完成软件解码、resize，并向 Worker 提供 HostMemory 帧。
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG_FALLBACK REQUIRED libavformat libavcodec libavutil libswscale)
+pkg_check_modules(OPENCV4_FALLBACK REQUIRED opencv4)
+
 # ============================================================
 # Rockchip MPP/RGA 硬件加速
 #
@@ -102,6 +108,7 @@ set(ENGINE_SOURCES
     src/pipeline/hal.cpp
     src/pipeline/pipeline.cpp
     src/pipeline/pipeline_manager.cpp
+    src/pipeline/ffmpeg_fallback_decoder.cpp
     src/pipeline/encoder_stage.cpp
     src/pipeline/inference_stage.cpp
     src/pipeline/rtsp_push_stage.cpp
@@ -123,6 +130,7 @@ set(INSTALL_HEADERS
     include/pipeline/hal.h
     include/pipeline/pipeline.h
     include/pipeline/pipeline_manager.h
+    include/pipeline/ffmpeg_fallback_decoder.h
     include/pipeline/encoder_stage.h
     include/pipeline/inference_stage.h
     include/pipeline/rtsp_push_stage.h
@@ -181,6 +189,21 @@ target_link_libraries(aivision-engine PRIVATE
     dl
     ${CURL_LIBRARIES}
 )
+
+target_compile_definitions(aivision-engine PRIVATE AIVISION_WITH_FFMPEG_OPENCV)
+target_include_directories(aivision-engine PRIVATE
+    ${FFMPEG_FALLBACK_INCLUDE_DIRS}
+    ${OPENCV4_FALLBACK_INCLUDE_DIRS}
+)
+target_link_directories(aivision-engine PRIVATE
+    ${FFMPEG_FALLBACK_LIBRARY_DIRS}
+    ${OPENCV4_FALLBACK_LIBRARY_DIRS}
+)
+target_link_libraries(aivision-engine PRIVATE
+    ${FFMPEG_FALLBACK_LIBRARIES}
+    ${OPENCV4_FALLBACK_LIBRARIES}
+)
+message(STATUS "FFmpeg/OpenCV software fallback enabled")
 
 target_link_libraries(aivision-hal-rkmpp PRIVATE
     Threads::Threads

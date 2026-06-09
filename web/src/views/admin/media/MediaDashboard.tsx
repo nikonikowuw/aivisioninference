@@ -13,7 +13,7 @@ import {
 } from '@chakra-ui/react';
 import Card from 'components/card/Card';
 import VideoPlayer from 'components/VideoPlayer';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MdCheckCircle, MdCircle,
@@ -22,7 +22,7 @@ import {
   MdPlayCircle,
   MdSearch, MdVideocam,
 } from 'react-icons/md';
-import { deviceGroupsApi, devicesApi, request } from 'services/api';
+import { deviceGroupsApi, devicesApi, mediaApi, request } from 'services/api';
 import { startGB28181Live } from 'services/gb28181';
 
 // ── Types ──
@@ -135,13 +135,14 @@ const GridCell: React.FC<{ index: number; tile: Tile | null; onDrop: (i: number,
     );
   };
 
-export default function LiveView() {
+export default function MediaDashboard() {
   const { t } = useTranslation('modules/media');
   const textColor = useColorModeValue('navy.700', 'white');
   const toast = useToast();
   const [devices, setDevices] = useState<Device[]>([]);
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
   const [tiles, setTiles] = useState<(Tile | null)[]>([null]);
+  const tilesRef = useRef<(Tile | null)[]>(tiles);
   const [layout, setLayout] = useState(1);
   const [search, setSearch] = useState('');
 
@@ -158,6 +159,19 @@ export default function LiveView() {
     }
     return request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=auto`);
   }, []);
+
+  const stopTilePlay = useCallback((tile: Tile | null | undefined) => {
+    if (!tile || tile.loading || !tile.url || tile.protocol === 'gb28181') return;
+    mediaApi.stopPlay(tile.deviceId).catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    tilesRef.current = tiles;
+  }, [tiles]);
+
+  useEffect(() => () => {
+    tilesRef.current.forEach(stopTilePlay);
+  }, [stopTilePlay]);
 
   const playDevice = useCallback((device: Device) => {
     setTiles(prev => {
@@ -187,6 +201,7 @@ export default function LiveView() {
   const handleDrop = useCallback((index: number, device: Device) => {
     setTiles(prev => {
       const u = [...prev];
+      stopTilePlay(u[index]);
       u[index] = { deviceId: device.id, deviceName: device.device_name, loading: true };
       startPlayRequest(device)
         .then(data => {
@@ -205,10 +220,23 @@ export default function LiveView() {
         });
       return u;
     });
-  }, [startPlayRequest, t]);
+  }, [startPlayRequest, stopTilePlay, t]);
 
-  const handleRemove = useCallback((index: number) => setTiles(prev => { const u = [...prev]; u[index] = null; return [...u]; }), []);
-  const handleLayoutChange = useCallback((n: number) => { setLayout(n); setTiles(prev => { const u = [...prev]; while (u.length < n) u.push(null); return u.slice(0, n); }); }, []);
+  const handleRemove = useCallback((index: number) => setTiles(prev => {
+    const u = [...prev];
+    stopTilePlay(u[index]);
+    u[index] = null;
+    return [...u];
+  }), [stopTilePlay]);
+  const handleLayoutChange = useCallback((n: number) => {
+    setLayout(n);
+    setTiles(prev => {
+      prev.slice(n).forEach(stopTilePlay);
+      const u = [...prev];
+      while (u.length < n) u.push(null);
+      return u.slice(0, n);
+    });
+  }, [stopTilePlay]);
   const lc = LAYOUTS[layout] || LAYOUTS[4];
 
   return (

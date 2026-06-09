@@ -23,5 +23,6 @@ func registerAIVisionTaskGroup(group *gin.RouterGroup, h *handler.AIVisionTaskHa
 	group.POST("/check-conflict", authMiddleware, rbacMiddleware, h.CheckConflict)
 	group.GET("/:id", authMiddleware, rbacMiddleware, h.GetByID)
 	group.PUT("/:id", authMiddleware, rbacMiddleware, h.Update)
+	group.POST("/:id/restart", authMiddleware, rbacMiddleware, h.Restart)
 	group.DELETE("/:id", authMiddleware, rbacMiddleware, h.Delete)
 }

@@ -13,6 +13,12 @@ namespace aivision
         {
             // 清理所有实例
             std::lock_guard<std::mutex> lock(mutex_);
+            for (auto &[name, instance] : instances_)
+            {
+                (void)name;
+                if (instance)
+                    instance->Destroy();
+            }
             instances_.clear();
         }
 
@@ -61,7 +67,7 @@ namespace aivision
             if (it == instances_.end())
                 return false;
 
-            // shared_ptr 引用计数归零时自动 dlclose
+            it->second->Destroy();
             instances_.erase(it);
             return true;
         }
@@ -261,6 +267,7 @@ namespace aivision
 
         bool AlgoManager::CanLoad(const std::string &so_path)
         {
+            (void)so_path;
             // TODO: 检查 NPU 内存是否充足
             return true;
         }

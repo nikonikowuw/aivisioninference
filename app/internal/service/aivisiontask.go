@@ -1,10 +1,17 @@
 package service
 
 import (
+	"archive/tar"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/datatypes"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
@@ -15,24 +22,27 @@ import (
 
 // AIVisionTaskService 处理 AIVisionTask 业务逻辑
 type AIVisionTaskService struct {
-	aivisiontaskRepo   *repository.AIVisionTaskRepository
-	aiTimeScheduleRepo *repository.AITimeScheduleRepository
-	sipSvc             *SIPService
-	streamManager      *StreamManager
+	aivisiontaskRepo     *repository.AIVisionTaskRepository
+	aiTimeScheduleRepo   *repository.AITimeScheduleRepository
+	algorithmPackageRepo *repository.AlgorithmPackageRepository
+	sipSvc               *SIPService
+	streamManager        *StreamManager
 }
 
 // NewAIVisionTaskService 创建新的 AIVisionTaskService
 func NewAIVisionTaskService(
 	aivisiontaskRepo *repository.AIVisionTaskRepository,
 	aiTimeScheduleRepo *repository.AITimeScheduleRepository,
+	algorithmPackageRepo *repository.AlgorithmPackageRepository,
 	sipSvc *SIPService,
 	streamManager *StreamManager,
 ) *AIVisionTaskService {
 	svc := &AIVisionTaskService{
-		aivisiontaskRepo:   aivisiontaskRepo,
-		aiTimeScheduleRepo: aiTimeScheduleRepo,
-		sipSvc:             sipSvc,
-		streamManager:      streamManager,
+		aivisiontaskRepo:     aivisiontaskRepo,
+		aiTimeScheduleRepo:   aiTimeScheduleRepo,
+		algorithmPackageRepo: algorithmPackageRepo,
+		sipSvc:               sipSvc,
+		streamManager:        streamManager,
 	}
 	if streamManager != nil {
 		streamManager.Subscribe(svc.HandleDeviceEvent)
@@ -63,7 +73,6 @@ func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID 
 
 	for current := sd; !current.After(ed); current = current.AddDate(0, 0, 1) {
 		minutes := make([]int, 1440)
-		var conflictNames []string
 
 		for _, t := range tasks {
 			tsd := time.Time(t.StartDate)
@@ -77,7 +86,6 @@ func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID 
 				continue
 			}
 
-			added := false
 			for _, w := range windows {
 				st, _ := time.Parse("15:04", w.Start)
 				et, _ := time.Parse("15:04", w.End)
@@ -86,13 +94,7 @@ func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID 
 
 				for m := startMin; m < endMin; m++ {
 					minutes[m]++
-					if minutes[m] >= maxStreams {
-						added = true
-					}
 				}
-			}
-			if added {
-				conflictNames = append(conflictNames, t.Name)
 			}
 		}
 
@@ -115,11 +117,6 @@ func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID 
 	return nil
 }
 
-func toJSONString(v interface{}) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
-
 // HandleDeviceEvent 处理流管理器/引擎返回的设备和流事件
 func (s *AIVisionTaskService) HandleDeviceEvent(ctx context.Context, event DeviceEvent) error {
 	var items []model.AIVisionTask
@@ -135,11 +132,11 @@ func (s *AIVisionTaskService) HandleDeviceEvent(ctx context.Context, event Devic
 				} else if event.EventType == "offline" || event.EventType == "error" {
 					if task.Status == model.TaskStatusRunning {
 						task.Status = model.TaskStatusError
-						reason := "流离线"
-						if r, ok := event.Metadata["error"].(string); ok {
-							reason = "流异常: " + r
+						reason := "errors.streamOffline"
+						if _, ok := event.Metadata["error"].(string); ok {
+							reason = "errors.streamError"
 						} else if event.EventType == "offline" {
-							reason = "GB28181 视频源掉线"
+							reason = "errors.gb28181SourceOffline"
 						}
 						task.ErrorReason = reason
 						_ = s.aivisiontaskRepo.Update(ctx, &task)
@@ -269,6 +266,10 @@ func (s *AIVisionTaskService) Delete(ctx context.Context, id string) error {
 
 // PatrolTasks 巡检任务，根据时间窗启动或停止推理流
 func (s *AIVisionTaskService) PatrolTasks(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	var items []model.AIVisionTask
 	if err := s.aivisiontaskRepo.FindAllActive(ctx, &items); err != nil {
 		return err
@@ -312,14 +313,52 @@ func (s *AIVisionTaskService) PatrolTasks(ctx context.Context) error {
 	return nil
 }
 
-// StartTask 拉起信令并更新状态
+// StartTask 拉起推理流并更新状态
 func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisionTask) error {
-	streamID := "ai_task_" + task.ID
-	if s.sipSvc != nil {
-		_, err := s.sipSvc.StartLiveStream(ctx, task.DeviceChannelID, streamID)
+	metadata := map[string]string{
+		"task_id":         task.ID,
+		"algo_package_id": task.AlgoPackageID,
+		"target_node_id":  task.TargetNodeID,
+	}
+	if s.algorithmPackageRepo != nil {
+		algoPackage, err := s.algorithmPackageRepo.FindByID(ctx, task.AlgoPackageID)
 		if err != nil {
 			task.Status = model.TaskStatusError
-			task.ErrorReason = "流拉起失败: " + err.Error()
+			task.ErrorReason = "errors.algorithmPackageNotFound"
+			return s.aivisiontaskRepo.Update(ctx, task)
+		}
+		soPath, err := resolveRuntimeSoPath(algoPackage)
+		if err != nil {
+			zap.L().Warn("resolve algorithm runtime so failed",
+				zap.String("task_id", task.ID),
+				zap.String("algo_package_id", task.AlgoPackageID),
+				zap.Error(err),
+			)
+			task.Status = model.TaskStatusError
+			task.ErrorReason = "errors.algorithmLoadFailed"
+			return s.aivisiontaskRepo.Update(ctx, task)
+		}
+		metadata["algo_name"] = algoPackage.AlgorithmName
+		metadata["algo_version"] = algoPackage.Version
+		metadata["so_path"] = soPath
+		metadata["algo_params_json"] = string(task.AIParams)
+		zap.L().Info("resolved algorithm runtime library",
+			zap.String("task_id", task.ID),
+			zap.String("algo_package_id", task.AlgoPackageID),
+			zap.String("algo_name", algoPackage.AlgorithmName),
+			zap.String("so_path", soPath),
+		)
+	}
+
+	if s.streamManager != nil {
+		if err := s.streamManager.Acquire(ctx, task.DeviceChannelID, "infer", metadata); err != nil {
+			zap.L().Warn("start ai vision stream failed",
+				zap.String("task_id", task.ID),
+				zap.String("device_channel_id", task.DeviceChannelID),
+				zap.Error(err),
+			)
+			task.Status = model.TaskStatusError
+			task.ErrorReason = "errors.connectionFailed"
 			return s.aivisiontaskRepo.Update(ctx, task)
 		}
 	}
@@ -329,11 +368,10 @@ func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisio
 	return s.aivisiontaskRepo.Update(ctx, task)
 }
 
-// StopTask 停止信令并更新状态
+// StopTask 停止推理流并更新状态
 func (s *AIVisionTaskService) StopTask(ctx context.Context, task *model.AIVisionTask, errorReason string) error {
-	streamID := "ai_task_" + task.ID
-	if s.sipSvc != nil {
-		_ = s.sipSvc.StopLiveStream(ctx, task.DeviceChannelID, streamID)
+	if s.streamManager != nil {
+		_ = s.streamManager.Release(ctx, task.DeviceChannelID, "infer")
 	}
 
 	if errorReason != "" {
@@ -344,4 +382,140 @@ func (s *AIVisionTaskService) StopTask(ctx context.Context, task *model.AIVision
 		task.ErrorReason = ""
 	}
 	return s.aivisiontaskRepo.Update(ctx, task)
+}
+
+// RestartTask 释放旧推理流并重新拉起任务。
+func (s *AIVisionTaskService) RestartTask(ctx context.Context, id string) error {
+	task, err := s.aivisiontaskRepo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if s.streamManager != nil {
+		_ = s.streamManager.Release(ctx, task.DeviceChannelID, "infer")
+	}
+	task.Status = model.TaskStatusReady
+	task.ErrorReason = ""
+	if err := s.aivisiontaskRepo.Update(ctx, task); err != nil {
+		return err
+	}
+	return s.StartTask(ctx, task)
+}
+
+func resolveRuntimeSoPath(algoPackage *model.AlgorithmPackage) (string, error) {
+	if algoPackage == nil {
+		return "", fmt.Errorf("algorithm package is nil")
+	}
+	if filepath.IsAbs(algoPackage.SoPath) {
+		if info, err := os.Stat(algoPackage.SoPath); err == nil && !info.IsDir() {
+			return algoPackage.SoPath, nil
+		}
+	}
+
+	packagePath := strings.TrimSpace(algoPackage.PackagePath)
+	if packagePath == "" {
+		return "", fmt.Errorf("algorithm package path is empty")
+	}
+	if info, err := os.Stat(packagePath); err != nil || info.IsDir() {
+		return "", fmt.Errorf("algorithm package tar is unavailable: %s", packagePath)
+	}
+
+	extractDir := strings.TrimSuffix(packagePath, filepath.Ext(packagePath)) + "_runtime"
+	if soPath, err := findSoFile(extractDir); err == nil {
+		return soPath, nil
+	}
+	if err := extractTarSecure(packagePath, extractDir); err != nil {
+		return "", err
+	}
+	return findSoFile(extractDir)
+}
+
+func extractTarSecure(tarPath, extractDir string) error {
+	file, err := os.Open(tarPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if err := os.MkdirAll(extractDir, 0755); err != nil {
+		return err
+	}
+	cleanRoot, err := filepath.Abs(extractDir)
+	if err != nil {
+		return err
+	}
+
+	reader := tar.NewReader(file)
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		cleanName := filepath.Clean(header.Name)
+		if filepath.IsAbs(cleanName) || strings.HasPrefix(cleanName, "..") || strings.Contains(cleanName, string(filepath.Separator)+".."+string(filepath.Separator)) {
+			return fmt.Errorf("unsafe tar entry: %s", header.Name)
+		}
+		targetPath := filepath.Join(cleanRoot, cleanName)
+		absTarget, err := filepath.Abs(targetPath)
+		if err != nil {
+			return err
+		}
+		if absTarget != cleanRoot && !strings.HasPrefix(absTarget, cleanRoot+string(filepath.Separator)) {
+			return fmt.Errorf("tar entry escapes extraction dir: %s", header.Name)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(absTarget, 0755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(absTarget), 0755); err != nil {
+				return err
+			}
+			out, err := os.OpenFile(absTarget, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(header.Mode)&0755)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(out, reader)
+			closeErr := out.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		}
+	}
+	return nil
+}
+
+func findSoFile(root string) (string, error) {
+	var soPath string
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if !entry.IsDir() && filepath.Ext(path) == ".so" {
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return err
+			}
+			soPath = absPath
+			return filepath.SkipAll
+		}
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	if soPath == "" {
+		return "", fmt.Errorf("no .so file found under %s", root)
+	}
+	return soPath, nil
 }

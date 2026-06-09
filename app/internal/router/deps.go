@@ -25,36 +25,36 @@ import (
 
 // RouteDeps 聚合路由注册阶段需要的 Handler、Service 与缓存依赖。
 type RouteDeps struct {
-	RBACCache            cache.Cache
-	AuditService         *service.AuditService
-	AuthHandler          *handler.AuthHandler
-	WSHandler            *handler.WSHandler
-	UserHandler          *handler.UserHandler
-	RoleHandler          *handler.RoleHandler
-	PermissionHandler    *handler.PermissionHandler
-	FileHandler          *handler.FileHandler
-	AuditHandler         *handler.AuditHandler
-	TaskHandler          *handler.TaskHandler
-	BrandHandler         *handler.BrandHandler
-	MailHandler          *handler.MailHandler
-	FeedbackHandler      *handler.FeedbackHandler
-	DashboardHandler     *handler.DashboardHandler
-	DeviceHandler        *handler.DeviceHandler
-	DeviceGroupHandler   *handler.DeviceGroupHandler
-	DeviceStagingHandler *handler.DeviceStagingHandler
-	SystemHandler        *handler.SystemHandler
-	SmartRecordHandler   *handler.SmartRecordHandler
-	StreamManager        *service.StreamManager
+	RBACCache               cache.Cache
+	AuditService            *service.AuditService
+	AuthHandler             *handler.AuthHandler
+	WSHandler               *handler.WSHandler
+	UserHandler             *handler.UserHandler
+	RoleHandler             *handler.RoleHandler
+	PermissionHandler       *handler.PermissionHandler
+	FileHandler             *handler.FileHandler
+	AuditHandler            *handler.AuditHandler
+	TaskHandler             *handler.TaskHandler
+	BrandHandler            *handler.BrandHandler
+	MailHandler             *handler.MailHandler
+	FeedbackHandler         *handler.FeedbackHandler
+	DashboardHandler        *handler.DashboardHandler
+	DeviceHandler           *handler.DeviceHandler
+	DeviceGroupHandler      *handler.DeviceGroupHandler
+	DeviceStagingHandler    *handler.DeviceStagingHandler
+	SystemHandler           *handler.SystemHandler
+	SmartRecordHandler      *handler.SmartRecordHandler
+	StreamManager           *service.StreamManager
 	LicenseHandler          *handler.LicenseHandler
 	LicenseService          *service.LicenseService
 	AIVisionTaskHandler     *handler.AIVisionTaskHandler
 	AITimeScheduleHandler   *handler.AITimeScheduleHandler
 	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
-	PersonHandler        *handler.PersonHandler
-	GB28181Handler       *handler.GB28181Handler
-	MediaGB28181Handler  *handler.MediaGB28181Handler
-	GB28181ConfigHandler *handler.GB28181ConfigHandler
-	SIPService           *service.SIPService
+	PersonHandler           *handler.PersonHandler
+	GB28181Handler          *handler.GB28181Handler
+	MediaGB28181Handler     *handler.MediaGB28181Handler
+	GB28181ConfigHandler    *handler.GB28181ConfigHandler
+	SIPService              *service.SIPService
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -210,36 +210,36 @@ func newRouteDeps(
 	sipService *service.SIPService,
 ) *RouteDeps {
 	return &RouteDeps{
-		RBACCache:            permCache,
-		AuditService:         auditSvc,
-		AuthHandler:          authHandler,
-		WSHandler:            wsHandler,
-		UserHandler:          userHandler,
-		RoleHandler:          roleHandler,
-		PermissionHandler:    permHandler,
-		FileHandler:          fileHandler,
-		AuditHandler:         auditHandler,
-		TaskHandler:          taskHandler,
-		BrandHandler:         brandHandler,
-		MailHandler:          mailHandler,
-		FeedbackHandler:      feedbackHandler,
-		DashboardHandler:     dashboardHandler,
-		DeviceHandler:        deviceHandler,
-		DeviceGroupHandler:   deviceGroupHandler,
-		DeviceStagingHandler: deviceStagingHandler,
-		SystemHandler:        systemHandler,
-		SmartRecordHandler:   smartRecordHandler,
-		StreamManager:        streamManager,
+		RBACCache:               permCache,
+		AuditService:            auditSvc,
+		AuthHandler:             authHandler,
+		WSHandler:               wsHandler,
+		UserHandler:             userHandler,
+		RoleHandler:             roleHandler,
+		PermissionHandler:       permHandler,
+		FileHandler:             fileHandler,
+		AuditHandler:            auditHandler,
+		TaskHandler:             taskHandler,
+		BrandHandler:            brandHandler,
+		MailHandler:             mailHandler,
+		FeedbackHandler:         feedbackHandler,
+		DashboardHandler:        dashboardHandler,
+		DeviceHandler:           deviceHandler,
+		DeviceGroupHandler:      deviceGroupHandler,
+		DeviceStagingHandler:    deviceStagingHandler,
+		SystemHandler:           systemHandler,
+		SmartRecordHandler:      smartRecordHandler,
+		StreamManager:           streamManager,
 		LicenseHandler:          licenseHandler,
 		LicenseService:          licenseService,
 		AIVisionTaskHandler:     aiVisionTaskHandler,
 		AITimeScheduleHandler:   aiTimeScheduleHandler,
 		AlgorithmPackageHandler: algorithmPackageHandler,
-		PersonHandler:        personHandler,
-		GB28181Handler:       gb28181Handler,
-		MediaGB28181Handler:  mediaGB28181Handler,
-		GB28181ConfigHandler: gb28181ConfigHandler,
-		SIPService:           sipService,
+		PersonHandler:           personHandler,
+		GB28181Handler:          gb28181Handler,
+		MediaGB28181Handler:     mediaGB28181Handler,
+		GB28181ConfigHandler:    gb28181ConfigHandler,
+		SIPService:              sipService,
 	}
 }
 
@@ -259,13 +259,13 @@ func provideLicenseService(licenseRepo *repository.LicenseRepository, db *gorm.D
 	return service.NewLicenseService(licenseRepo, db)
 }
 
-func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
-	svc := service.NewAIVisionTaskService(repo, scheduleRepo, sipSvc, streamManager)
+func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
+	svc := service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, sipSvc, streamManager)
 	return handler.NewAIVisionTaskHandler(svc)
 }
 
-func provideAIVisionTaskService(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *service.AIVisionTaskService {
-	return service.NewAIVisionTaskService(repo, scheduleRepo, sipSvc, streamManager)
+func provideAIVisionTaskService(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *service.AIVisionTaskService {
+	return service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, sipSvc, streamManager)
 }
 
 func provideAITimeScheduleHandler(repo *repository.AITimeScheduleRepository) *handler.AITimeScheduleHandler {

@@ -42,6 +42,9 @@ namespace aivision
         /// HAL 平台动态库路径 (可选，空字符串表示使用默认)
         std::string hal_so_path;
 
+        /// fallback HAL 平台动态库路径，必须同样能解码并输出帧给推理 Worker
+        std::string fallback_hal_so_path;
+
         /// HAL 配置 (JSON)
         std::string hal_config_json = "{}";
 

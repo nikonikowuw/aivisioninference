@@ -771,11 +771,14 @@ export interface AlgorithmPackageListParams extends CrudListParams {
 export const algorithmPackagesApi = {
   ...crud<AlgorithmPackage, AlgorithmPackageListParams>('algorithmpackages'),
   upload: async (file: File, onProgress?: (pct: number) => void): Promise<AlgorithmPackage> => {
+    void onProgress;
     const headers = authHeaders();
+    const formData = new FormData();
+    formData.append('file', file);
     const response = await fetch(`${API_BASE}/algorithmpackages/upload`, {
       method: 'POST',
       headers,
-      body: file,
+      body: formData,
     });
     redirectOnUnauthorized(response);
     const json = await parseApiResponse<AlgorithmPackage>(response);
@@ -886,6 +889,10 @@ export const aiVisionTasksApi = {
     request<{ conflict: boolean; message?: string }>('/ai-tasks/check-conflict', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  restart: (id: string) =>
+    request<null>(`/ai-tasks/${id}/restart`, {
+      method: 'POST',
     }),
   batchDelete: (ids: string[]) =>
     request<BatchResult>('/ai-tasks/batch-delete', {

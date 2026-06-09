@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gopkg.in/yaml.v3"
 	"gorm.io/datatypes"
 
@@ -135,9 +137,9 @@ func (s *AlgorithmPackageService) UploadAndProcess(ctx context.Context, mr *mult
 		Version:           meta.Version,
 		Domain:            meta.Domain,
 		ResultSchema:      meta.ResultSchema,
-		CapabilitiesImage: meta.CapabilitiesImage,
-		CapabilitiesData:  meta.CapabilitiesData,
-		Hardware:          meta.Hardware,
+		CapabilitiesImage: pq.StringArray(meta.CapabilitiesImage),
+		CapabilitiesData:  pq.StringArray(meta.CapabilitiesData),
+		Hardware:          pq.StringArray(meta.Hardware),
 		Description:       meta.Description,
 		PackagePath:       tarPath,
 		ExtractPath:       tarPath,
@@ -167,8 +169,8 @@ func (s *AlgorithmPackageService) UploadAndProcess(ctx context.Context, mr *mult
 		s.rdb.Set(ctx, redisKey, tarPath, 15*time.Minute)
 	}
 
-	// Format download URL — 直接构造完整 URL，避免字符串替换的脆弱性
-	downloadURL := fmt.Sprintf("%s/internal/algo/download?token=%s", s.opts.PublicURL, token)
+	// Format download URL — 自检接口属于 API 路由，不属于 /uploads 静态资源路径。
+	downloadURL := buildAlgoDownloadURL(s.opts.PublicURL, token)
 
 	// Trigger self check command to C++ engine
 	if s.engine != nil {
@@ -359,4 +361,15 @@ func (s *AlgorithmPackageService) GetPathByToken(ctx context.Context, token stri
 		return "", err
 	}
 	return val, nil
+}
+
+func buildAlgoDownloadURL(publicURL, token string) string {
+	base := strings.TrimRight(publicURL, "/")
+	if parsed, err := url.Parse(base); err == nil {
+		parsed.Path = strings.TrimSuffix(parsed.Path, "/uploads")
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		base = strings.TrimRight(parsed.String(), "/")
+	}
+	return fmt.Sprintf("%s/api/v1/internal/algo/download?token=%s", base, url.QueryEscape(token))
 }

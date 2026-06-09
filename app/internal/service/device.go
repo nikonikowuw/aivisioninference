@@ -401,7 +401,7 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string, lang stri
 	err = s.streamManager.Acquire(ctx, id, "detect", nil)
 
 	testSuccess := err == nil
-	testMessage := "测试连接成功，流可达"
+	testMessage := i18n.Translate(lang, apperrors.ConnectionTestSuccess)
 	if err != nil {
 		// 完整错误记入日志，不暴露内部细节给前端
 		zap.L().Warn("device connection test failed",

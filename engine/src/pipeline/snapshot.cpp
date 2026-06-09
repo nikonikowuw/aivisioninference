@@ -44,6 +44,29 @@ namespace aivision
             configs_.erase(algo_name);
         }
 
+        void SnapshotManager::BindStreamAlgos(const std::string &task_id, const std::vector<std::string> &algo_names)
+        {
+            std::unique_lock<std::shared_mutex> lock(rw_mutex_);
+            stream_algos_[task_id] = algo_names;
+        }
+
+        std::vector<std::string> SnapshotManager::GetStreamAlgos(const std::string &task_id)
+        {
+            std::shared_lock<std::shared_mutex> lock(rw_mutex_);
+            auto it = stream_algos_.find(task_id);
+            if (it != stream_algos_.end())
+            {
+                return it->second;
+            }
+            return {};
+        }
+
+        void SnapshotManager::RemoveStreamBinding(const std::string &task_id)
+        {
+            std::unique_lock<std::shared_mutex> lock(rw_mutex_);
+            stream_algos_.erase(task_id);
+        }
+
         uint64_t SnapshotManager::GetVersion(const std::string &algo_name)
         {
             std::shared_lock<std::shared_mutex> lock(rw_mutex_);
@@ -55,6 +78,7 @@ namespace aivision
         {
             std::unique_lock<std::shared_mutex> lock(rw_mutex_);
             configs_.clear();
+            stream_algos_.clear();
         }
 
     } // namespace pipeline

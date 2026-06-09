@@ -495,6 +495,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	// Since we are wiring up AIVisionTaskService manually here for the background worker:
 	aiTaskRepo := repository.NewAIVisionTaskRepository(db)
 	aiScheduleRepo := repository.NewAITimeScheduleRepository(db)
+	algorithmPackageRepo := repository.NewAlgorithmPackageRepository(db)
 	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
 	engineClient := provideEngineClient(cfg)
@@ -506,7 +507,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)
 	deviceRepoV2 := repository.NewDeviceRepositoryV2(db)
 	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil)
-	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, sipSvc, streamManager)
+	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, sipSvc, streamManager)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 

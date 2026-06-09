@@ -160,6 +160,12 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 			EnableInfer:    reason == "infer",
 			EnablePlayback: reason == "play",
 		}
+		if reason == "infer" && metadata != nil {
+			req.AlgoName = metadata["algo_name"]
+			req.AlgoVersion = metadata["algo_version"]
+			req.SoPath = metadata["so_path"]
+			req.AlgoParamsJSON = metadata["algo_params_json"]
+		}
 
 		info, err := m.engine.StartStream(ctx, req)
 		if err != nil {

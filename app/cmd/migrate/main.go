@@ -579,6 +579,7 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "aivisiontasks:create", Name: "创建任务", Path: "/api/v1/aivisiontasks", Method: "POST"},
 					{Code: "aivisiontasks:edit", Name: "编辑任务", Path: "/api/v1/aivisiontasks/*", Method: "PUT"},
 					{Code: "aivisiontasks:delete", Name: "删除任务", Path: "/api/v1/aivisiontasks/*", Method: "DELETE"},
+					{Code: "aivisiontasks:restart", Name: "重启任务", Path: "/api/v1/aivisiontasks/*/restart", Method: "POST"},
 					{Code: "aivisiontasks:check-conflict", Name: "检查冲突", Path: "/api/v1/aivisiontasks/check-conflict", Method: "POST"},
 				}},
 			},

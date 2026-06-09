@@ -79,6 +79,7 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 	// 2. 获取流状态以拿到播放地址
 	state := s.streamManager.GetStream(ctx, deviceID)
 	if state == nil {
+		_ = s.streamManager.Release(ctx, deviceID, "play")
 		return "", errors.New(errors.ErrStreamStateNotFound, "")
 	}
 

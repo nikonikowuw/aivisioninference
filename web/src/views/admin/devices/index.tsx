@@ -272,6 +272,10 @@ export default function Devices() {
     setIsTesting(device.id);
     try {
       const result = await devicesApi.test(device.id);
+      if (!result) {
+        toast({ title: t('message.testError'), status: 'error' });
+        return;
+      }
       toast({
         title: result.success ? t('message.testSuccess') : t('message.testFailed'),
         description: result.message,

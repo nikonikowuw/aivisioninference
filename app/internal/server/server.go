@@ -15,6 +15,7 @@ import (
 	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
 	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
+	"github.com/niko-admin/niko-admin/internal/task"
 )
 
 // App 聚合应用启动所需的所有依赖。
@@ -48,6 +49,7 @@ func (a *App) Run() {
 	}()
 
 	// 启动 Asynq 定时任务调度器
+	task.RegisterPeriodicTasks(a.AsynqScheduler)
 	go func() {
 		zap.L().Info("starting asynq scheduler")
 		if err := a.AsynqScheduler.Run(); err != nil {

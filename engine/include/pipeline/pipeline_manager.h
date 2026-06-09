@@ -11,6 +11,8 @@
 
 #include "pipeline.h"
 #include "hal.h"
+#include "ring_queue.h"
+#include "ffmpeg_fallback_decoder.h"
 
 namespace aivision
 {
@@ -31,6 +33,7 @@ namespace aivision
         struct PipelineManagerConfig
         {
             std::string hal_so_path;
+            std::string fallback_hal_so_path;
             std::string hal_config_json = "{}";
             std::string rtsp_push_server = "rtsp://localhost:10554";
             bool enable_ffmpeg_fallback = true;
@@ -42,6 +45,9 @@ namespace aivision
         public:
             explicit PipelineManager(PipelineManagerConfig config = {});
             ~PipelineManager();
+
+            /// 设置推理 Worker 使用的流队列管理器
+            void SetStreamQueueManager(StreamQueueManager *queue_mgr) { queue_mgr_ = queue_mgr; }
 
             /// 创建并启动 Pipeline
             bool CreatePipeline(const std::string &device_id,
@@ -80,16 +86,19 @@ namespace aivision
 
             std::string BuildPushURL(const std::string &device_id) const;
             bool StartFFmpegFallback(const std::string &device_id, const std::string &rtsp_url);
+            bool StartFFmpegInferenceFallback(const std::string &device_id, const std::string &rtsp_url, RingQueue *infer_queue);
             void StopFFmpegFallback(const std::string &device_id);
 
             PipelineManagerConfig config_;
             mutable std::mutex mutex_;
             std::map<std::string, std::unique_ptr<Pipeline>> pipelines_;
+            StreamQueueManager *queue_mgr_{nullptr};
 
             // HAL 管理器，供所有 Pipeline 共享或每个 Pipeline 独立？
             // 设计上 IMediaPipeline 是一路流一个实例。
             std::map<std::string, std::unique_ptr<HALManager>> hal_managers_;
             std::map<std::string, pid_t> ffmpeg_fallbacks_;
+            std::map<std::string, std::unique_ptr<FFmpegFallbackDecoder>> ffmpeg_infer_fallbacks_;
         };
 
     } // namespace pipeline

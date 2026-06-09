@@ -102,6 +102,10 @@ type StartStreamParams struct {
 	EnablePlayback    bool                `json:"enable_playback"`
 	MaxReconnects     int                 `json:"max_reconnects"`
 	ReconnectInterval int                 `json:"reconnect_interval"`
+	AlgoName          string              `json:"algo_name,omitempty"`
+	AlgoVersion       string              `json:"algo_version,omitempty"`
+	SoPath            string              `json:"so_path,omitempty"`
+	AlgoParamsJSON    string              `json:"algo_params_json,omitempty"`
 	Algorithms        []AlgoBindingParams `json:"algorithms"`
 }
 

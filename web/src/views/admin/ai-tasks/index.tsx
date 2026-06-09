@@ -18,9 +18,9 @@ import {
   useToast,
   Tooltip,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, EditIcon } from '@chakra-ui/icons';
+import { AddIcon, DeleteIcon, EditIcon, RepeatIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { aiVisionTasksApi, aiTimeSchedulesApi, type AIVisionTask, type AITimeSchedule } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
@@ -37,28 +37,30 @@ const statusColor: Record<string, string> = {
   error: 'red',
 };
 
-const statusLabel: Record<string, string> = {
-  draft: 'status.draft',
-  ready: 'status.ready',
-  running: 'status.running',
-  error: 'status.error',
-};
-
 export default function AIVisionTasks() {
   const { formatDateTime } = useDateFormat();
   const textColor = useColorModeValue('navy.700', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
-  const { t } = useTranslation(['modules/ai-tasks', 'common']);
+  const { t, i18n } = useTranslation(['modules/ai-tasks', 'common']);
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [restartingID, setRestartingID] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<AIVisionTask | null>(null);
   const [scheduleMap, setScheduleMap] = useState<Record<string, AITimeSchedule>>({});
 
   const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
+
+  const formatErrorReason = useCallback((reason?: string) => {
+    if (!reason) return '-';
+    if (reason.startsWith('errors.')) {
+      return i18n.exists(reason, { ns: 'modules/ai-tasks' }) ? t(reason) : t('errors.unknown');
+    }
+    return reason;
+  }, [i18n, t]);
 
   // 加载时间配置列表用于名称映射
   useEffect(() => {
@@ -103,6 +105,19 @@ export default function AIVisionTasks() {
     } finally {
       setIsDeleting(false);
       setDeleteTarget(null);
+    }
+  };
+
+  const handleRestart = async (task: AIVisionTask) => {
+    setRestartingID(task.id);
+    try {
+      await aiVisionTasksApi.restart(task.id);
+      toast({ title: t('message.restartSuccess'), status: 'success' });
+      load();
+    } catch (err: any) {
+      toast({ title: t('message.restartFailed'), description: err?.message || '', status: 'error' });
+    } finally {
+      setRestartingID(null);
     }
   };
 
@@ -173,6 +188,7 @@ export default function AIVisionTasks() {
           <Tbody>
             {tasks.map(task => {
               const schedule = scheduleMap[task.schedule_id];
+              const errorReason = formatErrorReason(task.error_reason);
               return (
                 <Tr key={task.id}>
                   <Td fontWeight="600">{task.name}</Td>
@@ -194,7 +210,7 @@ export default function AIVisionTasks() {
                     {task.start_date?.substring(0, 10)} ~ {task.end_date?.substring(0, 10)}
                   </Td>
                   <Td maxW="200px" isTruncated color="red.400">
-                    <Tooltip label={task.error_reason}>{task.error_reason || '-'}</Tooltip>
+                    <Tooltip label={errorReason}>{errorReason}</Tooltip>
                   </Td>
                   <Td whiteSpace="nowrap">{formatDateTime(task.updated_at)}</Td>
                   <Td>
@@ -209,6 +225,15 @@ export default function AIVisionTasks() {
                           setEditingTask(task);
                           setFormOpen(true);
                         }}
+                      />
+                      <IconButton
+                        aria-label={t('actions.restart')}
+                        icon={<RepeatIcon />}
+                        size="sm"
+                        variant="ghost"
+                        colorScheme="green"
+                        isLoading={restartingID === task.id}
+                        onClick={() => handleRestart(task)}
                       />
                       <IconButton
                         aria-label={t('actions.delete')}

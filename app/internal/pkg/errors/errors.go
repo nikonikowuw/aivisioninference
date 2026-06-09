@@ -125,11 +125,12 @@ const (
 	ErrLicenseStreamLimit    = 10055 // 授权并发路数不足
 	ErrLicenseNotConfigured  = 10056 // 授权公钥未配置
 
-	// 连接测试错误 (1008x).
-	ErrEngineNotReady    = 10080 // 推理引擎未就绪
-	ErrConnectionTimeout = 10081 // 连接超时
-	ErrEngineResponseBad = 10082 // 引擎响应异常
-	ErrConnectionFailed  = 10083 // 连接失败
+	// 连接测试结果 (1008x).
+	ErrEngineNotReady     = 10080 // 推理引擎未就绪
+	ErrConnectionTimeout  = 10081 // 连接超时
+	ErrEngineResponseBad  = 10082 // 引擎响应异常
+	ErrConnectionFailed   = 10083 // 连接失败
+	ConnectionTestSuccess = 10084 // 连接测试成功，流可达
 
 	// Server errors (5xxxx).
 	ErrInternal            = 50001

@@ -40,6 +40,8 @@ extern "C"
         uint32_t pixel_format; // 像素格式
         int dma_buf_fd;        // DMA-BUF 文件描述符 (可选)
         uint64_t phys_addr;    // 物理地址 (可选)
+        void *data;            // HostMemory 数据指针，DMA 场景可为空；追加字段，保持旧 ABI 前缀兼容
+        uint32_t stride;       // 每行字节数，DMA 场景可为 0；追加字段，保持旧 ABI 前缀兼容
     } hw_buffer_desc_t;
 
     /// 推理结果

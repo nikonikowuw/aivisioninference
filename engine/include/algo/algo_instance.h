@@ -57,7 +57,7 @@ namespace aivision
             /// 增加引用计数
             int AddRef() { return ref_count_.fetch_add(1) + 1; }
 
-            /// 减少引用计数，归零时自动销毁 (线程安全)
+            /// 减少 Worker 使用引用计数；销毁由 Destroy() 负责。
             int Release()
             {
                 int expected = ref_count_.load();
@@ -65,10 +65,6 @@ namespace aivision
                 {
                     if (ref_count_.compare_exchange_weak(expected, expected - 1))
                     {
-                        if (expected - 1 == 0)
-                        {
-                            DestroyInternal();
-                        }
                         return expected - 1;
                     }
                 }
@@ -92,6 +88,9 @@ namespace aivision
 
             /// 获取 SoHandle 引用
             std::shared_ptr<SoHandle> GetSoHandle() const { return so_handle_; }
+
+            /// 显式销毁算法上下文，由 AlgoManager 卸载/析构时调用。
+            void Destroy() { DestroyInternal(); }
 
         private:
             /// 内部销毁

@@ -90,6 +90,10 @@ func (c *IPCEngineClient) StartStream(ctx context.Context, req StreamStartReques
 		DecodeHWType:   0, // Auto
 		EnableInfer:    req.EnableInfer,
 		EnablePlayback: req.EnablePlayback,
+		AlgoName:       req.AlgoName,
+		AlgoVersion:    req.AlgoVersion,
+		SoPath:         req.SoPath,
+		AlgoParamsJSON: req.AlgoParamsJSON,
 	}
 	fbData := ipc.StartStreamParamsToFlatBuffers(params)
 

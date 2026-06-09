@@ -119,6 +119,7 @@ var (
 			10081: "连接超时，请检查设备网络是否可达",
 			10082: "引擎响应异常，请稍后重试",
 			10083: "连接失败",
+			10084: "测试连接成功，流可达",
 		},
 		"en": {
 			0:     "Success",
@@ -226,6 +227,7 @@ var (
 			10081: "Connection timeout, please check if the device is reachable",
 			10082: "Engine response error, please try again later",
 			10083: "Connection failed",
+			10084: "Connection test successful, stream reachable",
 		},
 		"zh-tw": {
 			0:     "成功",
@@ -333,6 +335,7 @@ var (
 			10081: "連線逾時，請檢查設備網路是否可達",
 			10082: "引擎回應異常，請稍後重試",
 			10083: "連線失敗",
+			10084: "測試連線成功，流可達",
 		},
 		"id": {
 			0:     "Berhasil",
@@ -440,6 +443,7 @@ var (
 			10081: "Koneksi timeout, silakan periksa apakah perangkat dapat dijangkau",
 			10082: "Respons mesin error, silakan coba lagi nanti",
 			10083: "Koneksi gagal",
+			10084: "Tes koneksi berhasil, stream dapat dijangkau",
 		},
 		"ja": {
 			0:     "成功",
@@ -547,6 +551,7 @@ var (
 			10081: "接続タイムアウト。デバイスへの到達可能性を確認してください",
 			10082: "エンジン応答異常。後でもう一度お試しください",
 			10083: "接続失敗",
+			10084: "接続テスト成功、ストリーム到達可能",
 		},
 		"ko": {
 			0:     "성공",
@@ -654,6 +659,7 @@ var (
 			10081: "연결 시간 초과. 장치에 도달할 수 있는지 확인하세요",
 			10082: "엔진 응답 오류. 나중에 다시 시도하세요",
 			10083: "연결 실패",
+			10084: "연결 테스트 성공, 스트리밍 도달 가능",
 		},
 	}
 )

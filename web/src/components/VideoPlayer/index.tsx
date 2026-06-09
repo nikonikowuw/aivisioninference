@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, Spinner, Center, Text, Badge } from '@chakra-ui/react';
-import { streamManager, Protocol } from './StreamManager';
+import { streamManager } from './StreamManager';
+import type { Protocol } from './StreamManager';
 
 interface FallbackConfig {
   fallbackOrder: Protocol[];
@@ -18,6 +19,7 @@ interface VideoPlayerProps {
   url: string;
   protocol?: Protocol;
   poster?: string;
+  videoRef?: React.RefObject<HTMLVideoElement>;
   onError?: (error: string) => void;
   onProtocolChange?: (protocol: Protocol) => void;
   fallbackConfig?: Partial<FallbackConfig>;
@@ -65,12 +67,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   url,
   protocol: forcedProtocol,
   poster,
+  videoRef: externalVideoRef,
   onError,
   onProtocolChange,
   fallbackConfig,
 }) => {
   const config = { ...DEFAULT_FALLBACK_CONFIG, ...fallbackConfig };
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const internalVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = externalVideoRef || internalVideoRef;
   const cleanupRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
 

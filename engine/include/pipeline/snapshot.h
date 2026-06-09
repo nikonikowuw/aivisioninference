@@ -14,6 +14,7 @@
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace aivision
 {
@@ -72,6 +73,15 @@ namespace aivision
             /// 移除指定算法的配置
             void RemoveConfig(const std::string &algo_name);
 
+            /// 绑定指定流需要执行的算法链
+            void BindStreamAlgos(const std::string &task_id, const std::vector<std::string> &algo_names);
+
+            /// 获取指定流绑定的算法链
+            std::vector<std::string> GetStreamAlgos(const std::string &task_id);
+
+            /// 移除指定流的算法绑定
+            void RemoveStreamBinding(const std::string &task_id);
+
             /// 获取当前配置版本号
             uint64_t GetVersion(const std::string &algo_name);
 
@@ -84,6 +94,9 @@ namespace aivision
 
             /// 存储所有算法配置 (algo_name -> AlgoConfig)
             std::unordered_map<std::string, AlgoConfig> configs_;
+
+            /// 流与算法链绑定 (task_id -> algo_names)
+            std::unordered_map<std::string, std::vector<std::string>> stream_algos_;
         };
 
     } // namespace pipeline

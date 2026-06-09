@@ -43,7 +43,8 @@ func RegisterPeriodicTasks(scheduler *asynq.Scheduler) {
 	// 每 5 分钟检查一次设备状态
 	scheduler.Register("*/5 * * * *", asynq.NewTask(TypeDeviceStatusCheck, nil))
 	// 存储清理任务由 StorageScheduler 动态管理，不在此注册
-	scheduler.Register("*/5 * * * *", asynq.NewTask(TypeAIVisionTaskPatrol, nil))
+	// AI 任务按分钟巡检时间窗，避免任务创建后长时间停留在 ready。
+	scheduler.Register("* * * * *", asynq.NewTask(TypeAIVisionTaskPatrol, nil))
 }
 
 // NewMux 创建并返回一个新的 Asynq ServeMux，并在此 Mux 上注册所有任务处理 Handler

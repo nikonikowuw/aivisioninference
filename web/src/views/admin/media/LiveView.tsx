@@ -11,10 +11,10 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import VideoPlayer from 'components/VideoPlayer';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdClose, MdRefresh } from 'react-icons/md';
-import { request } from 'services/api';
+import { mediaApi, request } from 'services/api';
 
 interface StreamTile {
   deviceId: string;
@@ -40,8 +40,22 @@ const LAYOUTS: Record<number, { cols: number }> = {
 const LiveView: React.FC = () => {
   const { t } = useTranslation('modules/media');
   const [tiles, setTiles] = useState<StreamTile[]>([]);
+  const tilesRef = useRef<StreamTile[]>(tiles);
   const [layout, setLayout] = useState<number>(1);
   const toast = useToast();
+
+  const stopTilePlay = useCallback((tile?: StreamTile) => {
+    if (!tile || tile.loading || !tile.url) return;
+    mediaApi.stopPlay(tile.deviceId).catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    tilesRef.current = tiles;
+  }, [tiles]);
+
+  useEffect(() => () => {
+    tilesRef.current.forEach(stopTilePlay);
+  }, [stopTilePlay]);
 
   const addTile = async (deviceId: string) => {
     const idx = tiles.length;
@@ -71,7 +85,10 @@ const LiveView: React.FC = () => {
   };
 
   const removeTile = (index: number) => {
-    setTiles(prev => prev.filter((_, i) => i !== index));
+    setTiles(prev => {
+      stopTilePlay(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const layoutConfig = LAYOUTS[layout] || LAYOUTS[4];

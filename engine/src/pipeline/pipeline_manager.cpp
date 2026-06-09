@@ -5,9 +5,12 @@
 #include <chrono>
 #include <csignal>
 #include <cerrno>
+#include <atomic>
 #include <iostream>
+#include <memory>
 #include <sys/wait.h>
 #include <thread>
+#include <utility>
 #include <unistd.h>
 
 namespace aivision
@@ -32,6 +35,19 @@ namespace aivision
 
                 kill(pid, SIGKILL);
                 waitpid(pid, nullptr, 0);
+            }
+
+            FrameContext MakeFrameContext(const std::string &device_id, HwBufferPtr frame, uint64_t frame_seq)
+            {
+                FrameContext ctx;
+                ctx.buffer = std::move(frame);
+                ctx.timestamp_ns = static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count());
+                ctx.task_id = device_id;
+                ctx.frame_seq = frame_seq;
+                return ctx;
             }
         }
 
@@ -59,48 +75,112 @@ namespace aivision
             // 1. 创建 Pipeline 实例
             auto pipeline = std::make_unique<Pipeline>(device_id);
             auto create_ffmpeg_fallback = [&]() {
-                if (!config_.enable_ffmpeg_fallback || !StartFFmpegFallback(device_id, rtsp_url))
+                if (!config_.enable_ffmpeg_fallback)
+                    return false;
+
+                if (enable_infer)
+                {
+                    if (!queue_mgr_)
+                        return false;
+                    RingQueue *infer_queue = queue_mgr_->CreateStream(device_id);
+                    if (!StartFFmpegInferenceFallback(device_id, rtsp_url, infer_queue))
+                    {
+                        queue_mgr_->RemoveStream(device_id);
+                        return false;
+                    }
+                    pipelines_[device_id] = std::move(pipeline);
+                    std::cout << "FFmpeg software inference fallback pipeline created for device: "
+                              << device_id << std::endl;
+                    return true;
+                }
+
+                if (!StartFFmpegFallback(device_id, rtsp_url))
                     return false;
 
                 pipelines_[device_id] = std::move(pipeline);
-                std::cout << "FFmpeg fallback pipeline created for device: " << device_id << std::endl;
+                std::cout << "FFmpeg relay fallback pipeline created for device: " << device_id << std::endl;
                 return true;
             };
 
-            // 2. 创建并启动 HAL (拉流/硬件解码)，必要时使用 FFmpeg 兜底转推
-            auto hal = std::make_unique<HALManager>();
-            if (config_.hal_so_path.empty())
+            // 2. 创建并启动 HAL (拉流/硬件解码)。推理场景下 fallback 也必须是真实 HAL。
+            std::vector<std::pair<std::string, std::string>> hal_candidates;
+            if (!config_.hal_so_path.empty())
+            {
+                hal_candidates.emplace_back("primary", config_.hal_so_path);
+            }
+            if (!config_.fallback_hal_so_path.empty() && config_.fallback_hal_so_path != config_.hal_so_path)
+            {
+                hal_candidates.emplace_back("fallback", config_.fallback_hal_so_path);
+            }
+            if (hal_candidates.empty())
             {
                 std::cerr << "HAL .so path is not configured for device " << device_id << std::endl;
                 return create_ffmpeg_fallback();
             }
-            if (!hal->LoadPipeline(config_.hal_so_path, config_.hal_config_json))
+
+            std::unique_ptr<HALManager> hal;
+            IMediaPipeline *media_pipeline = nullptr;
+            for (const auto &[kind, hal_path] : hal_candidates)
             {
-                std::cerr << "Failed to load HAL pipeline for device " << device_id << std::endl;
+                auto candidate = std::make_unique<HALManager>();
+                if (!candidate->LoadPipeline(hal_path, config_.hal_config_json))
+                {
+                    std::cerr << "Failed to load " << kind << " HAL pipeline for device "
+                              << device_id << ", hal_so=" << hal_path << std::endl;
+                    continue;
+                }
+                media_pipeline = candidate->GetPipeline();
+                if (!media_pipeline)
+                {
+                    std::cerr << kind << " HAL pipeline is null for device " << device_id << std::endl;
+                    continue;
+                }
+                hal = std::move(candidate);
+                std::cout << "Loaded " << kind << " HAL for device " << device_id
+                          << ", hal_so=" << hal_path << std::endl;
+                break;
+            }
+            if (!hal || !media_pipeline)
+            {
+                std::cerr << "No usable HAL pipeline for device " << device_id << std::endl;
                 return create_ffmpeg_fallback();
             }
-            auto *media_pipeline = hal->GetPipeline();
-            if (!media_pipeline)
+            RingQueue *infer_queue = nullptr;
+            if (enable_infer && queue_mgr_)
             {
-                std::cerr << "HAL pipeline is null for device " << device_id << std::endl;
-                return false;
+                infer_queue = queue_mgr_->CreateStream(device_id);
+                std::cout << "[PipelineManager] infer queue created device=" << device_id << std::endl;
             }
-            media_pipeline->SetFrameCallback([queue = pipeline->GetQueue(), device_id](HwBufferPtr frame) {
-                if (!queue || !frame)
+            auto frame_counter = std::make_shared<std::atomic<uint64_t>>(0);
+            media_pipeline->SetFrameCallback([queue = pipeline->GetQueue(), infer_queue, device_id, frame_counter](HwBufferPtr frame) {
+                if (!frame)
                     return;
-                FrameContext ctx;
-                ctx.buffer = std::move(frame);
-                ctx.timestamp_ns = static_cast<uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::system_clock::now().time_since_epoch())
-                        .count());
-                ctx.task_id = device_id;
-                queue->Push(std::move(ctx));
+                uint64_t count = frame_counter->fetch_add(1) + 1;
+                FrameContext ctx = MakeFrameContext(device_id, frame, count);
+                if (count == 1 || count % 100 == 0)
+                {
+                    std::cout << "[PipelineManager] frame received"
+                              << " device=" << device_id
+                              << " count=" << count
+                              << " infer_queue=" << (infer_queue ? "yes" : "no")
+                              << std::endl;
+                }
+                if (queue)
+                {
+                    FrameContext pipeline_ctx = ctx;
+                    queue->Push(std::move(pipeline_ctx));
+                }
+                if (infer_queue)
+                {
+                    infer_queue->Push(std::move(ctx));
+                }
             });
             if (!media_pipeline->Start(rtsp_url))
             {
                 std::cerr << "Failed to start HAL stream for device " << device_id
                           << ", url=" << rtsp_url << std::endl;
+                if (infer_queue && queue_mgr_)
+                    queue_mgr_->RemoveStream(device_id);
                 return create_ffmpeg_fallback();
             }
 
@@ -119,6 +199,8 @@ namespace aivision
                 if (!pipeline->AddStage(encoder) || !pipeline->AddStage(pusher))
                 {
                     media_pipeline->Stop();
+                    if (infer_queue && queue_mgr_)
+                        queue_mgr_->RemoveStream(device_id);
                     return false;
                 }
             }
@@ -127,6 +209,8 @@ namespace aivision
             if (!pipeline->Start())
             {
                 media_pipeline->Stop();
+                if (infer_queue && queue_mgr_)
+                    queue_mgr_->RemoveStream(device_id);
                 return false;
             }
 
@@ -156,6 +240,8 @@ namespace aivision
             }
             pipelines_.erase(it);
             hal_managers_.erase(device_id);
+            if (queue_mgr_)
+                queue_mgr_->RemoveStream(device_id);
 
             std::cout << "Pipeline destroyed for device: " << device_id << std::endl;
             return true;
@@ -265,9 +351,16 @@ namespace aivision
                 (void)device_id;
                 TerminateChildProcess(pid);
             }
+            for (auto &[device_id, decoder] : ffmpeg_infer_fallbacks_)
+            {
+                (void)device_id;
+                if (decoder)
+                    decoder->Stop();
+            }
             pipelines_.clear();
             hal_managers_.clear();
             ffmpeg_fallbacks_.clear();
+            ffmpeg_infer_fallbacks_.clear();
         }
 
         std::string PipelineManager::BuildPushURL(const std::string &device_id) const
@@ -322,14 +415,49 @@ namespace aivision
             return true;
         }
 
+        bool PipelineManager::StartFFmpegInferenceFallback(const std::string &device_id, const std::string &rtsp_url, RingQueue *infer_queue)
+        {
+            if (!infer_queue)
+                return false;
+
+            auto decoder = std::make_unique<FFmpegFallbackDecoder>();
+            auto frame_counter = std::make_shared<std::atomic<uint64_t>>(0);
+            bool started = decoder->Start(rtsp_url, device_id, 640, 360,
+                                          [infer_queue, device_id, frame_counter](HwBufferPtr frame) {
+                                              if (!frame)
+                                                  return;
+                                              uint64_t count = frame_counter->fetch_add(1) + 1;
+                                              infer_queue->Push(MakeFrameContext(device_id, std::move(frame), count));
+                                              if (count == 1 || count % 100 == 0)
+                                              {
+                                                  std::cout << "[PipelineManager] ffmpeg fallback frame queued"
+                                                            << " device=" << device_id
+                                                            << " count=" << count << std::endl;
+                                              }
+                                          });
+            if (!started)
+                return false;
+
+            ffmpeg_infer_fallbacks_[device_id] = std::move(decoder);
+            return true;
+        }
+
         void PipelineManager::StopFFmpegFallback(const std::string &device_id)
         {
             auto it = ffmpeg_fallbacks_.find(device_id);
-            if (it == ffmpeg_fallbacks_.end())
-                return;
-            pid_t pid = it->second;
-            TerminateChildProcess(pid);
-            ffmpeg_fallbacks_.erase(it);
+            if (it != ffmpeg_fallbacks_.end())
+            {
+                pid_t pid = it->second;
+                TerminateChildProcess(pid);
+                ffmpeg_fallbacks_.erase(it);
+            }
+
+            auto infer_it = ffmpeg_infer_fallbacks_.find(device_id);
+            if (infer_it != ffmpeg_infer_fallbacks_.end())
+            {
+                infer_it->second->Stop();
+                ffmpeg_infer_fallbacks_.erase(infer_it);
+            }
         }
 
         std::unique_ptr<Stage> PipelineManager::CreateInferenceStage(const std::string &device_id)

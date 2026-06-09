@@ -40,6 +40,12 @@ namespace aivision
             /// 缓冲区大小 (字节)
             size_t size = 0;
 
+            /// HostMemory 数据指针，软件解码 fallback 使用
+            void *data = nullptr;
+
+            /// 每行字节数，软件解码 fallback 使用
+            uint32_t stride = 0;
+
             /// 图像宽度 (像素)
             uint32_t width = 0;
 

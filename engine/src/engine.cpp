@@ -52,10 +52,12 @@ namespace aivision
         hal_mgr_ = std::make_unique<pipeline::HALManager>();
         pipeline::PipelineManagerConfig pipeline_config;
         pipeline_config.hal_so_path = config.hal_so_path;
+        pipeline_config.fallback_hal_so_path = config.fallback_hal_so_path;
         pipeline_config.hal_config_json = config.hal_config_json;
         pipeline_config.rtsp_push_server = config.rtsp_push_server;
         pipeline_config.enable_ffmpeg_fallback = config.enable_ffmpeg_fallback;
         pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(pipeline_config);
+        pipeline_mgr_->SetStreamQueueManager(queue_mgr_.get());
         algo_mgr_ = std::make_unique<algo::AlgoManager>();
 
         metrics_reporter_ = std::make_unique<monitor::MetricsReporter>(
@@ -234,10 +236,35 @@ namespace aivision
         if (json[start] == '"')
         {
             start++;
-            size_t end = json.find("\"", start);
-            if (end == std::string::npos)
-                return "";
-            return json.substr(start, end - start);
+            std::string value;
+            bool escaped = false;
+            for (size_t i = start; i < json.size(); ++i)
+            {
+                char ch = json[i];
+                if (escaped)
+                {
+                    switch (ch)
+                    {
+                    case 'n': value.push_back('\n'); break;
+                    case 'r': value.push_back('\r'); break;
+                    case 't': value.push_back('\t'); break;
+                    default: value.push_back(ch); break;
+                    }
+                    escaped = false;
+                    continue;
+                }
+                if (ch == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+                if (ch == '"')
+                {
+                    return value;
+                }
+                value.push_back(ch);
+            }
+            return "";
         }
 
         // 数字或布尔值
@@ -424,11 +451,21 @@ namespace aivision
         std::string stream_url = ExtractJsonField(payload_str, "stream_url");
         bool enable_infer = ExtractJsonBoolField(payload_str, "enable_infer", false);
         bool enable_playback = ExtractJsonBoolField(payload_str, "enable_playback", false);
+        std::string algo_name = ExtractJsonField(payload_str, "algo_name");
+        std::string algo_version = ExtractJsonField(payload_str, "algo_version");
+        std::string so_path = ExtractJsonField(payload_str, "so_path");
+        std::string algo_params_json = ExtractJsonField(payload_str, "algo_params_json");
+        if (algo_params_json.empty())
+        {
+            algo_params_json = "{}";
+        }
 
         std::cout << "[IPC] StreamStart device_id=" << device_id
                   << ", stream_url=" << stream_url
                   << ", enable_infer=" << enable_infer
-                  << ", enable_playback=" << enable_playback << std::endl;
+                  << ", enable_playback=" << enable_playback
+                  << ", algo=" << algo_name
+                  << ", so_path=" << so_path << std::endl;
 
         if (device_id.empty() || stream_url.empty())
         {
@@ -443,9 +480,45 @@ namespace aivision
             return;
         }
 
-        bool started = pipeline_mgr_->CreatePipeline(device_id, stream_url, enable_infer, enable_playback);
+        bool algo_ready = true;
+        if (enable_infer)
+        {
+            if (algo_name.empty() || so_path.empty())
+            {
+                std::cerr << "[IPC] StreamStart infer enabled but algo_name or so_path is empty" << std::endl;
+                algo_ready = false;
+            }
+            else
+            {
+                auto instance = algo_mgr_->Load(algo_name, algo_version, so_path, algo_params_json);
+                if (!instance)
+                {
+                    std::cerr << "[IPC] Failed to load algorithm for stream: "
+                              << algo_name << ", so_path=" << so_path << std::endl;
+                    algo_ready = false;
+                }
+                else
+                {
+                    pipeline::AlgoConfig config;
+                    config.algo_name = algo_name;
+                    config.algo_version = algo_version;
+                    config.algo_params_json = algo_params_json;
+                    snapshot_mgr_->UpdateConfig(algo_name, config);
+                    snapshot_mgr_->BindStreamAlgos(device_id, {algo_name});
+                    std::cout << "[IPC] Algorithm bound to stream device_id=" << device_id
+                              << ", algo=" << algo_name << std::endl;
+                }
+            }
+        }
+
+        bool started = false;
+        if (algo_ready)
+        {
+            started = pipeline_mgr_->CreatePipeline(device_id, stream_url, enable_infer, enable_playback);
+        }
         if (!started)
         {
+            snapshot_mgr_->RemoveStreamBinding(device_id);
             std::cerr << "[IPC] Failed to create hardware pipeline for device: " << device_id << std::endl;
         }
 
@@ -487,6 +560,7 @@ namespace aivision
         if (!device_id.empty())
         {
             pipeline_mgr_->DestroyPipeline(device_id);
+            snapshot_mgr_->RemoveStreamBinding(device_id);
         }
 
         // 发送响应

@@ -10,6 +10,10 @@ type StreamStartRequest struct {
 	RtspURL        string `json:"rtsp_url"`
 	EnableInfer    bool   `json:"enable_infer"`
 	EnablePlayback bool   `json:"enable_playback"`
+	AlgoName       string `json:"algo_name,omitempty"`
+	AlgoVersion    string `json:"algo_version,omitempty"`
+	SoPath         string `json:"so_path,omitempty"`
+	AlgoParamsJSON string `json:"algo_params_json,omitempty"`
 }
 
 // StreamInfo 流启动后的信息

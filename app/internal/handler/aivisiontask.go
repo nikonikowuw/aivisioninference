@@ -159,6 +159,29 @@ func (h *AIVisionTaskHandler) Delete(c *gin.Context) {
 	response.OK(c, nil)
 }
 
+// Restart restarts an existing aivisiontask by its ID.
+//
+// @Summary      重启aivisiontask
+// @Description  释放旧推理流并重新拉起aivisiontask
+// @Tags         aivisiontask
+// @Produce      json
+// @Param        id  path  string  true  "ID"
+// @Success      200  {object}  dto.Response
+// @Router       /aivisiontasks/{id}/restart [post]
+// @Security     BearerAuth
+func (h *AIVisionTaskHandler) Restart(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		response.Err(c, apperrors.New(apperrors.ErrBadRequest, "无效的 ID"))
+		return
+	}
+	if err := h.svc.RestartTask(c.Request.Context(), id); err != nil {
+		response.Err(c, err)
+		return
+	}
+	response.OK(c, nil)
+}
+
 // CheckConflict 检查资源冲突
 //
 // @Summary      检查资源冲突

@@ -259,9 +259,12 @@ func (m *StreamManager) Release(ctx context.Context, deviceID, reason string) er
 		state.Status = "inactive"
 
 		go func() {
-			stream, err := m.streamRepo.FindByStream(ctx, "live", deviceID, "__defaultVhost__")
+			dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			stream, err := m.streamRepo.FindByStream(dbCtx, "live", deviceID, "__defaultVhost__")
 			if err == nil && stream != nil {
-				_ = m.streamRepo.UpdateStatus(ctx, stream.ID, "inactive")
+				_ = m.streamRepo.UpdateStatus(dbCtx, stream.ID, "inactive")
 			}
 		}()
 	} else if reason == "play" {
@@ -409,7 +412,7 @@ func (m *StreamManager) GetStream(ctx context.Context, deviceID string) *StreamS
 
 // ListStreams 列出所有活跃流状态（过滤掉无引用的 inactive 流）
 func (m *StreamManager) ListStreams(ctx context.Context) []*StreamState {
-	results := make([]*StreamState, 0)
+	var results []*StreamState
 	m.streams.Range(func(key, value interface{}) bool {
 		state := value.(*StreamState)
 		// 只返回有活跃引用或处于活跃状态的流

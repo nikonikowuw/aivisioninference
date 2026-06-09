@@ -5,6 +5,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/errors"
 )
 
 // CreateGB28181Device creates a new GB28181 device
@@ -39,6 +40,23 @@ func (s *SIPService) ListGB28181Devices(ctx context.Context, req dto.GB28181Devi
 // GetGB28181DeviceByID returns a GB28181 device by ID
 func (s *SIPService) GetGB28181DeviceByID(ctx context.Context, id string) (*model.GB28181Device, error) {
 	return s.gbDeviceRepo.FindByID(ctx, id)
+}
+
+// ResolveGB28181DeviceCode resolves either a GB28181 device ID or a unified Device ID to a GB28181 device code.
+func (s *SIPService) ResolveGB28181DeviceCode(ctx context.Context, id string) (string, error) {
+	gbDevice, err := s.gbDeviceRepo.FindByID(ctx, id)
+	if err == nil {
+		return gbDevice.DeviceCode, nil
+	}
+
+	device, err := s.deviceRepo.FindByID(ctx, id)
+	if err != nil {
+		return "", errors.New(errors.ErrDeviceNotFound, "")
+	}
+	if device.GB28181DeviceID == "" {
+		return "", errors.New(errors.ErrDeviceNotFound, "")
+	}
+	return device.GB28181DeviceID, nil
 }
 
 // UpdateGB28181Device updates a GB28181 device

@@ -116,10 +116,7 @@ func (s *TimeConfigService) SetManualTime(t time.Time) error {
 	}
 
 	// 使用 unix 设置系统时间
-	tv := unix.Timeval{
-		Sec:  t.Unix(),
-		Usec: int64(t.Nanosecond() / 1000),
-	}
+	tv := unix.NsecToTimeval(t.UnixNano())
 
 	if err := unix.Settimeofday(&tv); err != nil {
 		return apperrors.New(apperrors.ErrSetTimeFailed, "")
@@ -364,7 +361,9 @@ func (s *TimeConfigService) getOrCreateTimeConfig() (*model.TimeConfig, error) {
 // ntpServersFromConfig 从 TimeConfig 中解析 NTP 服务器列表
 func ntpServersFromConfig(config model.TimeConfig) []string {
 	var servers []string
-	json.Unmarshal([]byte(config.NTPServers), &servers)
+	if err := json.Unmarshal([]byte(config.NTPServers), &servers); err != nil {
+		zap.L().Warn("failed to parse NTP servers config", zap.Error(err))
+	}
 	return servers
 }
 

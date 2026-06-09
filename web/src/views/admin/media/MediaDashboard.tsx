@@ -23,14 +23,20 @@ import {
   MdSearch, MdVideocam,
 } from 'react-icons/md';
 import { deviceGroupsApi, devicesApi, mediaApi, request } from 'services/api';
-import { startGB28181Live } from 'services/gb28181';
+import { startGB28181Live, stopGB28181Live } from 'services/gb28181';
 
 // ── Types ──
-interface Device { id: string; device_name: string; access_type: string; status: string; groups?: { id: string }[] }
+interface Device { id: string; device_name: string; access_type: string; status: string; rtsp_url?: string; groups?: { id: string }[] }
 interface DeviceGroup { id: string; group_name: string; parent_id?: string | null }
+
+const shouldUseGB28181Live = (device: Device) =>
+  !device.rtsp_url && (device.access_type === 'gb28181' || device.access_type === 'gb28181_nvr' || device.access_type === 'nvr_channel');
 interface PlayResponse { url: string; protocol: string; expires?: number; stream_id?: string }
 interface Tile { deviceId: string; deviceName: string; url?: string; protocol?: string; streamId?: string; loading: boolean; error?: string }
 interface TreeNode { id: string; name: string; type: 'group' | 'device'; children: TreeNode[]; device?: Device }
+
+const isValidPlayResponse = (data: PlayResponse | null | undefined): data is PlayResponse =>
+  Boolean(data?.url && data.protocol);
 
 const LAYOUTS: Record<number, { cols: number; rows: number }> = { 1: { cols: 1, rows: 1 }, 4: { cols: 2, rows: 2 }, 9: { cols: 3, rows: 3 } };
 const STATUS_MAP: Record<string, { color: string; icon: typeof MdCheckCircle }> = {
@@ -76,7 +82,7 @@ const TreeNodeView: React.FC<{ node: TreeNode; depth: number; search: string; on
       <Box pl={`${depth * 12}px`}>
         {isDevice ? (
           <Flex p="2" pr="3" borderRadius="md" cursor="grab" _hover={{ bg: hoverBg }} align="center" gap="2"
-            draggable onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name, access_type: device!.access_type })); e.dataTransfer.effectAllowed = 'copy'; }}
+            draggable onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name, access_type: device!.access_type, rtsp_url: device!.rtsp_url })); e.dataTransfer.effectAllowed = 'copy'; }}
             onClick={() => device && onPlay(device)}>
             <IconButton aria-label={t('play')} icon={<MdPlayCircle />} size="xs" colorScheme="green" variant="ghost" flexShrink={0}
               onClick={(e) => { e.stopPropagation(); device && onPlay(device); }} />
@@ -111,7 +117,7 @@ const GridCell: React.FC<{ index: number; tile: Tile | null; onDrop: (i: number,
         bg={dragOver ? 'blue.50' : 'black'} transition="all 0.15s"
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); try { const d = JSON.parse(e.dataTransfer.getData('application/json')); onDrop(index, { id: d.id, device_name: d.name, access_type: d.access_type || 'rtsp', status: 'unknown' }); } catch { } }}>
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); try { const d = JSON.parse(e.dataTransfer.getData('application/json')); onDrop(index, { id: d.id, device_name: d.name, access_type: d.access_type || 'rtsp', rtsp_url: d.rtsp_url, status: 'unknown' }); } catch { } }}>
         {tile ? (<>
           <Flex position="absolute" top={0} left={0} right={0} zIndex={2} bg="linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)" p={1.5} px={2} justify="space-between" align="center">
             <HStack spacing={1}>
@@ -154,14 +160,18 @@ export default function MediaDashboard() {
   const treeData = useMemo(() => buildTree(groups, devices), [groups, devices]);
 
   const startPlayRequest = useCallback((device: Device): Promise<PlayResponse> => {
-    if (device.access_type === 'gb28181') {
+    if (shouldUseGB28181Live(device)) {
       return startGB28181Live(device.id);
     }
-    return request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=auto`);
+    return request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=hls`);
   }, []);
 
   const stopTilePlay = useCallback((tile: Tile | null | undefined) => {
-    if (!tile || tile.loading || !tile.url || tile.protocol === 'gb28181') return;
+    if (!tile || tile.loading || !tile.url) return;
+    if (tile.protocol === 'hls' && tile.streamId) {
+      stopGB28181Live(tile.deviceId, tile.streamId).catch(() => { });
+      return;
+    }
     mediaApi.stopPlay(tile.deviceId).catch(() => { });
   }, []);
 
@@ -173,6 +183,14 @@ export default function MediaDashboard() {
     tilesRef.current.forEach(stopTilePlay);
   }, [stopTilePlay]);
 
+  const setTileAtIndex = useCallback((index: number, patch: Partial<Tile>) => {
+    setTiles(cur => {
+      const u = [...cur];
+      if (u[index]) Object.assign(u[index]!, patch);
+      return u;
+    });
+  }, []);
+
   const playDevice = useCallback((device: Device) => {
     setTiles(prev => {
       const emptyIdx = prev.findIndex(t => t === null);
@@ -181,22 +199,14 @@ export default function MediaDashboard() {
       updated[emptyIdx] = { deviceId: device.id, deviceName: device.device_name, loading: true };
       startPlayRequest(device)
         .then(data => {
-          setTiles(cur => {
-            const u = [...cur];
-            if (u[emptyIdx]) Object.assign(u[emptyIdx]!, { url: data.url, protocol: data.protocol, streamId: data.stream_id, loading: false });
-            return u;
-          });
+          setTileAtIndex(emptyIdx, isValidPlayResponse(data)
+            ? { url: data.url, protocol: data.protocol, streamId: data.stream_id, loading: false }
+            : { loading: false, error: t('playFailed') });
         })
-        .catch(() => {
-          setTiles(cur => {
-            const u = [...cur];
-            if (u[emptyIdx]) Object.assign(u[emptyIdx]!, { loading: false, error: t('playFailed') });
-            return u;
-          });
-        });
+        .catch(() => setTileAtIndex(emptyIdx, { loading: false, error: t('playFailed') }));
       return updated;
     });
-  }, [startPlayRequest, t]);
+  }, [startPlayRequest, setTileAtIndex, t]);
 
   const handleDrop = useCallback((index: number, device: Device) => {
     setTiles(prev => {
@@ -205,22 +215,14 @@ export default function MediaDashboard() {
       u[index] = { deviceId: device.id, deviceName: device.device_name, loading: true };
       startPlayRequest(device)
         .then(data => {
-          setTiles(cur => {
-            const u = [...cur];
-            if (u[index]) Object.assign(u[index]!, { url: data.url, protocol: data.protocol, streamId: data.stream_id, loading: false });
-            return u;
-          });
+          setTileAtIndex(index, isValidPlayResponse(data)
+            ? { url: data.url, protocol: data.protocol, streamId: data.stream_id, loading: false }
+            : { loading: false, error: t('playFailed') });
         })
-        .catch(() => {
-          setTiles(cur => {
-            const u = [...cur];
-            if (u[index]) Object.assign(u[index]!, { loading: false, error: t('playFailed') });
-            return u;
-          });
-        });
+        .catch(() => setTileAtIndex(index, { loading: false, error: t('playFailed') }));
       return u;
     });
-  }, [startPlayRequest, stopTilePlay, t]);
+  }, [startPlayRequest, stopTilePlay, setTileAtIndex, t]);
 
   const handleRemove = useCallback((index: number) => setTiles(prev => {
     const u = [...prev];

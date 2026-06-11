@@ -21,6 +21,7 @@ export const common = {
     import: "インポート",
     exportSelected: "選択した項目をエクスポート",
     batchDelete: "一括削除",
+    clearFilters: "フィルターをクリア",
   },
   status: {
     active: "有効",
@@ -43,6 +44,7 @@ export const common = {
     confirmDelete: "本当に削除しますか？",
     confirmCancel: "本当にキャンセルしますか？",
     operationSuccess: "操作が成功しました",
+    success: "操作が成功しました",
     operationFailed: "操作が失敗しました",
     networkError:
       "ネットワークエラーが発生しました。後でもう一度お試しください。",
@@ -213,6 +215,20 @@ export const common = {
   },
   batch: {
     selected: "{{count}} 件選択中",
+  },
+  dialog: {
+    delete: {
+      title: "削除確認",
+    },
+    enable: {
+      title: "有効化確認",
+    },
+    disable: {
+      title: "無効化確認",
+    },
+    retryEmbedding: {
+      title: "再抽出確認",
+    },
   },
   searchBar: {
     keyword: "キーワード",

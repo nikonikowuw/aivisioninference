@@ -21,6 +21,7 @@ export const common = {
     import: "가져오기",
     exportSelected: "선택 항목 내보내기",
     batchDelete: "일괄 삭제",
+    clearFilters: "필터 초기화",
   },
   status: {
     active: "활성",
@@ -43,6 +44,7 @@ export const common = {
     confirmDelete: "정말로 삭제하시겠습니까?",
     confirmCancel: "정말로 취소하시겠습니까?",
     operationSuccess: "작업이 성공적으로 완료되었습니다",
+    success: "작업이 성공적으로 완료되었습니다",
     operationFailed: "작업에 실패했습니다",
     networkError: "네트워크 오류가 발생했습니다. 나중에 다시 시도해 주세요.",
     unauthorized: "인증되지 않았습니다. 다시 로그인해 주세요.",
@@ -211,6 +213,20 @@ export const common = {
   },
   batch: {
     selected: "{{count}}개 항목 선택됨",
+  },
+  dialog: {
+    delete: {
+      title: "삭제 확인",
+    },
+    enable: {
+      title: "활성화 확인",
+    },
+    disable: {
+      title: "비활성화 확인",
+    },
+    retryEmbedding: {
+      title: "재추출 확인",
+    },
   },
   searchBar: {
     keyword: "키워드",

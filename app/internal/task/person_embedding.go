@@ -3,11 +3,11 @@ package task
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math"
+	"io"
+	"path/filepath"
+	"strings"
 
 	"github.com/hibiken/asynq"
 	"github.com/pgvector/pgvector-go"
@@ -15,11 +15,14 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/repository"
+	"github.com/niko-admin/niko-admin/internal/service"
+	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
 const (
-	TypePersonEmbedding = "person:embedding"
-	TypePersonImport    = "person:import"
+	TypePersonEmbedding        = "person:embedding"
+	TypePersonEmbeddingRebuild = "person:embedding:rebuild"
+	TypePersonImport           = "person:import"
 )
 
 // PersonEmbeddingPayload 特征提取任务载荷。
@@ -27,20 +30,38 @@ type PersonEmbeddingPayload struct {
 	PersonID string `json:"person_id"`
 }
 
+// PersonEmbeddingRebuildPayload 全量重提取任务载荷。
+type PersonEmbeddingRebuildPayload struct {
+	AlgoName    string `json:"algo_name"`
+	AlgoVersion string `json:"algo_version"`
+}
+
 // PersonEmbeddingHandler 处理人员特征提取任务。
 type PersonEmbeddingHandler struct {
-	personRepo    *repository.PersonRepository
-	embeddingRepo *repository.PersonEmbeddingRepository
+	personRepo           *repository.PersonRepository
+	embeddingRepo        *repository.PersonEmbeddingRepository
+	algorithmPackageRepo *repository.AlgorithmPackageRepository
+	faceSync             *service.FaceLibrarySyncService
+	engine               service.EngineClient
+	storage              storage.Storage
 }
 
 // NewPersonEmbeddingHandler 创建特征提取任务处理器。
-func NewPersonEmbeddingHandler(personRepo *repository.PersonRepository, embeddingRepo *repository.PersonEmbeddingRepository) *PersonEmbeddingHandler {
-	return &PersonEmbeddingHandler{personRepo: personRepo, embeddingRepo: embeddingRepo}
+func NewPersonEmbeddingHandler(personRepo *repository.PersonRepository, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, faceSync *service.FaceLibrarySyncService, engine service.EngineClient, storage storage.Storage) *PersonEmbeddingHandler {
+	return &PersonEmbeddingHandler{
+		personRepo:           personRepo,
+		embeddingRepo:        embeddingRepo,
+		algorithmPackageRepo: algorithmPackageRepo,
+		faceSync:             faceSync,
+		engine:               engine,
+		storage:              storage,
+	}
 }
 
 // RegisterHandlers 注册处理器。
 func (h *PersonEmbeddingHandler) RegisterHandlers(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypePersonEmbedding, h.handleEmbedding)
+	mux.HandleFunc(TypePersonEmbeddingRebuild, h.handleEmbeddingRebuild)
 }
 
 // handleEmbedding 处理特征提取任务。
@@ -63,10 +84,7 @@ func (h *PersonEmbeddingHandler) handleEmbedding(ctx context.Context, t *asynq.T
 		return fmt.Errorf("update status: %w", err)
 	}
 
-	// 提取特征向量
-	// TODO: Replace this placeholder SHA256 logic with real InsightFace model call
-	// Currently using deterministic placeholder vectors for development.
-	vec, err := h.extractEmbedding(person)
+	vec, err := h.extractEmbedding(ctx, person)
 	if err != nil {
 		zap.L().Error("embedding extraction failed", zap.String("person_id", person.ID), zap.Error(err))
 		_ = h.personRepo.UpdateEmbeddingStatus(ctx, person.ID, model.EmbeddingStatusFailed, "EXTRACTION_FAILED", "person.error.embeddingExtract", true)
@@ -97,29 +115,168 @@ func (h *PersonEmbeddingHandler) handleEmbedding(ctx context.Context, t *asynq.T
 	return nil
 }
 
-// extractEmbedding 提取 512 维特征向量。
-// WARNING: This is a deterministic placeholder implementation using SHA256.
-// It MUST be replaced with real InsightFace model call before production deployment.
-// Do NOT rely on this for actual face recognition / similarity search.
-func (h *PersonEmbeddingHandler) extractEmbedding(person *model.Person) ([]float32, error) {
-	hash := sha256.Sum256([]byte(person.ImageURL + person.PersonName))
-	vec := make([]float32, 512)
-	for i := 0; i < 512; i++ {
-		start := (i * 4) % 28
-		bits := binary.LittleEndian.Uint32(hash[start : start+4])
-		// 生成 [-1, 1] 范围的浮点数
-		vec[i] = (float32(bits)/float32(math.MaxUint32))*2 - 1
-	}
-	// 归一化
-	var norm float32
-	for _, v := range vec {
-		norm += v * v
-	}
-	norm = float32(math.Sqrt(float64(norm)))
-	if norm > 0 {
-		for i := range vec {
-			vec[i] /= norm
+func (h *PersonEmbeddingHandler) handleEmbeddingRebuild(ctx context.Context, t *asynq.Task) error {
+	var payload PersonEmbeddingRebuildPayload
+	if len(t.Payload()) > 0 {
+		if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+			return fmt.Errorf("unmarshal rebuild payload: %w", err)
 		}
 	}
-	return vec, nil
+	if payload.AlgoName == "" {
+		payload.AlgoName = "face_recognition"
+	}
+
+	persons, err := h.personRepo.ListEnabledForEmbedding(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("list enabled persons: %w", err)
+	}
+
+	var failed int
+	for i := range persons {
+		if err := h.rebuildPersonEmbedding(ctx, &persons[i]); err != nil {
+			failed++
+			zap.L().Error("person embedding rebuild failed",
+				zap.String("person_id", persons[i].ID),
+				zap.String("algo_name", payload.AlgoName),
+				zap.String("algo_version", payload.AlgoVersion),
+				zap.Error(err),
+			)
+		}
+	}
+
+	if h.faceSync != nil {
+		if err := h.faceSync.Sync(ctx, payload.AlgoName); err != nil {
+			return fmt.Errorf("sync face library: %w", err)
+		}
+	}
+
+	zap.L().Info("person embedding rebuild completed",
+		zap.String("algo_name", payload.AlgoName),
+		zap.String("algo_version", payload.AlgoVersion),
+		zap.Int("total", len(persons)),
+		zap.Int("failed", failed),
+	)
+	if failed > 0 {
+		return fmt.Errorf("person embedding rebuild partially failed: %d/%d", failed, len(persons))
+	}
+	return nil
+}
+
+func (h *PersonEmbeddingHandler) rebuildPersonEmbedding(ctx context.Context, person *model.Person) error {
+	if err := h.personRepo.UpdateEmbeddingStatus(ctx, person.ID, model.EmbeddingStatusExtracting, "", "", false); err != nil {
+		return fmt.Errorf("update status extracting: %w", err)
+	}
+
+	vec, err := h.extractEmbedding(ctx, person)
+	if err != nil {
+		_ = h.personRepo.UpdateEmbeddingStatus(ctx, person.ID, model.EmbeddingStatusFailed, "EXTRACTION_FAILED", "person.error.embeddingExtract", true)
+		return fmt.Errorf("extract embedding: %w", err)
+	}
+
+	_ = h.embeddingRepo.DeleteByPersonRecordID(ctx, person.ID)
+	embedding := &model.PersonEmbedding{
+		PersonRecordID: person.ID,
+		Embedding:      pgvector.NewVector(vec),
+		Version:        1,
+	}
+	if err := h.embeddingRepo.Create(ctx, embedding); err != nil {
+		_ = h.personRepo.UpdateEmbeddingStatus(ctx, person.ID, model.EmbeddingStatusFailed, "DB_WRITE_ERROR", "person.error.embeddingWrite", true)
+		return fmt.Errorf("create embedding: %w", err)
+	}
+	if err := h.personRepo.UpdateEmbeddingStatus(ctx, person.ID, model.EmbeddingStatusActive, "", "", false); err != nil {
+		return fmt.Errorf("update status active: %w", err)
+	}
+	return nil
+}
+
+func (h *PersonEmbeddingHandler) extractEmbedding(ctx context.Context, person *model.Person) ([]float32, error) {
+	if h.engine == nil {
+		return nil, fmt.Errorf("engine client is not configured")
+	}
+	imageBytes, err := h.readPersonImage(person.ImageURL)
+	if err != nil {
+		return nil, err
+	}
+
+	algoVersion, soPath, algoParamsJSON, err := h.resolveFaceRecognitionRuntime(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := h.engine.ExtractFaceEmbedding(ctx, "face_recognition", algoVersion, soPath, algoParamsJSON, imageBytes)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.Embedding) != 512 {
+		return nil, fmt.Errorf("unexpected embedding dimension: %d", len(result.Embedding))
+	}
+	return result.Embedding, nil
+}
+
+func (h *PersonEmbeddingHandler) resolveFaceRecognitionRuntime(ctx context.Context) (string, string, string, error) {
+	if h.algorithmPackageRepo == nil {
+		return "", "", "", fmt.Errorf("algorithm package repository is not configured")
+	}
+	algoPackage, err := h.algorithmPackageRepo.FindLatestPassedByAlgorithm(ctx, "face_recognition")
+	if err != nil {
+		return "", "", "", fmt.Errorf("find face_recognition algorithm package: %w", err)
+	}
+	soPath, err := service.ResolveRuntimeSoPath(algoPackage)
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolve face_recognition runtime so: %w", err)
+	}
+	return algoPackage.Version, soPath, "", nil
+}
+
+func (h *PersonEmbeddingHandler) readPersonImage(imageURL string) ([]byte, error) {
+	if h.storage == nil {
+		return nil, fmt.Errorf("storage is not configured")
+	}
+	storagePath := h.personImageStoragePath(imageURL)
+	rc, err := h.storage.Get(storagePath)
+	if err != nil {
+		fallback := strings.TrimPrefix(imageURL, "/")
+		if fallback != storagePath {
+			rc, err = h.storage.Get(fallback)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read person image %q: %w", imageURL, err)
+	}
+	defer rc.Close()
+
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("read person image bytes: %w", err)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("person image is empty")
+	}
+	return data, nil
+}
+
+func (h *PersonEmbeddingHandler) personImageStoragePath(imageURL string) string {
+	if imageURL == "" {
+		return ""
+	}
+	// 1. 如果包含 API 前缀，取文件名
+	if marker := "/api/v1/persons/image/"; strings.Contains(imageURL, marker) {
+		return "persons/" + filepath.Base(imageURL)
+	}
+	// 2. 如果包含存储基准 URL
+	if h.storage != nil {
+		baseURL := h.storage.GetURL("")
+		if baseURL != "" && strings.HasPrefix(imageURL, baseURL) {
+			return strings.TrimPrefix(imageURL, baseURL)
+		}
+	}
+	// 3. 处理 /uploads 前缀
+	path := strings.TrimPrefix(imageURL, "/")
+	if strings.HasPrefix(path, "uploads/") {
+		return strings.TrimPrefix(path, "uploads/")
+	}
+	if parts := strings.Split(imageURL, "/uploads/"); len(parts) > 1 {
+		return parts[1]
+	}
+	return path
 }

@@ -8,8 +8,10 @@
 #include <unistd.h>
 #include <algorithm>
 #include <cstring>
+#include <cerrno>
 #include <iostream>
 #include <mutex>
+#include <vector>
 
 namespace aivision
 {
@@ -25,6 +27,25 @@ namespace aivision
             try { port = std::stoi(addr.substr(pos + 1)); }
             catch (...) { return false; }
             return port > 0 && port <= 65535;
+        }
+
+        static bool ReadFull(int fd, uint8_t *buffer, size_t size)
+        {
+            size_t offset = 0;
+            while (offset < size)
+            {
+                ssize_t n = read(fd, buffer + offset, size - offset);
+                if (n < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                if (n <= 0)
+                {
+                    return false;
+                }
+                offset += static_cast<size_t>(n);
+            }
+            return true;
         }
 
         IPCServer::IPCServer(const IPCServerConfig &config)
@@ -219,16 +240,33 @@ namespace aivision
         void IPCServer::HandleClient(int client_fd)
         {
             t_active_client_fd = client_fd;
-            auto buffer = std::make_unique<uint8_t[]>(config_.recv_buffer_size);
+            constexpr size_t kHeaderSize = 8;
+            constexpr size_t kMaxPayloadSize = 64 * 1024 * 1024;
 
             while (running_.load())
             {
-                ssize_t n = read(client_fd, buffer.get(), config_.recv_buffer_size);
-                if (n <= 0)
+                uint8_t header[kHeaderSize]{};
+                if (!ReadFull(client_fd, header, kHeaderSize))
                 {
                     break;
                 }
-                ProcessMessage(client_fd, buffer.get(), static_cast<size_t>(n));
+
+                uint32_t payload_len = 0;
+                std::memcpy(&payload_len, header + 4, sizeof(uint32_t));
+                if (payload_len > kMaxPayloadSize)
+                {
+                    std::cerr << "[IPC] Payload too large: " << payload_len
+                              << ", max=" << kMaxPayloadSize << std::endl;
+                    break;
+                }
+
+                std::vector<uint8_t> message(kHeaderSize + payload_len);
+                std::memcpy(message.data(), header, kHeaderSize);
+                if (payload_len > 0 && !ReadFull(client_fd, message.data() + kHeaderSize, payload_len))
+                {
+                    break;
+                }
+                ProcessMessage(client_fd, message.data(), message.size());
             }
 
             close(client_fd);

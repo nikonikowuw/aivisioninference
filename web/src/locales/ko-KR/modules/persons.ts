@@ -76,6 +76,27 @@ export const persons = {
       sortOrder: { label: "정렬 순서", placeholder: "0" },
     },
   },
+  tags: {
+    title: "인물 태그",
+    create: "태그 추가",
+    edit: "태그 편집",
+    delete: "태그 삭제",
+    deleteConfirm: "태그 '{{name}}'을(를) 삭제하시겠습니까?",
+    empty: "태그를 찾을 수 없습니다",
+    form: {
+      tagName: { label: "태그 이름", placeholder: "태그 이름 입력" },
+      color: { label: "색상", placeholder: "색상 선택" },
+      sortOrder: { label: "정렬 순서", placeholder: "0" },
+    },
+    table: {
+      columns: {
+        tagName: "태그 이름",
+        color: "색상",
+        sortOrder: "정렬 순서",
+        persons: "인물 수",
+      },
+    },
+  },
   imports: {
     title: "가져오기 작업",
     upload: "아카이브 업로드",

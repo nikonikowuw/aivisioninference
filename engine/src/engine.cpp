@@ -8,10 +8,14 @@
 #include <cstring>
 #include <chrono>
 #include <algorithm>
+#include <array>
 #include <regex>
+#include <vector>
+#include <opencv2/imgcodecs.hpp>
 #include "proto/flatbuf/commands_generated.h"
 #include "proto/flatbuf/results_generated.h"
 #include "algo/so_handle.h"
+#include "pipeline/hw_buffer.h"
 
 namespace aivision
 {
@@ -30,6 +34,121 @@ namespace aivision
             if (!play_url.empty() && play_url.back() == '/')
                 play_url.pop_back();
             return play_url + "/live/" + device_id;
+        }
+
+        constexpr uint32_t FourCC(char a, char b, char c, char d)
+        {
+            return static_cast<uint32_t>(a) |
+                   (static_cast<uint32_t>(b) << 8) |
+                   (static_cast<uint32_t>(c) << 16) |
+                   (static_cast<uint32_t>(d) << 24);
+        }
+
+        constexpr uint32_t kPixelFormatBGR24 = FourCC('B', 'G', 'R', '3');
+
+        std::vector<uint8_t> DecodeBase64(const std::string &input)
+        {
+            static constexpr unsigned char kInvalid = 255;
+            static const std::array<unsigned char, 256> table = [] {
+                std::array<unsigned char, 256> t{};
+                t.fill(kInvalid);
+                const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+                for (size_t i = 0; i < chars.size(); ++i)
+                {
+                    t[static_cast<unsigned char>(chars[i])] = static_cast<unsigned char>(i);
+                }
+                return t;
+            }();
+
+            std::vector<uint8_t> output;
+            output.reserve(input.size() * 3 / 4);
+            int val = 0;
+            int valb = -8;
+            for (unsigned char c : input)
+            {
+                if (c == '=')
+                {
+                    break;
+                }
+                const unsigned char decoded = table[c];
+                if (decoded == kInvalid)
+                {
+                    if (c == '\r' || c == '\n' || c == '\t' || c == ' ')
+                    {
+                        continue;
+                    }
+                    return {};
+                }
+                val = (val << 6) + decoded;
+                valb += 6;
+                if (valb >= 0)
+                {
+                    output.push_back(static_cast<uint8_t>((val >> valb) & 0xFF));
+                    valb -= 8;
+                }
+            }
+            return output;
+        }
+
+        std::string JsonError(const std::string &code, const std::string &message)
+        {
+            return "{\"success\":false,\"error_code\":\"" + code + "\",\"error_message\":\"" + message + "\"}";
+        }
+
+        std::string JsonEscape(const std::string &value)
+        {
+            std::string escaped;
+            escaped.reserve(value.size());
+            for (char ch : value)
+            {
+                switch (ch)
+                {
+                case '\\':
+                    escaped += "\\\\";
+                    break;
+                case '"':
+                    escaped += "\\\"";
+                    break;
+                case '\n':
+                    escaped += "\\n";
+                    break;
+                case '\r':
+                    escaped += "\\r";
+                    break;
+                case '\t':
+                    escaped += "\\t";
+                    break;
+                default:
+                    escaped += ch;
+                    break;
+                }
+            }
+            return escaped;
+        }
+
+        std::string EnsurePackageDirConfig(const std::string &algo_params_json, const std::string &so_path)
+        {
+            if (so_path.empty() || algo_params_json.find("\"package_dir\"") != std::string::npos)
+            {
+                return algo_params_json.empty() ? "{}" : algo_params_json;
+            }
+
+            const std::string package_dir = std::filesystem::path(so_path).parent_path().string();
+            const std::string package_field = std::string("\"package_dir\":\"") + JsonEscape(package_dir) + "\"";
+            if (algo_params_json.empty() || algo_params_json == "{}")
+            {
+                return "{" + package_field + "}";
+            }
+
+            std::string merged = algo_params_json;
+            const auto pos = merged.find_last_of('}');
+            if (pos == std::string::npos)
+            {
+                return "{" + package_field + "}";
+            }
+            const bool needs_comma = merged.find_first_not_of(" \t\r\n{") != pos;
+            merged.insert(pos, std::string(needs_comma ? "," : "") + package_field);
+            return merged;
         }
     }
 
@@ -174,23 +293,21 @@ namespace aivision
         REGISTER_HANDLER(204, HandleStreamPlaybackStop);
         REGISTER_HANDLER(205, HandleStreamStatus);
         REGISTER_HANDLER(206, HandleStartSelfCheck);
+        REGISTER_HANDLER(207, HandleFaceLibraryUpdate);
+        REGISTER_HANDLER(208, HandleFaceEmbeddingExtract);
 
 #undef REGISTER_HANDLER
     }
 
-    void InferenceEngine::HandleStartStream(const uint8_t *payload, size_t size, uint64_t seq)
+void InferenceEngine::HandleStartStream(const uint8_t *payload, size_t size, uint64_t seq)
     {
         (void)payload; (void)size; (void)seq;
-        // TODO: 解析 FlatBuffers 指令
-        // pipeline_mgr_->CreatePipeline(device_id, rtsp_url, enable_infer, enable_playback);
         std::cout << "[IPC] Received StartStream" << std::endl;
     }
 
     void InferenceEngine::HandleStopStream(const uint8_t *payload, size_t size, uint64_t seq)
     {
         (void)payload; (void)size; (void)seq;
-        // TODO: 解析 FlatBuffers 指令
-        // pipeline_mgr_->DestroyPipeline(device_id);
         std::cout << "[IPC] Received StopStream" << std::endl;
     }
 
@@ -286,6 +403,75 @@ namespace aivision
         if (value == "false" || value == "0")
             return false;
         return default_value;
+    }
+
+    std::string InferenceEngine::ExtractJsonRawField(const std::string &json, const std::string &field_name)
+    {
+        std::string search = "\"" + field_name + "\"";
+        size_t pos = json.find(search);
+        if (pos == std::string::npos)
+            return "";
+
+        size_t start = json.find(":", pos);
+        if (start == std::string::npos)
+            return "";
+
+        start++;
+        while (start < json.size() &&
+               (json[start] == ' ' || json[start] == '\t' || json[start] == '\r' || json[start] == '\n'))
+        {
+            start++;
+        }
+        if (start >= json.size())
+            return "";
+
+        const char open = json[start];
+        const char close = open == '{' ? '}' : (open == '[' ? ']' : '\0');
+        if (close == '\0')
+            return "";
+
+        int depth = 0;
+        bool in_string = false;
+        bool escaped = false;
+        for (size_t i = start; i < json.size(); ++i)
+        {
+            const char ch = json[i];
+            if (in_string)
+            {
+                if (escaped)
+                {
+                    escaped = false;
+                }
+                else if (ch == '\\')
+                {
+                    escaped = true;
+                }
+                else if (ch == '"')
+                {
+                    in_string = false;
+                }
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                in_string = true;
+                continue;
+            }
+            if (ch == open)
+            {
+                depth++;
+            }
+            else if (ch == close)
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return json.substr(start, i - start + 1);
+                }
+            }
+        }
+        return "";
     }
 
     namespace {
@@ -682,6 +868,153 @@ namespace aivision
         }
     }
 
+    void InferenceEngine::HandleFaceLibraryUpdate(const uint8_t *payload, size_t size, uint64_t seq)
+    {
+        (void)seq;
+        const std::string payload_str = PayloadToString(payload, size);
+        const std::string algo_name = ExtractJsonField(payload_str, "algo_name");
+
+        std::string face_library_json = ExtractJsonField(payload_str, "face_library_json");
+        if (face_library_json.empty())
+        {
+            face_library_json = ExtractJsonRawField(payload_str, "face_library");
+        }
+        if (face_library_json.empty())
+        {
+            // 兼容 Go 侧直接发送 { "algo_name": "...", "version": "...", "items": [...] } 的载荷。
+            face_library_json = payload_str;
+        }
+
+        bool success = false;
+        std::string error_message;
+        if (algo_name.empty())
+        {
+            error_message = "missing algo_name";
+        }
+        else if (!algo_mgr_)
+        {
+            error_message = "algo manager not initialized";
+        }
+        else
+        {
+            success = algo_mgr_->UpdateFaceLibrary(algo_name, face_library_json);
+            if (!success)
+            {
+                error_message = "algorithm unavailable or does not support face library update";
+            }
+        }
+
+        std::cout << "[IPC] FaceLibraryUpdate"
+                  << " algo=" << algo_name
+                  << " payload_size=" << face_library_json.size()
+                  << " success=" << success
+                  << std::endl;
+
+        const std::string response =
+            std::string("{\"success\":") + (success ? "true" : "false") +
+            ",\"algo_name\":\"" + algo_name +
+            "\",\"error_message\":\"" + error_message + "\"}";
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 307,
+                                      reinterpret_cast<const uint8_t *>(response.data()),
+                                      response.size());
+        }
+    }
+
+    void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload, size_t size, uint64_t seq)
+    {
+        (void)seq;
+        const std::string payload_str = PayloadToString(payload, size);
+        std::string algo_name = ExtractJsonField(payload_str, "algo_name");
+        if (algo_name.empty())
+        {
+            algo_name = "face_recognition";
+        }
+        std::string algo_version = ExtractJsonField(payload_str, "algo_version");
+        if (algo_version.empty())
+        {
+            algo_version = "1.0.0";
+        }
+        const std::string so_path = ExtractJsonField(payload_str, "so_path");
+        const std::string algo_params_json = ExtractJsonField(payload_str, "algo_params_json");
+
+        const std::string image_base64 = ExtractJsonField(payload_str, "image_base64");
+        std::string response;
+        bool success = false;
+        uint32_t infer_time_us = 0;
+
+        if (image_base64.empty())
+        {
+            response = JsonError("MISSING_IMAGE", "image_base64 is required");
+        }
+        else if (!algo_mgr_)
+        {
+            response = JsonError("ENGINE_NOT_READY", "algo manager not initialized");
+        }
+        else
+        {
+            std::vector<uint8_t> image_bytes = DecodeBase64(image_base64);
+            if (image_bytes.empty())
+            {
+                response = JsonError("INVALID_IMAGE_BASE64", "image_base64 decode failed");
+            }
+            else
+            {
+                cv::Mat encoded(1, static_cast<int>(image_bytes.size()), CV_8UC1, image_bytes.data());
+                cv::Mat image = cv::imdecode(encoded, cv::IMREAD_COLOR);
+                if (image.empty())
+                {
+                    response = JsonError("INVALID_IMAGE", "image decode failed");
+                }
+                else
+                {
+                    pipeline::HwBufferDesc desc{};
+                    desc.memory_type = pipeline::HwBufferMemoryType::HostMemory;
+                    desc.dma_fd = -1;
+                    desc.dma_buf_fd = -1;
+                    desc.size = image.total() * image.elemSize();
+                    desc.data = image.data;
+                    desc.stride = static_cast<uint32_t>(image.step);
+                    desc.width = static_cast<uint32_t>(image.cols);
+                    desc.height = static_cast<uint32_t>(image.rows);
+                    desc.pixel_format = kPixelFormatBGR24;
+
+                    success = algo_mgr_->ExtractFaceEmbedding(algo_name, desc, response, infer_time_us);
+                    if (!success && !so_path.empty())
+                    {
+                        const std::string config_json = EnsurePackageDirConfig(algo_params_json, so_path);
+                        auto instance = algo_mgr_->Load(algo_name, algo_version, so_path, config_json);
+                        if (instance)
+                        {
+                            success = algo_mgr_->ExtractFaceEmbedding(algo_name, desc, response, infer_time_us);
+                        }
+                    }
+                    if (!success)
+                    {
+                        response = JsonError("EXTRACT_FAILED", "algorithm unavailable or extract failed");
+                    }
+                }
+            }
+        }
+
+        std::cout << "[IPC] FaceEmbeddingExtract"
+                  << " algo=" << algo_name
+                  << " success=" << success
+                  << " infer_time_us=" << infer_time_us
+                  << " response_size=" << response.size()
+                  << std::endl;
+
+        int client_fd = ipc_server_->GetActiveClientFd();
+        if (client_fd >= 0)
+        {
+            ipc_server_->SendResponse(client_fd, 308,
+                                      reinterpret_cast<const uint8_t *>(response.data()),
+                                      response.size());
+        }
+    }
+
     namespace {
         /// libcurl 写回调
         size_t curl_write_callback(void *ptr, size_t size, size_t nmemb, FILE *stream)
@@ -703,7 +1036,7 @@ namespace aivision
         (void)seq;
         std::cout << "[IPC] Received StartSelfCheck command" << std::endl;
 
-        const aivision::ipc::StartSelfCheckCmd *cmd = aivision::ipc::GetStartSelfCheckCmd(payload);
+        const aivision::ipc::StartSelfCheckCmd *cmd = flatbuffers::GetRoot<aivision::ipc::StartSelfCheckCmd>(payload);
         if (!cmd)
         {
             std::cerr << "Failed to parse StartSelfCheckCmd" << std::endl;
@@ -905,13 +1238,27 @@ namespace aivision
             }
         }
 
+        // 5. Keep a runtime instance ready for one-shot feature extraction.
+        if (success && algo_mgr_)
+        {
+            const std::string package_dir = std::filesystem::path(so_path).parent_path().string();
+            const std::string config_json = std::string("{\"package_dir\":\"") + JsonEscape(package_dir) + "\"}";
+            auto instance = algo_mgr_->Load(algo_name, version, so_path, config_json);
+            if (!instance)
+            {
+                success = false;
+                err_msg = "Failed to load algorithm runtime instance";
+                err_code = "RUNTIME_LOAD_FAILED";
+            }
+        }
+
         auto end_time = std::chrono::steady_clock::now();
         load_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
 
-        // 5. Clean up temporary files
+        // 6. Clean up temporary files
         cleanup();
 
-        // 6. Build response flatbuffer
+        // 7. Build response flatbuffer
         flatbuffers::FlatBufferBuilder fbb(1024);
         
         aivision::ipc::SelfCheckStatus status = success ? aivision::ipc::SelfCheckStatus_Passed 
@@ -933,7 +1280,7 @@ namespace aivision
 
         fbb.Finish(response_offset);
 
-        // 7. Write response back on the active client connection
+        // 8. Write response back on the active client connection
         int client_fd = ipc_server_->GetActiveClientFd();
         if (client_fd >= 0)
         {

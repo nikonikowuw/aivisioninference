@@ -215,6 +215,7 @@ func (s *AlgorithmPackageService) UploadAndProcess(ctx context.Context, mr *mult
 				fresh.SelfCheckResult = datatypes.JSON(`{"status": "success"}`)
 				zap.L().Info("[AlgorithmPackage] self-check passed",
 					zap.String("algo", algoName))
+				s.enqueueFaceEmbeddingRebuild(context.Background(), algoName, algoVersion)
 			}
 			if err := s.algorithmpackageRepo.Update(context.Background(), fresh); err != nil {
 				zap.L().Error("[AlgorithmPackage] failed to persist self-check result",
@@ -226,6 +227,27 @@ func (s *AlgorithmPackageService) UploadAndProcess(ctx context.Context, mr *mult
 	return item, nil
 }
 
+func (s *AlgorithmPackageService) enqueueFaceEmbeddingRebuild(ctx context.Context, algoName, algoVersion string) {
+	if s.taskClient == nil || algoName != defaultFaceRecognitionAlgorithm {
+		return
+	}
+	if err := s.taskClient.Enqueue(ctx, personEmbeddingRebuildTaskType, map[string]string{
+		"algo_name":    algoName,
+		"algo_version": algoVersion,
+	}); err != nil {
+		zap.L().Warn("[AlgorithmPackage] enqueue face embedding rebuild failed",
+			zap.String("algo", algoName),
+			zap.String("version", algoVersion),
+			zap.Error(err),
+		)
+		return
+	}
+	zap.L().Info("[AlgorithmPackage] face embedding rebuild enqueued",
+		zap.String("algo", algoName),
+		zap.String("version", algoVersion),
+	)
+}
+
 // RepackZipToTar checks zip entries for Zip Slip, extracts meta and .so, and writes a flat .tar file.
 func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 	zr, err := zip.OpenReader(zipPath)
@@ -235,25 +257,19 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 	defer zr.Close()
 
 	var meta *AlgoMeta
-	var foundMeta, foundSo bool
+	var foundSo bool
 
-	// 1. First pass: Validate Zip Slip — 检查 filepath.Clean 后是否包含 ".." 组件
+	// 1. First pass: Validate Zip Slip and extract metadata
 	for _, f := range zr.File {
 		cleanedPath := filepath.Clean(f.Name)
-		// 绝对路径直接拒绝
-		if filepath.IsAbs(cleanedPath) {
-			return nil, 0, "", fmt.Errorf("zip slip security exception (abs path): %s", f.Name)
-		}
-		// filepath.Clean 会移除 "." 并解析 "a/.."，残留的 ".." 前缀表示路径在根目录之上
-		if strings.HasPrefix(cleanedPath, "..") || strings.Contains(cleanedPath, "/../") {
+		if filepath.IsAbs(cleanedPath) || strings.HasPrefix(cleanedPath, "..") || strings.Contains(cleanedPath, "/../") {
 			return nil, 0, "", fmt.Errorf("zip slip security exception: %s", f.Name)
 		}
 
 		if filepath.Base(cleanedPath) == "algo_meta.yaml" {
-			foundMeta = true
 			rc, err := f.Open()
 			if err != nil {
-				return nil, 0, "", fmt.Errorf("read algo_meta.yaml failed: %w", err)
+				return nil, 0, "", fmt.Errorf("open algo_meta.yaml failed: %w", err)
 			}
 			data, err := io.ReadAll(rc)
 			rc.Close()
@@ -273,13 +289,13 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 		}
 	}
 
-	if !foundMeta {
+	if meta == nil {
 		return nil, 0, "", fmt.Errorf("algo_meta.yaml not found in package")
 	}
 	if !foundSo {
 		return nil, 0, "", fmt.Errorf(".so file not found in package")
 	}
-	if meta == nil || meta.AlgorithmName == "" || meta.Version == "" {
+	if meta.AlgorithmName == "" || meta.Version == "" {
 		return nil, 0, "", fmt.Errorf("invalid algo_meta.yaml: name and version are required")
 	}
 
@@ -320,12 +336,10 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 
 		if !info.IsDir() {
 			_, err = io.Copy(tw, rc)
-			rc.Close()
-			if err != nil {
-				return nil, 0, "", fmt.Errorf("copy zip entry %s to tar failed: %w", f.Name, err)
-			}
-		} else {
-			rc.Close()
+		}
+		rc.Close()
+		if err != nil {
+			return nil, 0, "", fmt.Errorf("copy zip entry %s to tar failed: %w", f.Name, err)
 		}
 	}
 

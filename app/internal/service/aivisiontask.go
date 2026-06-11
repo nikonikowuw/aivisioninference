@@ -430,6 +430,11 @@ func resolveRuntimeSoPath(algoPackage *model.AlgorithmPackage) (string, error) {
 	return findSoFile(extractDir)
 }
 
+// ResolveRuntimeSoPath returns the runtime .so path for an uploaded algorithm package.
+func ResolveRuntimeSoPath(algoPackage *model.AlgorithmPackage) (string, error) {
+	return resolveRuntimeSoPath(algoPackage)
+}
+
 func extractTarSecure(tarPath, extractDir string) error {
 	file, err := os.Open(tarPath)
 	if err != nil {

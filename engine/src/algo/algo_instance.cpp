@@ -142,6 +142,53 @@ namespace aivision
             return ret == 0;
         }
 
+        bool AlgoInstance::SupportsFaceLibraryUpdate() const
+        {
+            return so_handle_ && so_handle_->HasFaceLibraryUpdater();
+        }
+
+        bool AlgoInstance::UpdateFaceLibrary(const std::string &face_library_json)
+        {
+            if (!algo_handle_ || !so_handle_)
+            {
+                std::cerr << "[AlgoInstance] face library update skipped"
+                          << " algo=" << algo_name_
+                          << " version=" << version_
+                          << " reason=not_initialized"
+                          << std::endl;
+                return false;
+            }
+
+            if (!so_handle_->HasFaceLibraryUpdater())
+            {
+                std::cerr << "[AlgoInstance] face library update skipped"
+                          << " algo=" << algo_name_
+                          << " version=" << version_
+                          << " reason=symbol_not_found"
+                          << std::endl;
+                return false;
+            }
+
+            const int ret = so_handle_->UpdateFaceLibrary(algo_handle_, face_library_json.c_str());
+            if (ret != 0)
+            {
+                std::cerr << "[AlgoInstance] face library update failed"
+                          << " algo=" << algo_name_
+                          << " version=" << version_
+                          << " ret=" << ret
+                          << " payload_size=" << face_library_json.size()
+                          << std::endl;
+                return false;
+            }
+
+            std::cout << "[AlgoInstance] face library updated"
+                      << " algo=" << algo_name_
+                      << " version=" << version_
+                      << " payload_size=" << face_library_json.size()
+                      << std::endl;
+            return true;
+        }
+
         void AlgoInstance::DestroyInternal()
         {
             if (so_handle_ && algo_handle_)

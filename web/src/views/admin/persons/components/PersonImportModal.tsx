@@ -75,7 +75,7 @@ export const PersonImportModal: React.FC<PersonImportModalProps> = ({
       onClose();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
         duration: 5000,

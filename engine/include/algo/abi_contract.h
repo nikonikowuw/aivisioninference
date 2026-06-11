@@ -12,6 +12,7 @@
 //   detector_version   — 算法版本号
 //   detector_name      — 算法名称
 //   detector_self_test — 自检函数
+//   detector_update_face_library — 热更新算法实例内存人脸库快照
 //
 // 版本: 1.0.0
 
@@ -99,6 +100,13 @@ extern "C"
     /// 执行自检。
     /// @return 0 自检通过，非 0 自检失败
     int detector_self_test(void);
+
+    /// 热更新算法实例内存人脸库快照。
+    /// 该接口为可选符号。Engine 只转发完整快照 JSON，不解释新增/删除等业务语义。
+    /// @param handle 算法句柄
+    /// @param face_library_json 完整人脸库快照 JSON，由调用者管理生命周期
+    /// @return 0 更新成功，非 0 更新失败或算法不支持
+    int detector_update_face_library(algo_handle_t handle, const char *face_library_json);
 
     // ============================================================
     // 辅助函数 (由引擎提供，算法可调用)

@@ -76,6 +76,27 @@ export const persons = {
       sortOrder: { label: "排序", placeholder: "0" },
     },
   },
+  tags: {
+    title: "人员标签",
+    create: "新增标签",
+    edit: "编辑标签",
+    delete: "删除标签",
+    deleteConfirm: "确定删除标签'{{name}}'？",
+    empty: "暂无标签",
+    form: {
+      tagName: { label: "标签名称", placeholder: "请输入标签名称" },
+      color: { label: "颜色", placeholder: "请选择颜色" },
+      sortOrder: { label: "排序", placeholder: "0" },
+    },
+    table: {
+      columns: {
+        tagName: "标签名称",
+        color: "颜色",
+        sortOrder: "排序",
+        persons: "人员数",
+      },
+    },
+  },
   imports: {
     title: "导入任务",
     upload: "上传 CSV",

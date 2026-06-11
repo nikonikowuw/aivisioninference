@@ -21,6 +21,7 @@ export const common = {
     import: "Impor",
     exportSelected: "Ekspor yang Dipilih",
     batchDelete: "Hapus Massal",
+    clearFilters: "Hapus Filter",
   },
   status: {
     active: "Aktif",
@@ -43,6 +44,7 @@ export const common = {
     confirmDelete: "Apakah Anda yakin ingin menghapus?",
     confirmCancel: "Apakah Anda yakin ingin membatalkan?",
     operationSuccess: "Operasi berhasil",
+    success: "Operasi berhasil",
     operationFailed: "Operasi gagal",
     networkError: "Kesalahan jaringan, silakan coba lagi nanti",
     unauthorized: "Tidak sah, silakan masuk lagi",
@@ -214,6 +216,20 @@ export const common = {
   },
   batch: {
     selected: "{{count}} item dipilih",
+  },
+  dialog: {
+    delete: {
+      title: "Konfirmasi Hapus",
+    },
+    enable: {
+      title: "Konfirmasi Aktifkan",
+    },
+    disable: {
+      title: "Konfirmasi Nonaktifkan",
+    },
+    retryEmbedding: {
+      title: "Konfirmasi Ekstraksi Ulang",
+    },
   },
   searchBar: {
     keyword: "Kata Kunci",

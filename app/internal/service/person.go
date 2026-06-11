@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	personEmbeddingTaskType = "person:embedding"
-	personImportTaskType    = "person:import"
+	personEmbeddingTaskType        = "person:embedding"
+	personEmbeddingRebuildTaskType = "person:embedding:rebuild"
+	personImportTaskType           = "person:import"
 
 	personImageMaxSize = 10 << 20 // 10MB
 	// personImportMaxSize 限制导入压缩包最大体积，防止内存溢出。
@@ -101,13 +102,13 @@ var imageExtSet = map[string]bool{
 
 // PersonService 处理人员管理的业务逻辑。
 type PersonService struct {
-	personRepo         personRepo
-	groupRepo          personGroupRepo
-	tagRepo            personTagRepo
-	tagRelationRepo    personTagRelationRepo
-	importTaskRepo     importTaskRepo
-	storage            storage.Storage
-	taskClient         taskClient
+	personRepo      personRepo
+	groupRepo       personGroupRepo
+	tagRepo         personTagRepo
+	tagRelationRepo personTagRelationRepo
+	importTaskRepo  importTaskRepo
+	storage         storage.Storage
+	taskClient      taskClient
 }
 
 // NewPersonService 创建人员 Service。
@@ -139,64 +140,106 @@ func (s *PersonService) GetByID(ctx context.Context, id string) (*dto.PersonResp
 	return &resp, nil
 }
 
-// Create 创建人员。
-func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest, fileHeader *multipart.FileHeader) (*dto.PersonResponse, error) {
+// getStoragePath 从图片 URL 提取存储相对路径
+func (s *PersonService) getStoragePath(imageURL string) string {
+	if imageURL == "" {
+		return ""
+	}
+	// 1. 如果包含 API 前缀，取文件名
+	if marker := "/api/v1/persons/image/"; strings.Contains(imageURL, marker) {
+		return "persons/" + filepath.Base(imageURL)
+	}
+	// 2. 如果包含存储基准 URL
+	fullBaseURL := s.storage.GetURL("")
+	if fullBaseURL != "" && strings.HasPrefix(imageURL, fullBaseURL) {
+		return strings.TrimPrefix(imageURL, fullBaseURL)
+	}
+	// 3. 处理 /uploads 前缀
+	path := strings.TrimPrefix(imageURL, "/")
+	if strings.HasPrefix(path, "uploads/") {
+		return strings.TrimPrefix(path, "uploads/")
+	}
+	if parts := strings.Split(imageURL, "/uploads/"); len(parts) > 1 {
+		return parts[1]
+	}
+	return path
+}
+
+// processImage 处理上传的图片或已有的 URL，返回 URL 和 MD5
+func (s *PersonService) processImage(ctx context.Context, imageURL string, fileHeader *multipart.FileHeader, excludeID string) (string, string, error) {
 	var (
-		imageURL string
-		imageMD5 string
+		url string
+		md5Hash string
 	)
 
-	// 模式一：通过分片上传后获得的图片路径（优先）
-	if req.ImageURL != "" {
-		imageURL = req.ImageURL
-		// 从存储路径计算 MD5 用于去重
-		if rc, err := s.storage.Get(strings.TrimPrefix(imageURL, "/")); err == nil {
+	if imageURL != "" {
+		url = imageURL
+		storagePath := s.getStoragePath(url)
+		rc, err := s.storage.Get(storagePath)
+		if err != nil {
+			rc, err = s.storage.Get(strings.TrimPrefix(url, "/"))
+		}
+		if err == nil {
+			defer rc.Close()
 			hash := md5.New()
 			if _, err := io.Copy(hash, rc); err == nil {
-				imageMD5 = fmt.Sprintf("%x", hash.Sum(nil))
+				md5Hash = fmt.Sprintf("%x", hash.Sum(nil))
 			}
-			rc.Close()
+		} else {
+			zap.L().Error("get image from storage failed", zap.String("url", url), zap.Error(err))
+			return "", "", apperrors.New(apperrors.ErrInternal, "无法读取图片文件计算特征")
 		}
 	} else if fileHeader != nil {
-		// 模式二：传统 multipart 文件上传
 		if fileHeader.Size > personImageMaxSize {
-			return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
+			return "", "", apperrors.New(apperrors.ErrFileTooLarge, "")
 		}
 		ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 		if !imageExtSet[ext] {
-			return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
+			return "", "", apperrors.New(apperrors.ErrFileInvalidType, "")
 		}
 		file, err := fileHeader.Open()
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "")
+			return "", "", apperrors.New(apperrors.ErrBadRequest, "")
 		}
 		defer file.Close()
+
 		hash := md5.New()
-		teeReader := io.TeeReader(file, hash)
-		data, err := io.ReadAll(teeReader)
+		data, err := io.ReadAll(io.TeeReader(file, hash))
 		if err != nil {
-			return nil, apperrors.New(apperrors.ErrInternal, "")
+			return "", "", apperrors.New(apperrors.ErrInternal, "")
 		}
-		imageMD5 = fmt.Sprintf("%x", hash.Sum(nil))
-		if exists, _ := s.personRepo.ExistsByImageMD5(ctx, imageMD5, ""); exists {
-			return nil, apperrors.New(apperrors.ErrPersonImageDuplicate, "")
+		md5Hash = fmt.Sprintf("%x", hash.Sum(nil))
+
+		if exists, _ := s.personRepo.ExistsByImageMD5(ctx, md5Hash, excludeID); exists {
+			return "", "", apperrors.New(apperrors.ErrPersonImageDuplicate, "")
 		}
+
 		fileName := "persons/" + uuid.New().String() + ext
 		if _, err := s.storage.Save(bytes.NewReader(data), fileName); err != nil {
 			zap.L().Error("save person image failed", zap.Error(err))
-			return nil, apperrors.New(apperrors.ErrInternal, "")
+			return "", "", apperrors.New(apperrors.ErrInternal, "")
 		}
-		imageURL = fmt.Sprintf("/api/v1/persons/image/%s", filepath.Base(fileName))
+		url = fmt.Sprintf("/api/v1/persons/image/%s", filepath.Base(fileName))
 	} else {
-		return nil, apperrors.New(apperrors.ErrPersonImageRequired, "")
+		return "", "", apperrors.New(apperrors.ErrPersonImageRequired, "")
 	}
 
-	// 检查图片 MD5 唯一
-	if imageMD5 != "" {
-		if exists, _ := s.personRepo.ExistsByImageMD5(ctx, imageMD5, ""); exists {
-			return nil, apperrors.New(apperrors.ErrPersonImageDuplicate, "")
+	if md5Hash != "" {
+		if exists, _ := s.personRepo.ExistsByImageMD5(ctx, md5Hash, excludeID); exists {
+			return "", "", apperrors.New(apperrors.ErrPersonImageDuplicate, "")
 		}
 	}
+
+	return url, md5Hash, nil
+}
+
+// Create 创建人员。
+func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest, fileHeader *multipart.FileHeader) (*dto.PersonResponse, error) {
+	imageURL, imageMD5, err := s.processImage(ctx, req.ImageURL, fileHeader, "")
+	if err != nil {
+		return nil, err
+	}
+
 	// 检查人员编号唯一
 	if req.PersonCode != "" {
 		if exists, _ := s.personRepo.ExistsByPersonCode(ctx, req.PersonCode, ""); exists {
@@ -213,10 +256,7 @@ func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest,
 	if gender == "" {
 		gender = model.GenderUnknown
 	}
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
-	}
+	enabled := req.Enabled == nil || *req.Enabled
 
 	person := &model.Person{
 		PersonCode:      personCode,
@@ -237,24 +277,16 @@ func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest,
 	}
 
 	if len(req.GroupIDs) > 0 {
-		if err := s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs); err != nil {
-			zap.L().Error("replace person groups failed", zap.String("person_id", person.ID), zap.Error(err))
-			return nil, apperrors.New(apperrors.ErrInternal, "")
-		}
+		_ = s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs)
 	}
 
 	// 处理标签关联
 	if len(req.TagIDs) > 0 && s.tagRelationRepo != nil {
-		if err := s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs); err != nil {
-			zap.L().Error("create person tag relations failed", zap.String("person_id", person.ID), zap.Error(err))
-		}
+		_ = s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs)
 	}
 
 	// 投递特征提取任务
-	if err := s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID}); err != nil {
-		// 特征提取任务投递失败不影响人员创建主流程，记录告警日志供运维介入
-		zap.L().Warn("enqueue embedding task failed", zap.String("person_id", person.ID), zap.Error(err))
-	}
+	_ = s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID})
 
 	person, _ = s.personRepo.FindByID(ctx, person.ID)
 	resp := toPersonResponse(person)
@@ -287,65 +319,21 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 		person.PersonCode = req.PersonCode
 	}
 
-	// 更新图片：优先使用分片上传的 image_url，其次使用 multipart 文件
-	if req.ImageURL != "" {
-		// 模式一：分片上传后获得的图片路径
-		newMD5 := ""
-		if rc, err := s.storage.Get(strings.TrimPrefix(req.ImageURL, "/")); err == nil {
-			hash := md5.New()
-			if _, err := io.Copy(hash, rc); err == nil {
-				newMD5 = fmt.Sprintf("%x", hash.Sum(nil))
-			}
-			rc.Close()
+	// 更新图片
+	if req.ImageURL != "" || fileHeader != nil {
+		imageURL, imageMD5, err := s.processImage(ctx, req.ImageURL, fileHeader, id)
+		if err != nil {
+			return nil, err
 		}
-		if newMD5 != person.ImageMD5 {
-			if exists, _ := s.personRepo.ExistsByImageMD5(ctx, newMD5, id); exists {
-				return nil, apperrors.New(apperrors.ErrPersonImageDuplicate, "")
-			}
-		}
-		person.ImageURL = req.ImageURL
-		person.ImageMD5 = newMD5
+		person.ImageURL = imageURL
+		person.ImageMD5 = imageMD5
 		person.EmbeddingStatus = model.EmbeddingStatusPending
 		person.EmbeddingErrorCode = ""
 		person.EmbeddingErrorMessageKey = ""
 		person.EmbeddingRetryable = false
-	} else if fileHeader != nil {
-		// 模式二：传统 multipart 文件上传
-		if fileHeader.Size > personImageMaxSize {
-			return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
-		}
-		ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-		if !imageExtSet[ext] {
-			return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
-		}
-		file, err := fileHeader.Open()
-		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "")
-		}
-		defer file.Close()
-		hash := md5.New()
-		teeReader := io.TeeReader(file, hash)
-		data, err := io.ReadAll(teeReader)
-		if err != nil {
-			return nil, apperrors.New(apperrors.ErrInternal, "")
-		}
-		newMD5 := fmt.Sprintf("%x", hash.Sum(nil))
-		if newMD5 != person.ImageMD5 {
-			if exists, _ := s.personRepo.ExistsByImageMD5(ctx, newMD5, id); exists {
-				return nil, apperrors.New(apperrors.ErrPersonImageDuplicate, "")
-			}
-		}
-		fileName := "persons/" + uuid.New().String() + ext
-		if _, err := s.storage.Save(bytes.NewReader(data), fileName); err != nil {
-			zap.L().Error("save person image failed", zap.Error(err))
-			return nil, apperrors.New(apperrors.ErrInternal, "")
-		}
-		person.ImageURL = fmt.Sprintf("/api/v1/persons/image/%s", filepath.Base(fileName))
-		person.ImageMD5 = newMD5
-		person.EmbeddingStatus = model.EmbeddingStatusPending
-		person.EmbeddingErrorCode = ""
-		person.EmbeddingErrorMessageKey = ""
-		person.EmbeddingRetryable = false
+		
+		// 投递特征提取任务
+		_ = s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID})
 	}
 
 	if err := s.personRepo.Update(ctx, person); err != nil {
@@ -353,32 +341,15 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 		return nil, apperrors.New(apperrors.ErrInternal, "")
 	}
 
-	// 图片变更时投递特征提取任务
-	if req.ImageURL != "" || fileHeader != nil {
-		if err := s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID}); err != nil {
-			zap.L().Warn("enqueue embedding task failed", zap.String("person_id", person.ID), zap.Error(err))
-		}
-	}
-
 	if req.GroupIDs != nil {
-		if err := s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs); err != nil {
-			zap.L().Error("replace person groups failed", zap.String("person_id", person.ID), zap.Error(err))
-			return nil, apperrors.New(apperrors.ErrInternal, "")
-		}
+		_ = s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs)
 	}
 
 	// 处理标签关联
 	if req.TagIDs != nil && s.tagRelationRepo != nil {
-		// 先删除旧关联，再创建新关联
-		if err := s.tagRelationRepo.DeleteByPersonRecordID(ctx, person.ID); err != nil {
-			zap.L().Error("delete person tag relations failed", zap.String("person_id", person.ID), zap.Error(err))
-			return nil, apperrors.New(apperrors.ErrInternal, "")
-		}
+		_ = s.tagRelationRepo.DeleteByPersonRecordID(ctx, person.ID)
 		if len(req.TagIDs) > 0 {
-			if err := s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs); err != nil {
-				zap.L().Error("create person tag relations failed", zap.String("person_id", person.ID), zap.Error(err))
-				return nil, apperrors.New(apperrors.ErrInternal, "")
-			}
+			_ = s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs)
 		}
 	}
 
@@ -506,14 +477,7 @@ func (s *PersonService) ExportExcel(ctx context.Context, req dto.PersonListReque
 		f.SetCellValue(sheetName, fmt.Sprintf("H%d", rowIdx), item.CreatedAt.Format(time.RFC3339))
 
 		// 解析 ImageURL 为存储路径
-		fullBaseURL := s.storage.GetURL("")
-		storagePath := item.ImageURL
-
-		if fullBaseURL != "" && strings.HasPrefix(item.ImageURL, fullBaseURL) {
-			storagePath = strings.TrimPrefix(item.ImageURL, fullBaseURL)
-		} else if parts := strings.Split(item.ImageURL, "/uploads/"); len(parts) > 1 {
-			storagePath = parts[1]
-		}
+		storagePath := s.getStoragePath(item.ImageURL)
 
 		if rc, err := s.storage.Get(storagePath); err == nil {
 			imgData, _ := io.ReadAll(rc)

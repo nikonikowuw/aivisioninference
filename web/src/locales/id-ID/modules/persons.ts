@@ -76,6 +76,27 @@ export const persons = {
       sortOrder: { label: "Urutan", placeholder: "0" },
     },
   },
+  tags: {
+    title: "Person Tags",
+    create: "New Tag",
+    edit: "Edit Tag",
+    delete: "Delete Tag",
+    deleteConfirm: "Are you sure to delete tag '{{name}}'?",
+    empty: "No tags found",
+    form: {
+      tagName: { label: "Tag Name", placeholder: "Enter tag name" },
+      color: { label: "Color", placeholder: "Select color" },
+      sortOrder: { label: "Sort Order", placeholder: "0" },
+    },
+    table: {
+      columns: {
+        tagName: "Tag Name",
+        color: "Color",
+        sortOrder: "Sort Order",
+        persons: "Persons",
+      },
+    },
+  },
   imports: {
     title: "Tugas Impor",
     upload: "Unggah Arsip",

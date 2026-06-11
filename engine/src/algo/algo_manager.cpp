@@ -111,6 +111,46 @@ namespace aivision
             }
         }
 
+        bool AlgoManager::UpdateFaceLibrary(const std::string &algo_name,
+                                            const std::string &face_library_json,
+                                            uint32_t timeout_ms)
+        {
+            auto [instance, ok] = Acquire(algo_name, timeout_ms);
+            if (!ok || !instance)
+            {
+                std::cerr << "[AlgoManager] face library update failed"
+                          << " algo=" << algo_name
+                          << " reason=instance_not_available"
+                          << std::endl;
+                return false;
+            }
+
+            const bool updated = instance->UpdateFaceLibrary(face_library_json);
+            Release(algo_name);
+            return updated;
+        }
+
+        bool AlgoManager::ExtractFaceEmbedding(const std::string &algo_name,
+                                               const pipeline::HwBufferDesc &input_desc,
+                                               std::string &result_json,
+                                               uint32_t &infer_time_us,
+                                               uint32_t timeout_ms)
+        {
+            auto [instance, ok] = Acquire(algo_name, timeout_ms);
+            if (!ok || !instance)
+            {
+                std::cerr << "[AlgoManager] face embedding extract failed"
+                          << " algo=" << algo_name
+                          << " reason=instance_not_available"
+                          << std::endl;
+                return false;
+            }
+
+            const bool inferred = instance->Infer(input_desc, R"({"mode":"extract_embedding"})", result_json, infer_time_us);
+            Release(algo_name);
+            return inferred;
+        }
+
         HotReloadResult AlgoManager::HotReload(const std::string &algo_name,
                                                const std::string &new_version,
                                                const std::string &new_so_path,

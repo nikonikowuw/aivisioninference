@@ -46,7 +46,7 @@ export default function PersonGroupsPage() {
       setGroups(res);
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
       });
@@ -84,7 +84,7 @@ export default function PersonGroupsPage() {
       fetchData();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
       });
@@ -104,7 +104,7 @@ export default function PersonGroupsPage() {
       fetchData();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
       });
@@ -165,14 +165,14 @@ export default function PersonGroupsPage() {
                   <Td isNumeric>
                     <HStack justify="end" spacing="4px">
                       <IconButton
-                        aria-label="edit"
+                        aria-label={t('actions.edit')}
                         icon={<EditIcon />}
                         size="sm"
                         variant="ghost"
                         onClick={() => openEdit(g)}
                       />
                       <IconButton
-                        aria-label="delete"
+                        aria-label={t('actions.delete')}
                         icon={<DeleteIcon />}
                         size="sm"
                         variant="ghost"

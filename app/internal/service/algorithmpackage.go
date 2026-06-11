@@ -20,6 +20,7 @@ type AlgorithmPackageService struct {
 	opts                 AlgorithmOptions
 	rdb                  *redis.Client
 	engine               EngineClient
+	taskClient           taskClient
 }
 
 // NewAlgorithmPackageService creates a new AlgorithmPackageService.
@@ -28,12 +29,14 @@ func NewAlgorithmPackageService(
 	opts AlgorithmOptions,
 	rdb *redis.Client,
 	engine EngineClient,
+	taskClient taskClient,
 ) *AlgorithmPackageService {
 	return &AlgorithmPackageService{
 		algorithmpackageRepo: algorithmpackageRepo,
 		opts:                 opts,
 		rdb:                  rdb,
 		engine:               engine,
+		taskClient:           taskClient,
 	}
 }
 
@@ -45,25 +48,25 @@ func (s *AlgorithmPackageService) List(ctx context.Context, req dto.AlgorithmPac
 // Create creates a new algorithmpackage.
 func (s *AlgorithmPackageService) Create(ctx context.Context, req dto.CreateAlgorithmPackageRequest) (*model.AlgorithmPackage, error) {
 	item := &model.AlgorithmPackage{
-		AlgorithmName: req.AlgorithmName,
-		AlgorithmAlias: req.AlgorithmAlias,
-		Version: req.Version,
-		Domain: req.Domain,
-		ResultSchema: req.ResultSchema,
-		Description: req.Description,
-		PackagePath: req.PackagePath,
-		ExtractPath: req.ExtractPath,
-		PackageSize: req.PackageSize,
-		PackageMD5: req.PackageMD5,
-		SoPath: req.SoPath,
-		AIParamsSchema: req.AIParamsSchema,
+		AlgorithmName:   req.AlgorithmName,
+		AlgorithmAlias:  req.AlgorithmAlias,
+		Version:         req.Version,
+		Domain:          req.Domain,
+		ResultSchema:    req.ResultSchema,
+		Description:     req.Description,
+		PackagePath:     req.PackagePath,
+		ExtractPath:     req.ExtractPath,
+		PackageSize:     req.PackageSize,
+		PackageMD5:      req.PackageMD5,
+		SoPath:          req.SoPath,
+		AIParamsSchema:  req.AIParamsSchema,
 		SelfCheckStatus: req.SelfCheckStatus,
 		SelfCheckResult: req.SelfCheckResult,
-		SelfCheckAt: req.SelfCheckAt,
-		Status: req.Status,
-		RefCount: req.RefCount,
-		IsCurrent: req.IsCurrent,
-		Remark: req.Remark,
+		SelfCheckAt:     req.SelfCheckAt,
+		Status:          req.Status,
+		RefCount:        req.RefCount,
+		IsCurrent:       req.IsCurrent,
+		Remark:          req.Remark,
 	}
 	if err := s.algorithmpackageRepo.Create(ctx, item); err != nil {
 		return nil, err

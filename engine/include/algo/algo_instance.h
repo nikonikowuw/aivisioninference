@@ -54,6 +54,13 @@ namespace aivision
             /// 自检 (调用 detector_self_test)
             bool SelfTest();
 
+            /// 热更新算法实例内存人脸库快照。
+            /// 该方法只转发完整快照 JSON，不解释新增/删除等业务语义。
+            bool UpdateFaceLibrary(const std::string &face_library_json);
+
+            /// 当前算法是否实现 detector_update_face_library 可选符号。
+            bool SupportsFaceLibraryUpdate() const;
+
             /// 增加引用计数
             int AddRef() { return ref_count_.fetch_add(1) + 1; }
 

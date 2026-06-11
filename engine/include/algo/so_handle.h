@@ -114,6 +114,17 @@ namespace aivision
                 return fn ? fn() : -1;
             }
 
+            bool HasFaceLibraryUpdater() const
+            {
+                return GetSymbol<decltype(&detector_update_face_library)>("detector_update_face_library") != nullptr;
+            }
+
+            int UpdateFaceLibrary(algo_handle_t handle, const char *face_library_json)
+            {
+                auto fn = GetSymbol<decltype(&detector_update_face_library)>("detector_update_face_library");
+                return fn ? fn(handle, face_library_json) : -1;
+            }
+
             /// 手动释放 (关闭 .so)
             void Close();
 

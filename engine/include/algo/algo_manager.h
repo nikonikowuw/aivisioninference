@@ -72,6 +72,19 @@ namespace aivision
             /// 释放算法实例 (Worker 调用)
             void Release(const std::string &algo_name);
 
+            /// 热更新算法实例内存人脸库快照。
+            /// Go/上层负责生成完整快照，Engine 只按算法名转发给支持该可选 ABI 的实例。
+            bool UpdateFaceLibrary(const std::string &algo_name,
+                                   const std::string &face_library_json,
+                                   uint32_t timeout_ms = 30000);
+
+            /// 对单张图片执行人脸特征提取。
+            bool ExtractFaceEmbedding(const std::string &algo_name,
+                                      const pipeline::HwBufferDesc &input_desc,
+                                      std::string &result_json,
+                                      uint32_t &infer_time_us,
+                                      uint32_t timeout_ms = 30000);
+
             /// 热更新算法
             /// @param algo_name 算法名称
             /// @param new_version 新版本号

@@ -125,6 +125,21 @@ table StartSelfCheckCmd {
     version: string (required);
 }
 
+/// 热更新算法实例内存人脸库快照指令 (SignalType.FaceLibraryUpdate / cmd_type=207)
+/// Go 侧负责从 Postgres/vector 表生成完整快照，Engine 只转发给算法实例。
+table FaceLibraryUpdateCmd {
+    algo_name: string (required);
+    /// 完整人脸库快照 JSON，格式由算法包定义。
+    face_library_json: string (required);
+}
+
+/// 单张图库图片人脸特征提取指令 (SignalType.FaceEmbeddingExtract / cmd_type=208)
+/// Engine 解码 image_base64 后调用算法实例 detector_infer，context_json={"mode":"extract_embedding"}。
+table FaceEmbeddingExtractCmd {
+    algo_name: string = "face_recognition";
+    image_base64: string (required);
+}
+
 root_type StartStreamCmd;
 root_type StopStreamCmd;
 root_type UpdateAlgoConfigCmd;
@@ -137,3 +152,5 @@ root_type StreamPlaybackStartCmd;
 root_type StreamPlaybackStopCmd;
 root_type StreamStatusCmd;
 root_type StartSelfCheckCmd;
+root_type FaceLibraryUpdateCmd;
+root_type FaceEmbeddingExtractCmd;

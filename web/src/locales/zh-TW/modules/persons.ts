@@ -76,6 +76,27 @@ export const persons = {
       sortOrder: { label: "排序", placeholder: "0" },
     },
   },
+  tags: {
+    title: "人員標籤",
+    create: "新增標籤",
+    edit: "編輯標籤",
+    delete: "刪除標籤",
+    deleteConfirm: "確定刪除標籤'{{name}}'？",
+    empty: "暫無標籤",
+    form: {
+      tagName: { label: "標籤名稱", placeholder: "請輸入標籤名稱" },
+      color: { label: "顏色", placeholder: "請選擇顏色" },
+      sortOrder: { label: "排序", placeholder: "0" },
+    },
+    table: {
+      columns: {
+        tagName: "標籤名稱",
+        color: "顏色",
+        sortOrder: "排序",
+        persons: "人員數",
+      },
+    },
+  },
   imports: {
     title: "匯入任務",
     upload: "上傳壓縮檔",

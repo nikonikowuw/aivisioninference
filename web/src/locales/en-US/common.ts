@@ -21,6 +21,7 @@ export const common = {
     import: "Import",
     exportSelected: "Export Selected",
     batchDelete: "Batch Delete",
+    clearFilters: "Clear Filters",
   },
   status: {
     active: "Active",
@@ -45,6 +46,7 @@ export const common = {
     confirmDelete: "Are you sure you want to delete?",
     confirmCancel: "Are you sure you want to cancel?",
     operationSuccess: "Operation successful",
+    success: "Operation successful",
     operationFailed: "Operation failed",
     networkError: "Network error, please try again later",
     unauthorized: "Unauthorized, please sign in again",
@@ -215,6 +217,20 @@ export const common = {
   },
   batch: {
     selected: "{{count}} items selected",
+  },
+  dialog: {
+    delete: {
+      title: "Confirm Delete",
+    },
+    enable: {
+      title: "Confirm Enable",
+    },
+    disable: {
+      title: "Confirm Disable",
+    },
+    retryEmbedding: {
+      title: "Confirm Retry Extraction",
+    },
   },
   searchBar: {
     keyword: "Keyword",

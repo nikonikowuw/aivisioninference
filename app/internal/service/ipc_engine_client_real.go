@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -208,17 +210,103 @@ func (c *IPCEngineClient) StartSelfCheck(ctx context.Context, downloadURL, token
 	// 206 = StartSelfCheck — 使用较长超时，引擎需要下载+解压+dlopen+自检
 	resp, err := c.sendCommandWithTimeout(ctx, 206, fbData, 5*time.Minute)
 	if err != nil {
-		return fmt.Errorf("发送自检命令失败: %w", err)
+		return fmt.Errorf("send self-check command failed: %w", err)
 	}
 
 	result := ipc.FlatBuffersToAlgoLoadResult(resp)
 	if result == nil {
-		return fmt.Errorf("引擎未返回自检结果")
+		return fmt.Errorf("engine returned no self-check result")
 	}
 
 	if !result.Success {
-		return fmt.Errorf("算法自检失败: %s (错误码: %s)", result.ErrorMessage, result.ErrorCode)
+		return fmt.Errorf("algorithm self-check failed: %s (error code: %s)", result.ErrorMessage, result.ErrorCode)
 	}
 
 	return nil
+}
+
+// UpdateFaceLibrary 发送完整人脸库快照给 C++ Engine。
+func (c *IPCEngineClient) UpdateFaceLibrary(ctx context.Context, algoName string, faceLibraryJSON []byte) error {
+	c.logger.Info("IPC: UpdateFaceLibrary", zap.String("algo_name", algoName), zap.Int("payload_size", len(faceLibraryJSON)))
+
+	payload, err := json.Marshal(struct {
+		AlgoName        string `json:"algo_name"`
+		FaceLibraryJSON string `json:"face_library_json"`
+	}{
+		AlgoName:        algoName,
+		FaceLibraryJSON: string(faceLibraryJSON),
+	})
+	if err != nil {
+		return fmt.Errorf("marshal face library update payload: %w", err)
+	}
+
+	resp, err := c.sendCommand(ctx, 207, payload)
+	if err != nil {
+		return fmt.Errorf("send face library update command failed: %w", err)
+	}
+	if len(resp) == 0 {
+		return nil
+	}
+
+	var result struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"error_message"`
+	}
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return fmt.Errorf("unmarshal face library update response failed: %w", err)
+	}
+	if !result.Success {
+		if result.ErrorMessage == "" {
+			result.ErrorMessage = "unknown error"
+		}
+		return fmt.Errorf("engine failed to update face library: %s", result.ErrorMessage)
+	}
+	return nil
+}
+
+// ExtractFaceEmbedding 发送单张人脸图库图片给 Engine，由算法包提取 w600k_r50 特征。
+func (c *IPCEngineClient) ExtractFaceEmbedding(ctx context.Context, algoName, algoVersion, soPath, algoParamsJSON string, imageBytes []byte) (FaceEmbeddingResult, error) {
+	if algoName == "" {
+		algoName = defaultFaceRecognitionAlgorithm
+	}
+	if len(imageBytes) == 0 {
+		return FaceEmbeddingResult{}, fmt.Errorf("image bytes is empty")
+	}
+
+	payload, err := json.Marshal(struct {
+		AlgoName       string `json:"algo_name"`
+		AlgoVersion    string `json:"algo_version,omitempty"`
+		SoPath         string `json:"so_path,omitempty"`
+		AlgoParamsJSON string `json:"algo_params_json,omitempty"`
+		ImageBase64    string `json:"image_base64"`
+	}{
+		AlgoName:       algoName,
+		AlgoVersion:    algoVersion,
+		SoPath:         soPath,
+		AlgoParamsJSON: algoParamsJSON,
+		ImageBase64:    base64.StdEncoding.EncodeToString(imageBytes),
+	})
+	if err != nil {
+		return FaceEmbeddingResult{}, fmt.Errorf("marshal face embedding payload: %w", err)
+	}
+
+	resp, err := c.sendCommandWithTimeout(ctx, 208, payload, 60*time.Second)
+	if err != nil {
+		return FaceEmbeddingResult{}, fmt.Errorf("send face embedding extraction command failed: %w", err)
+	}
+
+	var result FaceEmbeddingResult
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return FaceEmbeddingResult{}, fmt.Errorf("unmarshal face embedding extraction response failed: %w", err)
+	}
+	if !result.Success {
+		if result.ErrorMessage == "" {
+			result.ErrorMessage = "unknown error"
+		}
+		return result, fmt.Errorf("face embedding extraction failed: %s", result.ErrorMessage)
+	}
+	if len(result.Embedding) == 0 {
+		return result, fmt.Errorf("face embedding extraction response missing embedding")
+	}
+	return result, nil
 }

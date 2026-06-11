@@ -31,6 +31,15 @@ func (r *AlgorithmPackageRepository) FindByID(ctx context.Context, id string) (*
 	return &item, err
 }
 
+func (r *AlgorithmPackageRepository) FindLatestPassedByAlgorithm(ctx context.Context, algoName string) (*model.AlgorithmPackage, error) {
+	var item model.AlgorithmPackage
+	err := r.db.WithContext(ctx).
+		Where("algorithm_name = ? AND self_check_status = ?", algoName, model.SelfCheckStatusPassed).
+		Order("updated_at DESC").
+		First(&item).Error
+	return &item, err
+}
+
 // Create inserts a new algorithmpackage record.
 func (r *AlgorithmPackageRepository) Create(ctx context.Context, item *model.AlgorithmPackage) error {
 	return r.db.WithContext(ctx).Create(item).Error

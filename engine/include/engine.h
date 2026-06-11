@@ -148,6 +148,12 @@ namespace aivision
         /// 处理 StartSelfCheck 指令
         void HandleStartSelfCheck(const uint8_t *payload, size_t size, uint64_t seq);
 
+        /// 处理人脸库快照热更新指令
+        void HandleFaceLibraryUpdate(const uint8_t *payload, size_t size, uint64_t seq);
+
+        /// 处理单张图片人脸特征提取指令
+        void HandleFaceEmbeddingExtract(const uint8_t *payload, size_t size, uint64_t seq);
+
         /// 调用 ZLM addStreamProxy API 拉取 RTSP 流
         /// 返回 ZLM 的播放 URL，失败返回空字符串
         std::string AddStreamProxy(const std::string &device_id, const std::string &rtsp_url);
@@ -157,6 +163,9 @@ namespace aivision
 
         /// 解析简单的 JSON 字段
         std::string ExtractJsonField(const std::string &json, const std::string &field_name);
+
+        /// 解析简单 JSON 中的原始对象/数组字段，返回原始 JSON 片段
+        std::string ExtractJsonRawField(const std::string &json, const std::string &field_name);
 
         /// 解析简单的 JSON 布尔字段
         bool ExtractJsonBoolField(const std::string &json, const std::string &field_name, bool default_value);

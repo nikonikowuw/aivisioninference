@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/middleware"
+	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
@@ -129,6 +130,73 @@ func (r *Router) setupRoutes() {
 	rbacCache := deps.RBACCache
 
 	// Auth (no auth required)
+	r.registerAuthRoutes(v1, deps)
+
+	// WebSocket
+	v1.GET("/ws", deps.WSHandler.HandleWebSocket)
+
+	// Algorithm Package Download (no auth required, verified by short-lived token)
+	v1.GET("/internal/algo/download", deps.AlgorithmPackageHandler.DownloadAlgorithmPackage)
+
+	// Protected routes
+	authorized := v1.Group("")
+	authorized.Use(middleware.Auth(r.jwtManager))
+	authorized.Use(middleware.Audit(deps.AuditService))
+
+	r.registerUserRoutes(authorized, deps, rbacCache)
+	r.registerRoleRoutes(authorized, deps, rbacCache)
+	r.registerPermissionRoutes(authorized, deps, rbacCache)
+	r.registerFileRoutes(authorized, deps, rbacCache)
+	r.registerAlgoPackageRoutes(authorized, deps, rbacCache)
+	r.registerAuditRoutes(authorized, deps, rbacCache)
+	r.registerGeneralTaskRoutes(authorized, deps, rbacCache)
+
+	// AIVisionTasks
+	RegisterAIVisionTaskRoutes(authorized, deps.AIVisionTaskHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
+
+	// AI Time Schedules (reusable time configurations for AI tasks)
+	RegisterAITimeScheduleRoutes(authorized, deps.AITimeScheduleHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
+
+	r.registerSystemRoutes(authorized, v1, deps, rbacCache)
+	r.registerFeedbackRoutes(authorized, deps, rbacCache)
+	r.registerDeviceRoutes(authorized, deps, rbacCache)
+	r.registerMediaRoutes(authorized, v1, deps, rbacCache)
+	r.registerPersonRoutes(authorized, deps, rbacCache)
+
+	r.engine.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api") {
+			response.Err(c, apperrors.New(apperrors.ErrNotFound, "资源不存在"))
+			return
+		}
+		c.File("./web/dist/index.html")
+	})
+
+	// Swagger UI (non-production only)
+	if r.config.AppEnv != "prod" {
+		r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
+
+	// Health check
+	r.engine.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	// Static file serving for uploaded files
+	uploads := r.engine.Group("/uploads")
+	uploads.Use(middleware.CORS(r.config.AllowOrigins))
+	uploads.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("Cache-Control", "public, max-age=31536000")
+		c.Next()
+	})
+	uploads.Static("", "uploads")
+
+	// Frontend static files (SPA)
+	r.engine.Static("/assets", "./web/dist/assets")
+	r.engine.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
+}
+
+func (r *Router) registerAuthRoutes(v1 *gin.RouterGroup, deps *RouteDeps) {
 	authHandler := deps.AuthHandler
 	v1.POST("/auth/login", authHandler.Login)
 	v1.POST("/auth/password-reset/request", authHandler.RequestPasswordReset)
@@ -139,20 +207,9 @@ func (r *Router) setupRoutes() {
 	v1.PUT("/auth/password", middleware.Auth(r.jwtManager), authHandler.ChangePassword)
 	v1.PUT("/auth/profile", middleware.Auth(r.jwtManager), authHandler.UpdateProfile)
 	v1.POST("/auth/avatar", middleware.Auth(r.jwtManager), authHandler.UploadAvatar)
+}
 
-	// WebSocket
-	wsHandler := deps.WSHandler
-	r.engine.GET("/api/v1/ws", wsHandler.HandleWebSocket)
-
-	// Algorithm Package Download (no auth required, verified by short-lived token)
-	v1.GET("/internal/algo/download", deps.AlgorithmPackageHandler.DownloadAlgorithmPackage)
-
-	// Protected routes
-	authorized := v1.Group("")
-	authorized.Use(middleware.Auth(r.jwtManager))
-	authorized.Use(middleware.Audit(deps.AuditService))
-
-	// Users
+func (r *Router) registerUserRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	userHandler := deps.UserHandler
 	users := authorized.Group("/users")
 	{
@@ -168,8 +225,9 @@ func (r *Router) setupRoutes() {
 		users.PUT("/:id/password", middleware.RBAC(rbacCache, r.db), userHandler.ResetPassword)
 		users.POST("/:id/avatar", middleware.RBAC(rbacCache, r.db), userHandler.UploadAvatar)
 	}
+}
 
-	// Roles
+func (r *Router) registerRoleRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	roleHandler := deps.RoleHandler
 	roles := authorized.Group("/roles")
 	{
@@ -183,8 +241,9 @@ func (r *Router) setupRoutes() {
 		roles.GET("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.GetPermissions)
 		roles.PUT("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.AssignPermissions)
 	}
+}
 
-	// Permissions
+func (r *Router) registerPermissionRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	permHandler := deps.PermissionHandler
 	permissions := authorized.Group("/permissions")
 	{
@@ -193,8 +252,9 @@ func (r *Router) setupRoutes() {
 		permissions.PUT("/:id", middleware.RBAC(rbacCache, r.db), permHandler.Update)
 		permissions.DELETE("/:id", middleware.RBAC(rbacCache, r.db), permHandler.Delete)
 	}
+}
 
-	// Files
+func (r *Router) registerFileRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	fileHandler := deps.FileHandler
 	files := authorized.Group("/files")
 	{
@@ -210,8 +270,9 @@ func (r *Router) setupRoutes() {
 		files.GET("/:id/download", middleware.RBAC(rbacCache, r.db), fileHandler.Download)
 		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
 	}
+}
 
-	// Algorithm Packages
+func (r *Router) registerAlgoPackageRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	algoHandler := deps.AlgorithmPackageHandler
 	algos := authorized.Group("/algorithmpackages")
 	{
@@ -220,13 +281,15 @@ func (r *Router) setupRoutes() {
 		algos.GET("/:id", middleware.RBAC(rbacCache, r.db), algoHandler.GetByID)
 		algos.DELETE("/:id", middleware.RBAC(rbacCache, r.db), algoHandler.Delete)
 	}
+}
 
-	// Audit Logs
+func (r *Router) registerAuditRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	auditHandler := deps.AuditHandler
 	authorized.GET("/audit-logs", middleware.RBAC(rbacCache, r.db), auditHandler.List)
 	authorized.GET("/audit-logs/export", middleware.RBAC(rbacCache, r.db), auditHandler.ExportCSV)
+}
 
-	// Tasks
+func (r *Router) registerGeneralTaskRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	taskHandler := deps.TaskHandler
 	tasks := authorized.Group("/tasks")
 	{
@@ -237,14 +300,10 @@ func (r *Router) setupRoutes() {
 		tasks.GET("/:id", middleware.RBAC(rbacCache, r.db), taskHandler.GetByID)
 		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
 	}
+}
 
-	// AIVisionTasks
-	RegisterAIVisionTaskRoutes(authorized, deps.AIVisionTaskHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
-
-	// AI Time Schedules (reusable time configurations for AI tasks)
-	RegisterAITimeScheduleRoutes(authorized, deps.AITimeScheduleHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
-
-	// System brand configuration
+func (r *Router) registerSystemRoutes(authorized *gin.RouterGroup, v1 *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+	// Brand configuration
 	brandHandler := deps.BrandHandler
 	v1.GET("/system/brand-config", brandHandler.GetConfig)
 	brandConfig := authorized.Group("/system/brand-config")
@@ -253,7 +312,7 @@ func (r *Router) setupRoutes() {
 		brandConfig.POST("/logo", middleware.RBAC(rbacCache, r.db), brandHandler.UploadLogo)
 	}
 
-	// System mail configuration
+	// Mail configuration
 	mailHandler := deps.MailHandler
 	mailConfig := authorized.Group("/system/mail-config")
 	{
@@ -262,43 +321,6 @@ func (r *Router) setupRoutes() {
 		mailConfig.POST("/test-smtp", middleware.RBAC(rbacCache, r.db), mailHandler.TestSMTP)
 		mailConfig.POST("/test-imap", middleware.RBAC(rbacCache, r.db), mailHandler.TestIMAP)
 		mailConfig.POST("/sync-imap", middleware.RBAC(rbacCache, r.db), mailHandler.SyncIMAP)
-	}
-
-	// Feedback
-	feedbackHandler := deps.FeedbackHandler
-	feedback := authorized.Group("/feedback")
-	{
-		feedback.POST("", feedbackHandler.Create)
-		feedback.GET("", middleware.RBAC(rbacCache, r.db), feedbackHandler.List)
-		feedback.GET("/export", middleware.RBAC(rbacCache, r.db), feedbackHandler.ExportCSV)
-		feedback.PUT("/batch-status", middleware.RBAC(rbacCache, r.db), feedbackHandler.BatchUpdateStatus)
-		feedback.PUT("/:id/status", middleware.RBAC(rbacCache, r.db), feedbackHandler.UpdateStatus)
-	}
-
-	// Devices
-	deviceHandler := deps.DeviceHandler
-	devices := authorized.Group("/devices")
-	{
-		devices.GET("", middleware.RBAC(rbacCache, r.db), deviceHandler.List)
-		devices.POST("", middleware.RBAC(rbacCache, r.db), deviceHandler.Create)
-		devices.GET("/export", middleware.RBAC(rbacCache, r.db), deviceHandler.ExportCSV)
-		devices.POST("/import", middleware.RBAC(rbacCache, r.db), deviceHandler.ImportCSV)
-		devices.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deviceHandler.BatchDelete)
-		devices.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.GetByID)
-		devices.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Update)
-		devices.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Delete)
-		devices.POST("/:id/test", middleware.RBAC(rbacCache, r.db), deviceHandler.TestConnection)
-	}
-
-	// Device Groups
-	deviceGroupHandler := deps.DeviceGroupHandler
-	deviceGroups := authorized.Group("/device-groups")
-	{
-		deviceGroups.GET("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.List)
-		deviceGroups.POST("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Create)
-		deviceGroups.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.GetByID)
-		deviceGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Update)
-		deviceGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Delete)
 	}
 
 	// System Management
@@ -322,20 +344,47 @@ func (r *Router) setupRoutes() {
 	// Dashboard
 	dashboardHandler := deps.DashboardHandler
 	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
+}
 
-	// Smart Records
-	if deps.SmartRecordHandler != nil {
-		smartRecords := authorized.Group("/smart-records")
-		{
-			smartRecords.GET("", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.List)
-			smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportCSV)
-			smartRecords.GET("/category-codes", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ListCategoryCodes)
-			smartRecords.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.BatchDelete)
-			smartRecords.POST("/export-selected", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.ExportSelectedCSV)
-			smartRecords.PUT("/:id/alarm-status", middleware.RBAC(rbacCache, r.db), deps.SmartRecordHandler.UpdateAlarmStatus)
-		}
+func (r *Router) registerFeedbackRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+	feedbackHandler := deps.FeedbackHandler
+	feedback := authorized.Group("/feedback")
+	{
+		feedback.POST("", feedbackHandler.Create)
+		feedback.GET("", middleware.RBAC(rbacCache, r.db), feedbackHandler.List)
+		feedback.GET("/export", middleware.RBAC(rbacCache, r.db), feedbackHandler.ExportCSV)
+		feedback.PUT("/batch-status", middleware.RBAC(rbacCache, r.db), feedbackHandler.BatchUpdateStatus)
+		feedback.PUT("/:id/status", middleware.RBAC(rbacCache, r.db), feedbackHandler.UpdateStatus)
+	}
+}
+
+func (r *Router) registerDeviceRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+	deviceHandler := deps.DeviceHandler
+	devices := authorized.Group("/devices")
+	{
+		devices.GET("", middleware.RBAC(rbacCache, r.db), deviceHandler.List)
+		devices.POST("", middleware.RBAC(rbacCache, r.db), deviceHandler.Create)
+		devices.GET("/export", middleware.RBAC(rbacCache, r.db), deviceHandler.ExportCSV)
+		devices.POST("/import", middleware.RBAC(rbacCache, r.db), deviceHandler.ImportCSV)
+		devices.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deviceHandler.BatchDelete)
+		devices.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.GetByID)
+		devices.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Update)
+		devices.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Delete)
+		devices.POST("/:id/test", middleware.RBAC(rbacCache, r.db), deviceHandler.TestConnection)
 	}
 
+	deviceGroupHandler := deps.DeviceGroupHandler
+	deviceGroups := authorized.Group("/device-groups")
+	{
+		deviceGroups.GET("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.List)
+		deviceGroups.POST("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Create)
+		deviceGroups.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.GetByID)
+		deviceGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Update)
+		deviceGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Delete)
+	}
+}
+
+func (r *Router) registerMediaRoutes(authorized *gin.RouterGroup, v1 *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	// Media streaming (ZLM webhooks - internal, no auth)
 	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager, deps.SIPService)
 	// Register ZLM webhooks at root level with secret validation
@@ -373,7 +422,6 @@ func (r *Router) setupRoutes() {
 			gb28181.POST("/devices/:id/catalog", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.TriggerCatalog)
 			gb28181.GET("/devices/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetChannels)
 			gb28181.GET("/catalog-tasks/:task_id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetCatalogTaskStatus)
-			// 新数据模型接口（Device 表）
 			gb28181.GET("/nvrs", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.ListNVRs)
 			gb28181.GET("/nvrs/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetNVRChannels)
 		}
@@ -399,33 +447,9 @@ func (r *Router) setupRoutes() {
 			gbConfig.PUT("/config", middleware.RBAC(rbacCache, r.db), deps.GB28181ConfigHandler.UpdateConfig)
 		}
 	}
+}
 
-	// Swagger UI (non-production only)
-	if r.config.AppEnv != "prod" {
-		r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	}
-
-	// Health check
-	r.engine.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	})
-
-	// Static file serving for uploaded files
-	// 允许前端直接访问 uploads 目录下的所有资源（包括 persons/ 和 avatars/）
-	uploads := r.engine.Group("/uploads")
-	uploads.Use(middleware.CORS(r.config.AllowOrigins)) // 确保图片支持跨域访问
-	uploads.Use(func(c *gin.Context) {
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("Cache-Control", "public, max-age=31536000") // 开启浏览器缓存
-		c.Next()
-	})
-	uploads.Static("", "uploads")
-
-	// Frontend static files (SPA)
-	r.engine.Static("/assets", "./web/dist/assets")
-	r.engine.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
-
-	// Persons
+func (r *Router) registerPersonRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
 	personHandler := deps.PersonHandler
 
 	personsImage := authorized.Group("/persons/image")
@@ -447,7 +471,6 @@ func (r *Router) setupRoutes() {
 		persons.POST("/:id/retry-embedding", middleware.RBAC(rbacCache, r.db), personHandler.RetryEmbedding)
 	}
 
-	// Person Groups
 	personGroups := authorized.Group("/person-groups")
 	{
 		personGroups.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListGroups)
@@ -456,7 +479,6 @@ func (r *Router) setupRoutes() {
 		personGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteGroup)
 	}
 
-	// Person Tags
 	personTags := authorized.Group("/person-tags")
 	{
 		personTags.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListTags)
@@ -465,7 +487,6 @@ func (r *Router) setupRoutes() {
 		personTags.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteTag)
 	}
 
-	// Person Import Tasks
 	personImports := authorized.Group("/person-import-tasks")
 	{
 		personImports.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListImportTasks)
@@ -473,14 +494,6 @@ func (r *Router) setupRoutes() {
 		personImports.POST("/by-url", middleware.RBAC(rbacCache, r.db), personHandler.ImportByURL)
 		personImports.GET("/:id", middleware.RBAC(rbacCache, r.db), personHandler.GetImportTask)
 	}
-
-	r.engine.NoRoute(func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/api") {
-			response.Err(c, apperrors.New(apperrors.ErrNotFound, "资源不存在"))
-			return
-		}
-		c.File("./web/dist/index.html")
-	})
 }
 
 // NewAsynqServer creates an Asynq server for task processing.
@@ -531,8 +544,9 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	personRepo := repository.NewPersonRepository(db)
 	embeddingRepo := repository.NewPersonEmbeddingRepository(db)
 	importTaskRepo := repository.NewImportTaskRepository(db)
+	faceLibrarySyncSvc := service.NewFaceLibrarySyncService(embeddingRepo, engineClient)
 	taskClient := task.NewClient(rdb)
-	task.NewPersonEmbeddingHandler(personRepo, embeddingRepo).RegisterHandlers(mux)
+	task.NewPersonEmbeddingHandler(personRepo, embeddingRepo, algorithmPackageRepo, faceLibrarySyncSvc, engineClient, avatarStorage).RegisterHandlers(mux)
 	task.NewPersonImportHandler(personRepo, embeddingRepo, importTaskRepo, avatarStorage, taskClient).RegisterHandlers(mux)
 
 	return mux

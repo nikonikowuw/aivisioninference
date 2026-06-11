@@ -3,10 +3,12 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
+	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
 )
 
@@ -66,27 +68,18 @@ func (r *PersonRepository) ListForExport(ctx context.Context, req dto.PersonList
 
 // Update 更新人员记录，仅更新业务字段（不覆盖零值）。
 func (r *PersonRepository) Update(ctx context.Context, item *model.Person) error {
-	return r.db.WithContext(ctx).Model(item).Updates(map[string]interface{}{
-		"person_code":                 item.PersonCode,
-		"person_name":                 item.PersonName,
-		"gender":                      item.Gender,
-		"phone":                       item.Phone,
-		"id_number":                   item.IDNumber,
-		"image_url":                   item.ImageURL,
-		"image_md5":                   item.ImageMD5,
-		"face_quality_score":          item.FaceQualityScore,
-		"embedding_status":            item.EmbeddingStatus,
-		"embedding_error_code":        item.EmbeddingErrorCode,
-		"embedding_error_message_key": item.EmbeddingErrorMessageKey,
-		"embedding_retryable":         item.EmbeddingRetryable,
-		"enabled":                     item.Enabled,
-		"remark":                      item.Remark,
-	}).Error
+	return r.db.WithContext(ctx).Model(item).Select(
+		"person_code", "person_name", "gender", "phone", "id_number",
+		"image_url", "image_md5", "face_quality_score", "embedding_status",
+		"embedding_error_code", "embedding_error_message_key", "embedding_retryable",
+		"enabled", "remark",
+	).Updates(item).Error
 }
 
-// SoftDelete 软删除人员。
+// SoftDelete 软删除人员。同时清除图片 MD5 和 URL，释放唯一索引，
+// 允许后续使用同一张图片重新创建人员。
 func (r *PersonRepository) SoftDelete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Delete(&model.Person{}, "id = ?", id).Error
+	return r.BatchSoftDelete(ctx, []string{id})
 }
 
 // BatchSoftDelete 批量软删除人员。
@@ -94,7 +87,11 @@ func (r *PersonRepository) BatchSoftDelete(ctx context.Context, ids []string) er
 	if len(ids) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).Delete(&model.Person{}, "id IN ?", ids).Error
+	return r.db.WithContext(ctx).Model(&model.Person{}).Where("id IN ?", ids).Updates(map[string]interface{}{
+		"deleted_at": time.Now(),
+		"image_md5":  nil,
+		"image_url":  "",
+	}).Error
 }
 
 // BatchToggle 批量启用/禁用。
@@ -114,9 +111,13 @@ func (r *PersonRepository) UpdateEmbeddingStatus(ctx context.Context, id, status
 
 // ExistsByPersonCode 检查人员编号是否存在。
 func (r *PersonRepository) ExistsByPersonCode(ctx context.Context, code, excludeID string) (bool, error) {
-	if code == "" { return false, nil }
+	if code == "" {
+		return false, nil
+	}
 	q := r.db.WithContext(ctx).Model(&model.Person{}).Where("person_code = ?", code)
-	if excludeID != "" { q = q.Where("id <> ?", excludeID) }
+	if excludeID != "" {
+		q = q.Where("id <> ?", excludeID)
+	}
 	var count int64
 	err := q.Count(&count).Error
 	return count > 0, err
@@ -124,9 +125,13 @@ func (r *PersonRepository) ExistsByPersonCode(ctx context.Context, code, exclude
 
 // ExistsByImageMD5 检查图片 MD5 是否存在。
 func (r *PersonRepository) ExistsByImageMD5(ctx context.Context, md5, excludeID string) (bool, error) {
-	if md5 == "" { return false, nil }
+	if md5 == "" {
+		return false, nil
+	}
 	q := r.db.WithContext(ctx).Model(&model.Person{}).Where("image_md5 = ?", md5)
-	if excludeID != "" { q = q.Where("id <> ?", excludeID) }
+	if excludeID != "" {
+		q = q.Where("id <> ?", excludeID)
+	}
 	var count int64
 	err := q.Count(&count).Error
 	return count > 0, err
@@ -138,15 +143,11 @@ func (r *PersonRepository) ReplaceGroups(ctx context.Context, personID string, g
 		if err := tx.Where("person_record_id = ?", personID).Delete(&model.PersonGroupMember{}).Error; err != nil {
 			return err
 		}
-		if len(groupIDs) == 0 {
-			return nil
-		}
 		members := make([]model.PersonGroupMember, 0, len(groupIDs))
 		for _, id := range groupIDs {
-			if id == "" {
-				continue
+			if id != "" {
+				members = append(members, model.PersonGroupMember{PersonRecordID: personID, GroupID: id})
 			}
-			members = append(members, model.PersonGroupMember{PersonRecordID: personID, GroupID: id})
 		}
 		if len(members) > 0 {
 			return tx.Create(&members).Error
@@ -159,14 +160,34 @@ func (r *PersonRepository) ReplaceGroups(ctx context.Context, personID string, g
 type PersonGroupRepository struct{ db *gorm.DB }
 
 // NewPersonGroupRepository 创建人员分组 Repository。
-func NewPersonGroupRepository(db *gorm.DB) *PersonGroupRepository { return &PersonGroupRepository{db: db} }
+func NewPersonGroupRepository(db *gorm.DB) *PersonGroupRepository {
+	return &PersonGroupRepository{db: db}
+}
 
-func (r *PersonGroupRepository) Create(ctx context.Context, item *model.PersonGroup) error { return r.db.WithContext(ctx).Create(item).Error }
-func (r *PersonGroupRepository) FindByID(ctx context.Context, id string) (*model.PersonGroup, error) { var item model.PersonGroup; err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; return &item, err }
-func (r *PersonGroupRepository) Update(ctx context.Context, item *model.PersonGroup) error { return r.db.WithContext(ctx).Save(item).Error }
-func (r *PersonGroupRepository) Delete(ctx context.Context, id string) error { return r.db.WithContext(ctx).Delete(&model.PersonGroup{}, "id = ?", id).Error }
-func (r *PersonGroupRepository) List(ctx context.Context) ([]model.PersonGroup, error) { var items []model.PersonGroup; err := r.db.WithContext(ctx).Order("sort_order ASC").Order("created_at DESC").Find(&items).Error; return items, err }
-func (r *PersonGroupRepository) CountPersons(ctx context.Context, id string) (int64, error) { var count int64; err := r.db.WithContext(ctx).Model(&model.PersonGroupMember{}).Where("group_id = ?", id).Count(&count).Error; return count, err }
+func (r *PersonGroupRepository) Create(ctx context.Context, item *model.PersonGroup) error {
+	return r.db.WithContext(ctx).Create(item).Error
+}
+func (r *PersonGroupRepository) FindByID(ctx context.Context, id string) (*model.PersonGroup, error) {
+	var item model.PersonGroup
+	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	return &item, err
+}
+func (r *PersonGroupRepository) Update(ctx context.Context, item *model.PersonGroup) error {
+	return r.db.WithContext(ctx).Save(item).Error
+}
+func (r *PersonGroupRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.PersonGroup{}, "id = ?", id).Error
+}
+func (r *PersonGroupRepository) List(ctx context.Context) ([]model.PersonGroup, error) {
+	var items []model.PersonGroup
+	err := r.db.WithContext(ctx).Order("sort_order ASC").Order("created_at DESC").Find(&items).Error
+	return items, err
+}
+func (r *PersonGroupRepository) CountPersons(ctx context.Context, id string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.PersonGroupMember{}).Where("group_id = ?", id).Count(&count).Error
+	return count, err
+}
 func (r *PersonGroupRepository) BatchCountPersons(ctx context.Context) (map[string]int64, error) {
 	counts := make(map[string]int64)
 	var rows []struct {
@@ -186,12 +207,61 @@ func (r *PersonGroupRepository) BatchCountPersons(ctx context.Context) (map[stri
 // PersonEmbeddingRepository 处理人员向量持久化。
 type PersonEmbeddingRepository struct{ db *gorm.DB }
 
-// NewPersonEmbeddingRepository 创建人员向量 Repository。
-func NewPersonEmbeddingRepository(db *gorm.DB) *PersonEmbeddingRepository { return &PersonEmbeddingRepository{db: db} }
+// FaceEmbeddingRecord 表示可下发给算法引擎的人脸库记录。
+type FaceEmbeddingRecord struct {
+	PersonID   string          `gorm:"column:person_id"`
+	PersonName string          `gorm:"column:person_name"`
+	Embedding  pgvector.Vector `gorm:"column:embedding"`
+}
 
-func (r *PersonEmbeddingRepository) DeleteByPersonRecordID(ctx context.Context, personID string) error { return r.db.WithContext(ctx).Where("person_record_id = ?", personID).Delete(&model.PersonEmbedding{}).Error }
-func (r *PersonEmbeddingRepository) Create(ctx context.Context, item *model.PersonEmbedding) error { return r.db.WithContext(ctx).Create(item).Error }
-func (r *PersonEmbeddingRepository) ListActive(ctx context.Context, limit int) ([]model.PersonEmbedding, error) { var items []model.PersonEmbedding; if limit <= 0 || limit > 1000 { limit = 500 }; err := r.db.WithContext(ctx).Preload("Person").Limit(limit).Find(&items).Error; return items, err }
+// NewPersonEmbeddingRepository 创建人员向量 Repository。
+func NewPersonEmbeddingRepository(db *gorm.DB) *PersonEmbeddingRepository {
+	return &PersonEmbeddingRepository{db: db}
+}
+
+func (r *PersonEmbeddingRepository) DeleteByPersonRecordID(ctx context.Context, personID string) error {
+	return r.db.WithContext(ctx).Where("person_record_id = ?", personID).Delete(&model.PersonEmbedding{}).Error
+}
+func (r *PersonEmbeddingRepository) Create(ctx context.Context, item *model.PersonEmbedding) error {
+	return r.db.WithContext(ctx).Create(item).Error
+}
+func (r *PersonEmbeddingRepository) ListActive(ctx context.Context, limit int) ([]model.PersonEmbedding, error) {
+	var items []model.PersonEmbedding
+	if limit <= 0 || limit > 1000 {
+		limit = 500
+	}
+	err := r.db.WithContext(ctx).Limit(limit).Find(&items).Error
+	return items, err
+}
+
+func (r *PersonEmbeddingRepository) ListActiveFaceLibrary(ctx context.Context, limit int) ([]FaceEmbeddingRecord, error) {
+	if limit <= 0 || limit > 100000 {
+		limit = 100000
+	}
+	var items []FaceEmbeddingRecord
+	err := r.db.WithContext(ctx).
+		Table("person_embeddings pe").
+		Select("p.id AS person_id, p.person_name, pe.embedding").
+		Joins("JOIN persons p ON p.id = pe.person_record_id").
+		Where("p.enabled = ? AND p.embedding_status = ? AND p.deleted_at IS NULL", true, model.EmbeddingStatusActive).
+		Order("p.updated_at DESC").
+		Limit(limit).
+		Scan(&items).Error
+	return items, err
+}
+
+func (r *PersonRepository) ListEnabledForEmbedding(ctx context.Context, limit int) ([]model.Person, error) {
+	if limit <= 0 || limit > 100000 {
+		limit = 100000
+	}
+	var items []model.Person
+	err := r.db.WithContext(ctx).
+		Where("enabled = ?", true).
+		Order("updated_at DESC").
+		Limit(limit).
+		Find(&items).Error
+	return items, err
+}
 
 // ImportTaskRepository 处理导入任务持久化。
 type ImportTaskRepository struct{ db *gorm.DB }
@@ -199,22 +269,30 @@ type ImportTaskRepository struct{ db *gorm.DB }
 // NewImportTaskRepository 创建导入任务 Repository。
 func NewImportTaskRepository(db *gorm.DB) *ImportTaskRepository { return &ImportTaskRepository{db: db} }
 
-func (r *ImportTaskRepository) Create(ctx context.Context, item *model.ImportTask) error { return r.db.WithContext(ctx).Create(item).Error }
-func (r *ImportTaskRepository) FindByID(ctx context.Context, id string) (*model.ImportTask, error) { var item model.ImportTask; err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; return &item, err }
-func (r *ImportTaskRepository) Update(ctx context.Context, item *model.ImportTask) error {
-	return r.db.WithContext(ctx).Model(item).Updates(map[string]interface{}{
-		"task_type":       item.TaskType,
-		"file_name":       item.FileName,
-		"file_url":        item.FileURL,
-		"total_rows":      item.TotalRows,
-		"success_rows":    item.SuccessRows,
-		"failed_rows":     item.FailedRows,
-		"fail_detail_url": item.FailDetailURL,
-		"status":          item.Status,
-		"completed_at":    item.CompletedAt,
-	}).Error
+func (r *ImportTaskRepository) Create(ctx context.Context, item *model.ImportTask) error {
+	return r.db.WithContext(ctx).Create(item).Error
 }
-func (r *ImportTaskRepository) List(ctx context.Context, req dto.PageRequest) ([]model.ImportTask, int64, error) { var total int64; q := r.db.WithContext(ctx).Model(&model.ImportTask{}).Where("task_type = ?", model.ImportTaskTypePerson); if err := q.Count(&total).Error; err != nil { return nil, 0, err }; var items []model.ImportTask; err := q.Scopes(scopes.OrderBy(req.Sort, req.Order, model.ImportTask{}.SortableFields()...), scopes.OrderByDefault(), scopes.Paginate(req.GetPage(), req.GetPageSize())).Find(&items).Error; return items, total, err }
+func (r *ImportTaskRepository) FindByID(ctx context.Context, id string) (*model.ImportTask, error) {
+	var item model.ImportTask
+	err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error
+	return &item, err
+}
+func (r *ImportTaskRepository) Update(ctx context.Context, item *model.ImportTask) error {
+	return r.db.WithContext(ctx).Model(item).Select(
+		"task_type", "file_name", "file_url", "total_rows",
+		"success_rows", "failed_rows", "fail_detail_url", "status", "completed_at",
+	).Updates(item).Error
+}
+func (r *ImportTaskRepository) List(ctx context.Context, req dto.PageRequest) ([]model.ImportTask, int64, error) {
+	var total int64
+	q := r.db.WithContext(ctx).Model(&model.ImportTask{}).Where("task_type = ?", model.ImportTaskTypePerson)
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []model.ImportTask
+	err := q.Scopes(scopes.OrderBy(req.Sort, req.Order, model.ImportTask{}.SortableFields()...), scopes.OrderByDefault(), scopes.Paginate(req.GetPage(), req.GetPageSize())).Find(&items).Error
+	return items, total, err
+}
 
 // PersonTagRepository 处理人员标签持久化。
 type PersonTagRepository struct{ db *gorm.DB }
@@ -279,7 +357,9 @@ func (r *PersonTagRepository) CountPersons(ctx context.Context, id string) (int6
 type PersonTagRelationRepository struct{ db *gorm.DB }
 
 // NewPersonTagRelationRepository 创建人员标签关联 Repository。
-func NewPersonTagRelationRepository(db *gorm.DB) *PersonTagRelationRepository { return &PersonTagRelationRepository{db: db} }
+func NewPersonTagRelationRepository(db *gorm.DB) *PersonTagRelationRepository {
+	return &PersonTagRelationRepository{db: db}
+}
 
 // BatchCreate 批量创建人员标签关联。
 func (r *PersonTagRelationRepository) BatchCreate(ctx context.Context, personID string, tagIDs []string) error {

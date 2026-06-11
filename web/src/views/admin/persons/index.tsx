@@ -74,7 +74,7 @@ export default function PersonsPage() {
     onClose: onImportClose 
   } = useDisclosure();
 
-  const { filters, setFilter, resetFilters, refresh } = useFilter();
+  const { filters, setFilter, resetFilters, searchTrigger, refresh } = useFilter();
 
   const fetchPersons = useCallback((page: number, pageSize: number) => personsApi.list({
     page,
@@ -95,6 +95,10 @@ export default function PersonsPage() {
     changePage, 
     changePageSize 
   } = usePagination<Person>(fetchPersons);
+
+  useEffect(() => {
+    loadPersons({ page: 1 });
+  }, [searchTrigger, loadPersons]);
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -131,7 +135,7 @@ export default function PersonsPage() {
       loadPersons();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
         duration: 3000,
@@ -150,7 +154,7 @@ export default function PersonsPage() {
       loadPersons();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
       });
@@ -170,7 +174,7 @@ export default function PersonsPage() {
       loadPersons();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
       });
@@ -189,7 +193,7 @@ export default function PersonsPage() {
       loadPersons();
     } catch (error: any) {
       toast({
-        title: tCommon('message.error'),
+        title: tCommon('message.operationFailed'),
         description: error.message,
         status: 'error',
       });
@@ -317,7 +321,7 @@ export default function PersonsPage() {
                   <Td isNumeric>
                     <HStack justify="end" spacing="4px">
                       <IconButton
-                        aria-label="retry"
+                        aria-label={t('embedding.retry')}
                         icon={<RepeatIcon />}
                         size="sm"
                         variant="ghost"
@@ -328,10 +332,10 @@ export default function PersonsPage() {
                         <MenuButton as={IconButton} icon={<ChevronDownIcon />} size="sm" variant="ghost" />
                         <MenuList>
                           <MenuItem onClick={() => openEdit(p)}>
-                            {tCommon('actions.edit')}
+                            {t('actions.edit')}
                           </MenuItem>
                           <MenuItem color="red.500" onClick={() => setDeleteTarget(p.id)}>
-                            {tCommon('actions.delete')}
+                            {t('actions.delete')}
                           </MenuItem>
                         </MenuList>
                       </Menu>

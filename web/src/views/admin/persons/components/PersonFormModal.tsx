@@ -27,7 +27,7 @@ import {
 import { MdFileUpload, MdImage } from 'react-icons/md';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Person, PersonGroup, chunkedUpload } from 'services/api';
+import { Person, PersonGroup, chunkedUpload, getFileUrl } from 'services/api';
 
 interface PersonFormModalProps {
   isOpen: boolean;
@@ -75,7 +75,7 @@ export const PersonFormModal: React.FC<PersonFormModalProps> = ({
         enabled: editingPerson?.enabled ?? true,
         group_ids: editingPerson?.groups?.map(g => g.id) || [],
       });
-      setPreviewUrl(editingPerson?.image_url || '');
+      setPreviewUrl(getFileUrl(editingPerson?.image_url) || '');
       setSelectedFile(null);
     }
   }, [isOpen, editingPerson]);

@@ -108,6 +108,27 @@ func (r *FileRepository) UpdateChunkUploadedChunks(ctx context.Context, uploadID
 	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Update("uploaded_chunks", uploadedChunksJSON).Error
 }
 
+// AtomicAppendChunkIndex 原子性地向 uploaded_chunks JSON 数组中追加索引。
+// 使用 PostgreSQL jsonb 操作避免并发上传时的竞态条件。
+func (r *FileRepository) AtomicAppendChunkIndex(ctx context.Context, uploadID string, index int) error {
+	sql := `
+		UPDATE file_chunks
+		SET uploaded_chunks = (
+			SELECT COALESCE(
+				jsonb_agg(DISTINCT v)::text,
+				'[]'::text
+			)
+			FROM (
+				SELECT jsonb_array_elements(uploaded_chunks::jsonb) AS v
+				UNION ALL
+				SELECT to_jsonb(?::int)
+			) t
+		)
+		WHERE upload_id = ? AND status = 'uploading'
+	`
+	return r.db.WithContext(ctx).Exec(sql, index, uploadID).Error
+}
+
 // UpdateChunkStatus 更新分块上传任务的状态
 func (r *FileRepository) UpdateChunkStatus(ctx context.Context, uploadID, status string) error {
 	return r.db.WithContext(ctx).Model(&model.FileChunk{}).Where("upload_id = ?", uploadID).Update("status", status).Error

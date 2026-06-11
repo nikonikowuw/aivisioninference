@@ -76,6 +76,27 @@ export const persons = {
       sortOrder: { label: "並び順", placeholder: "0" },
     },
   },
+  tags: {
+    title: "人員タグ",
+    create: "タグを追加",
+    edit: "タグを編集",
+    delete: "タグを削除",
+    deleteConfirm: "タグ'{{name}}'を削除しますか？",
+    empty: "タグが見つかりません",
+    form: {
+      tagName: { label: "タグ名", placeholder: "タグ名を入力" },
+      color: { label: "色", placeholder: "色を選択" },
+      sortOrder: { label: "順序", placeholder: "0" },
+    },
+    table: {
+      columns: {
+        tagName: "タグ名",
+        color: "色",
+        sortOrder: "順序",
+        persons: "人員数",
+      },
+    },
+  },
   imports: {
     title: "インポートタスク",
     upload: "CSVをアップロード",

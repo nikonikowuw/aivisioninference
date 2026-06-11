@@ -89,6 +89,7 @@ namespace aivision
                 "detector_version",
                 "detector_name",
                 "detector_self_test",
+                "detector_update_face_library",
             };
             for (const auto *sym : optional_symbols)
             {

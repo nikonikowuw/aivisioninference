@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -147,12 +146,9 @@ func (s *FileService) SaveChunk(ctx context.Context, uploadID string, index int,
 		return apperrors.New(apperrors.ErrFileTooLarge, "")
 	}
 
-	uploaded := s.unmarshalUploadedChunks(chunk.UploadedChunks)
-	uploaded = appendUniqueChunkIndex(uploaded, index)
-
-	data, _ := json.Marshal(uploaded)
-	if err := s.fileRepo.UpdateChunkUploadedChunks(ctx, uploadID, string(data)); err != nil {
-		zap.L().Error("update uploaded chunks failed", zap.Error(err))
+	// 使用 PostgreSQL jsonb 原子操作追加索引，避免并发上传时的竞态条件
+	if err := s.fileRepo.AtomicAppendChunkIndex(ctx, uploadID, index); err != nil {
+		zap.L().Error("atomic append chunk index failed", zap.Error(err))
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
@@ -536,7 +532,6 @@ func detectMimeType(filename, path string) string {
 		}
 	}
 
-	ext := strings.ToLower(filepath.Ext(filename))
 	mimeMap := map[string]string{
 		".jpg":  "image/jpeg",
 		".jpeg": "image/jpeg",
@@ -556,22 +551,10 @@ func detectMimeType(filename, path string) string {
 		".csv":  "text/csv",
 		".svg":  "image/svg+xml",
 	}
-	if mime, ok := mimeMap[ext]; ok {
+	if mime, ok := mimeMap[strings.ToLower(filepath.Ext(filename))]; ok {
 		return mime
 	}
 	return "application/octet-stream"
-}
-
-// appendUniqueChunkIndex 追加未记录的分片索引，并保持索引列表有序。
-func appendUniqueChunkIndex(uploaded []int, index int) []int {
-	for _, uploadedIndex := range uploaded {
-		if uploadedIndex == index {
-			return uploaded
-		}
-	}
-	uploaded = append(uploaded, index)
-	sort.Ints(uploaded)
-	return uploaded
 }
 
 // copyWithLimit 写入最多 limit+1 字节，用于识别超过限制的分片。

@@ -31,6 +31,17 @@ type StreamStatus struct {
 	RetryCount int    `json:"retry_count"`
 }
 
+// FaceEmbeddingResult 是 Engine 从单张人脸图库图片提取出的特征。
+type FaceEmbeddingResult struct {
+	Success        bool      `json:"success"`
+	ErrorCode      string    `json:"error_code,omitempty"`
+	ErrorMessage   string    `json:"error_message,omitempty"`
+	Embedding      []float32 `json:"embedding,omitempty"`
+	FaceConfidence float64   `json:"face_confidence,omitempty"`
+	QualityScore   float64   `json:"quality_score,omitempty"`
+	EmbeddingNorm  float64   `json:"embedding_norm,omitempty"`
+}
+
 // EngineClient 抽象 Go 控制面与 C++ 推理引擎的 IPC 通讯
 type EngineClient interface {
 	StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error)
@@ -39,6 +50,8 @@ type EngineClient interface {
 	StopPlayback(ctx context.Context, deviceID string) error
 	GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error)
 	StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error
+	UpdateFaceLibrary(ctx context.Context, algoName string, faceLibraryJSON []byte) error
+	ExtractFaceEmbedding(ctx context.Context, algoName, algoVersion, soPath, algoParamsJSON string, imageBytes []byte) (FaceEmbeddingResult, error)
 }
 
 // MockEngineClient 模拟实现
@@ -74,4 +87,12 @@ func (m *MockEngineClient) GetStreamStatus(ctx context.Context, deviceID string)
 
 func (m *MockEngineClient) StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error {
 	return nil
+}
+
+func (m *MockEngineClient) UpdateFaceLibrary(ctx context.Context, algoName string, faceLibraryJSON []byte) error {
+	return nil
+}
+
+func (m *MockEngineClient) ExtractFaceEmbedding(ctx context.Context, algoName, algoVersion, soPath, algoParamsJSON string, imageBytes []byte) (FaceEmbeddingResult, error) {
+	return FaceEmbeddingResult{Success: true, Embedding: make([]float32, 512)}, nil
 }

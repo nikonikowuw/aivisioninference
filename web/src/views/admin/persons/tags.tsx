@@ -109,11 +109,11 @@ export default function PersonTagsPage() {
       } else {
         await personTagsApi.create(formData);
       }
-      toast({ status: 'success', title: editingTag ? 'Updated' : 'Created' });
+      toast({ status: 'success', title: tCommon('message.success') });
       onFormClose();
       fetchTags();
     } catch {
-      toast({ status: 'error', title: 'Operation failed' });
+      toast({ status: 'error', title: tCommon('message.operationFailed') });
     } finally {
       setSubmitting(false);
     }
@@ -128,11 +128,11 @@ export default function PersonTagsPage() {
     if (!deleteTarget) return;
     try {
       await personTagsApi.delete(deleteTarget.id);
-      toast({ status: 'success', title: 'Deleted' });
+      toast({ status: 'success', title: tCommon('message.success') });
       onDeleteClose();
       fetchTags();
     } catch {
-      toast({ status: 'error', title: 'Delete failed' });
+      toast({ status: 'error', title: tCommon('message.operationFailed') });
     }
   };
 
@@ -140,14 +140,14 @@ export default function PersonTagsPage() {
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
       <Flex justify="space-between" align="center" mb="20px">
         <Text color={textColor} fontSize="22px" fontWeight="700">
-          {t('groups.title').replace('分组', '标签').replace('Group', 'Tag')}
+          {t('tags.title')}
         </Text>
         <Button
           leftIcon={<AddIcon />}
           colorScheme="brand"
           onClick={handleCreate}
         >
-          {t('groups.create').replace('分组', '标签').replace('Group', 'Tag')}
+          {t('tags.create')}
         </Button>
       </Flex>
 
@@ -155,16 +155,16 @@ export default function PersonTagsPage() {
         {loading ? (
           <TableSkeleton columns={5} rows={5} />
         ) : tags.length === 0 ? (
-          <EmptyState message="No tags found" />
+          <EmptyState description={t('tags.empty')} />
         ) : (
           <Table variant="simple">
             <Thead>
               <Tr>
-                <Th>{t('groups.form.groupName.label').replace('分组名称', '标签名称')}</Th>
-                <Th>Color</Th>
-                <Th isNumeric>Sort Order</Th>
-                <Th isNumeric>Persons</Th>
-                <Th>Actions</Th>
+                <Th>{t('tags.table.columns.tagName')}</Th>
+                <Th>{t('tags.table.columns.color')}</Th>
+                <Th isNumeric>{t('tags.table.columns.sortOrder')}</Th>
+                <Th isNumeric>{t('tags.table.columns.persons')}</Th>
+                <Th>{tCommon('actions')}</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -188,14 +188,14 @@ export default function PersonTagsPage() {
                   <Td>
                     <HStack spacing={2}>
                       <IconButton
-                        aria-label="Edit"
+                        aria-label={t('actions.edit')}
                         icon={<EditIcon />}
                         size="sm"
                         variant="ghost"
                         onClick={() => handleEdit(tag)}
                       />
                       <IconButton
-                        aria-label="Delete"
+                        aria-label={t('actions.delete')}
                         icon={<DeleteIcon />}
                         size="sm"
                         variant="ghost"
@@ -216,21 +216,21 @@ export default function PersonTagsPage() {
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>
-            {editingTag ? t('groups.edit').replace('分组', '标签') : t('groups.create').replace('分组', '标签')}
+            {editingTag ? t('tags.edit') : t('tags.create')}
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>{t('groups.form.groupName.label').replace('分组名称', '标签名称')}</FormLabel>
+                <FormLabel>{t('tags.form.tagName.label')}</FormLabel>
                 <Input
                   value={formData.tag_name}
                   onChange={(e) => setFormData({ ...formData, tag_name: e.target.value })}
-                  placeholder="Enter tag name"
+                  placeholder={t('tags.form.tagName.placeholder')}
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>Color</FormLabel>
+                <FormLabel>{t('tags.form.color.label')}</FormLabel>
                 <HStack>
                   <Input
                     type="color"
@@ -248,7 +248,7 @@ export default function PersonTagsPage() {
                 </HStack>
               </FormControl>
               <FormControl>
-                <FormLabel>{t('groups.form.sortOrder.label')}</FormLabel>
+                <FormLabel>{t('tags.form.sortOrder.label')}</FormLabel>
                 <Input
                   type="number"
                   value={formData.sort_order}
@@ -259,7 +259,7 @@ export default function PersonTagsPage() {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onFormClose}>
-              Cancel
+              {tCommon('button.cancel')}
             </Button>
             <Button
               colorScheme="brand"
@@ -267,7 +267,7 @@ export default function PersonTagsPage() {
               isLoading={submitting}
               isDisabled={!formData.tag_name.trim()}
             >
-              {editingTag ? 'Update' : 'Create'}
+              {editingTag ? tCommon('button.save') : tCommon('button.create')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -278,8 +278,8 @@ export default function PersonTagsPage() {
         isOpen={isDeleteOpen}
         onClose={onDeleteClose}
         onConfirm={confirmDelete}
-        title={t('groups.delete').replace('分组', '标签')}
-        message={t('groups.deleteConfirm', { name: deleteTarget?.tag_name || '' })}
+        title={t('tags.delete')}
+        message={t('tags.deleteConfirm', { name: deleteTarget?.tag_name || '' })}
       />
     </Box>
   );

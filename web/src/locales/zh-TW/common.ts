@@ -21,6 +21,7 @@ export const common = {
     import: "匯入",
     exportSelected: "匯出選中項",
     batchDelete: "批量刪除",
+    clearFilters: "清除篩選",
   },
   status: {
     active: "正常",
@@ -45,6 +46,7 @@ export const common = {
     confirmDelete: "確定要刪除嗎？",
     confirmCancel: "確定要取消嗎？",
     operationSuccess: "操作成功",
+    success: "操作成功",
     operationFailed: "操作失敗",
     networkError: "網路錯誤，請稍後重試",
     unauthorized: "未授權，請重新登入",
@@ -213,6 +215,20 @@ export const common = {
   },
   batch: {
     selected: "已選中 {{count}} 項",
+  },
+  dialog: {
+    delete: {
+      title: "確認刪除",
+    },
+    enable: {
+      title: "確認啟用",
+    },
+    disable: {
+      title: "確認禁用",
+    },
+    retryEmbedding: {
+      title: "確認重提特徵",
+    },
   },
   searchBar: {
     keyword: "關鍵字",

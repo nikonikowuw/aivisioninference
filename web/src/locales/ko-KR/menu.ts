@@ -34,6 +34,7 @@ export const menu = {
   "person-management": "인물 관리",
   "persons": "인물",
   "person-groups": "인물 그룹",
+  "person-face-search": "얼굴 검색",
   "algorithm-packages": "알고리즘 패키지",
   "aivision": "AI 비전",
   "ai-time-schedules": "AI 시간 예약",

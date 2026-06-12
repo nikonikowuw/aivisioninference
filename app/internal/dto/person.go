@@ -155,6 +155,19 @@ type PersonTagUpdateRequest struct {
 	SortOrder int    `json:"sort_order"`
 }
 
+// PersonSearchByFaceRequest 以图搜人请求参数（FormData）。
+type PersonSearchByFaceRequest struct {
+	TopK      int     `form:"top_k" json:"top_k"`
+	Threshold float64 `form:"threshold" json:"threshold"`
+}
+
+// PersonSearchByFaceResponse 以图搜人结果单条记录。
+type PersonSearchByFaceResponse struct {
+	Person     PersonResponse `json:"person"`
+	Similarity float64        `json:"similarity"`
+	Distance   float64        `json:"distance"`
+}
+
 // PersonTagResponse 标签响应。
 type PersonTagResponse struct {
 	ID          string `json:"id"`

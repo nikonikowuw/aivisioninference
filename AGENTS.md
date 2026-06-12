@@ -117,6 +117,7 @@ Handler → Service → Repository → Model (GORM)
 
 - 所有的错误都不能直接返回原错误给前端， 必须进行翻译
 - 前端除数据外， 所有的字段都必须支持国际化
+- **前端侧边栏菜单由后端 RBAC/Permission 表控制**：菜单项不在前端硬编码，而是通过 `Permission` 表的 `code` 字段与前端路由配置的 `id` 字段匹配。新增菜单必须在 `app/cmd/migrate/main.go` 的 `defaultMenuList()` 和 `migrateMultiLevelMenu` 中定义权限种子，然后执行迁移才能在后端记录。菜单的可见性由登录用户的角色权限决定。
 
 ### API Response Format
 

@@ -53,6 +53,7 @@ const defaultFormData: TagFormData = {
 
 export default function PersonTagsPage() {
   const { t } = useTranslation('modules/persons');
+  const { t: tCommon } = useTranslation('common');
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');

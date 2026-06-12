@@ -112,7 +112,7 @@ export const common = {
       "10060": "Silakan unggah gambar wajah",
       "10061": "Gambar sudah ada",
       "10062": "Kode orang sudah ada",
-      "10063": "Status saat ini tidak memerlukan percobaan ulang",
+      "10063": "Sedang mengekstrak, silakan coba lagi nanti",
       "10064": "Silakan unggah arsip",
       "10065": "Format arsip tidak didukung (ZIP, TAR.GZ, TAR.BZ2 didukung)",
       "10070": "Kode izin sudah digunakan",

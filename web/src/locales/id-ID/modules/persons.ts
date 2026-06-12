@@ -2,6 +2,7 @@ export const persons = {
   title: "Manajemen Orang",
   table: {
     columns: {
+      faceImage: "Wajah",
       personCode: "Kode Orang",
       personName: "Nama",
       gender: "Jenis Kelamin",
@@ -44,6 +45,7 @@ export const persons = {
     },
     retry: "Coba Ulang Embedding",
     retryConfirm: "Yakin ingin mencoba ulang ekstraksi embedding?",
+    batchRetryResult: "Ekstraksi ulang selesai: {{success}} berhasil, {{failed}} gagal",
     batchRetryConfirm: "Yakin ingin mencoba ulang embedding untuk {{count}} orang?",
   },
   actions: {
@@ -125,6 +127,21 @@ export const persons = {
       dropzone: "Klik atau seret arsip untuk mengunggah (ZIP / TAR.GZ / TAR.BZ2)",
       maxSize: "Maks 100MB",
     },
+  },
+  faceSearch: {
+    title: "Pencarian Wajah",
+    description: "Unggah gambar wajah untuk mencari orang serupa di pustaka orang",
+    uploadTitle: "Unggah Gambar Wajah",
+    uploadPlaceholder: "Klik atau seret untuk mengunggah gambar wajah",
+    searchButton: "Cari",
+    searchHint: "Unggah gambar untuk mencari, mendukung jpg/jpeg/png/webp",
+    resultsTitle: "Hasil Pencarian",
+    resultsPlaceholder: "Orang serupa akan ditampilkan di sini setelah pencarian",
+    noResults: "Tidak ditemukan orang serupa",
+    searching: "Mencari...",
+    replaceImage: "Klik untuk mengganti gambar",
+    resultsCount: "Ditemukan {{count}} orang serupa",
+    similarity: "Kemiripan",
   },
   message: {
     deleteConfirm: "Yakin ingin menghapus orang ini?",

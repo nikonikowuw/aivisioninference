@@ -64,6 +64,8 @@ type cache interface {
 // taskClient 异步任务客户端接口
 type taskClient interface {
 	Enqueue(ctx context.Context, taskType string, payload interface{}) error
+	EnqueueWithID(ctx context.Context, taskType string, payload interface{}, taskID string) error
+	RemovePending(ctx context.Context, taskType, entityID string) error
 }
 
 // DeviceService 处理设备管理的业务逻辑
@@ -119,7 +121,6 @@ func (s *DeviceService) GetByID(ctx context.Context, id string) (*dto.DeviceResp
 
 // Create 创建设备,包含名称唯一性校验和密码加密
 func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest) (*dto.DeviceResponse, error) {
-	// 名称唯一性校验
 	exists, err := s.deviceRepo.ExistsByName(ctx, req.DeviceName, "")
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrInternal, "")
@@ -128,7 +129,6 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		return nil, apperrors.New(apperrors.ErrDeviceNameTaken, "")
 	}
 
-	// 条件必填校验
 	if req.AccessType == "rtsp" && req.RtspURL == "" {
 		return nil, apperrors.New(apperrors.ErrRTSPURLRequired, "")
 	}
@@ -154,17 +154,8 @@ func (s *DeviceService) Create(ctx context.Context, req dto.DeviceCreateRequest)
 		Remark:           req.Remark,
 	}
 
-	// 设置 ExternalKey 用于唯一约束去重(rtsp:{url} | gb28181:{deviceID}:{channel})
-	switch req.AccessType {
-	case "rtsp":
-		if req.RtspURL != "" {
-			key := "rtsp:" + req.RtspURL
-			item.ExternalKey = &key
-		}
-	case "gb28181":
-		key := "gb28181:" + req.GB28181DeviceID + ":" + req.GB28181ChannelID
-		item.ExternalKey = &key
-	}
+	// 设置 ExternalKey 用于唯一约束去重
+	generateDeviceExternalKey(item)
 
 	// 密码加密
 	if req.Password != "" {
@@ -208,7 +199,6 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 		return nil, apperrors.New(apperrors.ErrDeviceNotFound, "")
 	}
 
-	// 名称唯一性校验
 	if req.DeviceName != "" && req.DeviceName != item.DeviceName {
 		exists, err := s.deviceRepo.ExistsByName(ctx, req.DeviceName, id)
 		if err != nil {
@@ -240,18 +230,7 @@ func (s *DeviceService) Update(ctx context.Context, id string, req dto.DeviceUpd
 	}
 
 	if accessChanged {
-		// 重新生成 ExternalKey
-		item.ExternalKey = nil // 先置空,再根据类型生成
-		switch item.AccessType {
-		case model.DeviceAccessTypeRTSP:
-			if item.RtspURL != "" {
-				key := "rtsp:" + item.RtspURL
-				item.ExternalKey = &key
-			}
-		case model.DeviceAccessTypeGB28181:
-			key := "gb28181:" + item.GB28181DeviceID + ":" + item.GB28181ChannelID
-			item.ExternalKey = &key
-		}
+		generateDeviceExternalKey(item)
 	}
 	if req.Username != "" {
 		item.Username = req.Username
@@ -401,7 +380,7 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string, lang stri
 	err = s.streamManager.Acquire(ctx, id, "detect", nil)
 
 	testSuccess := err == nil
-	testMessage := i18n.Translate(lang, apperrors.ConnectionTestSuccess)
+	testMessage := i18n.Translate(lang, apperrors.ErrConnectionTestOK)
 	if err != nil {
 		// 完整错误记入日志，不暴露内部细节给前端
 		zap.L().Warn("device connection test failed",
@@ -609,18 +588,7 @@ func (s *DeviceService) ImportCSV(ctx context.Context, reader io.Reader, lang st
 		}
 
 		// 设置 ExternalKey 用于唯一约束去重
-		switch item.AccessType {
-		case model.DeviceAccessTypeRTSP:
-			if item.RtspURL != "" {
-				key := "rtsp:" + item.RtspURL
-				item.ExternalKey = &key
-			}
-		case model.DeviceAccessTypeGB28181:
-			if item.GB28181DeviceID != "" {
-				key := "gb28181:" + item.GB28181DeviceID + ":" + item.GB28181ChannelID
-				item.ExternalKey = &key
-			}
-		}
+		generateDeviceExternalKey(item)
 
 		if err := s.deviceRepo.Create(ctx, item); err != nil {
 			zap.L().Error("import device failed", zap.String("name", deviceName), zap.Error(err))
@@ -827,6 +795,23 @@ func toDeviceGroupResponse(item *model.DeviceGroup, deviceCount int64) *dto.Devi
 		DeviceCount: deviceCount,
 		CreatedAt:   item.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   item.UpdatedAt.Format(time.RFC3339),
+	}
+}
+
+// generateDeviceExternalKey 根据接入类型生成设备的外部唯一键
+func generateDeviceExternalKey(item *model.Device) {
+	item.ExternalKey = nil
+	switch item.AccessType {
+	case model.DeviceAccessTypeRTSP:
+		if item.RtspURL != "" {
+			key := "rtsp:" + item.RtspURL
+			item.ExternalKey = &key
+		}
+	case model.DeviceAccessTypeGB28181:
+		if item.GB28181DeviceID != "" {
+			key := "gb28181:" + item.GB28181DeviceID + ":" + item.GB28181ChannelID
+			item.ExternalKey = &key
+		}
 	}
 }
 

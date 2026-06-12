@@ -51,6 +51,10 @@ const (
 	ErrArchiveRequired      = 10064 // 请上传压缩包
 	ErrArchiveUnsupported   = 10065 // 不支持的压缩包格式
 
+	// Face search errors (1006x).
+	ErrFaceExtractFailed    = 10066 // 人脸特征提取失败
+	ErrFaceSearchNoResult   = 10067 // 未找到相似人员
+
 	// Domain validation errors (1007x-101xx).
 	ErrPermissionCodeTaken      = 10070
 	ErrPermissionAssigned       = 10071
@@ -74,6 +78,9 @@ const (
 	ErrTimeWindowFormat         = 10109
 	ErrTaskStatusNotCancelable  = 10110
 	ErrDeviceExternalKeyTaken   = 10111
+	ErrDeviceDisabled           = 10112
+	ErrDeviceOffline            = 10113
+	ErrDeviceTypeInvalid        = 10114
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized       = 20001
@@ -130,7 +137,7 @@ const (
 	ErrConnectionTimeout  = 10081 // 连接超时
 	ErrEngineResponseBad  = 10082 // 引擎响应异常
 	ErrConnectionFailed   = 10083 // 连接失败
-	ConnectionTestSuccess = 10084 // 连接测试成功，流可达
+	ErrConnectionTestOK   = 10084 // 连接测试成功，流可达
 
 	// Server errors (5xxxx).
 	ErrInternal            = 50001

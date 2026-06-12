@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"github.com/hibiken/asynq"
@@ -256,27 +255,9 @@ func (h *PersonEmbeddingHandler) readPersonImage(imageURL string) ([]byte, error
 }
 
 func (h *PersonEmbeddingHandler) personImageStoragePath(imageURL string) string {
-	if imageURL == "" {
-		return ""
-	}
-	// 1. 如果包含 API 前缀，取文件名
-	if marker := "/api/v1/persons/image/"; strings.Contains(imageURL, marker) {
-		return "persons/" + filepath.Base(imageURL)
-	}
-	// 2. 如果包含存储基准 URL
+	baseURL := ""
 	if h.storage != nil {
-		baseURL := h.storage.GetURL("")
-		if baseURL != "" && strings.HasPrefix(imageURL, baseURL) {
-			return strings.TrimPrefix(imageURL, baseURL)
-		}
+		baseURL = h.storage.GetURL("")
 	}
-	// 3. 处理 /uploads 前缀
-	path := strings.TrimPrefix(imageURL, "/")
-	if strings.HasPrefix(path, "uploads/") {
-		return strings.TrimPrefix(path, "uploads/")
-	}
-	if parts := strings.Split(imageURL, "/uploads/"); len(parts) > 1 {
-		return parts[1]
-	}
-	return path
+	return service.ExtractPersonImageStoragePath(imageURL, baseURL)
 }

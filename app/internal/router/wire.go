@@ -77,11 +77,11 @@ var serviceSet = wire.NewSet(
 	provideDeviceDiscoveryService,
 	provideSystemHandler,
 	provideLicenseService,
-	provideAIVisionTaskService,
+	service.NewAIVisionTaskService,
 	provideSIPServiceWithZLM,
 	provideEngineClient,
 	provideAlgorithmOptions,
-	service.NewAlgorithmPackageService,
+	provideAlgorithmPackageService,
 )
 
 var handlerSet = wire.NewSet(

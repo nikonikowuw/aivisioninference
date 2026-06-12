@@ -304,6 +304,41 @@ func (h *PersonHandler) ViewImage(c *gin.Context) {
 	_, _ = io.Copy(c.Writer, rc)
 }
 
+// SearchByFace 以图搜人：上传人脸图片，提取特征后 1:N 余弦相似度搜索。
+// @Summary      以图搜人
+// @Description  上传人脸图片，实时提取特征并在人员库中搜索相似人员
+// @Tags         人员管理
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        image      formData  file    true   "人脸图片"
+// @Param        top_k      formData  int     false  "返回数量上限，默认10，最大50"
+// @Param        threshold  formData  number  false  "最低相似度阈值(0-1)，默认0.5"
+// @Success      200  {object}  dto.Response{data=[]dto.PersonSearchByFaceResponse}
+// @Router       /persons/search-by-face [post]
+// @Security     BearerAuth
+func (h *PersonHandler) SearchByFace(c *gin.Context) {
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		attachError(c, apperrors.New(apperrors.ErrPersonImageRequired, ""))
+		return
+	}
+	topK, _ := strconv.Atoi(c.PostForm("top_k"))
+	if topK <= 0 || topK > 50 {
+		topK = 5
+	}
+	threshold, _ := strconv.ParseFloat(c.PostForm("threshold"), 64)
+	if threshold <= 0 || threshold > 1 {
+		threshold = 0.7
+	}
+
+	items, err := h.svc.SearchByFace(c.Request.Context(), fileHeader, topK, threshold)
+	if err != nil {
+		attachError(c, err)
+		return
+	}
+	response.OK(c, items)
+}
+
 // ListGroups 查询分组列表。
 // @Summary      分组列表
 // @Tags         人员分组

@@ -117,6 +117,16 @@ func (m *MockTaskClient) Enqueue(ctx context.Context, taskType string, payload i
 	return args.Error(0)
 }
 
+func (m *MockTaskClient) EnqueueWithID(ctx context.Context, taskType string, payload interface{}, taskID string) error {
+	args := m.Called(ctx, taskType, payload, taskID)
+	return args.Error(0)
+}
+
+func (m *MockTaskClient) RemovePending(ctx context.Context, taskType, entityID string) error {
+	args := m.Called(ctx, taskType, entityID)
+	return args.Error(0)
+}
+
 // MockZLMClient is a mock of zlmClient interface
 type MockZLMClient struct {
 	mock.Mock

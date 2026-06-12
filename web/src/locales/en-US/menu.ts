@@ -12,6 +12,7 @@ export const menu = {
   "person-management": "Person Management",
   persons: "Persons",
   "person-groups": "Person Groups",
+  "person-face-search": "Face Search",
   "user-management": "User Management",
   "users": "Users",
   "roles": "Roles",

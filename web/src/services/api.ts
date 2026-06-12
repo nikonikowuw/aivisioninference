@@ -1242,6 +1242,12 @@ export interface PersonGroup {
   updated_at: string;
 }
 
+export interface FaceSearchResultItem {
+  person: Person;
+  similarity: number;
+  distance: number;
+}
+
 export interface PersonImportTask {
   id: string;
   task_type: string;
@@ -1313,6 +1319,8 @@ export const personsApi = {
     }),
   exportExcel: (params?: PersonListParams) =>
     downloadFile(`/persons/export${buildQuery(params || {})}`, 'persons.xlsx'),
+  searchByFace: (data: FormData) =>
+    request<FaceSearchResultItem[]>('/persons/search-by-face', { method: 'POST', body: data }),
 };
 
 export const personGroupsApi = {

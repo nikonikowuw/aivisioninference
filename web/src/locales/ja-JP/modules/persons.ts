@@ -2,6 +2,7 @@ export const persons = {
   title: "人員管理",
   table: {
     columns: {
+      faceImage: "顔写真",
       personCode: "人員コード",
       personName: "氏名",
       gender: "性別",
@@ -44,6 +45,7 @@ export const persons = {
     },
     retry: "特徴量を再抽出",
     retryConfirm: "この人員の特徴量を再抽出しますか？",
+    batchRetryResult: "一括再抽出完了：成功 {{success}}、失敗 {{failed}}",
     batchRetryConfirm: "{{count}}名の人員の特徴量を再抽出しますか？",
   },
   actions: {
@@ -125,6 +127,21 @@ export const persons = {
       dropzone: "クリックまたはドラッグで圧縮ファイルをアップロード（ZIP / TAR.GZ / TAR.BZ2）",
       maxSize: "最大100MB",
     },
+  },
+  faceSearch: {
+    title: "顔検索",
+    description: "顔写真をアップロードして、人物ライブラリから類似した人物を検索します",
+    uploadTitle: "顔写真をアップロード",
+    uploadPlaceholder: "クリックまたはドラッグで顔写真をアップロード",
+    searchButton: "検索",
+    searchHint: "画像をアップロードして検索、jpg/jpeg/png/webp対応",
+    resultsTitle: "検索結果",
+    resultsPlaceholder: "検索後、類似した人物がここに表示されます",
+    noResults: "類似する人物は見つかりませんでした",
+    searching: "検索中...",
+    replaceImage: "クリックして画像を変更",
+    resultsCount: "{{count}}件の類似人物が見つかりました",
+    similarity: "類似度",
   },
   message: {
     deleteConfirm: "この人員を削除しますか？",

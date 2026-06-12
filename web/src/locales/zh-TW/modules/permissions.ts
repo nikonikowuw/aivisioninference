@@ -218,11 +218,11 @@ export const permissions = {
       export: "匯出人員",
       "batch-delete": "批次刪除人員",
       "batch-toggle": "批次啟禁用人員",
-      "batch-retry-embedding": "批次重提特徵",
+      "batch-retry-embedding": "批次重新提取特徵",
       edit: "編輯人員",
       delete: "刪除人員",
       view: "檢視人員",
-      "retry-embedding": "重提特徵",
+      "retry-embedding": "重新提取特徵",
     },
     "person-group": {
       list: "分組列表",

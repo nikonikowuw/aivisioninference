@@ -259,13 +259,9 @@ func provideLicenseService(licenseRepo *repository.LicenseRepository, db *gorm.D
 	return service.NewLicenseService(licenseRepo, db)
 }
 
-func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
-	svc := service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, sipSvc, streamManager)
+func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, deviceRepo *repository.DeviceRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
+	svc := service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
 	return handler.NewAIVisionTaskHandler(svc)
-}
-
-func provideAIVisionTaskService(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *service.AIVisionTaskService {
-	return service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, sipSvc, streamManager)
 }
 
 func provideAITimeScheduleHandler(repo *repository.AITimeScheduleRepository) *handler.AITimeScheduleHandler {
@@ -345,6 +341,16 @@ func provideEngineClient(cfg *Config) service.EngineClient {
 	return service.NewIPCEngineClient(cfg.EngineAddr, timeout, zap.L())
 }
 
+func provideAlgorithmPackageService(
+	algorithmpackageRepo *repository.AlgorithmPackageRepository,
+	opts service.AlgorithmOptions,
+	rdb *redis.Client,
+	engine service.EngineClient,
+	taskClient *task.Client,
+) *service.AlgorithmPackageService {
+	return service.NewAlgorithmPackageService(algorithmpackageRepo, opts, rdb, engine, taskClient)
+}
+
 func provideAlgorithmOptions(cfg *Config) service.AlgorithmOptions {
 	return service.AlgorithmOptions{
 		MaxAlgoFileSizeBytes: int64(cfg.MaxAlgoFileSizeMB) << 20,
@@ -361,8 +367,11 @@ func providePersonHandler(
 	importTaskRepo *repository.ImportTaskRepository,
 	fileStorage storage.Storage,
 	taskClient *task.Client,
+	embeddingRepo *repository.PersonEmbeddingRepository,
+	algorithmPackageRepo *repository.AlgorithmPackageRepository,
+	engine service.EngineClient,
 ) *handler.PersonHandler {
-	personSvc := service.NewPersonService(personRepo, groupRepo, tagRepo, tagRelationRepo, importTaskRepo, fileStorage, taskClient)
+	personSvc := service.NewPersonService(personRepo, groupRepo, tagRepo, tagRelationRepo, importTaskRepo, fileStorage, taskClient, embeddingRepo, algorithmPackageRepo, engine)
 	return handler.NewPersonHandler(personSvc)
 }
 

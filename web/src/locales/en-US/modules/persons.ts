@@ -2,6 +2,7 @@ export const persons = {
   title: "Person Management",
   table: {
     columns: {
+      faceImage: "Face",
       personCode: "Person Code",
       personName: "Name",
       gender: "Gender",
@@ -44,6 +45,7 @@ export const persons = {
     },
     retry: "Retry Embedding",
     retryConfirm: "Are you sure to retry embedding extraction?",
+    batchRetryResult: "Batch retry done: {{success}} succeeded, {{failed}} failed",
     batchRetryConfirm: "Are you sure to batch retry embedding for {{count}} persons?",
   },
   actions: {
@@ -125,6 +127,21 @@ export const persons = {
       dropzone: "Click or drag archive to upload (ZIP / TAR.GZ / TAR.BZ2)",
       maxSize: "Max 100MB",
     },
+  },
+  faceSearch: {
+    title: "Face Search",
+    description: "Upload a face image to search for similar persons in the library",
+    uploadTitle: "Upload Face Image",
+    uploadPlaceholder: "Click or drag to upload face image",
+    searchButton: "Search",
+    searchHint: "Upload an image to search, supports jpg/jpeg/png/webp",
+    resultsTitle: "Search Results",
+    resultsPlaceholder: "Similar persons will be displayed here after searching",
+    noResults: "No similar persons found",
+    searching: "Searching...",
+    replaceImage: "Click to replace image",
+    resultsCount: "Found {{count}} similar persons",
+    similarity: "Similarity",
   },
   message: {
     deleteConfirm: "Are you sure to delete this person?",

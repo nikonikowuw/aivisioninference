@@ -187,6 +187,16 @@ func (m *mockTaskClient) Enqueue(ctx context.Context, taskType string, payload i
 	return nil
 }
 
+func (m *mockTaskClient) EnqueueWithID(ctx context.Context, taskType string, payload interface{}, taskID string) error {
+	m.enqueueCalled = true
+	m.lastTaskType = taskType
+	return nil
+}
+
+func (m *mockTaskClient) RemovePending(ctx context.Context, taskType, entityID string) error {
+	return nil
+}
+
 // TestHandleAlarm_Enqueue 验证告警被推入队列
 func TestHandleAlarm_Enqueue(t *testing.T) {
 	mockClient := &mockTaskClient{}

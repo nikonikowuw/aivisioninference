@@ -204,7 +204,7 @@ func (h *PersonImportHandler) handleImport(ctx context.Context, t *asynq.Task) e
 		}
 
 		// 投递特征提取任务
-		if err := h.taskClient.Enqueue(ctx, TypePersonEmbedding, map[string]string{"person_id": person.ID}); err != nil {
+		if err := h.taskClient.EnqueueWithID(ctx, TypePersonEmbedding, map[string]string{"person_id": person.ID}, TypePersonEmbedding+":"+person.ID); err != nil {
 			zap.L().Warn("enqueue embedding task from archive import failed", zap.String("person_id", person.ID), zap.Error(err))
 		}
 		successRows++
@@ -316,14 +316,11 @@ func parseTar(r io.Reader) ([]archiveEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read tar entry %s: %w", hdr.Name, err)
 		}
-		// 拷贝内容避免引用问题
-		copied := make([]byte, len(content))
-		copy(copied, content)
 		name := hdr.Name
 		entries = append(entries, archiveEntry{
 			Name: name,
 			Open: func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(copied)), nil
+				return io.NopCloser(bytes.NewReader(content)), nil
 			},
 		})
 	}

@@ -114,7 +114,7 @@ export const common = {
       "10060": "Please upload a face image",
       "10061": "Image already exists",
       "10062": "Person code already exists",
-      "10063": "Current status does not require retry",
+      "10063": "Extraction in progress, please try again later",
       "10064": "Please upload an archive",
       "10065": "Unsupported archive format (ZIP, TAR.GZ, TAR.BZ2 supported)",
       "10070": "Permission code is already taken",

@@ -220,7 +220,7 @@ func NewPersonEmbeddingRepository(db *gorm.DB) *PersonEmbeddingRepository {
 }
 
 func (r *PersonEmbeddingRepository) DeleteByPersonRecordID(ctx context.Context, personID string) error {
-	return r.db.WithContext(ctx).Where("person_record_id = ?", personID).Delete(&model.PersonEmbedding{}).Error
+	return r.db.WithContext(ctx).Where("person_record_id = ?", personID).Unscoped().Delete(&model.PersonEmbedding{}).Error
 }
 func (r *PersonEmbeddingRepository) Create(ctx context.Context, item *model.PersonEmbedding) error {
 	return r.db.WithContext(ctx).Create(item).Error
@@ -248,6 +248,80 @@ func (r *PersonEmbeddingRepository) ListActiveFaceLibrary(ctx context.Context, l
 		Limit(limit).
 		Scan(&items).Error
 	return items, err
+}
+
+// PersonSearchByFaceRecord 以图搜人查询结果行。
+type PersonSearchByFaceRecord struct {
+	model.Person
+	Distance float64 `gorm:"column:distance"`
+}
+
+// SearchByFace 执行 pgvector 余弦距离搜索，按相似度降序返回 active/enabled 人员。
+// queryVector 为查询图提取的 512 维特征，topK 上限 50，threshold 为最低余弦相似度(0-1)。
+func (r *PersonEmbeddingRepository) SearchByFace(ctx context.Context, queryVector pgvector.Vector, topK int, threshold float64) ([]PersonSearchByFaceRecord, error) {
+	if topK <= 0 || topK > 50 {
+		topK = 5
+	}
+	if threshold < 0 || threshold > 1 {
+		threshold = 0.5
+	}
+	// threshold 为缩放后相似度 [0,1]
+	// distance = 1 - raw_cos, scaled_cos = (raw_cos + 1)/2 = (1 - distance + 1)/2 = (2 - distance)/2
+	// maxDistance = 2 - 2*threshold
+	maxDistance := 2.0 - 2.0*threshold
+
+	// 第一步：查询匹配的人员 ID 和余弦距离，不通过 HAVING 引用 SELECT alias
+	type idDistance struct {
+		PersonID string  `gorm:"column:person_id"`
+		Distance float64 `gorm:"column:distance"`
+	}
+	var ids []idDistance
+	err := r.db.WithContext(ctx).
+		Table("person_embeddings pe").
+		Select("pe.person_record_id AS person_id, pe.embedding <=> ? AS distance", queryVector).
+		Joins("JOIN persons p ON p.id = pe.person_record_id").
+		Where("p.enabled = ? AND p.embedding_status = ? AND p.deleted_at IS NULL", true, model.EmbeddingStatusActive).
+		Where("(pe.embedding <=> ?) <= ?", queryVector, maxDistance).
+		Order("distance ASC").
+		Limit(topK).
+		Scan(&ids).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	// 第二步：提取 person IDs 并查询完整记录（含 Groups 预加载）
+	personIDs := make([]string, len(ids))
+	for i, v := range ids {
+		personIDs[i] = v.PersonID
+	}
+	var persons []model.Person
+	if err := r.db.WithContext(ctx).
+		Preload("Groups").
+		Where("id IN ?", personIDs).
+		Find(&persons).Error; err != nil {
+		return nil, err
+	}
+
+	// 第三步：按 distance 顺序组装结果
+	personMap := make(map[string]*model.Person, len(persons))
+	for i := range persons {
+		personMap[persons[i].ID] = &persons[i]
+	}
+	results := make([]PersonSearchByFaceRecord, 0, len(ids))
+	for _, v := range ids {
+		p, ok := personMap[v.PersonID]
+		if !ok {
+			continue
+		}
+		results = append(results, PersonSearchByFaceRecord{
+			Person:   *p,
+			Distance: v.Distance,
+		})
+	}
+	return results, nil
 }
 
 func (r *PersonRepository) ListEnabledForEmbedding(ctx context.Context, limit int) ([]model.Person, error) {

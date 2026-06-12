@@ -12,6 +12,7 @@ export const menu = {
   "person-management": "Manajemen Orang",
   persons: "Orang",
   "person-groups": "Grup Orang",
+  "person-face-search": "Pencarian Wajah",
   "user-management": "Manajemen Pengguna",
   "users": "Pengguna",
   "roles": "Peran",

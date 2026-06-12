@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pgvector/pgvector-go"
 	"github.com/xuri/excelize/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -20,6 +21,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/pkg/storage"
 )
 
@@ -102,18 +104,21 @@ var imageExtSet = map[string]bool{
 
 // PersonService 处理人员管理的业务逻辑。
 type PersonService struct {
-	personRepo      personRepo
-	groupRepo       personGroupRepo
-	tagRepo         personTagRepo
-	tagRelationRepo personTagRelationRepo
-	importTaskRepo  importTaskRepo
-	storage         storage.Storage
-	taskClient      taskClient
+	personRepo          personRepo
+	groupRepo           personGroupRepo
+	tagRepo             personTagRepo
+	tagRelationRepo     personTagRelationRepo
+	importTaskRepo      importTaskRepo
+	storage             storage.Storage
+	taskClient          taskClient
+	embeddingRepo       *repository.PersonEmbeddingRepository
+	algorithmPackageRepo *repository.AlgorithmPackageRepository
+	engine              EngineClient
 }
 
 // NewPersonService 创建人员 Service。
-func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, tagRepo personTagRepo, tagRelationRepo personTagRelationRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient) *PersonService {
-	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, tagRepo: tagRepo, tagRelationRepo: tagRelationRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient}
+func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, tagRepo personTagRepo, tagRelationRepo personTagRelationRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, engine EngineClient) *PersonService {
+	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, tagRepo: tagRepo, tagRelationRepo: tagRelationRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient, embeddingRepo: embeddingRepo, algorithmPackageRepo: algorithmPackageRepo, engine: engine}
 }
 
 // List 查询人员列表。
@@ -140,8 +145,9 @@ func (s *PersonService) GetByID(ctx context.Context, id string) (*dto.PersonResp
 	return &resp, nil
 }
 
-// getStoragePath 从图片 URL 提取存储相对路径
-func (s *PersonService) getStoragePath(imageURL string) string {
+// ExtractPersonImageStoragePath 从图片 URL 提取人员存储相对路径。
+// 此函数供 service 和 task 共享使用。
+func ExtractPersonImageStoragePath(imageURL string, storageBaseURL string) string {
 	if imageURL == "" {
 		return ""
 	}
@@ -150,19 +156,27 @@ func (s *PersonService) getStoragePath(imageURL string) string {
 		return "persons/" + filepath.Base(imageURL)
 	}
 	// 2. 如果包含存储基准 URL
-	fullBaseURL := s.storage.GetURL("")
-	if fullBaseURL != "" && strings.HasPrefix(imageURL, fullBaseURL) {
-		return strings.TrimPrefix(imageURL, fullBaseURL)
+	if storageBaseURL != "" && strings.HasPrefix(imageURL, storageBaseURL) {
+		return strings.TrimPrefix(imageURL, storageBaseURL)
 	}
-	// 3. 处理 /uploads 前缀
+	// 3. 处理 /uploads 前缀：确保返回相对于 uploadDir 的路径
 	path := strings.TrimPrefix(imageURL, "/")
-	if strings.HasPrefix(path, "uploads/") {
-		return strings.TrimPrefix(path, "uploads/")
+	for strings.HasPrefix(path, "uploads/") {
+		path = strings.TrimPrefix(path, "uploads/")
 	}
-	if parts := strings.Split(imageURL, "/uploads/"); len(parts) > 1 {
-		return parts[1]
+	if parts := strings.Split(path, "/uploads/"); len(parts) > 1 {
+		return parts[len(parts)-1]
 	}
 	return path
+}
+
+// getStoragePath 从图片 URL 提取存储相对路径
+func (s *PersonService) getStoragePath(imageURL string) string {
+	baseURL := ""
+	if s.storage != nil {
+		baseURL = s.storage.GetURL("")
+	}
+	return ExtractPersonImageStoragePath(imageURL, baseURL)
 }
 
 // processImage 处理上传的图片或已有的 URL，返回 URL 和 MD5
@@ -210,10 +224,6 @@ func (s *PersonService) processImage(ctx context.Context, imageURL string, fileH
 		}
 		md5Hash = fmt.Sprintf("%x", hash.Sum(nil))
 
-		if exists, _ := s.personRepo.ExistsByImageMD5(ctx, md5Hash, excludeID); exists {
-			return "", "", apperrors.New(apperrors.ErrPersonImageDuplicate, "")
-		}
-
 		fileName := "persons/" + uuid.New().String() + ext
 		if _, err := s.storage.Save(bytes.NewReader(data), fileName); err != nil {
 			zap.L().Error("save person image failed", zap.Error(err))
@@ -240,7 +250,6 @@ func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest,
 		return nil, err
 	}
 
-	// 检查人员编号唯一
 	if req.PersonCode != "" {
 		if exists, _ := s.personRepo.ExistsByPersonCode(ctx, req.PersonCode, ""); exists {
 			return nil, apperrors.New(apperrors.ErrPersonCodeDuplicate, "")
@@ -280,13 +289,11 @@ func (s *PersonService) Create(ctx context.Context, req dto.PersonCreateRequest,
 		_ = s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs)
 	}
 
-	// 处理标签关联
 	if len(req.TagIDs) > 0 && s.tagRelationRepo != nil {
 		_ = s.tagRelationRepo.BatchCreate(ctx, person.ID, req.TagIDs)
 	}
 
-	// 投递特征提取任务
-	_ = s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID})
+	_ = s.taskClient.EnqueueWithID(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID}, personEmbeddingTaskType+":"+person.ID)
 
 	person, _ = s.personRepo.FindByID(ctx, person.ID)
 	resp := toPersonResponse(person)
@@ -332,8 +339,7 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 		person.EmbeddingErrorMessageKey = ""
 		person.EmbeddingRetryable = false
 		
-		// 投递特征提取任务
-		_ = s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID})
+		_ = s.taskClient.EnqueueWithID(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID}, personEmbeddingTaskType+":"+person.ID)
 	}
 
 	if err := s.personRepo.Update(ctx, person); err != nil {
@@ -345,7 +351,6 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 		_ = s.personRepo.ReplaceGroups(ctx, person.ID, req.GroupIDs)
 	}
 
-	// 处理标签关联
 	if req.TagIDs != nil && s.tagRelationRepo != nil {
 		_ = s.tagRelationRepo.DeleteByPersonRecordID(ctx, person.ID)
 		if len(req.TagIDs) > 0 {
@@ -363,11 +368,16 @@ func (s *PersonService) Delete(ctx context.Context, id string) error {
 	if _, err := s.personRepo.FindByID(ctx, id); err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "")
 	}
+	// 先清理 Redis 中该 person 的 pending embedding 任务
+	_ = s.taskClient.RemovePending(ctx, personEmbeddingTaskType, id)
 	return s.personRepo.SoftDelete(ctx, id)
 }
 
 // BatchDelete 批量删除人员。
 func (s *PersonService) BatchDelete(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		_ = s.taskClient.RemovePending(ctx, personEmbeddingTaskType, id)
+	}
 	return s.personRepo.BatchSoftDelete(ctx, ids)
 }
 
@@ -382,13 +392,14 @@ func (s *PersonService) RetryEmbedding(ctx context.Context, id string) error {
 	if err != nil {
 		return apperrors.New(apperrors.ErrNotFound, "")
 	}
-	if person.EmbeddingStatus == model.EmbeddingStatusActive || person.EmbeddingStatus == model.EmbeddingStatusExtracting {
+	// 仅阻止正在提取中的任务，允许 active 状态重新提取（算法升级场景）
+	if person.EmbeddingStatus == model.EmbeddingStatusExtracting {
 		return apperrors.New(apperrors.ErrPersonStatusNoRetry, "")
 	}
 	if err := s.personRepo.UpdateEmbeddingStatus(ctx, id, model.EmbeddingStatusPending, "", "", false); err != nil {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
-	return s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": id})
+	return s.taskClient.EnqueueWithID(ctx, personEmbeddingTaskType, map[string]string{"person_id": id}, personEmbeddingTaskType+":"+id)
 }
 
 // BatchRetryResult 批量重提特征结果。
@@ -410,7 +421,8 @@ func (s *PersonService) BatchRetryEmbedding(ctx context.Context, ids []string) (
 	result := BatchRetryResult{Errors: make(map[string]string)}
 	var pendingIDs []string
 	for _, p := range persons {
-		if p.EmbeddingStatus == model.EmbeddingStatusActive || p.EmbeddingStatus == model.EmbeddingStatusExtracting {
+		// 仅阻止正在提取中的任务，允许 active 状态重新提取（算法升级场景）
+		if p.EmbeddingStatus == model.EmbeddingStatusExtracting {
 			result.Failed++
 			result.Errors[p.ID] = apperrors.New(apperrors.ErrPersonStatusNoRetry, "").Error()
 			continue
@@ -427,7 +439,7 @@ func (s *PersonService) BatchRetryEmbedding(ctx context.Context, ids []string) (
 				continue
 			}
 			// 逐条投递任务（Asynq Enqueue 本身开销很小）
-			if err := s.taskClient.Enqueue(ctx, personEmbeddingTaskType, map[string]string{"person_id": id}); err != nil {
+			if err := s.taskClient.EnqueueWithID(ctx, personEmbeddingTaskType, map[string]string{"person_id": id}, personEmbeddingTaskType+":"+id); err != nil {
 				result.Failed++
 				result.Errors[id] = err.Error()
 				continue
@@ -734,6 +746,100 @@ func (s *PersonService) CreateImportTaskByURL(ctx context.Context, fileURL strin
 	}
 	payload := map[string]interface{}{"task_id": task.ID, "file_url": fileURL, "overwrite": overwrite}
 	return s.enqueueAndRespond(ctx, task, payload)
+}
+
+// SearchByFace 以图搜人：上传人脸图片实时提取 embedding 并在人员库中 1:N 搜索。
+func (s *PersonService) SearchByFace(ctx context.Context, fileHeader *multipart.FileHeader, topK int, threshold float64) ([]dto.PersonSearchByFaceResponse, error) {
+	if fileHeader == nil {
+		return nil, apperrors.New(apperrors.ErrPersonImageRequired, "")
+	}
+	if fileHeader.Size > personImageMaxSize {
+		return nil, apperrors.New(apperrors.ErrFileTooLarge, "")
+	}
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if !imageExtSet[ext] {
+		return nil, apperrors.New(apperrors.ErrFileInvalidType, "")
+	}
+
+	// 读取图片 bytes
+	file, err := fileHeader.Open()
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrBadRequest, "")
+	}
+	defer file.Close()
+
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	if len(imageBytes) == 0 {
+		return nil, apperrors.New(apperrors.ErrPersonImageRequired, "")
+	}
+
+	// 解析最新 face_recognition 算法包运行时
+	if s.algorithmPackageRepo == nil || s.engine == nil {
+		zap.L().Error("face recognition engine or algorithm package repo not configured")
+		return nil, apperrors.New(apperrors.ErrEngineNotReady, "")
+	}
+	algoVersion, soPath, algoParamsJSON, err := s.resolveFaceRecognitionRuntime(ctx)
+	if err != nil {
+		zap.L().Error("resolve face recognition runtime failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrFaceExtractFailed, "")
+	}
+
+	// 调用引擎提取特征
+	result, err := s.engine.ExtractFaceEmbedding(ctx, "face_recognition", algoVersion, soPath, algoParamsJSON, imageBytes)
+	if err != nil {
+		zap.L().Error("extract face embedding failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrFaceExtractFailed, "")
+	}
+	if len(result.Embedding) != 512 {
+		zap.L().Error("unexpected embedding dimension", zap.Int("dim", len(result.Embedding)))
+		return nil, apperrors.New(apperrors.ErrFaceExtractFailed, "")
+	}
+
+	// 转为 pgvector 执行相似搜索
+	queryVector := pgvector.NewVector(result.Embedding)
+	records, err := s.embeddingRepo.SearchByFace(ctx, queryVector, topK, threshold)
+	if err != nil {
+		zap.L().Error("face search by embedding failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrInternal, "")
+	}
+	if len(records) == 0 {
+		return []dto.PersonSearchByFaceResponse{}, nil
+	}
+
+	// 拼装响应
+	resp := make([]dto.PersonSearchByFaceResponse, len(records))
+	for i, rec := range records {
+		// 余弦相似度缩放到 [0, 1] 范围: (cos + 1) / 2
+		similarity := (2.0 - rec.Distance) / 2.0
+		if similarity < 0 {
+			similarity = 0
+		}
+		if similarity > 1 {
+			similarity = 1
+		}
+		resp[i] = dto.PersonSearchByFaceResponse{
+			Person:     toPersonResponse(&rec.Person),
+			Similarity: similarity,
+			Distance:   rec.Distance,
+		}
+	}
+	return resp, nil
+}
+
+// resolveFaceRecognitionRuntime 查找最新通过的 face_recognition 算法包，返回 version、soPath、algoParamsJSON。
+func (s *PersonService) resolveFaceRecognitionRuntime(ctx context.Context) (string, string, string, error) {
+	algoPackage, err := s.algorithmPackageRepo.FindLatestPassedByAlgorithm(ctx, "face_recognition")
+	if err != nil {
+		return "", "", "", fmt.Errorf("find face_recognition algorithm package: %w", err)
+	}
+	soPath, err := ResolveRuntimeSoPath(algoPackage)
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolve face_recognition runtime so: %w", err)
+	}
+	return algoPackage.Version, soPath, "", nil
 }
 
 // Helper functions

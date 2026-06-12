@@ -2,6 +2,7 @@ export const persons = {
   title: "인물 관리",
   table: {
     columns: {
+      faceImage: "얼굴",
       personCode: "인물 코드",
       personName: "이름",
       gender: "성별",
@@ -44,6 +45,7 @@ export const persons = {
     },
     retry: "임베딩 재시도",
     retryConfirm: "이 인물의 임베딩 추출을 재시도하시겠습니까?",
+    batchRetryResult: "일괄 재추출 완료: 성공 {{success}}, 실패 {{failed}}",
     batchRetryConfirm: "{{count}}명의 임베딩을 일괄 재시도하시겠습니까?",
   },
   actions: {
@@ -125,6 +127,21 @@ export const persons = {
       dropzone: "클릭 또는 드래그하여 아카이브 업로드 (ZIP / TAR.GZ / TAR.BZ2)",
       maxSize: "최대 100MB",
     },
+  },
+  faceSearch: {
+    title: "얼굴 검색",
+    description: "얼굴 사진을 업로드하여 인물 라이브러리에서 유사한 인물을 검색합니다",
+    uploadTitle: "얼굴 이미지 업로드",
+    uploadPlaceholder: "클릭 또는 드래그하여 얼굴 이미지 업로드",
+    searchButton: "검색",
+    searchHint: "이미지를 업로드하여 검색, jpg/jpeg/png/webp 지원",
+    resultsTitle: "검색 결과",
+    resultsPlaceholder: "검색 후 유사한 인물이 여기에 표시됩니다",
+    noResults: "유사한 인물을 찾을 수 없습니다",
+    searching: "검색 중...",
+    replaceImage: "클릭하여 이미지 변경",
+    resultsCount: "유사한 인물 {{count}}명을 찾았습니다",
+    similarity: "유사도",
   },
   message: {
     deleteConfirm: "이 인물을 삭제하시겠습니까?",

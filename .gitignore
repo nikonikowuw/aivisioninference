@@ -17,6 +17,7 @@ app/tmp/
 app/.env
 app/server
 app/docs/
+app/uploads/
 *.exe
 *.exe~
 *.dll

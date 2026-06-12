@@ -90,7 +90,7 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
     if (!isOpen) return;
     setConflictError(null);
 
-    devicesApi.list({ page: 1, page_size: 1000 }).then(res => {
+    devicesApi.list({ page: 1, page_size: 1000, status: 'online' }).then(res => {
       setDevices(res.list);
     }).catch(() => {});
 

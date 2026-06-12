@@ -49,6 +49,7 @@ export const aiTasks = {
     empty: '暂无推理任务',
     nameRequired: '请输入任务名称',
     deviceRequired: '请选择设备',
+    deviceOffline: '所选设备离线',
     algorithmRequired: '请选择算法',
     nodeRequired: '请选择算力节点',
     scheduleRequired: '请选择时间配置',

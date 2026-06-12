@@ -12,6 +12,7 @@ export const menu = {
   "person-management": "人物管理",
   persons: "人物",
   "person-groups": "人物グループ",
+  "person-face-search": "顔検索",
   "user-management": "ユーザー管理",
   "users": "ユーザー",
   "roles": "ロール",

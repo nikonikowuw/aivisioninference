@@ -49,6 +49,7 @@ export const aiTasks = {
     empty: 'No inference tasks yet',
     nameRequired: 'Please enter task name',
     deviceRequired: 'Please select a device',
+    deviceOffline: 'Selected device is offline',
     algorithmRequired: 'Please select an algorithm',
     nodeRequired: 'Please select a compute node',
     scheduleRequired: 'Please select a time schedule',

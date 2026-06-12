@@ -37,6 +37,7 @@ import {
   MdVisibility,
   MdSchedule,
   MdExtension,
+  MdSearch,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -71,6 +72,7 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdVisibility,
   MdSchedule,
   MdExtension,
+  MdSearch,
 };
 
 // 菜单 code 到组件的映射
@@ -96,6 +98,7 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'license': () => import('../views/admin/license'),
   'persons': () => import('../views/admin/persons'),
   'person-groups': () => import('../views/admin/persons/groups'),
+  'person-face-search': () => import('../views/admin/persons/face-search'),
   'gb28181-devices': () => import('../views/admin/gb28181/DeviceList'),
   'gb28181-channels': () => import('../views/admin/gb28181/ChannelList'),
   'aivisiontasks': () => import('../views/admin/ai-tasks'),

@@ -162,6 +162,7 @@ func (r *Router) setupRoutes() {
 	r.registerDeviceRoutes(authorized, deps, rbacCache)
 	r.registerMediaRoutes(authorized, v1, deps, rbacCache)
 	r.registerPersonRoutes(authorized, deps, rbacCache)
+	r.registerSmartRecordRoutes(authorized, deps, rbacCache)
 
 	r.engine.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api") {
@@ -462,6 +463,7 @@ func (r *Router) registerPersonRoutes(authorized *gin.RouterGroup, deps *RouteDe
 		persons.GET("", middleware.RBAC(rbacCache, r.db), personHandler.List)
 		persons.POST("", middleware.RBAC(rbacCache, r.db), personHandler.Create)
 		persons.GET("/export", middleware.RBAC(rbacCache, r.db), personHandler.ExportExcel)
+		persons.POST("/search-by-face", middleware.RBAC(rbacCache, r.db), personHandler.SearchByFace)
 		persons.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), personHandler.BatchDelete)
 		persons.POST("/batch-toggle", middleware.RBAC(rbacCache, r.db), personHandler.BatchToggle)
 		persons.POST("/batch-retry-embedding", middleware.RBAC(rbacCache, r.db), personHandler.BatchRetryEmbedding)
@@ -493,6 +495,20 @@ func (r *Router) registerPersonRoutes(authorized *gin.RouterGroup, deps *RouteDe
 		personImports.POST("", middleware.RBAC(rbacCache, r.db), personHandler.Import)
 		personImports.POST("/by-url", middleware.RBAC(rbacCache, r.db), personHandler.ImportByURL)
 		personImports.GET("/:id", middleware.RBAC(rbacCache, r.db), personHandler.GetImportTask)
+	}
+}
+
+func (r *Router) registerSmartRecordRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+	smartRecordHandler := deps.SmartRecordHandler
+
+	smartRecords := authorized.Group("/smart-records")
+	{
+		smartRecords.GET("/category-codes", middleware.RBAC(rbacCache, r.db), smartRecordHandler.ListCategoryCodes)
+		smartRecords.GET("", middleware.RBAC(rbacCache, r.db), smartRecordHandler.List)
+		smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), smartRecordHandler.ExportCSV)
+		smartRecords.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), smartRecordHandler.BatchDelete)
+		smartRecords.PUT("/:id/alarm-status", middleware.RBAC(rbacCache, r.db), smartRecordHandler.UpdateAlarmStatus)
+		smartRecords.POST("/export-selected", middleware.RBAC(rbacCache, r.db), smartRecordHandler.ExportSelectedCSV)
 	}
 }
 
@@ -530,7 +546,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)
 	deviceRepoV2 := repository.NewDeviceRepositoryV2(db)
 	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil)
-	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, sipSvc, streamManager)
+	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 

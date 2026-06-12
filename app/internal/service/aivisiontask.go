@@ -25,6 +25,7 @@ type AIVisionTaskService struct {
 	aivisiontaskRepo     *repository.AIVisionTaskRepository
 	aiTimeScheduleRepo   *repository.AITimeScheduleRepository
 	algorithmPackageRepo *repository.AlgorithmPackageRepository
+	deviceRepo           *repository.DeviceRepository
 	sipSvc               *SIPService
 	streamManager        *StreamManager
 }
@@ -34,6 +35,7 @@ func NewAIVisionTaskService(
 	aivisiontaskRepo *repository.AIVisionTaskRepository,
 	aiTimeScheduleRepo *repository.AITimeScheduleRepository,
 	algorithmPackageRepo *repository.AlgorithmPackageRepository,
+	deviceRepo *repository.DeviceRepository,
 	sipSvc *SIPService,
 	streamManager *StreamManager,
 ) *AIVisionTaskService {
@@ -41,6 +43,7 @@ func NewAIVisionTaskService(
 		aivisiontaskRepo:     aivisiontaskRepo,
 		aiTimeScheduleRepo:   aiTimeScheduleRepo,
 		algorithmPackageRepo: algorithmPackageRepo,
+		deviceRepo:           deviceRepo,
 		sipSvc:               sipSvc,
 		streamManager:        streamManager,
 	}
@@ -48,6 +51,28 @@ func NewAIVisionTaskService(
 		streamManager.Subscribe(svc.HandleDeviceEvent)
 	}
 	return svc
+}
+
+// validateDeviceForInference 校验设备是否可用于推理任务
+func (s *AIVisionTaskService) validateDeviceForInference(ctx context.Context, deviceID string) error {
+	device, err := s.deviceRepo.FindByID(ctx, deviceID)
+	if err != nil {
+		return apperrors.New(apperrors.ErrDeviceNotFound, "")
+	}
+	if !device.Enabled {
+		return apperrors.New(apperrors.ErrDeviceDisabled, "")
+	}
+	if device.Status != model.DeviceStatusOnline {
+		return apperrors.New(apperrors.ErrDeviceOffline, "")
+	}
+	// 校验 access_type 是否支持推理
+	switch device.AccessType {
+	case model.DeviceAccessTypeRTSP, model.DeviceAccessTypeGB28181, model.DeviceAccessTypeNVRChannel:
+		// 支持的接入类型
+	default:
+		return apperrors.New(apperrors.ErrDeviceTypeInvalid, "")
+	}
+	return nil
 }
 
 // resolveSchedule 根据 schedule_id 加载时间配置并返回解析后的日期和时间窗
@@ -171,6 +196,11 @@ func (s *AIVisionTaskService) Create(ctx context.Context, req dto.CreateAIVision
 		return nil, err
 	}
 
+	// 校验设备通道状态
+	if err := s.validateDeviceForInference(ctx, req.DeviceChannelID); err != nil {
+		return nil, err
+	}
+
 	item := &model.AIVisionTask{
 		Name:            req.Name,
 		Status:          model.TaskStatusReady,
@@ -210,6 +240,10 @@ func (s *AIVisionTaskService) Update(ctx context.Context, id string, req dto.Upd
 		item.Status = req.Status
 	}
 	if req.DeviceChannelID != "" {
+		// 校验新设备通道状态
+		if err := s.validateDeviceForInference(ctx, req.DeviceChannelID); err != nil {
+			return err
+		}
 		item.DeviceChannelID = req.DeviceChannelID
 	}
 	if req.AlgoPackageID != "" {
@@ -315,6 +349,13 @@ func (s *AIVisionTaskService) PatrolTasks(ctx context.Context) error {
 
 // StartTask 拉起推理流并更新状态
 func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisionTask) error {
+	// 启动前再次校验设备状态，防止创建时在线但启动时已离线
+	if err := s.validateDeviceForInference(ctx, task.DeviceChannelID); err != nil {
+		task.Status = model.TaskStatusError
+		task.ErrorReason = "errors.deviceNotAvailable"
+		return s.aivisiontaskRepo.Update(ctx, task)
+	}
+
 	metadata := map[string]string{
 		"task_id":         task.ID,
 		"algo_package_id": task.AlgoPackageID,

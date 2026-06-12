@@ -331,7 +331,7 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 			ChildCodes []string
 		}{
 			{Code: "user-management", Name: "用户管理", Icon: "MdPeople", ChildCodes: []string{"users", "roles", "permissions"}},
-			{Code: "person-management", Name: "人员管理", Icon: "MdFace", ChildCodes: []string{"persons", "person-groups"}},
+			{Code: "person-management", Name: "人员管理", Icon: "MdFace", ChildCodes: []string{"persons", "person-groups", "person-face-search"}},
 			{Code: "algorithm-management", Name: "算法管理", Icon: "MdVpnKey", ChildCodes: []string{"license", "algorithm-packages"}},
 			{Code: "system-management", Name: "系统管理", Icon: "MdSettings", ChildCodes: []string{"files", "audit-logs", "tasks"}},
 		}
@@ -655,6 +655,9 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "person:group:create", Name: "创建分组", Path: "/api/v1/person-groups", Method: "POST"},
 					{Code: "person:group:edit", Name: "编辑分组", Path: "/api/v1/person-groups/*", Method: "PUT"},
 					{Code: "person:group:delete", Name: "删除分组", Path: "/api/v1/person-groups/*", Method: "DELETE"},
+				}},
+				{Name: "以图搜人", Code: "person-face-search", Path: "/persons/face-search", Icon: "MdSearch", Buttons: []buttonInfo{
+					{Code: "person:face-search", Name: "以图搜人", Path: "/api/v1/persons/search-by-face", Method: "POST"},
 				}},
 			},
 		},

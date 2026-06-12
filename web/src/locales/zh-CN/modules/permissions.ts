@@ -217,11 +217,11 @@ export const permissions = {
       export: "导出人员",
       "batch-delete": "批量删除人员",
       "batch-toggle": "批量启禁用人员",
-      "batch-retry-embedding": "批量重提特征",
+      "batch-retry-embedding": "批量重新提取特征",
       edit: "编辑人员",
       delete: "删除人员",
       view: "查看人员",
-      "retry-embedding": "重提特征",
+      "retry-embedding": "重新提取特征",
     },
     "person-group": {
       list: "分组列表",

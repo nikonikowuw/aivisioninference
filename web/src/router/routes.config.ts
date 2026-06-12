@@ -156,6 +156,14 @@ export const adminRoutes: RouteConfig[] = [
         component: () => import('../views/admin/persons/groups'),
         layout: '/admin',
       },
+      {
+        id: 'person-face-search',
+        path: '/persons/face-search',
+        i18nKey: 'menu:person-face-search',
+        icon: 'MdSearch',
+        component: () => import('../views/admin/persons/face-search'),
+        layout: '/admin',
+      },
     ],
   },
   {

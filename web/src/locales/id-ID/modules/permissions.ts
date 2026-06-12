@@ -223,6 +223,7 @@ export const permissions = {
       delete: "Hapus Orang",
       view: "Lihat Orang",
       "retry-embedding": "Ulangi Ekstraksi Fitur",
+      "face-search": "Pencarian Wajah",
     },
     "person-group": {
       list: "Daftar Grup",

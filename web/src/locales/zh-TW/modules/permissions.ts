@@ -223,6 +223,7 @@ export const permissions = {
       delete: "刪除人員",
       view: "檢視人員",
       "retry-embedding": "重新提取特徵",
+      "face-search": "以圖搜人",
     },
     "person-group": {
       list: "分組列表",

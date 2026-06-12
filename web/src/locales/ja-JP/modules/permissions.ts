@@ -223,6 +223,7 @@ export const permissions = {
       delete: "人物を削除",
       view: "人物詳細を表示",
       "retry-embedding": "特徴抽出を再実行",
+      "face-search": "顔検索",
     },
     "person-group": {
       list: "グループ一覧",

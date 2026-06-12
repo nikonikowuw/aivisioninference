@@ -223,6 +223,7 @@ export const permissions = {
       delete: "Delete Person",
       view: "View Person",
       "retry-embedding": "Retry Embedding",
+      "face-search": "Face Search",
     },
     "person-group": {
       list: "Group List",

@@ -39,7 +39,7 @@ import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import { EmptyState } from 'components/empty/EmptyState';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
-import { TableSkeleton } from 'components/skeleton/Skeleton';
+import { useDateFormat } from 'hooks/useDateFormat';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -62,25 +62,17 @@ const statusColorMap: Record<string, string> = {
   disabled: 'gray',
 };
 
-const batchActionTitleKeys: Record<string, string> = {
-  'delete': 'dialog.delete.title',
-  'retry-embedding': 'dialog.retryEmbedding.title',
-  'enable': 'dialog.enable.title',
-  'disable': 'dialog.disable.title',
+const batchActionConfig: Record<string, { titleKey: string; messageKey: string }> = {
+  'delete':          { titleKey: 'dialog.delete.title',          messageKey: 'message.batchDeleteConfirm' },
+  'retry-embedding': { titleKey: 'dialog.retryEmbedding.title',   messageKey: 'embedding.batchRetryConfirm' },
+  'enable':          { titleKey: 'dialog.enable.title',           messageKey: 'message.batchEnableConfirm' },
+  'disable':         { titleKey: 'dialog.disable.title',          messageKey: 'message.batchDisableConfirm' },
 };
-
-function getBatchMessageKey(action: string): string {
-  switch (action) {
-    case 'retry-embedding': return 'embedding.batchRetryConfirm';
-    case 'enable': return 'message.batchEnableConfirm';
-    case 'disable': return 'message.batchDisableConfirm';
-    default: return 'message.batchDeleteConfirm';
-  }
-}
 
 export default function PersonsPage() {
   const { t } = useTranslation('modules/persons');
   const { t: tCommon } = useTranslation('common');
+  const { formatDateTime } = useDateFormat();
 
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const bgCard = useColorModeValue('white', 'navy.800');
@@ -460,18 +452,16 @@ const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
                   </Td>
                   <Td>{p.phone || '-'}</Td>
                   <Td>
-                    {(p.embedding_status === 'pending' || p.embedding_status === 'extracting') ? (
-                      <HStack spacing="2">
-                        <Spinner size="sm" color="blue.500" />
-                        <Badge colorScheme="blue" borderRadius="full" px="2">
-                          {t(`embedding.status.${p.embedding_status}`)}
-                        </Badge>
-                      </HStack>
-                    ) : (
-                      <Badge colorScheme={statusColorMap[p.embedding_status] || 'gray'} borderRadius="full" px="2">
-                        {t(`embedding.status.${p.embedding_status}`)}
-                      </Badge>
-                    )}
+                    <Badge
+                      colorScheme={statusColorMap[p.embedding_status] || 'gray'}
+                      borderRadius="full"
+                      px="2"
+                    >
+                      {(p.embedding_status === 'pending' || p.embedding_status === 'extracting') && (
+                        <Spinner size="xs" color="blue.500" me="1" />
+                      )}
+                      {t(`embedding.status.${p.embedding_status}`)}
+                    </Badge>
                   </Td>
                   <Td>
                     <Switch
@@ -481,7 +471,7 @@ const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
                       size="sm"
                     />
                   </Td>
-                  <Td>{new Date(p.created_at).toLocaleDateString()}</Td>
+                  <Td>{formatDateTime(p.created_at)}</Td>
                   <Td isNumeric>
                     <HStack justify="end" spacing={2}>
                       <IconButton
@@ -538,8 +528,8 @@ const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
         onClose={() => setBatchAction(null)}
         onConfirm={handleBatchConfirm}
         isLoading={isBatching}
-        title={tCommon(batchActionTitleKeys[batchAction!] || 'dialog.delete.title')}
-        message={t(getBatchMessageKey(batchAction!), { count: selectedIds.length })}
+        title={tCommon(batchActionConfig[batchAction!]?.titleKey ?? 'dialog.delete.title')}
+        message={t(batchActionConfig[batchAction!]?.messageKey ?? 'message.batchDeleteConfirm', { count: selectedIds.length })}
       />
 
       <PersonFormModal

@@ -222,6 +222,7 @@ export const permissions = {
       delete: "인물 삭제",
       view: "인물 상세 조회",
       "retry-embedding": "특징 추출 재시도",
+      "face-search": "얼굴 검색",
     },
     "person-group": {
       list: "그룹 목록",

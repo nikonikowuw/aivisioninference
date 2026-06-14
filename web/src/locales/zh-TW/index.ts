@@ -23,6 +23,7 @@ import { gb28181 } from "./modules/gb28181";
 import { aiTasks } from './modules/ai-tasks';
 import aiTimeSchedules from './modules/ai-time-schedules';
 import algorithmpackage from './modules/algorithmpackage';
+import { edgeNodes } from './modules/edge-nodes';
 
 export default {
   common,
@@ -50,4 +51,5 @@ export default {
   "modules/ai-tasks": aiTasks,
   "modules/ai-time-schedules": aiTimeSchedules,
   "modules/algorithmpackage": algorithmpackage,
+  "modules/edge-nodes": edgeNodes,
 };

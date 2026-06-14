@@ -1,11 +1,11 @@
-// OSSStorage implements Storage using MinIO/S3-compatible object storage.
-// Package pkg/storage 提供统一的文件存储接口及本地文件系统、PostgreSQL Large Objects、MinIO/S3 三种存储后端实现。
 package storage
 
 import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -40,6 +40,11 @@ func NewOSSStorage(endpoint, accessKey, secretKey, bucket string, useSSL bool) (
 		}
 	}
 
+	// Set bucket policy to empty (private) to prevent anonymous access
+	if err := client.SetBucketPolicy(ctx, bucket, ""); err != nil {
+		return nil, fmt.Errorf("set bucket policy to private: %w", err)
+	}
+
 	return &OSSStorage{client: client, bucket: bucket}, nil
 }
 
@@ -69,6 +74,15 @@ func (s *OSSStorage) Delete(path string) error {
 // GetURL returns the bucket-relative path for the file.
 func (s *OSSStorage) GetURL(path string) string {
 	return fmt.Sprintf("/%s/%s", s.bucket, path)
+}
+
+// GetPresignedURL returns a time-limited public URL for the file.
+func (s *OSSStorage) GetPresignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	u, err := s.client.PresignedGetObject(ctx, s.bucket, path, expiry, url.Values{})
+	if err != nil {
+		return "", fmt.Errorf("presign object: %w", err)
+	}
+	return u.String(), nil
 }
 
 // ReadAt reads len(p) bytes from the object starting at byte offset off.

@@ -81,6 +81,8 @@ const (
 	ErrDeviceDisabled           = 10112
 	ErrDeviceOffline            = 10113
 	ErrDeviceTypeInvalid        = 10114
+	CodeVersionIncompatible     = 10115
+	ErrEdgeNodeNameTaken        = 10116
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized       = 20001
@@ -162,13 +164,11 @@ func (e *AppError) Error() string {
 	return fmt.Sprintf("code=%d, message=%s", e.Code, e.Message)
 }
 
-// New creates a new AppError with the given code and message.
-// If the message is empty, the default message for the code is used.
 func New(code int, msg string) *AppError {
 	if msg == "" {
-		msg = DefaultMessage(code, defaultLanguage)
+		return &AppError{Code: code, Message: DefaultMessage(code, defaultLanguage), localizedMessage: false}
 	}
-	return &AppError{Code: code, Message: msg}
+	return &AppError{Code: code, Message: msg, localizedMessage: false}
 }
 
 // IsLocalizedMessage reports whether the message was already translated for the current request.
@@ -186,7 +186,7 @@ func NewLocalized(code int, msg string) *AppError {
 
 // Newf creates a new AppError with a formatted explicit message.
 func Newf(code int, format string, args ...interface{}) *AppError {
-	return &AppError{Code: code, Message: fmt.Sprintf(format, args...)}
+	return &AppError{Code: code, Message: fmt.Sprintf(format, args...), localizedMessage: true}
 }
 
 // DefaultMessage returns the default message for a business error code in the specified language.

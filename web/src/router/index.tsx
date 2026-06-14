@@ -39,6 +39,11 @@ import {
   MdExtension,
   MdSearch,
   MdRemoveRedEye,
+  MdDevicesOther,
+  MdAddCircleOutline,
+  MdInfoOutline,
+  MdEdit,
+  MdOutlineDns,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -75,6 +80,11 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdExtension,
   MdSearch,
   MdRemoveRedEye,
+  MdDevicesOther,
+  MdAddCircleOutline,
+  MdInfoOutline,
+  MdEdit,
+  MdOutlineDns,
 };
 
 // 菜单 code 到组件的映射
@@ -106,6 +116,9 @@ const menuComponentMap: Record<string, () => Promise<{ default: ComponentType<an
   'aivisiontasks': () => import('../views/admin/ai-tasks'),
   'ai-time-schedules': () => import('../views/admin/ai-time-schedules'),
   'algorithm-packages': () => import('../views/admin/algorithmpackage'),
+  'edge-nodes': () => import('../views/admin/devices/edge-nodes'),
+  'edge-nodes-detail': () => import('../views/admin/devices/edge-nodes/detail'),
+  'edge-nodes-edit': () => import('../views/admin/devices/edge-nodes/edit'),
 };
 
 const lazyCache = new Map<string, ComponentType<any>>();
@@ -228,7 +241,7 @@ export function generateRoutesFromMenus(menus: Menu[]): React.ReactNode[] {
   const routedMenus = allMenus.filter((menu) => menuComponentMap[menu.code]);
   pruneLazyCache(routedMenus.map((menu) => `menu:${menu.code}`));
 
-  return routedMenus.map((menu) => {
+  const result: React.ReactNode[] = routedMenus.map((menu) => {
     const LazyComponent = createLazyComponent(`menu:${menu.code}`, menuComponentMap[menu.code]);
     return (
       <Route
@@ -238,6 +251,41 @@ export function generateRoutesFromMenus(menus: Menu[]): React.ReactNode[] {
       />
     );
   });
+
+  // 补充注册 hidden 路由（创建、详情、编辑等非菜单页面）
+  const flattenAdminRoutes = (routes: RouteConfig[]): RouteConfig[] => {
+    const res: RouteConfig[] = [];
+    for (const r of routes) {
+      if (r.hidden && r.component) {
+        res.push(r);
+      }
+      if (r.children) {
+        res.push(...flattenAdminRoutes(r.children));
+      }
+    }
+    return res;
+  };
+
+  const hiddenRoutes = flattenAdminRoutes(adminRoutes);
+  const menuPaths = new Set(allMenus.map((m) => normalizePath(m.path)));
+  for (const route of hiddenRoutes) {
+    const normalizedPath = normalizePath(route.path);
+    // 跳过已被菜单路由覆盖的路径
+    if (menuPaths.has(normalizedPath)) continue;
+    const compLoader = menuComponentMap[route.id];
+    if (compLoader) {
+      const LazyComponent = createLazyComponent(`route:${route.id}`, compLoader);
+      result.push(
+        <Route
+          key={`static-${route.id}`}
+          path={normalizedPath}
+          element={<LazyComponent />}
+        />
+      );
+    }
+  }
+
+  return result;
 }
 
 /**

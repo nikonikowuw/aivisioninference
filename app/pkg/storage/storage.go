@@ -2,7 +2,11 @@
 // including local filesystem, PostgreSQL Large Objects, and object storage (MinIO/S3).
 package storage
 
-import "io"
+import (
+	"context"
+	"io"
+	"time"
+)
 
 // Storage defines the interface for file storage backends.
 type Storage interface {
@@ -14,6 +18,8 @@ type Storage interface {
 	Delete(path string) error
 	// GetURL returns the public URL for the file.
 	GetURL(path string) string
+	// GetPresignedURL returns a time-limited public URL for the file.
+	GetPresignedURL(ctx context.Context, path string, expiry time.Duration) (string, error)
 	// ReadAt reads len(p) bytes from the file starting at byte offset off.
 	ReadAt(path string, p []byte, off int64) (n int, err error)
 	// Size returns the file size in bytes.

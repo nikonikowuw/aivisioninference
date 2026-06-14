@@ -20,6 +20,7 @@ import {
   AlertDescription,
   Box,
   Badge,
+  Tag,
   Divider,
   Accordion,
   AccordionItem,
@@ -30,6 +31,7 @@ import {
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { aiVisionTasksApi, devicesApi, algoPackagesApi, aiTimeSchedulesApi, mediaApi, type AIVisionTask, type Device, type AlgorithmPackage, type AITimeSchedule, type ROIRegion, type MarkRegion, type LineRegion } from 'services/api';
+import { edgeNodeApi, recommendNodeApi, type EdgeNode } from 'services/edgeNode';
 import DynamicParamsForm from 'components/DynamicParamsForm';
 import RegionCanvas from 'components/RegionCanvas';
 import VideoPlayer from 'components/VideoPlayer';
@@ -53,10 +55,17 @@ interface FormData {
   line_regions: LineRegion[];
 }
 
-const edgeNodeOptions = [
-  { id: '00000000-0000-4000-8000-000000000001', labelKey: 'form.defaultNode' },
-  { id: '00000000-0000-4000-8000-000000000002', labelKey: 'form.highPerformanceNode' },
+const edgeNodeOptions: EdgeNodeOption[] = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'form.defaultNode' },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'form.highPerformanceNode' },
 ];
+
+interface EdgeNodeOption {
+  id: string;
+  name: string;
+  loadRate?: number;
+  isRecommended?: boolean;
+}
 
 const defaultForm: FormData = {
   name: '',
@@ -75,6 +84,8 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
   const [devices, setDevices] = useState<Device[]>([]);
   const [algos, setAlgos] = useState<AlgorithmPackage[]>([]);
   const [schedules, setSchedules] = useState<AITimeSchedule[]>([]);
+  const [edgeNodes, setEdgeNodes] = useState<EdgeNodeOption[]>(edgeNodeOptions);
+  const [recommendedNodeId, setRecommendedNodeId] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [regionVideoUrl, setRegionVideoUrl] = useState('');
@@ -98,6 +109,17 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
       setAlgos(res.list);
     }).catch(() => {});
 
+    edgeNodeApi.list({ page: 1, page_size: 1000 }).then(res => {
+      const dynamicNodes: EdgeNodeOption[] = res.list
+        .filter(n => n.status === 'online' && n.enabled)
+        .map(n => ({
+          id: n.id,
+          name: `${n.name} (${n.current_load}/${n.max_load})`,
+          loadRate: n.max_load > 0 ? n.current_load / n.max_load : 0,
+        }));
+      setEdgeNodes([...edgeNodeOptions, ...dynamicNodes]);
+    }).catch(() => {});
+
     aiTimeSchedulesApi.listAll().then(res => {
       setSchedules(res);
     }).catch(() => {});
@@ -118,6 +140,26 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
       setForm({ ...defaultForm });
     }
   }, [isOpen, initialData]);
+
+  // 算法包变更时自动调用推荐节点接口
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!form.algo_package_id) {
+      setRecommendedNodeId(null);
+      return;
+    }
+    recommendNodeApi.recommend(form.algo_package_id)
+      .then((res) => {
+        setRecommendedNodeId(res.recommended_node_id);
+        // 仅在用户未手动选择节点时自动填充推荐节点
+        if (!form.target_node_id || form.target_node_id === edgeNodeOptions[0].id) {
+          setForm(prev => ({ ...prev, target_node_id: res.recommended_node_id }));
+        }
+      })
+      .catch(() => {
+        setRecommendedNodeId(null);
+      });
+  }, [form.algo_package_id]);
 
   const updateField = (key: keyof FormData, value: any) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -300,12 +342,27 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
                     </Select>
                   </FormControl>
                   <FormControl isRequired flex={1}>
-                    <FormLabel fontSize="sm">{t('fields.node')}</FormLabel>
+                    <FormLabel fontSize="sm">
+                      {t('fields.node')}
+                      {recommendedNodeId && (
+                        <Tag size="sm" colorScheme="green" ml={2} variant="subtle">
+                          推荐节点
+                        </Tag>
+                      )}
+                    </FormLabel>
                     <Select value={form.target_node_id} onChange={e => updateField('target_node_id', e.target.value)} size="md">
-                      {edgeNodeOptions.map(node => (
-                        <option key={node.id} value={node.id}>{t(node.labelKey)}</option>
+                      {edgeNodes.map(node => (
+                        <option key={node.id} value={node.id}>
+                          {node.name.startsWith('form.') ? t(node.name) : node.name}
+                          {node.isRecommended ? ' ★' : ''}
+                        </option>
                       ))}
                     </Select>
+                    {recommendedNodeId && form.target_node_id === recommendedNodeId && (
+                      <Text fontSize="xs" color="green.500" mt={1}>
+                        ✔ 已为您推荐负载最低的节点
+                      </Text>
+                    )}
                   </FormControl>
                 </HStack>
 

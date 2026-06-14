@@ -84,6 +84,14 @@ type Config struct {
 	ZLMHTTPPort int `yaml:"zlm_http_port" mapstructure:"zlm_http_port"`
 	// ZLM 实际对外 IP（设备推流目标地址，默认从 ZLMAPIURL 解析）
 	ZLMExternalIP string `yaml:"zlm_external_ip" mapstructure:"zlm_external_ip"`
+	Engine        RouterEngineConfig
+}
+
+type RouterEngineConfig struct {
+	MinCompatibleVersion      string
+	VersionCheckEnabled       bool
+	HeartbeatTimeoutSec       int
+	HeartbeatCheckIntervalSec int
 }
 
 // New creates a new Router with all dependencies wired.
@@ -171,6 +179,7 @@ func (r *Router) setupRoutes() {
 	r.registerMediaRoutes(authorized, v1, deps)
 	r.registerPersonRoutes(authorized, deps)
 	r.registerSmartRecordRoutes(authorized, deps)
+	r.registerEdgeNodeRoutes(authorized, v1, deps)
 
 	r.engine.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api") {
@@ -590,6 +599,12 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
+
+	// Edge Node Status Checker
+	nodeRepo := repository.NewEdgeNodeRepository(db)
+	hub := ws.NewHub()
+	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
+	edgeNodeStatusTask.RegisterHandlers(mux)
 
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。

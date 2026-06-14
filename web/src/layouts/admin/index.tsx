@@ -21,6 +21,7 @@ import {
   getActiveRouteFromMenus,
 } from "../../router";
 import PersonDetail from "../../views/admin/persons/detail";
+import EdgeNodeDetail from "../../views/admin/devices/edge-nodes/detail";
 
 export default function Dashboard(props: { [x: string]: any }) {
   const { ...rest } = props;
@@ -147,10 +148,11 @@ export default function Dashboard(props: { [x: string]: any }) {
                 </Text>
               ) : (
                 <Routes>
+                  {/* 静态关键路由置顶，且不再依赖细颗粒度权限判断（由组件内部处理），保证跳转稳定性 */}
+                  <Route path="persons/:id" element={<PersonDetail />} />
+                  <Route path="devices/edge-nodes/:id" element={<EdgeNodeDetail />} />
+
                   {dynamicRoutes}
-                  {hasAnyPermission(user?.permission_codes || [], ['person:list']) && (
-                    <Route path="persons/:id" element={<PersonDetail />} />
-                  )}
                   <Route
                     path="/"
                     element={<Navigate to="/admin/default" replace />}

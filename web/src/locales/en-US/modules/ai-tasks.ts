@@ -17,6 +17,8 @@ export const aiTasks = {
     draft: 'Draft',
     ready: 'Ready',
     running: 'Running',
+    suspended: 'Suspended',
+    stopped: 'Stopped',
     error: 'Error',
   },
   actions: {

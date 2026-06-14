@@ -40,6 +40,7 @@ pnpm-debug.log*
 
 # C++ / CMake (engine/)
 **/build/
+**/build_test/
 **/CMakeFiles/
 **/CMakeCache.txt
 **/cmake_install.cmake
@@ -50,6 +51,7 @@ pnpm-debug.log*
 **/*.so
 **/*.dylib
 **/aivision-engine
+engine/.env
 
 # Proto / FlatBuffers
 **/generated/
@@ -73,3 +75,4 @@ docker-compose.override.yml
 
 # Test
 *.out
+test_json.go

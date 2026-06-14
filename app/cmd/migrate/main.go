@@ -136,6 +136,21 @@ func main() {
 
 	mustExec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_root ON users (is_root) WHERE is_root = true")
 
+	// 修复 edge_nodes.name：软删除后允许同名重新添加，改用部分唯一索引
+	mustExec(db, `DO $$ BEGIN
+		IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_edge_node_name_deleted_at') THEN
+			DROP INDEX idx_edge_node_name_deleted_at;
+		END IF;
+		IF EXISTS (
+			SELECT 1 FROM pg_indexes 
+			WHERE indexname = 'idx_edge_nodes_name' 
+			  AND (indexdef NOT LIKE '%WHERE%')
+		) THEN
+			DROP INDEX idx_edge_nodes_name;
+		END IF;
+	END $$`)
+	mustExec(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_edge_nodes_name ON edge_nodes (name) WHERE deleted_at IS NULL")
+
 	// 修复 devices.external_key：RTSP URL 允许重复添加，移除唯一索引。
 	mustExec(db, `DO $$ BEGIN
 		IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_devices_external_key') THEN
@@ -331,6 +346,7 @@ func migrateMultiLevelMenu(db *gorm.DB) error {
 			Icon       string
 			ChildCodes []string
 		}{
+			{Code: "device-management", Name: "设备管理", Icon: "MdVideocam", ChildCodes: []string{"devices", "device-staging", "device-groups", "gb28181-devices", "gb28181-channels", "edge-nodes"}},
 			{Code: "user-management", Name: "用户管理", Icon: "MdPeople", ChildCodes: []string{"users", "roles", "permissions"}},
 			{Code: "person-management", Name: "人员管理", Icon: "MdFace", ChildCodes: []string{"persons", "person-groups", "person-face-search"}},
 			{Code: "algorithm-management", Name: "算法管理", Icon: "MdVpnKey", ChildCodes: []string{"license", "algorithm-packages"}},
@@ -654,6 +670,16 @@ func defaultMenuList() []parentMenuDef {
 				}},
 				{Name: "GB28181通道", Code: "gb28181-channels", Path: "/gb28181/channels", Icon: "MdViewList", Buttons: []buttonInfo{
 					{Code: "gb28181-channel:list", Name: "通道列表", Path: "/api/v1/gb28181/devices/*/channels", Method: "GET"},
+				}},
+				{Name: "边缘节点", Code: "edge-nodes", Path: "/devices/edge-nodes", Icon: "MdDeviceHub", Buttons: []buttonInfo{
+					{Code: "edge-node:list", Name: "边缘节点列表", Path: "/api/v1/edge-nodes", Method: "GET"},
+					{Code: "edge-node:create", Name: "创建边缘节点", Path: "/api/v1/edge-nodes", Method: "POST"},
+					{Code: "edge-node:edit", Name: "编辑边缘节点", Path: "/api/v1/edge-nodes/*", Method: "PUT"},
+					{Code: "edge-node:delete", Name: "删除边缘节点", Path: "/api/v1/edge-nodes/*", Method: "DELETE"},
+					{Code: "edge-node:view", Name: "查看边缘节点", Path: "/api/v1/edge-nodes/*", Method: "GET"},
+					{Code: "edge-node:deploy-algo", Name: "下发算法包", Path: "/api/v1/edge-nodes/*/deploy-algo", Method: "POST"},
+					{Code: "edge-node:algorithms", Name: "查看节点算法", Path: "/api/v1/edge-nodes/*/algorithms", Method: "GET"},
+				{Code: "edge-node:delete-algo", Name: "卸载算法", Path: "/api/v1/edge-nodes/*/algorithms/*", Method: "DELETE"},
 				}},
 			},
 		},

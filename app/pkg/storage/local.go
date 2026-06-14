@@ -1,12 +1,12 @@
-// LocalStorage implements Storage using the local filesystem.
-// Package pkg/storage 提供统一的文件存储接口及本地文件系统、PostgreSQL Large Objects、MinIO/S3 三种存储后端实现。
 package storage
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // LocalStorage implements Storage using the local filesystem.
@@ -55,6 +55,11 @@ func (s *LocalStorage) Delete(path string) error {
 // GetURL returns the public URL for the file.
 func (s *LocalStorage) GetURL(path string) string {
 	return s.publicURL + "/" + path
+}
+
+// GetPresignedURL returns the public URL for the file (local storage doesn't support expiration).
+func (s *LocalStorage) GetPresignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	return s.GetURL(path), nil
 }
 
 // ReadAt reads len(p) bytes from the file starting at byte offset off.

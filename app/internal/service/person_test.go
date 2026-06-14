@@ -148,6 +148,11 @@ func (m *MockStorage) Size(path string) (int64, error) {
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockStorage) GetPresignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	args := m.Called(ctx, path, expiry)
+	return args.String(0), args.Error(1)
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------

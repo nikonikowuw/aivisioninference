@@ -4,6 +4,7 @@ export const menu = {
   devices: "设备列表",
   "device-groups": "设备分组",
   "device-staging": "设备待接入",
+  "edge-nodes": "边缘节点",
   "media-management": "媒体预览",
   "live-view": "实时预览",
   recordings: "录像回放",

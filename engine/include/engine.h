@@ -66,7 +66,26 @@ namespace aivision
 
         /// ZLM Secret
         std::string zlm_secret = "";
+
+        /// 平台管理端 URL（用于心跳上报）
+        std::string platform_url = "";
+
+        /// 边缘节点 ID（平台注册后获取）
+        std::string node_id = "";
+
+        /// 引擎认证 Token（平台创建节点后获取）
+        std::string auth_token = "";
+
+        /// 引擎 HTTP 服务端口（默认 8080）
+        int http_port = 8080;
+
+        /// 算法包安装基目录
+        std::string algo_dir = "/var/aivision/algo";
+
     };
+
+    namespace http { class HTTPServer; }
+    namespace monitor { class HeartbeatReporter; }
 
     /// 推理引擎主类
     class InferenceEngine
@@ -95,6 +114,9 @@ namespace aivision
 
         /// 获取引擎版本
         static std::string Version() { return "1.0.0"; }
+
+        /// 获取引擎配置引用
+        const EngineConfig& GetConfig() const { return config_; }
 
         // ============================================================
         // 组件访问器
@@ -186,6 +208,12 @@ namespace aivision
         std::unique_ptr<pipeline::PipelineManager> pipeline_mgr_;
         std::unique_ptr<algo::AlgoManager> algo_mgr_;
         std::unique_ptr<monitor::MetricsReporter> metrics_reporter_;
+
+        // HTTP 服务端（用于健康检查、算法部署等管理接口）
+        std::unique_ptr<http::HTTPServer> http_server_;
+
+        // 心跳上报模块（向平台推送引擎状态）
+        std::unique_ptr<monitor::HeartbeatReporter> heartbeat_reporter_;
     };
 
 } // namespace aivision

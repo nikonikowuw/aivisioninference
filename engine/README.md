@@ -109,6 +109,12 @@ aivision-engine --env-file /etc/aivision/engine.env
 | `NIKO_ENGINE_HAL_DIR` | 平台名映射时使用的 HAL 库目录 |
 | `NIKO_ENGINE_HAL_CONFIG` | HAL 配置 JSON |
 | `NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK` | 是否允许 FFmpeg fallback，支持 `true/false` |
+| `NIKO_ENGINE_PLATFORM_URL` | 平台管理端 URL（用于心跳上报） |
+| `NIKO_ENGINE_NODE_ID` | 边缘节点 ID（平台注册后获取） |
+| `NIKO_ENGINE_AUTH_TOKEN` | 引擎认证 Token（平台创建节点后获取） |
+| `NIKO_ENGINE_HTTP_PORT` | 引擎 HTTP 服务端口（默认 8080） |
+
+| `NIKO_ENGINE_RTSP_PUSH` | RTSP 推流地址 |
 
 命令行也支持同名能力：
 
@@ -136,6 +142,67 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 | `bitrate` | int | 4000000 | 目标码率 bps |
 | `fps` | int | 25 | 帧率 |
 | `gop` | int | 50 | GOP 大小 |
+
+## 边缘节点功能
+
+引擎支持作为边缘节点连接到 Niko Admin 平台，实现状态上报、算法包下发和远程管理。
+
+### HTTP Server（端口 8080）
+
+引擎内置 HTTP 服务，提供以下管理接口：
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/health` | GET | 健康检查，返回 status, uptime, current_load, engine_version |
+| `/hardware-info` | GET | 硬件信息，返回 CPU/GPU 型号、内存、平台 |
+| `/deploy-algo` | POST | 部署算法包，参数：algo_package_id, download_url, md5 |
+| `/algorithms` | GET | 查询已加载算法列表 |
+
+### Heartbeat Reporter
+
+引擎每 5 秒向平台上报一次心跳，包含：
+
+- 运行时长（uptime）
+- 当前负载（current_load）
+- 硬件信息（hardware_info）
+- 已安装算法列表（installed_algorithms）
+- 引擎版本（engine_version，当前版本 `1.0.0`）
+
+心跳响应中包含待下发的算法包信息（pending_deployments），引擎自动下载并安装。  
+
+### 算法包下载与安装
+
+1. 平台管理员触发算法包下发
+2. 平台在心跳响应中返回下载 URL（预签名 URL，1 小时有效期）
+3. 引擎下载 tar.gz 文件到 /tmp
+4. 引擎校验 MD5
+5. 引擎解压并加载 .so 算法文件
+6. 下次心跳时上报安装状态
+
+### 版本兼容性
+
+引擎在心跳中携带版本号（`AIVISION_ENGINE_VERSION`），当前版本 `1.0.0`。
+平台可配置最低兼容版本，过旧引擎的心跳将被拒绝。
+
+### 配置指南
+
+完整配置示例见 [.env.example](./.env.example)。
+
+```ini
+# 平台连接
+NIKO_ENGINE_PLATFORM_URL=http://your-platform:8080
+NIKO_ENGINE_NODE_ID=<从平台获取>
+NIKO_ENGINE_AUTH_TOKEN=<从平台获取>
+
+# 引擎服务
+NIKO_ENGINE_HTTP_PORT=8080
+NIKO_ENGINE_IPC_ADDR=0.0.0.0:9500
+
+
+# HAL 配置
+NIKO_ENGINE_HAL_PLATFORM=macos
+NIKO_ENGINE_HAL_DIR=/usr/local/lib/aivision
+```
 
 ## 数据流
 

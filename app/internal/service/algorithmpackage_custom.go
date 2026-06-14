@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -141,7 +142,9 @@ func (s *AlgorithmPackageService) UploadAndProcess(ctx context.Context, mr *mult
 		CapabilitiesData:  pq.StringArray(meta.CapabilitiesData),
 		Hardware:          pq.StringArray(meta.Hardware),
 		Description:       meta.Description,
-		PackagePath:       tarPath,
+		// Store PackagePath as relative to the upload dir (e.g., "algorithms/uuid.tar")
+		// so that GetURL() constructed as publicURL + "/" + path produces the correct URL.
+		PackagePath:       filepath.Join("algorithms", tarFilename),
 		ExtractPath:       tarPath,
 		PackageSize:       size,
 		PackageMD5:        md5sum,
@@ -297,6 +300,14 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 	}
 	if meta.AlgorithmName == "" || meta.Version == "" {
 		return nil, 0, "", fmt.Errorf("invalid algo_meta.yaml: name and version are required")
+	}
+
+	validNameVer := regexp.MustCompile(`^[a-zA-Z0-9_\-\.]+$`)
+	if !validNameVer.MatchString(meta.AlgorithmName) {
+		return nil, 0, "", fmt.Errorf("invalid algorithm_name: must match ^[a-zA-Z0-9_\\-\\.]+$")
+	}
+	if !validNameVer.MatchString(meta.Version) {
+		return nil, 0, "", fmt.Errorf("invalid version: must match ^[a-zA-Z0-9_\\-\\.]+$")
 	}
 
 	// 2. Second pass: Create tar and write entries

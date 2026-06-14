@@ -1,11 +1,11 @@
-// PGStorage implements Storage using PostgreSQL Large Objects.
-// Package pkg/storage 提供统一的文件存储接口及本地文件系统、PostgreSQL Large Objects、MinIO/S3 三种存储后端实现。
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
+	"time"
 )
 
 // PGStorage implements Storage using PostgreSQL Large Objects.
@@ -55,6 +55,11 @@ func (s *PGStorage) Delete(path string) error {
 // GetURL returns an empty string; PostgreSQL large objects have no public URL.
 func (s *PGStorage) GetURL(path string) string {
 	return ""
+}
+
+// GetPresignedURL returns an empty string; PostgreSQL large objects have no public URL.
+func (s *PGStorage) GetPresignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	return "", nil
 }
 
 // ReadAt reads len(p) bytes from the large object starting at byte offset off.

@@ -116,6 +116,32 @@ export const adminRoutes: RouteConfig[] = [
         layout: '/admin',
       },
       {
+        id: 'edge-nodes',
+        path: '/devices/edge-nodes',
+        i18nKey: 'menu:edge-nodes',
+        icon: 'MdDevicesOther',
+        layout: '/admin',
+        children: [
+          {
+            id: 'edge-nodes-list',
+            path: '/devices/edge-nodes',
+            i18nKey: 'menu:edge-nodes',
+            icon: 'MdDevicesOther',
+            component: () => import('../views/admin/devices/edge-nodes'),
+            layout: '/admin',
+          },
+          {
+            id: 'edge-nodes-detail',
+            path: '/devices/edge-nodes/:id',
+            i18nKey: 'menu:edge-nodes',
+            icon: 'MdInfoOutline',
+            hidden: true,
+            component: () => import('../views/admin/devices/edge-nodes/detail'),
+            layout: '/admin',
+          },
+        ],
+      },
+      {
         id: 'gb28181-devices',
         path: '/gb28181/devices',
         i18nKey: 'menu:gb28181-devices',

@@ -64,6 +64,12 @@ func provideRouterConfig(cfg *config.Config) *router.Config {
 		ZLMSecret:                 cfg.ZLM.Secret,
 		EngineAddr:                cfg.Engine.Addr,
 		EngineTimeoutSec:          cfg.Engine.TimeoutSec,
+		Engine: router.RouterEngineConfig{
+			MinCompatibleVersion:        cfg.Engine.MinCompatibleVersion,
+			VersionCheckEnabled:         cfg.Engine.VersionCheckEnabled,
+			HeartbeatTimeoutSec:         cfg.Engine.HeartbeatTimeoutSec,
+			HeartbeatCheckIntervalSec:   cfg.Engine.HeartbeatCheckInterval,
+		},
 	}
 }
 

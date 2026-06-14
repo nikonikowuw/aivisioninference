@@ -63,8 +63,10 @@ export const common = {
       "0": "Berhasil",
       "10001": "Permintaan buruk",
       "10002": "Tidak dapat menonaktifkan diri sendiri",
-      "10003": "Tidak ada izin untuk mengoperasi pengguna di tingkat yang sama atau lebih tinggi",
-      "10004": "Tidak ada izin untuk mengoperasi peran di tingkat yang sama atau lebih tinggi",
+      "10003":
+        "Tidak ada izin untuk mengoperasi pengguna di tingkat yang sama atau lebih tinggi",
+      "10004":
+        "Tidak ada izin untuk mengoperasi peran di tingkat yang sama atau lebih tinggi",
       "10005": "Email sudah digunakan",
       "10006": "Kata sandi lama salah",
       "10008": "Format waktu mulai tidak valid",
@@ -78,7 +80,8 @@ export const common = {
       "10016": "Token tidak valid atau kedaluwarsa",
       "10017": "Konten CSV tidak valid",
       "10018": "Jumlah baris CSV melebihi batas",
-      "10019": "CSV memerlukan minimal kolom username, email, display_name, dan password",
+      "10019":
+        "CSV memerlukan minimal kolom username, email, display_name, dan password",
       "10020": "Status harus 0 atau 1",
       "10021": "Header CSV harus username,email,display_name,password,status",
       "10022": "Username duplikat di CSV",
@@ -86,7 +89,8 @@ export const common = {
       "10024": "Format email tidak valid",
       "10025": "Username sudah digunakan",
       "10026": "Tidak dapat menghapus pengguna saat ini",
-      "10027": "Tidak dapat mereset kata sandi sendiri; gunakan ubah kata sandi",
+      "10027":
+        "Tidak dapat mereset kata sandi sendiri; gunakan ubah kata sandi",
       "10028": "Nama peran sudah digunakan",
       "10029": "Level peran harus lebih besar dari 0",
       "10030": "Tugas pembersihan penyimpanan sedang berjalan",
@@ -108,7 +112,8 @@ export const common = {
       "10053": "Lisensi telah kedaluwarsa",
       "10054": "Lisensi belum berlaku",
       "10055": "Kapasitas stream bersamaan lisensi tidak mencukupi",
-      "10056": "Kunci publik lisensi belum dikonfigurasi, hubungi administrator",
+      "10056":
+        "Kunci publik lisensi belum dikonfigurasi, hubungi administrator",
       "10060": "Silakan unggah gambar wajah",
       "10061": "Gambar sudah ada",
       "10062": "Kode orang sudah ada",
@@ -116,7 +121,8 @@ export const common = {
       "10064": "Silakan unggah arsip",
       "10065": "Format arsip tidak didukung (ZIP, TAR.GZ, TAR.BZ2 didukung)",
       "10070": "Kode izin sudah digunakan",
-      "10071": "Izin atau izin turunannya sudah ditetapkan ke peran dan tidak dapat dihapus",
+      "10071":
+        "Izin atau izin turunannya sudah ditetapkan ke peran dan tidak dapat dihapus",
       "10072": "Peran sudah ditetapkan ke pengguna dan tidak dapat dihapus",
       "10073": "Konten file tidak lengkap",
       "10074": "Jumlah chunk tidak sesuai dengan ukuran file",
@@ -125,8 +131,10 @@ export const common = {
       "10077": "Unggahan telah dibatalkan",
       "10078": "Ukuran file tidak sesuai deklarasi",
       "10079": "Verifikasi checksum file gagal",
-      "10080": "Mesin inferensi belum siap, silakan periksa apakah layanan mesin berjalan",
-      "10081": "Koneksi timeout, silakan periksa apakah perangkat dapat dijangkau",
+      "10080":
+        "Mesin inferensi belum siap, silakan periksa apakah layanan mesin berjalan",
+      "10081":
+        "Koneksi timeout, silakan periksa apakah perangkat dapat dijangkau",
       "10082": "Respons mesin error, silakan coba lagi nanti",
       "10083": "Koneksi gagal",
       "10100": "Nama perangkat sudah digunakan",
@@ -297,6 +305,9 @@ export const common = {
   empty: {
     title: "Tidak Ada Data",
     description: "Tidak ada catatan yang ditemukan sesuai kriteria Anda",
+  },
+  filter: {
+    select: "Silakan pilih",
   },
 } as const;
 

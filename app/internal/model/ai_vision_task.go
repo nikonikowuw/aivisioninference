@@ -6,10 +6,12 @@ import (
 
 // AIVisionTask 状态常量
 const (
-	TaskStatusDraft   = "draft"
-	TaskStatusReady   = "ready"
-	TaskStatusRunning = "running"
-	TaskStatusError   = "error"
+	TaskStatusDraft    = "draft"
+	TaskStatusReady    = "ready"
+	TaskStatusRunning  = "running"
+	TaskStatusError    = "error"
+	TaskStatusStopped  = "stopped"
+	TaskStatusSuspended = "suspended"
 )
 
 // AIVisionTask AI视觉推理任务模型

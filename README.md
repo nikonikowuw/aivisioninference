@@ -41,6 +41,7 @@ AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理�
 - 🧠 **AI 推理任务编排**：Go 控制面下发任务，C++ 数据面执行流处理、算法加载、推理与结果上报。
 - 📦 **算法包管理**：支持人脸识别、跌倒检测等算法包示例，算法以动态库和元数据形式接入。
 - 🧾 **智能记录沉淀**：推理结果、告警事件、截图/证据与任务状态可回传控制面并落库。
+- 🔗 **边缘节点管理**：边缘推理节点的注册、状态监控、算法包下发（MinIO 预签名 URL）与引擎版本兼容性校验。
 - 🔐 **后台管理能力**：继承 Niko Admin 的 JWT 双 Token、RBAC、审计日志、文件管理、i18n 与 Swagger 能力。
 - ⚙️ **边缘硬件适配**：C++ engine 支持 FFmpeg/OpenCV fallback，并预留 RKMPP/RGA 等硬件加速 HAL。
 
@@ -257,6 +258,56 @@ Go 控制面与 C++ 数据面使用 `proto/flatbuf/` 下的 FlatBuffers schema �
 
 ---
 
+## 🔗 边缘节点管理
+
+边缘节点管理模块将 C++ 推理引擎注册为平台可管理的边缘节点，实现状态实时监控、算法包远程下发与版本兼容性管理。
+
+### 架构概览
+
+```txt
+┌─────────────────────────────────────────────┐
+│             Niko Admin 平台 (Go)             │
+│   EdgeNodeHandler → EdgeNodeService         │
+│   ├─ EdgeNodeRepository (CUD)                │
+│   ├─ EdgeNodeAlgorithmRepository (关联)      │
+│   ├─ EdgeNodeAuth (JWT 节点 Token)            │
+│   └─ EdgeNodeStatusTask (离线检测)            │
+└──────────────────────┬──────────────────────┘
+                       │ HTTP / Heartbeat
+┌──────────────────────▼──────────────────────┐
+│           C++ 推理引擎 (Engine)               │
+│   ├─ HTTP Server (health / deploy / algo)    │
+│   ├─ HeartbeatReporter (每 5 秒上报)          │
+│   ├─ AlgorithmDownloader (MinIO → 安装)       │
+│   └─ 引擎版本: 1.0.0+                         │
+└─────────────────────────────────────────────┘
+```
+
+### 核心流程
+
+1. **节点注册**：管理员通过平台创建边缘节点，系统生成 JWT Token（10 年有效期）。
+2. **引擎配置**：将 Token、NodeID、平台 URL 写入引擎 `.env` 配置，启动引擎。
+3. **心跳上报**：引擎每 5 秒向平台上报运行状态、负载、硬件信息与已安装算法。
+4. **算法下发**：管理员触发下发 → 平台在心跳响应中返回 MinIO 预签名 URL → 引擎下载并安装。
+5. **离线检测**：平台每 10 秒检测心跳超时节点（>15 秒），自动标记为 offline。
+
+### 关键特性
+
+- 🔐 **JWT 节点鉴权**：每个节点独立 Token，心跳接口独立鉴权。
+- 📦 **MinIO 预签名 URL**：算法包下载使用 1 小时有效期的预签名 URL，保障存储安全。
+- 🔄 **自动重试**：失败部署最多重试 3 次（指数退避：5m、10m、20m）。
+- ⚖️ **负载推荐**：创建任务时自动推荐负载最低的在线节点。
+- 🔧 **版本校验**：可配置最低兼容引擎版本，拒绝过旧引擎的心跳。
+- ⚡ **WebSocket 实时推送**：节点状态变更实时推送到前端。
+
+详细配置与操作指南见：
+
+- `docs/edge-node-guide.md` — 管理员操作指南
+- `docs/engine-setup.md` — 引擎配置与故障排查
+- `docs/api.md` — 完整 API 文档
+
+---
+
 ## ⚙️ 配置说明
 
 配置加载优先级：`环境变量 > .env > config.yaml > 默认值`。所有环境变量统一使用 `NIKO_` 前缀，生产环境必须通过环境变量注入密钥。
@@ -296,6 +347,9 @@ NIKO_STORAGE_DRIVER=local
 - `prd/tech-design.md`：技术设计文档。
 - `docs/gb28181-guide.md`：GB28181 接入说明。
 - `docs/zlm-verification.md`：ZLMediaKit 验证说明。
+- `docs/edge-node-guide.md`：边缘节点管理操作指南。
+- `docs/engine-setup.md`：引擎配置与故障排查。
+- `docs/api.md`：完整 API 参考。
 - Swagger：服务启动后访问 `http://localhost:8080/swagger/index.html`。
 
 ---

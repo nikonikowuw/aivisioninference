@@ -143,8 +143,12 @@ type ZLMConfig struct {
 
 // EngineConfig holds C++ inference engine connection settings.
 type EngineConfig struct {
-	Addr       string        `mapstructure:"addr"`
-	TimeoutSec int           `mapstructure:"timeout_sec"`
+	Addr                   string `mapstructure:"addr"`
+	TimeoutSec             int    `mapstructure:"timeout_sec"`
+	MinCompatibleVersion   string `mapstructure:"min_compatible_version"`
+	VersionCheckEnabled    bool   `mapstructure:"version_check_enabled"`
+	HeartbeatTimeoutSec    int    `mapstructure:"heartbeat_timeout_sec"`
+	HeartbeatCheckInterval int    `mapstructure:"heartbeat_check_interval_sec"`
 }
 
 // Load reads configuration from files and environment variables.
@@ -302,6 +306,8 @@ func setDefaults(v *viper.Viper) {
 	// Engine
 	v.SetDefault("engine.addr", "localhost:9500")
 	v.SetDefault("engine.timeout_sec", 5)
+	v.SetDefault("engine.heartbeat_timeout_sec", 15)
+	v.SetDefault("engine.heartbeat_check_interval_sec", 10)
 
 	// Seed
 	v.SetDefault("seed.username", "admin")

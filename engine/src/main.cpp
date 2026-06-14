@@ -168,6 +168,12 @@ static EngineConfig LoadConfigFromEnv()
     config.zlm_api_url = GetEnvString("NIKO_ENGINE_ZLM_URL", config.zlm_api_url);
     config.zlm_secret = GetEnvString("NIKO_ENGINE_ZLM_SECRET", config.zlm_secret);
 
+    config.platform_url = GetEnvString("NIKO_ENGINE_PLATFORM_URL", config.platform_url);
+    config.node_id = GetEnvString("NIKO_ENGINE_NODE_ID", config.node_id);
+    config.auth_token = GetEnvString("NIKO_ENGINE_AUTH_TOKEN", config.auth_token);
+    config.http_port = GetEnvUInt32("NIKO_ENGINE_HTTP_PORT", config.http_port);
+    config.algo_dir = GetEnvString("NIKO_ENGINE_ALGO_DIR", config.algo_dir);
+
     std::string hal_platform = GetEnvString("NIKO_ENGINE_HAL_PLATFORM");
     if (config.hal_so_path.empty() && !hal_platform.empty())
         config.hal_so_path = DefaultHalPathForPlatform(hal_platform);
@@ -197,6 +203,11 @@ static void PrintRuntimeConfig(const EngineConfig &config,
               << " rtsp_push=" << config.rtsp_push_server
               << " zlm_url=" << config.zlm_api_url
               << " zlm_secret=" << (config.zlm_secret.empty() ? "<empty>" : "<set>") << std::endl;
+    std::cout << "[Config] platform_url=" << (config.platform_url.empty() ? "<unset>" : config.platform_url)
+              << " node_id=" << (config.node_id.empty() ? "<unset>" : config.node_id)
+              << " auth_token=" << (config.auth_token.empty() ? "<unset>" : "<set>") << std::endl;
+    std::cout << "[Config] http_port=" << config.http_port << std::endl;
+    std::cout << "[Config] algo_dir=" << config.algo_dir << std::endl;
 }
 
 } // namespace

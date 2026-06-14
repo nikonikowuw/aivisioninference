@@ -23,6 +23,26 @@ find_package(Threads REQUIRED)
 # CURL
 find_package(CURL REQUIRED)
 
+# OpenSSL (for MD5 verification in AlgorithmDownloader)
+find_package(OpenSSL REQUIRED)
+
+# nlohmann/json (Modern JSON library, header-only)
+include(FetchContent)
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
+# cpp-httplib (HTTP Server library, header-only)
+FetchContent_Declare(
+    httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.11.2
+)
+FetchContent_MakeAvailable(httplib)
+
 # FFmpeg + OpenCV software fallback decoder is required.
 # 推理 fallback 必须能完成软件解码、resize，并向 Worker 提供 HostMemory 帧。
 find_package(PkgConfig REQUIRED)
@@ -97,8 +117,8 @@ endif()
 # 源文件
 # ============================================================
 
-set(ENGINE_SOURCES
-    src/main.cpp
+# 核心库源文件（不含 main，包含新模块）
+set(ENGINE_LIB_SOURCES
     src/engine.cpp
     src/ipc_server.cpp
     src/pipeline/hw_buffer.cpp
@@ -116,6 +136,14 @@ set(ENGINE_SOURCES
     src/algo/algo_instance.cpp
     src/algo/algo_manager.cpp
     src/monitor/metrics_reporter.cpp
+    src/http/http_server.cpp
+    src/monitor/heartbeat_reporter.cpp
+    src/algo/algorithm_downloader.cpp
+)
+
+# 引擎可执行入口
+set(ENGINE_SOURCES
+    src/main.cpp
 )
 
 set(INSTALL_HEADERS
@@ -139,6 +167,9 @@ set(INSTALL_HEADERS
     include/algo/algo_instance.h
     include/algo/algo_manager.h
     include/monitor/metrics_reporter.h
+    include/http/http_server.h
+    include/monitor/heartbeat_reporter.h
+    include/algo/algorithm_downloader.h
 )
 
 # ============================================================
@@ -151,9 +182,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ============================================================
-# 可执行文件
+# 静态库与可执行文件
 # ============================================================
 
+# 核心引擎静态库（所有业务逻辑，不含 main）
+add_library(aivision-engine-lib STATIC ${ENGINE_LIB_SOURCES})
+
+# 引擎可执行文件
 add_executable(aivision-engine ${ENGINE_SOURCES})
 
 add_library(aivision-hal-rkmpp SHARED
@@ -168,7 +203,10 @@ if(APPLE)
     )
 endif()
 
-target_include_directories(aivision-engine PRIVATE
+target_include_directories(aivision-engine-lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_include_directories(aivision-engine-lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${FLATBUFFERS_INCLUDE_DIRS}
 )
@@ -183,27 +221,32 @@ if(APPLE)
     )
 endif()
 
-target_link_libraries(aivision-engine PRIVATE
+target_link_libraries(aivision-engine-lib PUBLIC
     flatbuffers::flatbuffers
     Threads::Threads
+    CURL::libcurl
+    OpenSSL::Crypto
+    httplib::httplib
     dl
-    ${CURL_LIBRARIES}
 )
 
-target_compile_definitions(aivision-engine PRIVATE AIVISION_WITH_FFMPEG_OPENCV)
-target_include_directories(aivision-engine PRIVATE
+target_compile_definitions(aivision-engine-lib PRIVATE AIVISION_WITH_FFMPEG_OPENCV)
+target_include_directories(aivision-engine-lib PRIVATE
     ${FFMPEG_FALLBACK_INCLUDE_DIRS}
     ${OPENCV4_FALLBACK_INCLUDE_DIRS}
 )
-target_link_directories(aivision-engine PRIVATE
+target_link_directories(aivision-engine-lib PUBLIC
     ${FFMPEG_FALLBACK_LIBRARY_DIRS}
     ${OPENCV4_FALLBACK_LIBRARY_DIRS}
 )
-target_link_libraries(aivision-engine PRIVATE
+target_link_libraries(aivision-engine-lib PUBLIC
     ${FFMPEG_FALLBACK_LIBRARIES}
     ${OPENCV4_FALLBACK_LIBRARIES}
 )
 message(STATUS "FFmpeg/OpenCV software fallback enabled")
+
+# aivision-engine main executable links the static library
+target_link_libraries(aivision-engine PRIVATE aivision-engine-lib)
 
 target_link_libraries(aivision-hal-rkmpp PRIVATE
     Threads::Threads
@@ -237,7 +280,7 @@ if(APPLE)
 endif()
 
 if(NOT APPLE)
-    target_link_libraries(aivision-engine PRIVATE rt)
+    target_link_libraries(aivision-engine-lib PUBLIC rt)
 endif()
 
 # ============================================================
@@ -275,6 +318,41 @@ if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
     endif()
 
     add_test(NAME rkmpp_pipeline COMMAND test_rkmpp_pipeline)
+
+    add_executable(test_http_server
+        tests/test_http_server.cpp
+    )
+    target_include_directories(test_http_server PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_http_server PRIVATE
+        Threads::Threads
+        httplib::httplib
+    )
+    add_test(NAME http_server COMMAND test_http_server)
+
+    add_executable(test_heartbeat_reporter
+        tests/test_heartbeat_reporter.cpp
+    )
+    target_include_directories(test_heartbeat_reporter PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_heartbeat_reporter PRIVATE
+        Threads::Threads
+    )
+    add_test(NAME heartbeat_reporter COMMAND test_heartbeat_reporter)
+
+    add_executable(test_algorithm_downloader
+        tests/test_algorithm_downloader.cpp
+    )
+    target_include_directories(test_algorithm_downloader PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_algorithm_downloader PRIVATE
+        Threads::Threads
+        OpenSSL::Crypto
+    )
+    add_test(NAME algorithm_downloader COMMAND test_algorithm_downloader)
 endif()
 
 # ============================================================

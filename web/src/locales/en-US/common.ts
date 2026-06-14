@@ -143,6 +143,11 @@ export const common = {
       "10109": "Invalid time window format, expected HH:mm",
       "10110": "Task status does not allow cancellation",
       "10111": "Device access URL already exists",
+      "10112": "Device is disabled",
+      "10113": "Device is offline, cannot configure inference task",
+      "10114": "Device type does not support inference tasks",
+      "10115": "Engine version incompatible, please upgrade engine",
+      "10116": "Edge node name is already taken",
       "20001": "Unauthorized",
       "20002": "Token expired",
       "20003": "Token invalid",
@@ -304,6 +309,9 @@ export const common = {
   empty: {
     title: "No Data",
     description: "No records found matching your criteria",
+  },
+  filter: {
+    select: "Please select",
   },
 } as const;
 

@@ -80,3 +80,45 @@ func (r *AIVisionTaskRepository) List(ctx context.Context, req dto.AIVisionTaskL
 	).Find(&items).Error
 	return items, total, err
 }
+
+// FindRunningTasksByNode returns tasks that are currently running on the specified node.
+func (r *AIVisionTaskRepository) FindRunningTasksByNode(ctx context.Context, nodeID string) ([]model.AIVisionTask, error) {
+	var tasks []model.AIVisionTask
+	err := r.db.WithContext(ctx).
+		Where("target_node_id = ?", nodeID).
+		Where("status = ?", model.TaskStatusRunning).
+		Find(&tasks).Error
+	return tasks, err
+}
+
+// FindSuspendedTasksByNode returns tasks that are currently suspended on the specified node.
+func (r *AIVisionTaskRepository) FindSuspendedTasksByNode(ctx context.Context, nodeID string) ([]model.AIVisionTask, error) {
+	var tasks []model.AIVisionTask
+	err := r.db.WithContext(ctx).
+		Where("target_node_id = ?", nodeID).
+		Where("status = ?", model.TaskStatusSuspended).
+		Find(&tasks).Error
+	return tasks, err
+}
+
+// SetErrorReason sets the error reason for a task and transitions it to suspended.
+func (r *AIVisionTaskRepository) SetErrorReason(ctx context.Context, taskID string, reason string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.AIVisionTask{}).
+		Where("id = ?", taskID).
+		Updates(map[string]interface{}{
+			"status":       model.TaskStatusSuspended,
+			"error_reason": reason,
+		}).Error
+}
+
+// ClearErrorReason clears the error reason and restores a task from suspended to running.
+func (r *AIVisionTaskRepository) ClearErrorReason(ctx context.Context, taskID string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.AIVisionTask{}).
+		Where("id = ?", taskID).
+		Updates(map[string]interface{}{
+			"status":       model.TaskStatusRunning,
+			"error_reason": "",
+		}).Error
+}

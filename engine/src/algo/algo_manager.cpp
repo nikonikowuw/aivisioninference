@@ -330,5 +330,31 @@ namespace aivision
             return instances_.size();
         }
 
+        void AlgoManager::UpdateDeploymentStatus(const std::string& algo_package_id,
+                                                  const std::string& version,
+                                                  const std::string& install_path,
+                                                  const std::string& status,
+                                                  const std::string& error_message)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (auto& dep : deployments_)
+            {
+                if (dep.algo_package_id == algo_package_id && dep.version == version)
+                {
+                    dep.install_path = install_path;
+                    dep.status = status;
+                    dep.error_message = error_message;
+                    return;
+                }
+            }
+            deployments_.push_back({algo_package_id, version, install_path, status, error_message});
+        }
+
+        std::vector<DeploymentInfo> AlgoManager::GetDeployments() const
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            return deployments_;
+        }
+
     } // namespace algo
 } // namespace aivision

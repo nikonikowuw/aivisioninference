@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 #include "algo_instance.h"
@@ -45,6 +46,16 @@ namespace aivision
             uint64_t load_time_ms = 0;
             uint64_t npu_memory_bytes = 0;
             std::string self_check_result;
+        };
+
+        /// 部署状态记录
+        struct DeploymentInfo
+        {
+            std::string algo_package_id;
+            std::string version;
+            std::string install_path;
+            std::string status;
+            std::string error_message;
         };
 
         /// AlgoManager — 算法管理器
@@ -112,6 +123,16 @@ namespace aivision
             /// 获取算法实例数
             size_t InstanceCount() const;
 
+            /// 更新算法部署状态（线程安全）
+            void UpdateDeploymentStatus(const std::string& algo_package_id,
+                                        const std::string& version,
+                                        const std::string& install_path,
+                                        const std::string& status,
+                                        const std::string& error_message = "");
+
+            /// 获取所有部署记录
+            std::vector<DeploymentInfo> GetDeployments() const;
+
             /// 设置热更新状态变更回调
             using StateChangeCallback = std::function<void(HotReloadState, HotReloadState)>;
             void SetStateChangeCallback(StateChangeCallback cb)
@@ -153,6 +174,9 @@ namespace aivision
 
             /// 排空超时标志
             std::atomic<bool> drain_timed_out_{false};
+
+            /// 算法部署记录列表
+            std::vector<DeploymentInfo> deployments_;
         };
 
     } // namespace algo

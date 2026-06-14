@@ -295,6 +295,9 @@ export const common = {
     title: "데이터 없음",
     description: "조건에 맞는 기록을 찾을 수 없습니다",
   },
+  filter: {
+    select: "선택해주세요",
+  },
 } as const;
 
 export default common;

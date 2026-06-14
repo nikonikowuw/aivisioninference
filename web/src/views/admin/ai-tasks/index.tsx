@@ -18,7 +18,7 @@ import {
   useToast,
   Tooltip,
 } from '@chakra-ui/react';
-import { AddIcon, DeleteIcon, EditIcon, RepeatIcon } from '@chakra-ui/icons';
+import { AddIcon, DeleteIcon, EditIcon, RepeatIcon, WarningIcon } from '@chakra-ui/icons';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { aiVisionTasksApi, aiTimeSchedulesApi, type AIVisionTask, type AITimeSchedule } from 'services/api';
@@ -28,12 +28,15 @@ import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
+import { useWebSocket } from 'hooks/useWebSocket';
 import TaskFormModal from './components/TaskFormModal';
 
 const statusColor: Record<string, string> = {
   draft: 'gray',
   ready: 'cyan',
   running: 'green',
+  suspended: 'yellow',
+  stopped: 'red',
   error: 'red',
 };
 
@@ -92,6 +95,15 @@ export default function AIVisionTasks() {
   useEffect(() => {
     load({ page: 1 });
   }, [searchTrigger, load]);
+
+  // WebSocket real-time task status updates
+  const handleWsMessage = useCallback((msg: any) => {
+    if (msg.type === 'task-status') {
+      load({ page });
+    }
+  }, [load, page]);
+
+  useWebSocket({ onMessage: handleWsMessage });
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -194,6 +206,9 @@ export default function AIVisionTasks() {
                   <Td fontWeight="600">{task.name}</Td>
                   <Td>
                     <Badge colorScheme={statusColor[task.status] || 'gray'}>
+                      {task.status === 'suspended' && (
+                        <WarningIcon mr={1} />
+                      )}
                       {t(`status.${task.status}`)}
                     </Badge>
                   </Td>

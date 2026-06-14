@@ -12,6 +12,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/buildinfo"
 	"github.com/niko-admin/niko-admin/internal/handler"
+	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/internal/pkg/onvif"
@@ -56,6 +57,8 @@ type RouteDeps struct {
 	GB28181ConfigHandler    *handler.GB28181ConfigHandler
 	SIPService              *service.SIPService
 	SIPRuntimeSvc           *service.SIPRuntimeService
+	EdgeNodeHandler         *handler.EdgeNodeHandler
+	EdgeNodeMiddleware       *middleware.EdgeNodeMiddleware
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -212,6 +215,8 @@ func newRouteDeps(
 	gb28181ConfigHandler *handler.GB28181ConfigHandler,
 	sipService *service.SIPService,
 	sipRuntimeSvc *service.SIPRuntimeService,
+	edgeNodeHandler *handler.EdgeNodeHandler,
+	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
 ) *RouteDeps {
 	if sipService != nil {
 		sipService.SetRuntimeService(sipRuntimeSvc)
@@ -248,6 +253,8 @@ func newRouteDeps(
 		GB28181ConfigHandler:    gb28181ConfigHandler,
 		SIPService:              sipService,
 		SIPRuntimeSvc:           sipRuntimeSvc,
+		EdgeNodeHandler:         edgeNodeHandler,
+		EdgeNodeMiddleware:       edgeNodeMiddleware,
 	}
 }
 
@@ -413,4 +420,35 @@ func provideGB28181PlatformConfigService(
 	svc := service.NewGB28181PlatformConfigService(repo)
 	svc.SetNotifier(runtimeSvc)
 	return svc
+}
+
+func provideEdgeNodeService(
+	nodeRepo *repository.EdgeNodeRepository,
+	nodeAlgoRepo *repository.EdgeNodeAlgorithmRepository,
+	algoPackageRepo *repository.AlgorithmPackageRepository,
+	taskRepo *repository.AIVisionTaskRepository,
+	jwtManager *jwt.Manager,
+	fileStorage storage.Storage,
+	cfg *Config,
+	hub *ws.Hub,
+) *service.EdgeNodeService {
+	svc := service.NewEdgeNodeService(
+		nodeRepo,
+		nodeAlgoRepo,
+		algoPackageRepo,
+		taskRepo,
+		jwtManager,
+		fileStorage,
+		hub,
+	)
+	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
+	return svc
+}
+
+func provideEdgeNodeHandler(svc *service.EdgeNodeService) *handler.EdgeNodeHandler {
+	return handler.NewEdgeNodeHandler(svc)
+}
+
+func provideEdgeNodeMiddleware(jwtManager *jwt.Manager) *middleware.EdgeNodeMiddleware {
+	return middleware.NewEdgeNodeMiddleware(jwtManager)
 }

@@ -7,6 +7,7 @@ export const menu = {
   "live-view": "Live View",
   "device-groups": "Device Groups",
   "device-staging": "Device Staging",
+  "edge-nodes": "Edge Nodes",
   "stream-status": "Stream Status",
   "smart-records": "Smart Records",
   "person-management": "Person Management",

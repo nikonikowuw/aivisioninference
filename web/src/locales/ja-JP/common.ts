@@ -297,6 +297,9 @@ export const common = {
     title: "データがありません",
     description: "条件に一致するレコードが見つかりませんでした",
   },
+  filter: {
+    select: "選択してください",
+  },
 } as const;
 
 export default common;

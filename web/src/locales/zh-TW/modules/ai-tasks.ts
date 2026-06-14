@@ -17,6 +17,8 @@ export const aiTasks = {
     draft: '草稿',
     ready: '就緒',
     running: '運行中',
+    suspended: '已暫停',
+    stopped: '已停止',
     error: '異常',
   },
   actions: {

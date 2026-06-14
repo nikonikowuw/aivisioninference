@@ -1,4 +1,6 @@
 #include "engine.h"
+#include "http/http_server.h"
+#include "monitor/heartbeat_reporter.h"
 #include "pipeline/pipeline_manager.h"
 #include <iostream>
 #include <curl/curl.h>
@@ -183,6 +185,10 @@ namespace aivision
             ipc_server_.get(), worker_pool_.get(), buffer_pool_.get(),
             queue_mgr_.get(), algo_mgr_.get(),
             monitor::MetricsReporterConfig{config.metrics_interval_ms});
+
+        // 创建 HTTP Server 和 HeartbeatReporter
+        http_server_ = std::make_unique<http::HTTPServer>(this);
+        heartbeat_reporter_ = std::make_unique<monitor::HeartbeatReporter>(this);
     }
 
     InferenceEngine::~InferenceEngine()
@@ -240,6 +246,21 @@ namespace aivision
         // 启动 Metrics 上报
         metrics_reporter_->Start();
 
+        // 启动 HTTP Server（如果配置了端口）
+        if (config_.http_port > 0)
+        {
+            if (!http_server_->Start(config_.http_port))
+            {
+                std::cerr << "Failed to start HTTP Server on port " << config_.http_port << std::endl;
+            }
+        }
+
+        // 启动 HeartbeatReporter（如果配置了平台连接）
+        if (!config_.platform_url.empty() && !config_.node_id.empty() && !config_.auth_token.empty())
+        {
+            heartbeat_reporter_->Start();
+        }
+
         // 主循环 (等待 Shutdown 或外部信号)
         while (running_.load())
         {
@@ -267,6 +288,10 @@ namespace aivision
 
         if (pipeline_mgr_)
             pipeline_mgr_->StopAll();
+        if (heartbeat_reporter_)
+            heartbeat_reporter_->Stop();
+        if (http_server_)
+            http_server_->Stop();
         if (metrics_reporter_)
             metrics_reporter_->Stop();
         if (worker_pool_)

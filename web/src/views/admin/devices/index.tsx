@@ -447,6 +447,7 @@ export default function Devices() {
                 </Th>
                 <Th>{t('fields.id')}</Th>
                 <Th>{t('fields.deviceName')}</Th>
+                <Th>{t('fields.deviceGroups')}</Th>
                 <Th>{t('fields.accessType')}</Th>
                 <Th>{t('fields.status')}</Th>
                 <Th>{t('fields.manufacturer')}</Th>
@@ -456,9 +457,9 @@ export default function Devices() {
             </Thead>
             <Tbody>
               {(pageLoading && devices.length === 0) ? (
-                <Tr><Td colSpan={8}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                <Tr><Td colSpan={9}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : devices.length === 0 ? (
-                <Tr><Td colSpan={8}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
+                <Tr><Td colSpan={9}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
               ) : (
                 devices.map((device) => (
                   <Tr key={device.id} opacity={(pageLoading && !pendingIds.has(device.id)) ? 0.6 : 1} transition="opacity 0.2s">
@@ -473,6 +474,19 @@ export default function Devices() {
                           {device.device_name}
                         </Text>
                       </HStack>
+                    </Td>
+                    <Td>
+                      {device.groups && device.groups.length > 0 ? (
+                        <Flex wrap="wrap" gap="1">
+                          {device.groups.map(g => (
+                            <Badge key={g.id} colorScheme="brand" variant="subtle" fontSize="xs">
+                              {g.group_name}
+                            </Badge>
+                          ))}
+                        </Flex>
+                      ) : (
+                        <Text fontSize="sm" color="gray.400">-</Text>
+                      )}
                     </Td>
                     <Td>
                       <Badge variant="outline" colorScheme="gray">{device.access_type.toUpperCase()}</Badge>

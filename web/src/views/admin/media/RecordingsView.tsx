@@ -197,7 +197,7 @@ export default function RecordingsView() {
       </Card>
 
       {/* Playback modal */}
-      <Modal isOpen={isPlayerOpen} onClose={closePlayer} size="xl">
+      <Modal isOpen={isPlayerOpen} onClose={closePlayer} size="xl" isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('playbackModalTitle')}</ModalHeader>

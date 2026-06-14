@@ -213,7 +213,7 @@ export default function PersonTagsPage() {
       </Box>
 
       {/* Create/Edit Modal */}
-      <Modal isOpen={isFormOpen} onClose={onFormClose}>
+      <Modal isOpen={isFormOpen} onClose={onFormClose} isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>

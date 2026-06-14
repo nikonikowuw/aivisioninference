@@ -118,7 +118,7 @@ export const PersonFormModal: React.FC<PersonFormModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
       <ModalOverlay backdropFilter="blur(4px)" />
       <ModalContent borderRadius="20px">
         <ModalHeader fontSize="22px" fontWeight="800" color={textColor} pt="25px" px="25px">

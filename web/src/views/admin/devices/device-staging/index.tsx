@@ -615,7 +615,7 @@ export default function DeviceStaging() {
       />
 
       {/* 设备详情模态框 */}
-      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="lg">
+      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="lg" isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('detail.title')}</ModalHeader>
@@ -632,7 +632,7 @@ export default function DeviceStaging() {
       </Modal>
 
       {/* 单个设备导入模态框 */}
-      <Modal isOpen={isImportOpen} onClose={onImportClose} size="md">
+      <Modal isOpen={isImportOpen} onClose={onImportClose} size="md" isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('import.title')}</ModalHeader>
@@ -690,7 +690,7 @@ export default function DeviceStaging() {
       </Modal>
 
       {/* 批量导入模态框 */}
-      <Modal isOpen={isBatchImportOpen} onClose={onBatchImportClose} size="md">
+      <Modal isOpen={isBatchImportOpen} onClose={onBatchImportClose} size="md" isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('import.batchTitle', { count: selectedIds.length })}</ModalHeader>

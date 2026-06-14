@@ -125,7 +125,7 @@ export default function ScheduleFormModal({ isOpen, onClose, onSuccess, initialD
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
       <ModalOverlay />
       <ModalContent>
         <ModalHeader>{initialData ? t('actions.edit') : t('actions.create')}</ModalHeader>

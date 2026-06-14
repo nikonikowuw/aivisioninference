@@ -288,7 +288,7 @@ export default function FeedbackPage() {
       />
 
       {/* Feedback Detail Modal */}
-      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="lg">
+      <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="lg" isCentered>
         <ModalOverlay backdropFilter="blur(8px)" />
         <ModalContent
           borderRadius="24px"

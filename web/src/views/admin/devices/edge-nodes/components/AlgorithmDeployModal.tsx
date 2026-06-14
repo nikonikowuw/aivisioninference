@@ -60,7 +60,7 @@ export function AlgorithmDeployModal({ isOpen, onClose, onSuccess, node }: Algor
   }, [selectedId, node.id, toast, t, onClose]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
       <ModalOverlay />
       <ModalContent>
         <ModalHeader>{t('actions.deployAlgo')}</ModalHeader>

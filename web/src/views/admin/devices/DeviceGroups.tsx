@@ -181,7 +181,7 @@ export default function DeviceGroups() {
       </Card>
 
       {/* Create/Edit Modal */}
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />
         <ModalContent bg={modalBg}>
           <ModalHeader color={textColor}>{editing ? t('actions.edit') : t('groupActions.create')}</ModalHeader>

@@ -371,7 +371,7 @@ export default function DeviceList() {
       </Drawer>
 
       {/* 编辑弹窗 */}
-      <Modal isOpen={isEditOpen} onClose={onEditClose}>
+      <Modal isOpen={isEditOpen} onClose={onEditClose} isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('devices.actions.edit')}</ModalHeader>
@@ -410,7 +410,7 @@ export default function DeviceList() {
       </Modal>
 
       {/* 创建弹窗 */}
-      <Modal isOpen={isCreateOpen} onClose={onCreateClose}>
+      <Modal isOpen={isCreateOpen} onClose={onCreateClose} isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('devices.actions.create')}</ModalHeader>

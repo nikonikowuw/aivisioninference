@@ -361,7 +361,7 @@ export default function Roles() {
       />
 
       {/* Create/Edit Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="md">
+      <Modal isOpen={isOpen} onClose={onClose} size="md" isCentered>
         <ModalOverlay backdropFilter="blur(8px)" />
         <ModalContent
           as="form"
@@ -517,7 +517,7 @@ export default function Roles() {
       </Modal>
 
       {/* Permissions Modal */}
-      <Modal isOpen={isPermOpen} onClose={onPermClose} size="xl">
+      <Modal isOpen={isPermOpen} onClose={onPermClose} size="xl" isCentered>
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent borderRadius="20px">
           <ModalHeader fontSize="22px" fontWeight="800" color={textColor} pt="25px" px="25px">

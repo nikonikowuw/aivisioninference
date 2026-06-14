@@ -530,7 +530,7 @@ export default function Devices() {
       </Card>
 
       {/* Modal & Dialogs */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+      <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
         <ModalOverlay />
         <ModalContent bg={modalBg}>
           <ModalHeader color={textColor}>{editing ? t('actions.edit') : t('actions.create')}</ModalHeader>

@@ -86,7 +86,7 @@ export const PersonImportModal: React.FC<PersonImportModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
       <ModalOverlay backdropFilter="blur(4px)" />
       <ModalContent borderRadius="20px">
         <ModalHeader fontSize="22px" fontWeight="800" color={textColor} pt="25px" px="25px">

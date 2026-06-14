@@ -285,7 +285,7 @@ export default function TaskFormModal({ isOpen, onClose, onSuccess, initialData 
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
+    <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside" isCentered>
       <ModalOverlay />
       <ModalContent maxH="90vh">
         <ModalHeader>{initialData ? t('modal.titleEdit') : t('modal.titleCreate')}</ModalHeader>

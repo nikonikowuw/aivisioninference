@@ -164,7 +164,7 @@ export default function WebhookConfigTab() {
         </Table>
       </Box>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{t('webhook.create')}</ModalHeader>

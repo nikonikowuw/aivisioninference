@@ -11,6 +11,11 @@ export const persons = {
       embeddingStatus: "特征状态",
       enabled: "启用",
       createdAt: "创建时间",
+      device: "设备",
+      similarity: "相似度",
+      operator: "操作人",
+      action: "动作",
+      personCount: "人员数",
     },
   },
   form: {
@@ -29,11 +34,23 @@ export const persons = {
     editTitle: "编辑人员",
   },
   detail: {
+    title: "人员详情",
     basicInfo: "基础信息",
     imageInfo: "人脸图片",
     embeddingInfo: "特征信息",
     relatedRecords: "关联记录",
     recentIdentifications: "近期识别记录",
+    noGroups: "暂无分组",
+    noTags: "暂无标签",
+    noRelatedPersons: "暂无关联人员",
+    noRecords: "暂无识别记录",
+    noAuditLogs: "暂无操作日志",
+    tabs: {
+      groupsAndTags: "分组与标签",
+      relatedPersons: "关联人员",
+      records: "识别记录",
+      auditLogs: "操作日志",
+    },
   },
   embedding: {
     status: {

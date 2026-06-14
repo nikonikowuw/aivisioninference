@@ -30,10 +30,10 @@ type CreateAIVisionTaskRequest struct {
 	DeviceChannelID string          `json:"device_channel_id" binding:"required,uuid"`
 	AlgoPackageID   string          `json:"algo_package_id" binding:"required,uuid"`
 	TargetNodeID    string          `json:"target_node_id" binding:"required,uuid"`
-	AIParams        json.RawMessage `json:"ai_params,omitempty"`
-	ROIRegions      json.RawMessage `json:"roi_regions,omitempty"`
-	MarkRegions     json.RawMessage `json:"mark_regions,omitempty"`
-	LineRegions     json.RawMessage `json:"line_regions,omitempty"`
+	AIParams        json.RawMessage `json:"ai_params,omitempty" swaggertype:"object"`
+	ROIRegions      json.RawMessage `json:"roi_regions,omitempty" swaggertype:"object"`
+	MarkRegions     json.RawMessage `json:"mark_regions,omitempty" swaggertype:"object"`
+	LineRegions     json.RawMessage `json:"line_regions,omitempty" swaggertype:"object"`
 }
 
 // UpdateAIVisionTaskRequest 更新推理任务请求
@@ -44,10 +44,10 @@ type UpdateAIVisionTaskRequest struct {
 	DeviceChannelID string          `json:"device_channel_id" binding:"required,uuid"`
 	AlgoPackageID   string          `json:"algo_package_id" binding:"required,uuid"`
 	TargetNodeID    string          `json:"target_node_id" binding:"required,uuid"`
-	AIParams        json.RawMessage `json:"ai_params,omitempty"`
-	ROIRegions      json.RawMessage `json:"roi_regions,omitempty"`
-	MarkRegions     json.RawMessage `json:"mark_regions,omitempty"`
-	LineRegions     json.RawMessage `json:"line_regions,omitempty"`
+	AIParams        json.RawMessage `json:"ai_params,omitempty" swaggertype:"object"`
+	ROIRegions      json.RawMessage `json:"roi_regions,omitempty" swaggertype:"object"`
+	MarkRegions     json.RawMessage `json:"mark_regions,omitempty" swaggertype:"object"`
+	LineRegions     json.RawMessage `json:"line_regions,omitempty" swaggertype:"object"`
 	ErrorReason     string          `json:"error_reason"`
 }
 

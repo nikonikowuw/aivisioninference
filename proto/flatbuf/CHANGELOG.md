@@ -10,18 +10,18 @@
 
 ### 新增消息类型
 
-| 方向 | 类型 | 说明 |
-|------|------|------|
-| Go→C++ | `StartStreamCmd` | 启动视频流推理 |
-| Go→C++ | `StopStreamCmd` | 停止视频流推理 |
-| Go→C++ | `UpdateConfigCmd` | 运行时更新算法配置 |
-| Go→C++ | `LoadAlgoCmd` | 加载/切换算法库 |
-| Go→C++ | `UnloadAlgoCmd` | 卸载算法库 |
-| C++→Go | `InferenceResultMsg` | 推理结果 |
-| C++→Go | `StreamStatusMsg` | 流状态变更 |
-| C++→Go | `AlgoLoadResultMsg` | 算法加载结果 |
-| C++→Go | `EngineMetricsMsg` | 引擎运行指标 |
-| 双向 | `HeartbeatCmd` / `HeartbeatAckMsg` | 心跳探活 |
+| 方向   | 类型                               | 说明               |
+| ------ | ---------------------------------- | ------------------ |
+| Go→C++ | `StartStreamCmd`                   | 启动视频流推理     |
+| Go→C++ | `StopStreamCmd`                    | 停止视频流推理     |
+| Go→C++ | `UpdateConfigCmd`                  | 运行时更新算法配置 |
+| Go→C++ | `LoadAlgoCmd`                      | 加载/切换算法库    |
+| Go→C++ | `UnloadAlgoCmd`                    | 卸载算法库         |
+| C++→Go | `InferenceResultMsg`               | 推理结果           |
+| C++→Go | `StreamStatusMsg`                  | 流状态变更         |
+| C++→Go | `AlgoLoadResultMsg`                | 算法加载结果       |
+| C++→Go | `EngineMetricsMsg`                 | 引擎运行指标       |
+| 双向   | `HeartbeatCmd` / `HeartbeatAckMsg` | 心跳探活           |
 
 ### 兼容性
 
@@ -35,28 +35,28 @@
 
 ### 新增字段
 
-| 消息 | 新增字段 | 类型 | 默认值 | 说明 |
-|------|----------|------|--------|------|
-| `BoundingBox` | `label_name` | string | `""` | 人可读标签名 |
-| `BoundingBox` | `track_id` | int | `-1` | 目标跟踪 ID |
-| `InferenceResultMsg` | `infer_time_us` | uint | `0` | 推理耗时 |
-| `InferenceResultMsg` | `preprocess_time_us` | uint | `0` | 预处理耗时 |
-| `InferenceResultMsg` | `postprocess_time_us` | uint | `0` | 后处理耗时 |
+| 消息                 | 新增字段              | 类型   | 默认值 | 说明         |
+| -------------------- | --------------------- | ------ | ------ | ------------ |
+| `BoundingBox`        | `label_name`          | string | `""`   | 人可读标签名 |
+| `BoundingBox`        | `track_id`            | int    | `-1`   | 目标跟踪 ID  |
+| `InferenceResultMsg` | `infer_time_us`       | uint   | `0`    | 推理耗时     |
+| `InferenceResultMsg` | `preprocess_time_us`  | uint   | `0`    | 预处理耗时   |
+| `InferenceResultMsg` | `postprocess_time_us` | uint   | `0`    | 后处理耗时   |
 
 ### 新增消息类型
 
-| 方向 | 类型 | 说明 |
-|------|------|------|
+| 方向   | 类型              | 说明               |
+| ------ | ----------------- | ------------------ |
 | C++→Go | `WorkerStatusMsg` | 单 Worker 状态诊断 |
 
 ### 兼容性
 
-| 读取方 | 写入方 | 结果 |
-|--------|--------|------|
-| Go v1.0 | C++ v1.1 | ✅ 新字段自动忽略 |
-| Go v1.1 | C++ v1.0 | ✅ 新字段读到默认值 |
-| C++ v1.0 | Go v1.1 | ✅ 新字段自动忽略 |
-| C++ v1.1 | Go v1.0 | ✅ 新字段自动忽略 |
+| 读取方   | 写入方   | 结果                |
+| -------- | -------- | ------------------- |
+| Go v1.0  | C++ v1.1 | ✅ 新字段自动忽略   |
+| Go v1.1  | C++ v1.0 | ✅ 新字段读到默认值 |
+| C++ v1.0 | Go v1.1  | ✅ 新字段自动忽略   |
+| C++ v1.1 | Go v1.0  | ✅ 新字段自动忽略   |
 
 ---
 
@@ -66,19 +66,19 @@
 
 ### 变更内容
 
-| 消息 | 变更 | 说明 |
-|------|------|------|
-| `Polygon` | 新增 `points_normalized` + `coord_system` | 支持归一化坐标 |
-| `InferenceResultMsg` | 新增 `background_path` | 背景图路径 |
+| 消息                 | 变更                                      | 说明           |
+| -------------------- | ----------------------------------------- | -------------- |
+| `Polygon`            | 新增 `points_normalized` + `coord_system` | 支持归一化坐标 |
+| `InferenceResultMsg` | 新增 `background_path`                    | 背景图路径     |
 
 ### 兼容性
 
-| 读取方 | 写入方 | 结果 |
-|--------|--------|------|
-| Go v1.x | C++ v2.0 | ✅ 新字段忽略, 旧 `points` 仍有效 |
-| Go v2.0 | C++ v1.x | ✅ `points_normalized` 为空, 回退到 `points` |
-| C++ v1.x | Go v2.0 | ✅ 新字段忽略 |
-| C++ v2.0 | Go v1.x | ✅ 新字段忽略 |
+| 读取方   | 写入方   | 结果                                         |
+| -------- | -------- | -------------------------------------------- |
+| Go v1.x  | C++ v2.0 | ✅ 新字段忽略, 旧 `points` 仍有效            |
+| Go v2.0  | C++ v1.x | ✅ `points_normalized` 为空, 回退到 `points` |
+| C++ v1.x | Go v2.0  | ✅ 新字段忽略                                |
+| C++ v2.0 | Go v1.x  | ✅ 新字段忽略                                |
 
 ### 迁移策略
 

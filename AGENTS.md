@@ -6,20 +6,20 @@ Niko Admin is a backend admin scaffold built with **Gin + GORM + PostgreSQL + Re
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Web Framework | Gin v1.10+ |
-| ORM | GORM v1.26+ |
-| Database | PostgreSQL 16+ |
-| Cache | Redis 7+ |
-| Task Queue | Asynq (Redis-backed) |
-| Auth | JWT (golang-jwt v5) |
-| WebSocket | gorilla/websocket |
-| Config | Viper |
-| CLI | Cobra |
-| Logging | Zap |
-| Swagger | swaggo/swag + gin-swagger |
-| Hot Reload | air |
+| Layer         | Technology                |
+| ------------- | ------------------------- |
+| Web Framework | Gin v1.10+                |
+| ORM           | GORM v1.26+               |
+| Database      | PostgreSQL 16+            |
+| Cache         | Redis 7+                  |
+| Task Queue    | Asynq (Redis-backed)      |
+| Auth          | JWT (golang-jwt v5)       |
+| WebSocket     | gorilla/websocket         |
+| Config        | Viper                     |
+| CLI           | Cobra                     |
+| Logging       | Zap                       |
+| Swagger       | swaggo/swag + gin-swagger |
+| Hot Reload    | air                       |
 
 ## Project Structure
 
@@ -73,20 +73,20 @@ Handler → Service → Repository → Model (GORM)
 
 项目使用 **Google Wire** 进行编译时依赖注入，分两层覆盖：
 
-| 层级 | 包 | 入口 |
-|---|---|---|
-| 应用层（App） | `internal/server/` | `InitializeApp()` — 创建 DB、Redis、JWT、WebSocket、Router、Asynq |
-| 路由层（Route） | `internal/router/` | `InitializeRouteDeps()` — 创建 Repo、Service、Handler |
+| 层级            | 包                 | 入口                                                              |
+| --------------- | ------------------ | ----------------------------------------------------------------- |
+| 应用层（App）   | `internal/server/` | `InitializeApp()` — 创建 DB、Redis、JWT、WebSocket、Router、Asynq |
+| 路由层（Route） | `internal/router/` | `InitializeRouteDeps()` — 创建 Repo、Service、Handler             |
 
 `internal/server/wire.go` 负责顶层依赖（数据库连接、缓存、JWT 管理器、路由配置映射），`internal/router/wire.go` 负责业务层的 Repo-Service-Handler 构造链。`cmd/server/main.go` 仅调用 `server.InitializeApp()` 后执行 `app.Run()`。
 
 ### 工作机制
 
-| 文件 | 职责 |
-|---|---|
-| `wire.go` | 声明 `wire.Build()` 定义依赖拓扑（`//go:build wireinject`，不参与编译） |
+| 文件          | 职责                                                                        |
+| ------------- | --------------------------------------------------------------------------- |
+| `wire.go`     | 声明 `wire.Build()` 定义依赖拓扑（`//go:build wireinject`，不参与编译）     |
 | `wire_gen.go` | Wire 自动生成的注入代码（标记 `DO NOT EDIT`），包含完整、类型安全的构造顺序 |
-| `deps.go` | 手写 provider 函数，用于需要自定义构造逻辑的场景（如条件选择缓存后端） |
+| `deps.go`     | 手写 provider 函数，用于需要自定义构造逻辑的场景（如条件选择缓存后端）      |
 
 ### 修改流程
 

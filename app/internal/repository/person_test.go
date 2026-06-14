@@ -80,7 +80,8 @@ func setupPersonTestDB(t *testing.T) *gorm.DB {
 			created_by TEXT,
 			updated_by TEXT,
 			tag_name TEXT NOT NULL UNIQUE,
-			tag_color TEXT
+			color TEXT,
+			sort_order INTEGER DEFAULT 0
 		);
 	`).Error)
 	require.NoError(t, db.Exec(`
@@ -179,7 +180,7 @@ func TestPersonRepository_ListWithKeyword(t *testing.T) {
 	createTestPerson(t, repo, "P006", "ZhaoLiu")
 
 	req := dto.PersonListRequest{
-		PageRequest: dto.PageRequest{Page: 1, PageSize: 10},
+		PageRequest:     dto.PageRequest{Page: 1, PageSize: 10},
 		EmbeddingStatus: model.EmbeddingStatusPending,
 	}
 	// Keyword search uses ILIKE (PostgreSQL-specific), test with status filter instead
@@ -300,4 +301,87 @@ func TestPersonGroupRepository_CRUD(t *testing.T) {
 
 	err = repo.Delete(ctx, group.ID)
 	assert.NoError(t, err)
+}
+
+func TestPersonGroupRepository_CountPersonsExcludeSoftDeleted(t *testing.T) {
+	db := setupPersonTestDB(t)
+	personRepo := repository.NewPersonRepository(db)
+	groupRepo := repository.NewPersonGroupRepository(db)
+	ctx := context.Background()
+
+	// 1. Create a group
+	group := &model.PersonGroup{GroupName: "测试组"}
+	group.ID = uuid.New().String()
+	require.NoError(t, groupRepo.Create(ctx, group))
+
+	// 2. Create two persons
+	p1ID := createTestPerson(t, personRepo, "P101", "正常人员")
+	p2ID := createTestPerson(t, personRepo, "P102", "已删除人员")
+
+	// 3. Associate both to the group
+	require.NoError(t, db.Exec("INSERT INTO person_group_members (person_record_id, group_id, created_at) VALUES (?, ?, ?)", p1ID, group.ID, time.Now()).Error)
+	require.NoError(t, db.Exec("INSERT INTO person_group_members (person_record_id, group_id, created_at) VALUES (?, ?, ?)", p2ID, group.ID, time.Now()).Error)
+
+	// Before soft delete, count should be 2
+	c, err := groupRepo.CountPersons(ctx, group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), c)
+
+	batch, err := groupRepo.BatchCountPersons(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), batch[group.ID])
+
+	// 4. Soft delete the second person
+	require.NoError(t, personRepo.SoftDelete(ctx, p2ID))
+
+	// After soft delete, count should be 1
+	c2, err := groupRepo.CountPersons(ctx, group.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), c2)
+
+	batch2, err := groupRepo.BatchCountPersons(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), batch2[group.ID])
+}
+
+func TestPersonTagRepository_CountPersonsExcludeSoftDeleted(t *testing.T) {
+	db := setupPersonTestDB(t)
+	personRepo := repository.NewPersonRepository(db)
+	tagRepo := repository.NewPersonTagRepository(db)
+	tagRelRepo := repository.NewPersonTagRelationRepository(db)
+	ctx := context.Background()
+
+	// 1. Create a tag
+	tag := &model.PersonTag{TagName: "VIP"}
+	tag.ID = uuid.New().String()
+	require.NoError(t, tagRepo.Create(ctx, tag))
+
+	// 2. Create two persons
+	p1ID := createTestPerson(t, personRepo, "P201", "正常标签人员")
+	p2ID := createTestPerson(t, personRepo, "P202", "已删除标签人员")
+
+	// 3. Associate both to the tag
+	require.NoError(t, tagRelRepo.BatchCreate(ctx, p1ID, []string{tag.ID}))
+	require.NoError(t, tagRelRepo.BatchCreate(ctx, p2ID, []string{tag.ID}))
+
+	// Before soft delete, count should be 2
+	c, err := tagRepo.CountPersons(ctx, tag.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), c)
+
+	batch, err := tagRepo.BatchCountPersons(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), batch[tag.ID])
+
+	// 4. Soft delete the second person
+	require.NoError(t, personRepo.SoftDelete(ctx, p2ID))
+
+	// After soft delete, count should be 1
+	c2, err := tagRepo.CountPersons(ctx, tag.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), c2)
+
+	batch2, err := tagRepo.BatchCountPersons(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), batch2[tag.ID])
 }

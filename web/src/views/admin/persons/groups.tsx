@@ -139,6 +139,7 @@ export default function PersonGroupsPage() {
             <Tr>
               <Th>{t('groups.form.groupName.label')}</Th>
               <Th>{t('groups.form.description.label')}</Th>
+              <Th>{t('table.columns.personCount')}</Th>
               <Th>{t('groups.form.sortOrder.label')}</Th>
               <Th isNumeric>{tCommon('actions')}</Th>
             </Tr>
@@ -146,13 +147,13 @@ export default function PersonGroupsPage() {
           <Tbody>
             {loading ? (
               <Tr>
-                <Td colSpan={4} textAlign="center" py="40px">
+                <Td colSpan={5} textAlign="center" py="40px">
                   <Text color="gray.500">{tCommon('status.loading')}</Text>
                 </Td>
               </Tr>
             ) : groups.length === 0 ? (
               <Tr>
-                <Td colSpan={4}>
+                <Td colSpan={5}>
                   <EmptyState />
                 </Td>
               </Tr>
@@ -161,6 +162,7 @@ export default function PersonGroupsPage() {
                 <Tr key={g.id}>
                   <Td fontWeight="500">{g.group_name}</Td>
                   <Td>{g.description || '-'}</Td>
+                  <Td>{g.person_count ?? 0}</Td>
                   <Td>{g.sort_order}</Td>
                   <Td isNumeric>
                     <HStack justify="end" spacing="4px">

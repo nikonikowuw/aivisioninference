@@ -20,13 +20,13 @@ redis:
   db: 0
 
 jwt:
-  secret: ""  # Set via NIKO_JWT_SECRET env var
-  access_expire: 3600    # 1 hour
+  secret: "" # Set via NIKO_JWT_SECRET env var
+  access_expire: 3600 # 1 hour
   refresh_expire: 604800 # 7 days
 
 storage:
   driver: local
-  chunk_size: 5      # MB
+  chunk_size: 5 # MB
   max_file_size: 100 # MB
   max_algo_file_size: 1024 # MB
   max_upload_concurrency: 2

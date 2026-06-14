@@ -38,6 +38,7 @@ import {
   MdSchedule,
   MdExtension,
   MdSearch,
+  MdRemoveRedEye,
 } from 'react-icons/md';
 import { adminRoutes, authRoutes, allRoutes } from './routes.config';
 import { RouteConfig, SidebarRouteType } from './types';
@@ -73,6 +74,7 @@ const IconsMap: Record<string, ComponentType<any>> = {
   MdSchedule,
   MdExtension,
   MdSearch,
+  MdRemoveRedEye,
 };
 
 // 菜单 code 到组件的映射

@@ -32,12 +32,12 @@ const (
 // PersonGroup 表示人员分组，支持单层自关联分组
 type PersonGroup struct {
 	BaseModel
-	GroupName   string         `gorm:"type:varchar(128);not null" json:"group_name"`
-	Description string         `gorm:"type:varchar(255)" json:"description"`
-	ParentID    *string        `gorm:"type:uuid" json:"parent_id"`
-	Parent      *PersonGroup   `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
-	Children    []PersonGroup  `gorm:"foreignKey:ParentID" json:"children,omitempty"`
-	SortOrder   int            `gorm:"default:0" json:"sort_order"`
+	GroupName   string        `gorm:"type:varchar(128);not null" json:"group_name"`
+	Description string        `gorm:"type:varchar(255)" json:"description"`
+	ParentID    *string       `gorm:"type:uuid" json:"parent_id"`
+	Parent      *PersonGroup  `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
+	Children    []PersonGroup `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	SortOrder   int           `gorm:"default:0" json:"sort_order"`
 }
 
 // SortableFields 返回允许排序的字段列表
@@ -48,22 +48,22 @@ func (PersonGroup) SortableFields() []string {
 // Person 表示人员记录，遵循"一张人脸图对应一条记录"原则
 type Person struct {
 	BaseModel
-	PersonCode              string          `gorm:"type:varchar(64);index" json:"person_code"`
-	PersonName              string          `gorm:"type:varchar(128);not null;index" json:"person_name"`
-	Gender                  string          `gorm:"type:varchar(16);default:unknown;check:gender IN ('unknown','male','female','other')" json:"gender"`
-	Phone                   string          `gorm:"type:varchar(32)" json:"phone"`
-	IDNumber                string          `gorm:"type:varchar(64)" json:"id_number,omitempty"`
-	ImageURL                string          `gorm:"type:varchar(512);not null" json:"image_url"`
-	ImageMD5                string          `gorm:"type:varchar(64);uniqueIndex" json:"image_md5"`
-	FaceQualityScore        *float64        `gorm:"type:numeric(4,3);check:face_quality_score >= 0 AND face_quality_score <= 1" json:"face_quality_score,omitempty"`
-	EmbeddingStatus         string          `gorm:"type:varchar(16);not null;default:pending;index" json:"embedding_status"`
-	EmbeddingErrorCode      string          `gorm:"type:varchar(64)" json:"embedding_error_code,omitempty"`
-	EmbeddingErrorMessageKey string         `gorm:"type:varchar(128)" json:"embedding_error_message_key,omitempty"`
-	EmbeddingRetryable      bool            `gorm:"default:false" json:"embedding_retryable"`
-	Enabled                 bool            `gorm:"default:true;index" json:"enabled"`
-	Remark                  string          `gorm:"type:text" json:"remark"`
-	Groups                  []PersonGroup   `gorm:"many2many:person_group_members;foreignKey:ID;joinForeignKey:PersonRecordID;references:ID" json:"groups,omitempty"`
-	Embedding               *PersonEmbedding `gorm:"foreignKey:PersonRecordID" json:"embedding,omitempty"`
+	PersonCode               string           `gorm:"type:varchar(64);index" json:"person_code"`
+	PersonName               string           `gorm:"type:varchar(128);not null;index" json:"person_name"`
+	Gender                   string           `gorm:"type:varchar(16);default:unknown;check:gender IN ('unknown','male','female','other')" json:"gender"`
+	Phone                    string           `gorm:"type:varchar(32)" json:"phone"`
+	IDNumber                 string           `gorm:"type:varchar(64)" json:"id_number,omitempty"`
+	ImageURL                 string           `gorm:"type:varchar(512);not null" json:"image_url"`
+	ImageMD5                 string           `gorm:"type:varchar(64);uniqueIndex" json:"image_md5"`
+	FaceQualityScore         *float64         `gorm:"type:numeric(4,3);check:face_quality_score >= 0 AND face_quality_score <= 1" json:"face_quality_score,omitempty"`
+	EmbeddingStatus          string           `gorm:"type:varchar(16);not null;default:pending;index" json:"embedding_status"`
+	EmbeddingErrorCode       string           `gorm:"type:varchar(64)" json:"embedding_error_code,omitempty"`
+	EmbeddingErrorMessageKey string           `gorm:"type:varchar(128)" json:"embedding_error_message_key,omitempty"`
+	EmbeddingRetryable       bool             `gorm:"default:false" json:"embedding_retryable"`
+	Enabled                  bool             `gorm:"default:true;index" json:"enabled"`
+	Remark                   string           `gorm:"type:text" json:"remark"`
+	Groups                   []PersonGroup    `gorm:"many2many:person_group_members;foreignKey:ID;joinForeignKey:PersonRecordID;references:ID;joinReferences:GroupID" json:"groups,omitempty"`
+	Embedding                *PersonEmbedding `gorm:"foreignKey:PersonRecordID" json:"embedding,omitempty"`
 }
 
 // SortableFields 返回允许排序的字段列表
@@ -138,5 +138,3 @@ type PersonTagRelation struct {
 	TagID          string    `gorm:"type:uuid;primaryKey" json:"tag_id"`
 	CreatedAt      time.Time `json:"created_at"`
 }
-
-

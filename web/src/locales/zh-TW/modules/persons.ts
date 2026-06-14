@@ -11,6 +11,11 @@ export const persons = {
       embeddingStatus: "特徵狀態",
       enabled: "啟用",
       createdAt: "建立時間",
+      device: "設備",
+      similarity: "相似度",
+      operator: "操作人",
+      action: "動作",
+      personCount: "人員數",
     },
   },
   form: {
@@ -29,11 +34,23 @@ export const persons = {
     editTitle: "編輯人員",
   },
   detail: {
+    title: "人員詳情",
     basicInfo: "基礎資訊",
     imageInfo: "人臉圖片",
     embeddingInfo: "特徵資訊",
     relatedRecords: "關聯記錄",
     recentIdentifications: "近期識別記錄",
+    noGroups: "暫無分組",
+    noTags: "暫无標籤",
+    noRelatedPersons: "暫無關聯人員",
+    noRecords: "暫無識別記錄",
+    noAuditLogs: "暫無操作日誌",
+    tabs: {
+      groupsAndTags: "分組與標籤",
+      relatedPersons: "關聯人員",
+      records: "識別記錄",
+      auditLogs: "操作日誌",
+    },
   },
   embedding: {
     status: {

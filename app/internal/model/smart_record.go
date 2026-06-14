@@ -48,7 +48,7 @@ type SmartRecord struct {
 	BackgroundImageURL string   `gorm:"type:varchar(512)" json:"background_image_url,omitempty"`
 	// PersonImageURL 是底库人脸图，通过 JOIN persons 表按 person_record_id 关联获取，不在 smart_records 表中存储
 	PersonImageURL string         `gorm:"->;type:varchar(512)" json:"person_image_url,omitempty"`
-	RawResult      datatypes.JSON `gorm:"type:jsonb" json:"raw_result,omitempty"`
+	RawResult      datatypes.JSON `gorm:"type:jsonb" json:"raw_result,omitempty" swaggertype:"object"`
 	CreatedAt      time.Time      `json:"created_at"`
 }
 

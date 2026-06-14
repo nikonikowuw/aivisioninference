@@ -11,6 +11,11 @@ export const persons = {
       embeddingStatus: "特徴量状態",
       enabled: "有効",
       createdAt: "作成日時",
+      device: "デバイス",
+      similarity: "類似度",
+      operator: "操作者",
+      action: "動作",
+      personCount: "人員数",
     },
   },
   form: {
@@ -29,11 +34,23 @@ export const persons = {
     editTitle: "人員を編集",
   },
   detail: {
+    title: "人員詳細",
     basicInfo: "基本情報",
     imageInfo: "顔写真",
     embeddingInfo: "特徴量情報",
     relatedRecords: "関連レコード",
     recentIdentifications: "最近の識別記録",
+    noGroups: "グループなし",
+    noTags: "タグなし",
+    noRelatedPersons: "関連人員なし",
+    noRecords: "識別記録なし",
+    noAuditLogs: "操作ログなし",
+    tabs: {
+      groupsAndTags: "グループとタグ",
+      relatedPersons: "関連人員",
+      records: "識別記録",
+      auditLogs: "操作ログ",
+    },
   },
   embedding: {
     status: {

@@ -11,6 +11,11 @@ export const persons = {
       embeddingStatus: "임베딩 상태",
       enabled: "활성",
       createdAt: "생성일",
+      device: "장비",
+      similarity: "유사도",
+      operator: "작업자",
+      action: "동작",
+      personCount: "인물 수",
     },
   },
   form: {
@@ -29,11 +34,23 @@ export const persons = {
     editTitle: "인물 편집",
   },
   detail: {
+    title: "인물 상세 정보",
     basicInfo: "기본 정보",
     imageInfo: "얼굴 이미지",
     embeddingInfo: "임베딩 정보",
     relatedRecords: "관련 기록",
     recentIdentifications: "최근 인식 기록",
+    noGroups: "그룹 없음",
+    noTags: "태그 없음",
+    noRelatedPersons: "관련 인물 없음",
+    noRecords: "인식 기록 없음",
+    noAuditLogs: "작업 로그 없음",
+    tabs: {
+      groupsAndTags: "그룹 및 태그",
+      relatedPersons: "관련 인물",
+      records: "인식 기록",
+      auditLogs: "작업 로그",
+    },
   },
   embedding: {
     status: {

@@ -11,6 +11,11 @@ export const persons = {
       embeddingStatus: "Embedding Status",
       enabled: "Enabled",
       createdAt: "Created At",
+      device: "Device",
+      similarity: "Similarity",
+      operator: "Operator",
+      action: "Action",
+      personCount: "Person Count",
     },
   },
   form: {
@@ -29,11 +34,23 @@ export const persons = {
     editTitle: "Edit Person",
   },
   detail: {
+    title: "Person Details",
     basicInfo: "Basic Info",
     imageInfo: "Face Image",
     embeddingInfo: "Embedding Info",
     relatedRecords: "Related Records",
     recentIdentifications: "Recent Identifications",
+    noGroups: "No Groups",
+    noTags: "No Tags",
+    noRelatedPersons: "No Related Persons",
+    noRecords: "No Records",
+    noAuditLogs: "No Audit Logs",
+    tabs: {
+      groupsAndTags: "Groups & Tags",
+      relatedPersons: "Related Persons",
+      records: "Identification Records",
+      auditLogs: "Audit Logs",
+    },
   },
   embedding: {
     status: {

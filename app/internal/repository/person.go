@@ -40,12 +40,18 @@ func (r *PersonRepository) FindByIDs(ctx context.Context, ids []string) ([]model
 	return items, err
 }
 
+// buildListQuery 构建查询基础（筛选 + 分组过滤），用于 List 和 ListForExport。
+func (r *PersonRepository) buildListQuery(ctx context.Context, req dto.PersonListRequest) *gorm.DB {
+	q := r.db.WithContext(ctx).Model(&model.Person{}).Scopes(req.FilterScopes()...)
+	if req.GroupID != "" {
+		q = q.Joins("JOIN person_group_members pgm ON pgm.person_record_id = persons.id AND pgm.group_id = ?", req.GroupID)
+	}
+	return q
+}
+
 // List 查询人员分页列表。
 func (r *PersonRepository) List(ctx context.Context, req dto.PersonListRequest) ([]model.Person, int64, error) {
-	base := r.db.WithContext(ctx).Model(&model.Person{}).Scopes(req.FilterScopes()...)
-	if req.GroupID != "" {
-		base = base.Joins("JOIN person_group_members pgm ON pgm.person_record_id = persons.id AND pgm.group_id = ?", req.GroupID)
-	}
+	base := r.buildListQuery(ctx, req)
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -59,10 +65,7 @@ func (r *PersonRepository) List(ctx context.Context, req dto.PersonListRequest) 
 // ListForExport 查询导出列表。
 func (r *PersonRepository) ListForExport(ctx context.Context, req dto.PersonListRequest, limit int) ([]model.Person, error) {
 	var items []model.Person
-	q := r.db.WithContext(ctx).Model(&model.Person{}).Scopes(req.FilterScopes()...)
-	if req.GroupID != "" {
-		q = q.Joins("JOIN person_group_members pgm ON pgm.person_record_id = persons.id AND pgm.group_id = ?", req.GroupID)
-	}
+	q := r.buildListQuery(ctx, req)
 	return items, q.Scopes(scopes.OrderBy(req.Sort, req.Order, model.Person{}.SortableFields()...), scopes.OrderByDefault()).Limit(limit).Preload("Groups").Find(&items).Error
 }
 
@@ -185,7 +188,11 @@ func (r *PersonGroupRepository) List(ctx context.Context) ([]model.PersonGroup, 
 }
 func (r *PersonGroupRepository) CountPersons(ctx context.Context, id string) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&model.PersonGroupMember{}).Where("group_id = ?", id).Count(&count).Error
+	err := r.db.WithContext(ctx).
+		Table("person_group_members").
+		Joins("JOIN persons ON persons.id = person_group_members.person_record_id").
+		Where("person_group_members.group_id = ? AND persons.deleted_at IS NULL", id).
+		Count(&count).Error
 	return count, err
 }
 func (r *PersonGroupRepository) BatchCountPersons(ctx context.Context) (map[string]int64, error) {
@@ -194,7 +201,13 @@ func (r *PersonGroupRepository) BatchCountPersons(ctx context.Context) (map[stri
 		GroupID string `gorm:"column:group_id"`
 		Count   int64  `gorm:"column:count"`
 	}
-	err := r.db.WithContext(ctx).Model(&model.PersonGroupMember{}).Select("group_id, COUNT(*) as count").Group("group_id").Find(&rows).Error
+	err := r.db.WithContext(ctx).
+		Table("person_group_members").
+		Select("person_group_members.group_id, COUNT(*) as count").
+		Joins("JOIN persons ON persons.id = person_group_members.person_record_id").
+		Where("persons.deleted_at IS NULL").
+		Group("person_group_members.group_id").
+		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +423,13 @@ func (r *PersonTagRepository) BatchCountPersons(ctx context.Context) (map[string
 		TagID string `gorm:"column:tag_id"`
 		Count int64  `gorm:"column:count"`
 	}
-	err := r.db.WithContext(ctx).Model(&model.PersonTagRelation{}).Select("tag_id, COUNT(*) as count").Group("tag_id").Find(&rows).Error
+	err := r.db.WithContext(ctx).
+		Table("person_tag_relations").
+		Select("person_tag_relations.tag_id, COUNT(*) as count").
+		Joins("JOIN persons ON persons.id = person_tag_relations.person_record_id").
+		Where("persons.deleted_at IS NULL").
+		Group("person_tag_relations.tag_id").
+		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +442,11 @@ func (r *PersonTagRepository) BatchCountPersons(ctx context.Context) (map[string
 // CountPersons 查询单个标签关联的人员数量。
 func (r *PersonTagRepository) CountPersons(ctx context.Context, id string) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&model.PersonTagRelation{}).Where("tag_id = ?", id).Count(&count).Error
+	err := r.db.WithContext(ctx).
+		Table("person_tag_relations").
+		Joins("JOIN persons ON persons.id = person_tag_relations.person_record_id").
+		Where("person_tag_relations.tag_id = ? AND persons.deleted_at IS NULL", id).
+		Count(&count).Error
 	return count, err
 }
 

@@ -53,18 +53,18 @@ type AlgorithmPackage struct {
 	Version           string         `gorm:"type:varchar(32);not null" json:"version"`
 	Domain            string         `gorm:"type:varchar(64);not null;index" json:"domain"`
 	ResultSchema      string         `gorm:"type:varchar(64);not null" json:"result_schema"`
-	CapabilitiesImage pq.StringArray `gorm:"type:text[]" json:"capabilities_image,omitempty"`
-	CapabilitiesData  pq.StringArray `gorm:"type:text[]" json:"capabilities_data,omitempty"`
-	Hardware          pq.StringArray `gorm:"type:text[]" json:"hardware,omitempty"`
+	CapabilitiesImage pq.StringArray `gorm:"type:text[]" json:"capabilities_image,omitempty" swaggertype:"array,string"`
+	CapabilitiesData  pq.StringArray `gorm:"type:text[]" json:"capabilities_data,omitempty" swaggertype:"array,string"`
+	Hardware          pq.StringArray `gorm:"type:text[]" json:"hardware,omitempty" swaggertype:"array,string"`
 	Description       string         `gorm:"type:text" json:"description,omitempty"`
 	PackagePath       string         `gorm:"type:varchar(512);not null" json:"package_path"`
 	ExtractPath       string         `gorm:"type:varchar(512);not null" json:"extract_path"`
 	PackageSize       int64          `json:"package_size,omitempty"`
 	PackageMD5        string         `gorm:"type:varchar(64)" json:"package_md5,omitempty"`
 	SoPath            string         `gorm:"type:varchar(512);not null" json:"so_path"`
-	AIParamsSchema    datatypes.JSON `gorm:"type:jsonb" json:"ai_params_schema,omitempty"`
+	AIParamsSchema    datatypes.JSON `gorm:"type:jsonb" json:"ai_params_schema,omitempty" swaggertype:"object"`
 	SelfCheckStatus   string         `gorm:"type:varchar(16);not null;default:pending" json:"self_check_status"`
-	SelfCheckResult   datatypes.JSON `gorm:"type:jsonb" json:"self_check_result,omitempty"`
+	SelfCheckResult   datatypes.JSON `gorm:"type:jsonb" json:"self_check_result,omitempty" swaggertype:"object"`
 	SelfCheckAt       *time.Time     `json:"self_check_at,omitempty"`
 	Status            string         `gorm:"type:varchar(16);not null;default:draft;index" json:"status"`
 	RefCount          int            `gorm:"default:0" json:"ref_count"`

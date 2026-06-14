@@ -11,6 +11,11 @@ export const persons = {
       embeddingStatus: "Status Embedding",
       enabled: "Aktif",
       createdAt: "Dibuat Pada",
+      device: "Perangkat",
+      similarity: "Kemiripan",
+      operator: "Operator",
+      action: "Tindakan",
+      personCount: "Jumlah Orang",
     },
   },
   form: {
@@ -29,11 +34,23 @@ export const persons = {
     editTitle: "Edit Orang",
   },
   detail: {
+    title: "Detail Orang",
     basicInfo: "Info Dasar",
     imageInfo: "Gambar Wajah",
     embeddingInfo: "Info Embedding",
     relatedRecords: "Catatan Terkait",
     recentIdentifications: "Identifikasi Terbaru",
+    noGroups: "Tidak Ada Grup",
+    noTags: "Tidak Ada Tag",
+    noRelatedPersons: "Tidak Ada Orang Terkait",
+    noRecords: "Tidak Ada Rekaman",
+    noAuditLogs: "Tidak Ada Log Audit",
+    tabs: {
+      groupsAndTags: "Grup & Tag",
+      relatedPersons: "Orang Terkait",
+      records: "Rekaman Identifikasi",
+      auditLogs: "Log Audit",
+    },
   },
   embedding: {
     status: {

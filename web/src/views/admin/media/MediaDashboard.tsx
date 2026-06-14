@@ -74,21 +74,27 @@ const TreeNodeView: React.FC<{ node: TreeNode; depth: number; search: string; on
     const isDevice = node.type === 'device';
     const device = node.device;
     const statusInfo = device ? STATUS_MAP[device.status] || STATUS_MAP.unknown : null;
+    const isOffline = device?.status === 'offline';
     const textColor = useColorModeValue('navy.700', 'white');
+    const deviceTextColor = isOffline ? 'gray.400' : textColor;
     const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
     if (search && isDevice && !node.name.toLowerCase().includes(search.toLowerCase())) return null;
     if (search && !isDevice && !node.children.some(c => c.name.toLowerCase().includes(search.toLowerCase()))) return null;
     return (
       <Box pl={`${depth * 12}px`}>
         {isDevice ? (
-          <Flex p="2" pr="3" borderRadius="md" cursor="grab" _hover={{ bg: hoverBg }} align="center" gap="2"
-            draggable onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name, access_type: device!.access_type, rtsp_url: device!.rtsp_url })); e.dataTransfer.effectAllowed = 'copy'; }}
-            onClick={() => device && onPlay(device)}>
-            <IconButton aria-label={t('play')} icon={<MdPlayCircle />} size="xs" colorScheme="green" variant="ghost" flexShrink={0}
-              onClick={(e) => { e.stopPropagation(); device && onPlay(device); }} />
-            <Icon as={MdVideocam} color="blue.500" boxSize="14px" flexShrink={0} />
-            <Text fontSize="sm" color={textColor} flex={1} noOfLines={1}>{node.name}</Text>
-            {statusInfo && <Icon as={statusInfo.icon} color={`${statusInfo.color}.500`} boxSize="10px" flexShrink={0} />}
+          <Flex p="2" pr="3" borderRadius="md" cursor={isOffline ? 'not-allowed' : 'grab'} _hover={{ bg: hoverBg }} align="center" gap="2"
+            draggable={!isOffline} onDragStart={(e) => { 
+              if (isOffline) { e.preventDefault(); return; }
+              e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name, access_type: device!.access_type, rtsp_url: device!.rtsp_url })); e.dataTransfer.effectAllowed = 'copy'; 
+            }}
+            onClick={() => { if (!isOffline && device) onPlay(device); }}>
+            <IconButton aria-label={t('play')} icon={<MdPlayCircle />} size="xs" colorScheme={isOffline ? 'gray' : 'green'} variant="ghost" flexShrink={0}
+              isDisabled={isOffline}
+              onClick={(e) => { e.stopPropagation(); if (!isOffline && device) onPlay(device); }} />
+            <Icon as={MdVideocam} color={isOffline ? 'gray.400' : 'blue.500'} boxSize="14px" flexShrink={0} />
+            <Text fontSize="sm" color={deviceTextColor} flex={1} noOfLines={1} opacity={isOffline ? 0.6 : 1}>{node.name}</Text>
+            {statusInfo && <Icon as={statusInfo.icon} color={`${statusInfo.color}.500`} boxSize="10px" flexShrink={0} opacity={isOffline ? 0.5 : 1} />}
           </Flex>
         ) : (
           <Flex p="2" pr="3" borderRadius="md" cursor="pointer" _hover={{ bg: hoverBg }} align="center" gap="2" onClick={() => setExpanded(!expanded)}>

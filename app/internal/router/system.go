@@ -3,8 +3,6 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/niko-admin/niko-admin/internal/handler"
-	"github.com/niko-admin/niko-admin/internal/middleware"
-	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 )
 
@@ -12,26 +10,24 @@ import (
 type SystemRouter struct {
 	systemHandler *handler.SystemHandler
 	jwtManager    *jwt.Manager
-	rbacCache     cache.Cache
 }
 
 // NewSystemRouter 创建系统管理路由
 func NewSystemRouter(
 	systemHandler *handler.SystemHandler,
 	jwtManager *jwt.Manager,
-	rbacCache cache.Cache,
 ) *SystemRouter {
 	return &SystemRouter{
 		systemHandler: systemHandler,
 		jwtManager:    jwtManager,
-		rbacCache:     rbacCache,
 	}
 }
 
 // RegisterRoutes 注册系统管理路由
 func (r *SystemRouter) RegisterRoutes(router *gin.RouterGroup) {
 	system := router.Group("/system")
-	system.Use(middleware.Auth(r.jwtManager))
+	// 注意：router 是 authorized 组（已有 Auth + Audit），
+	// 所有子路由自动继承，无需重复挂载 Auth 中间件
 
 	// 管理员可配置的系统信息（设备型号、部署位置、描述）
 	info := system.Group("/info")

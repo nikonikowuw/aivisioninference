@@ -11,18 +11,22 @@ import (
 )
 
 // RegisterAIVisionTaskRoutes registers AIVisionTask CRUD routes.
-func RegisterAIVisionTaskRoutes(api *gin.RouterGroup, h *handler.AIVisionTaskHandler, authMiddleware, rbacMiddleware gin.HandlerFunc) {
+// api 必须是已挂载 Auth + Audit 中间件的路由组。
+func RegisterAIVisionTaskRoutes(api *gin.RouterGroup, h *handler.AIVisionTaskHandler, rbacMiddleware gin.HandlerFunc) {
 	// 兼容历史生成路径与 OpenSpec 约定路径，避免前端动态路由/接口联调出现 404。
-	registerAIVisionTaskGroup(api.Group("/aivisiontasks"), h, authMiddleware, rbacMiddleware)
-	registerAIVisionTaskGroup(api.Group("/ai-tasks"), h, authMiddleware, rbacMiddleware)
+	registerAIVisionTaskGroup(api.Group("/aivisiontasks"), h, rbacMiddleware)
+	registerAIVisionTaskGroup(api.Group("/ai-tasks"), h, rbacMiddleware)
 }
 
-func registerAIVisionTaskGroup(group *gin.RouterGroup, h *handler.AIVisionTaskHandler, authMiddleware, rbacMiddleware gin.HandlerFunc) {
-	group.GET("", authMiddleware, rbacMiddleware, h.List)
-	group.POST("", authMiddleware, rbacMiddleware, h.Create)
-	group.POST("/check-conflict", authMiddleware, rbacMiddleware, h.CheckConflict)
-	group.GET("/:id", authMiddleware, rbacMiddleware, h.GetByID)
-	group.PUT("/:id", authMiddleware, rbacMiddleware, h.Update)
-	group.POST("/:id/restart", authMiddleware, rbacMiddleware, h.Restart)
-	group.DELETE("/:id", authMiddleware, rbacMiddleware, h.Delete)
+func registerAIVisionTaskGroup(group *gin.RouterGroup, h *handler.AIVisionTaskHandler, rbacMiddleware gin.HandlerFunc) {
+	if rbacMiddleware != nil {
+		group.Use(rbacMiddleware)
+	}
+	group.GET("", h.List)
+	group.POST("", h.Create)
+	group.POST("/check-conflict", h.CheckConflict)
+	group.GET("/:id", h.GetByID)
+	group.PUT("/:id", h.Update)
+	group.POST("/:id/restart", h.Restart)
+	group.DELETE("/:id", h.Delete)
 }

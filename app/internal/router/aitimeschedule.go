@@ -7,14 +7,18 @@ import (
 )
 
 // RegisterAITimeScheduleRoutes 注册 AITimeSchedule CRUD 路由。
-func RegisterAITimeScheduleRoutes(api *gin.RouterGroup, h *handler.AITimeScheduleHandler, authMiddleware, rbacMiddleware gin.HandlerFunc) {
+// api 必须是已挂载 Auth + Audit 中间件的路由组。
+func RegisterAITimeScheduleRoutes(api *gin.RouterGroup, h *handler.AITimeScheduleHandler, rbacMiddleware gin.HandlerFunc) {
 	group := api.Group("/ai-time-schedules")
+	if rbacMiddleware != nil {
+		group.Use(rbacMiddleware)
+	}
 	{
-		group.GET("", authMiddleware, rbacMiddleware, h.List)
-		group.GET("/all", authMiddleware, rbacMiddleware, h.ListAll)
-		group.POST("", authMiddleware, rbacMiddleware, h.Create)
-		group.GET("/:id", authMiddleware, rbacMiddleware, h.GetByID)
-		group.PUT("/:id", authMiddleware, rbacMiddleware, h.Update)
-		group.DELETE("/:id", authMiddleware, rbacMiddleware, h.Delete)
+		group.GET("", h.List)
+		group.GET("/all", h.ListAll)
+		group.POST("", h.Create)
+		group.GET("/:id", h.GetByID)
+		group.PUT("/:id", h.Update)
+		group.DELETE("/:id", h.Delete)
 	}
 }

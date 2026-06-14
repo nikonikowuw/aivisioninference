@@ -28,14 +28,21 @@ import (
 
 // Router holds all dependencies for route registration.
 type Router struct {
-	engine       *gin.Engine
-	db           *gorm.DB
-	rdb          *redis.Client
-	jwtManager   *jwt.Manager
-	hub          *ws.Hub
-	config       *Config
-	accessLogger *zap.Logger
-	scheduler    *asynq.Scheduler
+	engine        *gin.Engine
+	db            *gorm.DB
+	rdb           *redis.Client
+	jwtManager    *jwt.Manager
+	hub           *ws.Hub
+	config        *Config
+	accessLogger  *zap.Logger
+	scheduler     *asynq.Scheduler
+	rbacCache     cache.Cache
+	SIPRuntimeSvc *service.SIPRuntimeService
+}
+
+// RBAC returns the RBAC middleware, bound to the Router's cached dependencies.
+func (r *Router) RBAC() gin.HandlerFunc {
+	return middleware.RBAC(r.rbacCache, r.db)
 }
 
 // Config holds router-level configuration.
@@ -127,7 +134,8 @@ func (r *Router) setupRoutes() {
 	if err != nil {
 		zap.L().Fatal("initialize route dependencies failed", zap.Error(err))
 	}
-	rbacCache := deps.RBACCache
+	r.SIPRuntimeSvc = deps.SIPRuntimeSvc
+	r.rbacCache = deps.RBACCache
 
 	// Auth (no auth required)
 	r.registerAuthRoutes(v1, deps)
@@ -143,26 +151,26 @@ func (r *Router) setupRoutes() {
 	authorized.Use(middleware.Auth(r.jwtManager))
 	authorized.Use(middleware.Audit(deps.AuditService))
 
-	r.registerUserRoutes(authorized, deps, rbacCache)
-	r.registerRoleRoutes(authorized, deps, rbacCache)
-	r.registerPermissionRoutes(authorized, deps, rbacCache)
-	r.registerFileRoutes(authorized, deps, rbacCache)
-	r.registerAlgoPackageRoutes(authorized, deps, rbacCache)
-	r.registerAuditRoutes(authorized, deps, rbacCache)
-	r.registerGeneralTaskRoutes(authorized, deps, rbacCache)
+	r.registerUserRoutes(authorized, deps)
+	r.registerRoleRoutes(authorized, deps)
+	r.registerPermissionRoutes(authorized, deps)
+	r.registerFileRoutes(authorized, deps)
+	r.registerAlgoPackageRoutes(authorized, deps)
+	r.registerAuditRoutes(authorized, deps)
+	r.registerGeneralTaskRoutes(authorized, deps)
 
 	// AIVisionTasks
-	RegisterAIVisionTaskRoutes(authorized, deps.AIVisionTaskHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
+	RegisterAIVisionTaskRoutes(authorized, deps.AIVisionTaskHandler, r.RBAC())
 
 	// AI Time Schedules (reusable time configurations for AI tasks)
-	RegisterAITimeScheduleRoutes(authorized, deps.AITimeScheduleHandler, middleware.Auth(r.jwtManager), middleware.RBAC(rbacCache, r.db))
+	RegisterAITimeScheduleRoutes(authorized, deps.AITimeScheduleHandler, r.RBAC())
 
-	r.registerSystemRoutes(authorized, v1, deps, rbacCache)
-	r.registerFeedbackRoutes(authorized, deps, rbacCache)
-	r.registerDeviceRoutes(authorized, deps, rbacCache)
-	r.registerMediaRoutes(authorized, v1, deps, rbacCache)
-	r.registerPersonRoutes(authorized, deps, rbacCache)
-	r.registerSmartRecordRoutes(authorized, deps, rbacCache)
+	r.registerSystemRoutes(authorized, v1, deps)
+	r.registerFeedbackRoutes(authorized, deps)
+	r.registerDeviceRoutes(authorized, deps)
+	r.registerMediaRoutes(authorized, v1, deps)
+	r.registerPersonRoutes(authorized, deps)
+	r.registerSmartRecordRoutes(authorized, deps)
 
 	r.engine.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api") {
@@ -210,182 +218,202 @@ func (r *Router) registerAuthRoutes(v1 *gin.RouterGroup, deps *RouteDeps) {
 	v1.POST("/auth/avatar", middleware.Auth(r.jwtManager), authHandler.UploadAvatar)
 }
 
-func (r *Router) registerUserRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerUserRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	userHandler := deps.UserHandler
 	users := authorized.Group("/users")
+	users.Use(r.RBAC())
 	{
-		users.GET("", middleware.RBAC(rbacCache, r.db), userHandler.List)
-		users.POST("", middleware.RBAC(rbacCache, r.db), userHandler.Create)
-		users.GET("/export", middleware.RBAC(rbacCache, r.db), userHandler.ExportCSV)
-		users.POST("/import", middleware.RBAC(rbacCache, r.db), userHandler.ImportCSV)
-		users.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), userHandler.BatchDelete)
-		users.PUT("/batch-status", middleware.RBAC(rbacCache, r.db), userHandler.BatchUpdateStatus)
-		users.GET("/:id", middleware.RBAC(rbacCache, r.db), userHandler.GetByID)
-		users.PUT("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Update)
-		users.DELETE("/:id", middleware.RBAC(rbacCache, r.db), userHandler.Delete)
-		users.PUT("/:id/password", middleware.RBAC(rbacCache, r.db), userHandler.ResetPassword)
-		users.POST("/:id/avatar", middleware.RBAC(rbacCache, r.db), userHandler.UploadAvatar)
+		users.GET("", userHandler.List)
+		users.POST("", userHandler.Create)
+		users.GET("/export", userHandler.ExportCSV)
+		users.POST("/import", userHandler.ImportCSV)
+		users.POST("/batch-delete", userHandler.BatchDelete)
+		users.PUT("/batch-status", userHandler.BatchUpdateStatus)
+		users.GET("/:id", userHandler.GetByID)
+		users.PUT("/:id", userHandler.Update)
+		users.DELETE("/:id", userHandler.Delete)
+		users.PUT("/:id/password", userHandler.ResetPassword)
+		users.POST("/:id/avatar", userHandler.UploadAvatar)
 	}
 }
 
-func (r *Router) registerRoleRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerRoleRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	roleHandler := deps.RoleHandler
-	roles := authorized.Group("/roles")
+
+	// 例外：无需 RBAC 的公开路由（所有认证用户可查看角色列表）
+	authorized.GET("/roles", roleHandler.List)
+
+	// 需要 RBAC 的管理路由
+	roleMgmt := authorized.Group("/roles")
+	roleMgmt.Use(r.RBAC())
 	{
-		roles.GET("", roleHandler.List)
-		roles.POST("", middleware.RBAC(rbacCache, r.db), roleHandler.Create)
-		roles.GET("/export", middleware.RBAC(rbacCache, r.db), roleHandler.ExportCSV)
-		roles.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), roleHandler.BatchDelete)
-		roles.GET("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.GetByID)
-		roles.PUT("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Update)
-		roles.DELETE("/:id", middleware.RBAC(rbacCache, r.db), roleHandler.Delete)
-		roles.GET("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.GetPermissions)
-		roles.PUT("/:id/permissions", middleware.RBAC(rbacCache, r.db), roleHandler.AssignPermissions)
+		roleMgmt.POST("", roleHandler.Create)
+		roleMgmt.GET("/export", roleHandler.ExportCSV)
+		roleMgmt.POST("/batch-delete", roleHandler.BatchDelete)
+		roleMgmt.GET("/:id", roleHandler.GetByID)
+		roleMgmt.PUT("/:id", roleHandler.Update)
+		roleMgmt.DELETE("/:id", roleHandler.Delete)
+		roleMgmt.GET("/:id/permissions", roleHandler.GetPermissions)
+		roleMgmt.PUT("/:id/permissions", roleHandler.AssignPermissions)
 	}
 }
 
-func (r *Router) registerPermissionRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerPermissionRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	permHandler := deps.PermissionHandler
-	permissions := authorized.Group("/permissions")
+
+	// 例外：无需 RBAC（前端菜单渲染需要权限树）
+	authorized.GET("/permissions/tree", permHandler.Tree)
+
+	// 需要 RBAC 的管理路由
+	permMgmt := authorized.Group("/permissions")
+	permMgmt.Use(r.RBAC())
 	{
-		permissions.GET("/tree", permHandler.Tree)
-		permissions.POST("", middleware.RBAC(rbacCache, r.db), permHandler.Create)
-		permissions.PUT("/:id", middleware.RBAC(rbacCache, r.db), permHandler.Update)
-		permissions.DELETE("/:id", middleware.RBAC(rbacCache, r.db), permHandler.Delete)
+		permMgmt.POST("", permHandler.Create)
+		permMgmt.PUT("/:id", permHandler.Update)
+		permMgmt.DELETE("/:id", permHandler.Delete)
 	}
 }
 
-func (r *Router) registerFileRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerFileRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	fileHandler := deps.FileHandler
 	files := authorized.Group("/files")
+	files.Use(r.RBAC())
 	{
-		files.POST("/upload/init", middleware.RBAC(rbacCache, r.db), fileHandler.InitUpload)
-		files.POST("/upload/:upload_id/chunk", middleware.RBAC(rbacCache, r.db), fileHandler.UploadChunk)
-		files.POST("/upload/:upload_id/complete", middleware.RBAC(rbacCache, r.db), fileHandler.CompleteUpload)
-		files.GET("/upload/:upload_id/progress", middleware.RBAC(rbacCache, r.db), fileHandler.UploadProgress)
-		files.POST("/upload/check", middleware.RBAC(rbacCache, r.db), fileHandler.CheckFile)
-		files.GET("", middleware.RBAC(rbacCache, r.db), fileHandler.List)
-		files.GET("/export", middleware.RBAC(rbacCache, r.db), fileHandler.ExportCSV)
-		files.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), fileHandler.BatchDelete)
-		files.GET("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.GetByID)
-		files.GET("/:id/download", middleware.RBAC(rbacCache, r.db), fileHandler.Download)
-		files.DELETE("/:id", middleware.RBAC(rbacCache, r.db), fileHandler.Delete)
+		files.POST("/upload/init", fileHandler.InitUpload)
+		files.POST("/upload/:upload_id/chunk", fileHandler.UploadChunk)
+		files.POST("/upload/:upload_id/complete", fileHandler.CompleteUpload)
+		files.GET("/upload/:upload_id/progress", fileHandler.UploadProgress)
+		files.POST("/upload/check", fileHandler.CheckFile)
+		files.GET("", fileHandler.List)
+		files.GET("/export", fileHandler.ExportCSV)
+		files.POST("/batch-delete", fileHandler.BatchDelete)
+		files.GET("/:id", fileHandler.GetByID)
+		files.GET("/:id/download", fileHandler.Download)
+		files.DELETE("/:id", fileHandler.Delete)
 	}
 }
 
-func (r *Router) registerAlgoPackageRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerAlgoPackageRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	algoHandler := deps.AlgorithmPackageHandler
 	algos := authorized.Group("/algorithmpackages")
+	algos.Use(r.RBAC())
 	{
-		algos.GET("", middleware.RBAC(rbacCache, r.db), algoHandler.List)
-		algos.POST("/upload", middleware.RBAC(rbacCache, r.db), middleware.UploadProtection(r.config.MaxUploadConcurrency), algoHandler.UploadAlgorithm)
-		algos.GET("/:id", middleware.RBAC(rbacCache, r.db), algoHandler.GetByID)
-		algos.DELETE("/:id", middleware.RBAC(rbacCache, r.db), algoHandler.Delete)
+		algos.GET("", algoHandler.List)
+		algos.POST("/upload", middleware.UploadProtection(r.config.MaxUploadConcurrency), algoHandler.UploadAlgorithm)
+		algos.GET("/:id", algoHandler.GetByID)
+		algos.DELETE("/:id", algoHandler.Delete)
 	}
 }
 
-func (r *Router) registerAuditRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerAuditRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	auditHandler := deps.AuditHandler
-	authorized.GET("/audit-logs", middleware.RBAC(rbacCache, r.db), auditHandler.List)
-	authorized.GET("/audit-logs/export", middleware.RBAC(rbacCache, r.db), auditHandler.ExportCSV)
+	auditLogs := authorized.Group("/audit-logs")
+	auditLogs.Use(r.RBAC())
+	{
+		auditLogs.GET("", auditHandler.List)
+		auditLogs.GET("/export", auditHandler.ExportCSV)
+	}
 }
 
-func (r *Router) registerGeneralTaskRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerGeneralTaskRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	taskHandler := deps.TaskHandler
 	tasks := authorized.Group("/tasks")
+	tasks.Use(r.RBAC())
 	{
-		tasks.POST("", middleware.RBAC(rbacCache, r.db), taskHandler.Create)
-		tasks.GET("", middleware.RBAC(rbacCache, r.db), taskHandler.List)
-		tasks.GET("/export", middleware.RBAC(rbacCache, r.db), taskHandler.ExportCSV)
-		tasks.POST("/batch-cancel", middleware.RBAC(rbacCache, r.db), taskHandler.BatchCancel)
-		tasks.GET("/:id", middleware.RBAC(rbacCache, r.db), taskHandler.GetByID)
-		tasks.POST("/:id/cancel", middleware.RBAC(rbacCache, r.db), taskHandler.Cancel)
+		tasks.POST("", taskHandler.Create)
+		tasks.GET("", taskHandler.List)
+		tasks.GET("/export", taskHandler.ExportCSV)
+		tasks.POST("/batch-cancel", taskHandler.BatchCancel)
+		tasks.GET("/:id", taskHandler.GetByID)
+		tasks.POST("/:id/cancel", taskHandler.Cancel)
 	}
 }
 
-func (r *Router) registerSystemRoutes(authorized *gin.RouterGroup, v1 *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
-	// Brand configuration
+func (r *Router) registerSystemRoutes(authorized *gin.RouterGroup, v1 *gin.RouterGroup, deps *RouteDeps) {
 	brandHandler := deps.BrandHandler
+	// Brand config GET: 无需登录也不需要 RBAC（前端品牌展示）
 	v1.GET("/system/brand-config", brandHandler.GetConfig)
-	brandConfig := authorized.Group("/system/brand-config")
+
+	// Brand config mutate + Mail config + License + Dashboard: all need RBAC
+	sysRBAC := authorized.Group("")
+	sysRBAC.Use(r.RBAC())
 	{
-		brandConfig.PUT("", middleware.RBAC(rbacCache, r.db), brandHandler.SaveConfig)
-		brandConfig.POST("/logo", middleware.RBAC(rbacCache, r.db), brandHandler.UploadLogo)
+		brandCfg := sysRBAC.Group("/system/brand-config")
+		brandCfg.PUT("", brandHandler.SaveConfig)
+		brandCfg.POST("/logo", brandHandler.UploadLogo)
+
+		mailCfg := sysRBAC.Group("/system/mail-config")
+		mailCfg.GET("", deps.MailHandler.GetConfig)
+		mailCfg.PUT("", deps.MailHandler.SaveConfig)
+		mailCfg.POST("/test-smtp", deps.MailHandler.TestSMTP)
+		mailCfg.POST("/test-imap", deps.MailHandler.TestIMAP)
+		mailCfg.POST("/sync-imap", deps.MailHandler.SyncIMAP)
+
+		if deps.LicenseHandler != nil {
+			license := sysRBAC.Group("/license")
+			license.GET("/fingerprint", deps.LicenseHandler.GetFingerprint)
+			license.POST("/upload", deps.LicenseHandler.Upload)
+			license.GET("/active", deps.LicenseHandler.GetActive)
+			license.GET("/check", deps.LicenseHandler.CheckAuth)
+			license.GET("", deps.LicenseHandler.List)
+		}
+
+		sysRBAC.GET("/dashboard/stats", deps.DashboardHandler.Stats)
 	}
 
-	// Mail configuration
-	mailHandler := deps.MailHandler
-	mailConfig := authorized.Group("/system/mail-config")
-	{
-		mailConfig.GET("", middleware.RBAC(rbacCache, r.db), mailHandler.GetConfig)
-		mailConfig.PUT("", middleware.RBAC(rbacCache, r.db), mailHandler.SaveConfig)
-		mailConfig.POST("/test-smtp", middleware.RBAC(rbacCache, r.db), mailHandler.TestSMTP)
-		mailConfig.POST("/test-imap", middleware.RBAC(rbacCache, r.db), mailHandler.TestIMAP)
-		mailConfig.POST("/sync-imap", middleware.RBAC(rbacCache, r.db), mailHandler.SyncIMAP)
-	}
-
-	// System Management
+	// System Management (no RBAC, relies on internal auth)
 	if deps.SystemHandler != nil {
-		systemRouter := NewSystemRouter(deps.SystemHandler, r.jwtManager, rbacCache)
+		systemRouter := NewSystemRouter(deps.SystemHandler, r.jwtManager)
 		systemRouter.RegisterRoutes(authorized)
 	}
-
-	// License Management
-	if deps.LicenseHandler != nil {
-		license := authorized.Group("/license")
-		{
-			license.GET("/fingerprint", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.GetFingerprint)
-			license.POST("/upload", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.Upload)
-			license.GET("/active", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.GetActive)
-			license.GET("/check", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.CheckAuth)
-			license.GET("", middleware.RBAC(rbacCache, r.db), deps.LicenseHandler.List)
-		}
-	}
-
-	// Dashboard
-	dashboardHandler := deps.DashboardHandler
-	authorized.GET("/dashboard/stats", middleware.RBAC(rbacCache, r.db), dashboardHandler.Stats)
 }
 
-func (r *Router) registerFeedbackRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerFeedbackRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	feedbackHandler := deps.FeedbackHandler
-	feedback := authorized.Group("/feedback")
+
+	// 例外：任意认证用户可提交反馈，无需 RBAC
+	authorized.POST("/feedback", feedbackHandler.Create)
+
+	// 需要 RBAC 的管理路由
+	feedbackMgmt := authorized.Group("/feedback")
+	feedbackMgmt.Use(r.RBAC())
 	{
-		feedback.POST("", feedbackHandler.Create)
-		feedback.GET("", middleware.RBAC(rbacCache, r.db), feedbackHandler.List)
-		feedback.GET("/export", middleware.RBAC(rbacCache, r.db), feedbackHandler.ExportCSV)
-		feedback.PUT("/batch-status", middleware.RBAC(rbacCache, r.db), feedbackHandler.BatchUpdateStatus)
-		feedback.PUT("/:id/status", middleware.RBAC(rbacCache, r.db), feedbackHandler.UpdateStatus)
+		feedbackMgmt.GET("", feedbackHandler.List)
+		feedbackMgmt.GET("/export", feedbackHandler.ExportCSV)
+		feedbackMgmt.PUT("/batch-status", feedbackHandler.BatchUpdateStatus)
+		feedbackMgmt.PUT("/:id/status", feedbackHandler.UpdateStatus)
 	}
 }
 
-func (r *Router) registerDeviceRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerDeviceRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	deviceHandler := deps.DeviceHandler
 	devices := authorized.Group("/devices")
+	devices.Use(r.RBAC())
 	{
-		devices.GET("", middleware.RBAC(rbacCache, r.db), deviceHandler.List)
-		devices.POST("", middleware.RBAC(rbacCache, r.db), deviceHandler.Create)
-		devices.GET("/export", middleware.RBAC(rbacCache, r.db), deviceHandler.ExportCSV)
-		devices.POST("/import", middleware.RBAC(rbacCache, r.db), deviceHandler.ImportCSV)
-		devices.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), deviceHandler.BatchDelete)
-		devices.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.GetByID)
-		devices.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Update)
-		devices.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceHandler.Delete)
-		devices.POST("/:id/test", middleware.RBAC(rbacCache, r.db), deviceHandler.TestConnection)
+		devices.GET("", deviceHandler.List)
+		devices.POST("", deviceHandler.Create)
+		devices.GET("/export", deviceHandler.ExportCSV)
+		devices.POST("/import", deviceHandler.ImportCSV)
+		devices.POST("/batch-delete", deviceHandler.BatchDelete)
+		devices.GET("/:id", deviceHandler.GetByID)
+		devices.PUT("/:id", deviceHandler.Update)
+		devices.DELETE("/:id", deviceHandler.Delete)
+		devices.POST("/:id/test", deviceHandler.TestConnection)
 	}
 
 	deviceGroupHandler := deps.DeviceGroupHandler
 	deviceGroups := authorized.Group("/device-groups")
+	deviceGroups.Use(r.RBAC())
 	{
-		deviceGroups.GET("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.List)
-		deviceGroups.POST("", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Create)
-		deviceGroups.GET("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.GetByID)
-		deviceGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Update)
-		deviceGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), deviceGroupHandler.Delete)
+		deviceGroups.GET("", deviceGroupHandler.List)
+		deviceGroups.POST("", deviceGroupHandler.Create)
+		deviceGroups.GET("/:id", deviceGroupHandler.GetByID)
+		deviceGroups.PUT("/:id", deviceGroupHandler.Update)
+		deviceGroups.DELETE("/:id", deviceGroupHandler.Delete)
 	}
 }
 
-func (r *Router) registerMediaRoutes(authorized *gin.RouterGroup, v1 *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerMediaRoutes(authorized *gin.RouterGroup, v1 *gin.RouterGroup, deps *RouteDeps) {
 	// Media streaming (ZLM webhooks - internal, no auth)
 	mediaWebhookHandler, mediaPlayHandler, mediaRecordingHandler, deviceStagingHandler := provideMediaServices(r.db, r.config, deps.StreamManager, deps.SIPService)
 	// Register ZLM webhooks at root level with secret validation
@@ -395,16 +423,17 @@ func (r *Router) registerMediaRoutes(authorized *gin.RouterGroup, v1 *gin.Router
 
 	// Device Staging (Discover results)
 	staging := authorized.Group("/device-staging")
+	staging.Use(r.RBAC())
 	{
-		staging.GET("", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.List)
-		staging.POST("/batch-import", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.BatchImport)
-		staging.POST("/batch-ignore", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.BatchIgnore)
-		staging.POST("/scan-onvif", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.ScanONVIF)
-		staging.POST("/:id/import", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.Import)
-		staging.POST("/:id/ignore", middleware.RBAC(rbacCache, r.db), deviceStagingHandler.Ignore)
+		staging.GET("", deviceStagingHandler.List)
+		staging.POST("/batch-import", deviceStagingHandler.BatchImport)
+		staging.POST("/batch-ignore", deviceStagingHandler.BatchIgnore)
+		staging.POST("/scan-onvif", deviceStagingHandler.ScanONVIF)
+		staging.POST("/:id/import", deviceStagingHandler.Import)
+		staging.POST("/:id/ignore", deviceStagingHandler.Ignore)
 	}
 
-	// Media playback API (under /api/v1/media)
+	// Media playback API (under /api/v1/media, jwt auth only, no RBAC)
 	mediaPlayGroup := v1.Group("/media")
 	mediaPlayGroup.Use(middleware.Auth(r.jwtManager))
 	mediaPlayHandler.RegisterRoutes(mediaPlayGroup)
@@ -413,102 +442,112 @@ func (r *Router) registerMediaRoutes(authorized *gin.RouterGroup, v1 *gin.Router
 	// GB28181 设备管理路由
 	if deps.GB28181Handler != nil {
 		gb28181 := authorized.Group("/gb28181")
+		gb28181.Use(r.RBAC())
 		{
-			gb28181.GET("/devices", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.List)
-			gb28181.POST("/devices", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Create)
-			gb28181.POST("/devices/batch-delete", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.BatchDelete)
-			gb28181.GET("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetByID)
-			gb28181.PUT("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Update)
-			gb28181.DELETE("/devices/:id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.Delete)
-			gb28181.POST("/devices/:id/catalog", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.TriggerCatalog)
-			gb28181.GET("/devices/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetChannels)
-			gb28181.GET("/catalog-tasks/:task_id", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetCatalogTaskStatus)
-			gb28181.GET("/nvrs", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.ListNVRs)
-			gb28181.GET("/nvrs/:id/channels", middleware.RBAC(rbacCache, r.db), deps.GB28181Handler.GetNVRChannels)
+			gb28181.GET("/devices", deps.GB28181Handler.List)
+			gb28181.POST("/devices", deps.GB28181Handler.Create)
+			gb28181.POST("/devices/batch-delete", deps.GB28181Handler.BatchDelete)
+			gb28181.GET("/devices/:id", deps.GB28181Handler.GetByID)
+			gb28181.PUT("/devices/:id", deps.GB28181Handler.Update)
+			gb28181.DELETE("/devices/:id", deps.GB28181Handler.Delete)
+			gb28181.POST("/devices/:id/catalog", deps.GB28181Handler.TriggerCatalog)
+			gb28181.GET("/devices/:id/channels", deps.GB28181Handler.GetChannels)
+			gb28181.GET("/catalog-tasks/:task_id", deps.GB28181Handler.GetCatalogTaskStatus)
+			gb28181.GET("/nvrs", deps.GB28181Handler.ListNVRs)
+			gb28181.GET("/nvrs/:id/channels", deps.GB28181Handler.GetNVRChannels)
 		}
 	}
 
 	// GB28181 媒体路由
 	if deps.MediaGB28181Handler != nil {
 		mediaGB28181 := authorized.Group("/media/gb28181")
+		mediaGB28181.Use(r.RBAC())
 		{
-			mediaGB28181.POST("/live/start", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StartLive)
-			mediaGB28181.POST("/live/stop", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StopLive)
-			mediaGB28181.POST("/playback/start", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StartPlayback)
-			mediaGB28181.POST("/playback/control", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.PlaybackControl)
-			mediaGB28181.POST("/playback/stop", middleware.RBAC(rbacCache, r.db), deps.MediaGB28181Handler.StopPlayback)
+			mediaGB28181.POST("/live/start", deps.MediaGB28181Handler.StartLive)
+			mediaGB28181.POST("/live/stop", deps.MediaGB28181Handler.StopLive)
+			mediaGB28181.POST("/playback/start", deps.MediaGB28181Handler.StartPlayback)
+			mediaGB28181.POST("/playback/control", deps.MediaGB28181Handler.PlaybackControl)
+			mediaGB28181.POST("/playback/stop", deps.MediaGB28181Handler.StopPlayback)
 		}
 	}
 
 	// GB28181 配置路由
 	if deps.GB28181ConfigHandler != nil {
 		gbConfig := authorized.Group("/system/gb28181")
+		gbConfig.Use(r.RBAC())
 		{
-			gbConfig.GET("/config", middleware.RBAC(rbacCache, r.db), deps.GB28181ConfigHandler.GetConfig)
-			gbConfig.PUT("/config", middleware.RBAC(rbacCache, r.db), deps.GB28181ConfigHandler.UpdateConfig)
+			gbConfig.GET("/config", deps.GB28181ConfigHandler.GetConfig)
+			gbConfig.PUT("/config", deps.GB28181ConfigHandler.UpdateConfig)
 		}
 	}
 }
 
-func (r *Router) registerPersonRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerPersonRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	personHandler := deps.PersonHandler
 
+	// 例外：图片预览无需 RBAC（URL 包含签名 token）
 	personsImage := authorized.Group("/persons/image")
 	{
 		personsImage.GET("/:filename", personHandler.ViewImage)
 	}
 
+	// 需要 RBAC 的 person CRUD
 	persons := authorized.Group("/persons")
+	persons.Use(r.RBAC())
 	{
-		persons.GET("", middleware.RBAC(rbacCache, r.db), personHandler.List)
-		persons.POST("", middleware.RBAC(rbacCache, r.db), personHandler.Create)
-		persons.GET("/export", middleware.RBAC(rbacCache, r.db), personHandler.ExportExcel)
-		persons.POST("/search-by-face", middleware.RBAC(rbacCache, r.db), personHandler.SearchByFace)
-		persons.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), personHandler.BatchDelete)
-		persons.POST("/batch-toggle", middleware.RBAC(rbacCache, r.db), personHandler.BatchToggle)
-		persons.POST("/batch-retry-embedding", middleware.RBAC(rbacCache, r.db), personHandler.BatchRetryEmbedding)
-		persons.GET("/:id", middleware.RBAC(rbacCache, r.db), personHandler.GetByID)
-		persons.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.Update)
-		persons.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.Delete)
-		persons.POST("/:id/retry-embedding", middleware.RBAC(rbacCache, r.db), personHandler.RetryEmbedding)
+		persons.GET("", personHandler.List)
+		persons.POST("", personHandler.Create)
+		persons.GET("/export", personHandler.ExportExcel)
+		persons.POST("/search-by-face", personHandler.SearchByFace)
+		persons.POST("/batch-delete", personHandler.BatchDelete)
+		persons.POST("/batch-toggle", personHandler.BatchToggle)
+		persons.POST("/batch-retry-embedding", personHandler.BatchRetryEmbedding)
+		persons.GET("/:id", personHandler.GetByID)
+		persons.PUT("/:id", personHandler.Update)
+		persons.DELETE("/:id", personHandler.Delete)
+		persons.POST("/:id/retry-embedding", personHandler.RetryEmbedding)
 	}
 
 	personGroups := authorized.Group("/person-groups")
+	personGroups.Use(r.RBAC())
 	{
-		personGroups.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListGroups)
-		personGroups.POST("", middleware.RBAC(rbacCache, r.db), personHandler.CreateGroup)
-		personGroups.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.UpdateGroup)
-		personGroups.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteGroup)
+		personGroups.GET("", personHandler.ListGroups)
+		personGroups.POST("", personHandler.CreateGroup)
+		personGroups.PUT("/:id", personHandler.UpdateGroup)
+		personGroups.DELETE("/:id", personHandler.DeleteGroup)
 	}
 
 	personTags := authorized.Group("/person-tags")
+	personTags.Use(r.RBAC())
 	{
-		personTags.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListTags)
-		personTags.POST("", middleware.RBAC(rbacCache, r.db), personHandler.CreateTag)
-		personTags.PUT("/:id", middleware.RBAC(rbacCache, r.db), personHandler.UpdateTag)
-		personTags.DELETE("/:id", middleware.RBAC(rbacCache, r.db), personHandler.DeleteTag)
+		personTags.GET("", personHandler.ListTags)
+		personTags.POST("", personHandler.CreateTag)
+		personTags.PUT("/:id", personHandler.UpdateTag)
+		personTags.DELETE("/:id", personHandler.DeleteTag)
 	}
 
 	personImports := authorized.Group("/person-import-tasks")
+	personImports.Use(r.RBAC())
 	{
-		personImports.GET("", middleware.RBAC(rbacCache, r.db), personHandler.ListImportTasks)
-		personImports.POST("", middleware.RBAC(rbacCache, r.db), personHandler.Import)
-		personImports.POST("/by-url", middleware.RBAC(rbacCache, r.db), personHandler.ImportByURL)
-		personImports.GET("/:id", middleware.RBAC(rbacCache, r.db), personHandler.GetImportTask)
+		personImports.GET("", personHandler.ListImportTasks)
+		personImports.POST("", personHandler.Import)
+		personImports.POST("/by-url", personHandler.ImportByURL)
+		personImports.GET("/:id", personHandler.GetImportTask)
 	}
 }
 
-func (r *Router) registerSmartRecordRoutes(authorized *gin.RouterGroup, deps *RouteDeps, rbacCache cache.Cache) {
+func (r *Router) registerSmartRecordRoutes(authorized *gin.RouterGroup, deps *RouteDeps) {
 	smartRecordHandler := deps.SmartRecordHandler
 
 	smartRecords := authorized.Group("/smart-records")
+	smartRecords.Use(r.RBAC())
 	{
-		smartRecords.GET("/category-codes", middleware.RBAC(rbacCache, r.db), smartRecordHandler.ListCategoryCodes)
-		smartRecords.GET("", middleware.RBAC(rbacCache, r.db), smartRecordHandler.List)
-		smartRecords.GET("/export", middleware.RBAC(rbacCache, r.db), smartRecordHandler.ExportCSV)
-		smartRecords.POST("/batch-delete", middleware.RBAC(rbacCache, r.db), smartRecordHandler.BatchDelete)
-		smartRecords.PUT("/:id/alarm-status", middleware.RBAC(rbacCache, r.db), smartRecordHandler.UpdateAlarmStatus)
-		smartRecords.POST("/export-selected", middleware.RBAC(rbacCache, r.db), smartRecordHandler.ExportSelectedCSV)
+		smartRecords.GET("/category-codes", smartRecordHandler.ListCategoryCodes)
+		smartRecords.GET("", smartRecordHandler.List)
+		smartRecords.GET("/export", smartRecordHandler.ExportCSV)
+		smartRecords.POST("/batch-delete", smartRecordHandler.BatchDelete)
+		smartRecords.PUT("/:id/alarm-status", smartRecordHandler.UpdateAlarmStatus)
+		smartRecords.POST("/export-selected", smartRecordHandler.ExportSelectedCSV)
 	}
 }
 
@@ -545,7 +584,8 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)
 	deviceRepoV2 := repository.NewDeviceRepositoryV2(db)
-	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil)
+	auditRepo := repository.NewAuditRepository(db)
+	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo)
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)

@@ -6,6 +6,10 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"image"
+	_ "image/gif" // registers gif decoder with image.Decode
+	_ "image/jpeg" // registers jpeg decoder with image.Decode
+	"image/png"
 	"io"
 	"mime/multipart"
 	"path/filepath"
@@ -16,6 +20,7 @@ import (
 	"github.com/pgvector/pgvector-go"
 	"github.com/xuri/excelize/v2"
 	"go.uber.org/zap"
+	_ "golang.org/x/image/webp" // registers webp decoder with image.Decode
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
@@ -145,7 +150,7 @@ func (s *PersonService) GetByID(ctx context.Context, id string) (*dto.PersonResp
 	return &resp, nil
 }
 
-// ExtractPersonImageStoragePath 从图片 URL 提取人员存储相对路径。
+// ExtractPersonImageStoragePath 从图片 URL 提取人员存储相对路径（无前导斜杠）。
 // 此函数供 service 和 task 共享使用。
 func ExtractPersonImageStoragePath(imageURL string, storageBaseURL string) string {
 	if imageURL == "" {
@@ -155,9 +160,10 @@ func ExtractPersonImageStoragePath(imageURL string, storageBaseURL string) strin
 	if marker := "/api/v1/persons/image/"; strings.Contains(imageURL, marker) {
 		return "persons/" + filepath.Base(imageURL)
 	}
-	// 2. 如果包含存储基准 URL
+	// 2. 如果包含存储基准 URL，去除 baseURL 部分并清理前导斜杠
 	if storageBaseURL != "" && strings.HasPrefix(imageURL, storageBaseURL) {
-		return strings.TrimPrefix(imageURL, storageBaseURL)
+		path := strings.TrimPrefix(imageURL, storageBaseURL)
+		return strings.TrimPrefix(path, "/")
 	}
 	// 3. 处理 /uploads 前缀：确保返回相对于 uploadDir 的路径
 	path := strings.TrimPrefix(imageURL, "/")
@@ -167,7 +173,7 @@ func ExtractPersonImageStoragePath(imageURL string, storageBaseURL string) strin
 	if parts := strings.Split(path, "/uploads/"); len(parts) > 1 {
 		return parts[len(parts)-1]
 	}
-	return path
+	return strings.TrimPrefix(path, "/")
 }
 
 // getStoragePath 从图片 URL 提取存储相对路径
@@ -488,27 +494,60 @@ func (s *PersonService) ExportExcel(ctx context.Context, req dto.PersonListReque
 		f.SetCellValue(sheetName, fmt.Sprintf("G%d", rowIdx), fmt.Sprintf("%v", item.Enabled))
 		f.SetCellValue(sheetName, fmt.Sprintf("H%d", rowIdx), item.CreatedAt.Format(time.RFC3339))
 
-		// 解析 ImageURL 为存储路径
+		// 解析 ImageURL 为存储路径并读取图片（带 fallback 机制）
 		storagePath := s.getStoragePath(item.ImageURL)
-
-		if rc, err := s.storage.Get(storagePath); err == nil {
-			imgData, _ := io.ReadAll(rc)
-			rc.Close()
-			if len(imgData) > 0 {
-				ext := filepath.Ext(storagePath)
-				if ext == "" {
-					ext = ".jpg"
-				}
-				_ = f.AddPictureFromBytes(sheetName, fmt.Sprintf("A%d", rowIdx), &excelize.Picture{
+		var imgData []byte
+		if s.storage != nil && item.ImageURL != "" {
+			rc, err := s.storage.Get(storagePath)
+			if err != nil {
+				// fallback: 尝试直接去掉前导斜杠的路径
+				fallbackPath := strings.TrimPrefix(item.ImageURL, "/")
+				rc, err = s.storage.Get(fallbackPath)
+			}
+			if err == nil {
+				imgData, _ = io.ReadAll(rc)
+				rc.Close()
+			}
+			if len(imgData) == 0 {
+				zap.L().Warn("人员图片加载失败，导出仅包含文本",
+					zap.String("person_id", item.ID),
+					zap.String("image_url", item.ImageURL),
+					zap.String("storage_path", storagePath),
+					zap.Error(err),
+				)
+			}
+		}
+		if len(imgData) > 0 {
+			hintExt := filepath.Ext(storagePath)
+			if hintExt == "" {
+				hintExt = ".jpg"
+			}
+			preparedData, ext, err := prepareExportImage(imgData, hintExt)
+			if err != nil {
+				zap.L().Warn("人员图片解码/转换失败，跳过该图片",
+					zap.String("person_id", item.ID),
+					zap.String("image_url", item.ImageURL),
+					zap.String("storage_path", storagePath),
+					zap.Error(err),
+				)
+			} else {
+				if err := f.AddPictureFromBytes(sheetName, fmt.Sprintf("A%d", rowIdx), &excelize.Picture{
 					Extension: ext,
-					File:      imgData,
+					File:      preparedData,
 					Format: &excelize.GraphicOptions{
 						AutoFit:         true,
 						LockAspectRatio: true,
 						OffsetX:         5,
 						OffsetY:         5,
 					},
-				})
+				}); err != nil {
+					zap.L().Warn("导出内嵌图片失败，跳过该图片",
+						zap.String("person_id", item.ID),
+						zap.String("image_url", item.ImageURL),
+						zap.String("extension", ext),
+						zap.Error(err),
+					)
+				}
 			}
 		}
 	}
@@ -903,4 +942,35 @@ func safeStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// prepareExportImage 解码图片字节并根据实际格式确保扩展名是 excelize 支持的（jpg/png/gif）。
+// 对于 webp 等非支持格式，自动重新编码为 PNG。
+// 返回嵌入安全的图片字节和对应的扩展名。
+func prepareExportImage(data []byte, hintExt string) ([]byte, string, error) {
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", fmt.Errorf("image decode: %w", err)
+	}
+
+	// 根据解码格式映射到 excelize 支持的扩展名
+	var safeExt string
+	switch format {
+	case "png":
+		safeExt = ".png"
+	case "jpeg":
+		safeExt = ".jpg"
+	case "gif":
+		safeExt = ".gif"
+	default:
+		// webp 等不被 excelize 支持的格式 -> 转 PNG
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, "", fmt.Errorf("re-encode %s as png: %w", format, err)
+		}
+		return buf.Bytes(), ".png", nil
+	}
+
+	// 已是兼容格式，直接返回原始字节和标准扩展名
+	return data, safeExt, nil
 }

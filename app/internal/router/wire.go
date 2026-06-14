@@ -49,6 +49,8 @@ var repositorySet = wire.NewSet(
 	repository.NewImportTaskRepository,
 	repository.NewDeviceSipConfigRepository,
 	repository.NewDeviceRepositoryV2,
+	repository.NewGB28181PlatformConfigRepository,
+	repository.NewGB28181StreamSessionRepository,
 )
 
 var serviceSet = wire.NewSet(
@@ -82,6 +84,8 @@ var serviceSet = wire.NewSet(
 	provideEngineClient,
 	provideAlgorithmOptions,
 	provideAlgorithmPackageService,
+	provideGB28181PlatformConfigService,
+	service.NewSIPRuntimeService,
 )
 
 var handlerSet = wire.NewSet(

@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/hash"
+	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
 type discoveredDeviceRepo interface {
@@ -18,14 +22,23 @@ type discoveredDeviceRepo interface {
 }
 
 type DeviceStagingService struct {
-	repo       discoveredDeviceRepo
-	deviceRepo deviceRepo
+	repo                discoveredDeviceRepo
+	deviceRepo          deviceRepo
+	gbDeviceRepo        *repository.GB28181DeviceRepository
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository
 }
 
-func NewDeviceStagingService(repo discoveredDeviceRepo, devRepo deviceRepo) *DeviceStagingService {
+func NewDeviceStagingService(
+	repo discoveredDeviceRepo,
+	devRepo deviceRepo,
+	gbDeviceRepo *repository.GB28181DeviceRepository,
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository,
+) *DeviceStagingService {
 	return &DeviceStagingService{
-		repo:       repo,
-		deviceRepo: devRepo,
+		repo:                repo,
+		deviceRepo:          devRepo,
+		gbDeviceRepo:        gbDeviceRepo,
+		deviceSipConfigRepo: deviceSipConfigRepo,
 	}
 }
 
@@ -106,17 +119,27 @@ func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string, user
 		device.RtspURL = injectCredentialsToRTSP(device.RtspURL, username, password)
 	}
 
-	// 设置 ExternalKey 用于唯一约束去重
-	switch device.AccessType {
-	case model.DeviceAccessTypeRTSP:
-		if device.RtspURL != "" {
-			key := "rtsp:" + device.RtspURL
-			device.ExternalKey = &key
+	// Hashing Unified Device password
+	if password != "" {
+		hashed, hashErr := hash.Hash(password)
+		if hashErr == nil {
+			device.Password = hashed
 		}
-	case model.DeviceAccessTypeGB28181:
-		if device.GB28181DeviceID != "" {
-			key := "gb28181:" + device.GB28181DeviceID + ":" + device.GB28181ChannelID
-			device.ExternalKey = &key
+	}
+
+	// 设置 ExternalKey 用于唯一约束去重
+	isGB28181 := device.AccessType == model.DeviceAccessTypeGB28181 || device.AccessType == model.DeviceAccessTypeGB28181NVR
+	if isGB28181 {
+		device.AccessType = model.DeviceAccessTypeGB28181NVR
+		key := "gb28181_nvr:" + item.GB28181Code
+		device.ExternalKey = &key
+	} else {
+		switch device.AccessType {
+		case model.DeviceAccessTypeRTSP:
+			if device.RtspURL != "" {
+				key := "rtsp:" + device.RtspURL
+				device.ExternalKey = &key
+			}
 		}
 	}
 
@@ -128,6 +151,69 @@ func (s *DeviceStagingService) ImportSingle(ctx context.Context, id string, user
 			}
 		}
 		return err
+	}
+
+	// Create GB28181Device & DeviceSipConfig if it's GB28181
+	if isGB28181 {
+		if s.gbDeviceRepo != nil {
+			// NOTE: SipPassword stores the raw password for SIP Digest auth (not bcrypt-hashed),
+			// unlike device.Password which is bcrypt-hashed for login.
+			// SIP digest auth needs the raw password to compute MD5(response).
+
+			// Safe slice for SipDomain (GB28181Code is typically 20 chars)
+			sipDomain := safeSipDomain(item.GB28181Code)
+
+			gbDevice := &model.GB28181Device{
+				DeviceID:          &device.ID,
+				DeviceCode:        item.GB28181Code,
+				SipID:             item.GB28181Code,
+				SipDomain:         sipDomain,
+				SipPassword:       password, // raw password for SIP digest auth
+				HeartbeatInterval: 60,
+				Status:            model.GB28181StatusOffline,
+				Manufacturer:      item.Manufacturer,
+				Model:             item.Model,
+				Firmware:          item.FirmwareVersion,
+				ExternalKey:       "gb28181:" + item.GB28181Code,
+			}
+			if existingGb, findErr := s.gbDeviceRepo.FindByDeviceCode(ctx, item.GB28181Code); findErr != nil || existingGb == nil {
+				if err := s.gbDeviceRepo.Create(ctx, gbDevice); err != nil {
+					zap.L().Warn("create gb28181 device failed", zap.String("code", item.GB28181Code), zap.Error(err))
+				}
+			} else {
+				if err := s.gbDeviceRepo.Update(ctx, existingGb.ID, map[string]interface{}{
+					"device_id":    &device.ID,
+					"sip_password": password,
+				}); err != nil {
+					zap.L().Warn("update gb28181 device failed", zap.String("code", item.GB28181Code), zap.Error(err))
+				}
+			}
+		}
+
+		if s.deviceSipConfigRepo != nil {
+			sipDomain := safeSipDomain(item.GB28181Code)
+
+			sipConfig := &model.DeviceSipConfig{
+				DeviceID:          device.ID,
+				DeviceCode:        item.GB28181Code,
+				SipID:             item.GB28181Code,
+				SipDomain:         sipDomain,
+				SipPassword:       password,
+				HeartbeatInterval: 60,
+			}
+			if existingConfig, findErr := s.deviceSipConfigRepo.FindByDeviceCode(ctx, item.GB28181Code); findErr != nil || existingConfig == nil {
+				if err := s.deviceSipConfigRepo.Create(ctx, sipConfig); err != nil {
+					zap.L().Warn("create device sip config failed", zap.String("code", item.GB28181Code), zap.Error(err))
+				}
+			} else {
+				if err := s.deviceSipConfigRepo.Update(ctx, existingConfig.ID, map[string]interface{}{
+					"device_id":    device.ID,
+					"sip_password": password,
+				}); err != nil {
+					zap.L().Warn("update device sip config failed", zap.String("code", item.GB28181Code), zap.Error(err))
+				}
+			}
+		}
 	}
 
 	return s.repo.MarkImported(ctx, id, device.ID)
@@ -148,5 +234,14 @@ func injectCredentialsToRTSP(rtspURL, username, password string) string {
 		authority = authority[idx+1:]
 	}
 	return prefix + username + ":" + password + "@" + authority
+}
+
+// safeSipDomain safely extracts the first 10 characters of a GB28181 code for use as SIP domain.
+// Returns the full code if it's shorter than 10 characters to prevent panic.
+func safeSipDomain(code string) string {
+	if len(code) >= 10 {
+		return code[:10]
+	}
+	return code
 }
 

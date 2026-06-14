@@ -585,7 +585,8 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)
 	deviceRepoV2 := repository.NewDeviceRepositoryV2(db)
 	auditRepo := repository.NewAuditRepository(db)
-	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo)
+	streamSessionRepo := repository.NewGB28181StreamSessionRepository(db)
+	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo, streamSessionRepo)
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)

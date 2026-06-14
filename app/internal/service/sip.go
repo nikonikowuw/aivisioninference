@@ -31,31 +31,23 @@ type SIPService struct {
 	taskClient          taskClient
 	deviceSipConfigRepo *repository.DeviceSipConfigRepository
 	deviceRepoV2        *repository.DeviceRepositoryV2
+	auditRepo           *repository.AuditRepository
+	streamSessionRepo   *repository.GB28181StreamSessionRepository
 
 	// GB28181 ZLM 集成字段
 	zlmClient     *zlm.Client
 	streamManager *StreamManager
-	zlmBaseIP     string // ZLM 对设备可见的 IP（设备推流目标）
-	rtmpPort      int    // ZLM RTMP 端口
-	rtspPort      int    // ZLM RTSP 端口
-	httpPort      int    // ZLM HTTP 端口
+	zlmBaseIP     string // ZLM 对设备可见的 IP
+	rtmpPort      int
+	rtspPort      int
+	httpPort      int
 
 	// 缓存和 WebSocket
 	cache pkgcache.Cache
 	hub   *ws.Hub
-}
 
-// NewSIPService creates a new SIPService.
-func NewSIPService(
-	deviceRepo *repository.DeviceRepository,
-	gbDeviceRepo *repository.GB28181DeviceRepository,
-	mediaStreamRepo *repository.MediaStreamRepository,
-) *SIPService {
-	return &SIPService{
-		deviceRepo:      deviceRepo,
-		gbDeviceRepo:    gbDeviceRepo,
-		mediaStreamRepo: mediaStreamRepo,
-	}
+	// SIP Runtime
+	runtimeSvc *SIPRuntimeService
 }
 
 // NewSIPServiceWithZLM creates a SIPService with ZLM media integration.
@@ -73,6 +65,8 @@ func NewSIPServiceWithZLM(
 	rtmpPort, rtspPort, httpPort int,
 	cache pkgcache.Cache,
 	hub *ws.Hub,
+	auditRepo *repository.AuditRepository,
+	streamSessionRepo *repository.GB28181StreamSessionRepository,
 ) *SIPService {
 	return &SIPService{
 		deviceRepo:          deviceRepo,
@@ -90,11 +84,17 @@ func NewSIPServiceWithZLM(
 		httpPort:            httpPort,
 		cache:               cache,
 		hub:                 hub,
+		auditRepo:           auditRepo,
+		streamSessionRepo:   streamSessionRepo,
 	}
 }
 
 func (s *SIPService) SetDiscoveryService(svc *DeviceDiscoveryService) {
 	s.discoverySvc = svc
+}
+
+func (s *SIPService) SetRuntimeService(svc *SIPRuntimeService) {
+	s.runtimeSvc = svc
 }
 
 var gb28181DeviceIDRegex = regexp.MustCompile(`^\d{20}$`)
@@ -106,84 +106,113 @@ func (s *SIPService) ValidateDeviceCode(deviceID string) error {
 	return nil
 }
 
-// HandleRegister validates a device SIP registration request.
-// Returns error if registration should be rejected.
+// HandleRegister validates a device SIP registration request and updates device status.
 func (s *SIPService) HandleRegister(ctx context.Context, deviceID, remoteIP string, port int) error {
-	// 1. Validate 20-digit GB28181 device code format
 	if err := s.ValidateDeviceCode(deviceID); err != nil {
 		return err
 	}
 
-	// 2. Find the device in database
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
 		return errors.New(errors.ErrDeviceNotFound, "")
 	}
 
-	// 3. Update registration info
-	now := time.Now()
-	gbDevice.RegisterAddress = remoteIP
-	gbDevice.RegisterPort = port
-	gbDevice.LastRegisterAt = &now
-	gbDevice.Status = model.GB28181StatusOnline
+	oldIP := gbDevice.RegisterAddress
+	oldPort := gbDevice.RegisterPort
+	addressChanged := oldIP != "" && (oldIP != remoteIP || oldPort != port)
 
-	if err := s.gbDeviceRepo.UpdateStatus(ctx, gbDevice.ID, model.GB28181StatusOnline); err != nil {
-		return fmt.Errorf("update device status: %w", err)
+	now := time.Now()
+	updates := map[string]interface{}{
+		"register_address": remoteIP,
+		"register_port":    port,
+		"last_register_at": now,
+		"status":           model.GB28181StatusOnline,
 	}
 
-	// 4. 同步到新数据模型 DeviceSipConfig
+	if err := s.gbDeviceRepo.Update(ctx, gbDevice.ID, updates); err != nil {
+		return fmt.Errorf("update device registration: %w", err)
+	}
+
 	if s.deviceSipConfigRepo != nil {
 		if err := s.deviceSipConfigRepo.UpdateRegisterAddress(ctx, deviceID, remoteIP, port); err != nil {
 			zap.L().Warn("update DeviceSipConfig register address failed", zap.String("device_code", deviceID), zap.Error(err))
 		}
 	}
 
-	// 5. 同步到 Device 模型（如果有关联记录）
+	// Sync Device model status with fallback ExternalKey lookup
 	if gbDevice.DeviceID != nil {
-		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOnline, "", "")
+		if err := s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOnline, "", ""); err != nil {
+			zap.L().Warn("update device status failed", zap.String("device_id", *gbDevice.DeviceID), zap.Error(err))
+		}
 	} else {
-		// 无关联 Device 记录时，通过 ExternalKey 查找
+		// Fallback: look up device by ExternalKey if no direct association
 		key := "gb28181_nvr:" + deviceID
 		if dev, err := s.deviceRepo.FindByExternalKey(ctx, key); err == nil && dev != nil {
-			_ = s.deviceRepo.UpdateStatus(ctx, dev.ID, model.DeviceStatusOnline, "", "")
+			if err := s.deviceRepo.UpdateStatus(ctx, dev.ID, model.DeviceStatusOnline, "", ""); err != nil {
+				zap.L().Warn("update device status by external key failed", zap.String("key", key), zap.Error(err))
+			}
 		}
 	}
 
-	// 6. 触发目录查询（如果是 NVR/平台）
-	// 使用独立 context，HTTP 请求结束后 goroutine 仍可正常执行
+	if addressChanged && s.auditRepo != nil {
+		auditLog := &model.AuditLog{
+			Username:      "system",
+			ActionType:    "update_register_address",
+			ResourceType:  "gb28181_device",
+			ResourceID:    gbDevice.DeviceCode,
+			RequestMethod: "REGISTER",
+			RequestIP:     remoteIP,
+			ResultSummary: fmt.Sprintf("Device %s address changed from %s:%d to %s:%d", deviceID, oldIP, oldPort, remoteIP, port),
+		}
+		if err := s.auditRepo.Create(ctx, auditLog); err != nil {
+			zap.L().Warn("audit log create failed", zap.Error(err))
+		}
+	}
+
 	go func() {
 		if err := s.QueryCatalog(context.Background(), gbDevice.DeviceCode); err != nil {
 			zap.L().Warn("catalog query failed", zap.String("device_code", gbDevice.DeviceCode), zap.Error(err))
 		}
 	}()
 
+	s.broadcastStatus(deviceID, model.DeviceStatusOnline)
 	return nil
+}
+
+// HandleInviteOK marks an INVITE session as active after receiving 200 OK from the device.
+func (s *SIPService) HandleInviteOK(ctx context.Context, callID string, sdpBody string) error {
+	session, err := s.streamSessionRepo.FindByCallID(ctx, callID)
+	if err != nil {
+		return fmt.Errorf("find session by call id: %w", err)
+	}
+	updates := map[string]interface{}{
+		"status":     "active",
+		"start_time": time.Now(),
+	}
+	return s.streamSessionRepo.Update(ctx, session.StreamID, updates)
 }
 
 // HandleHeartbeat updates the heartbeat timestamp for a registered device.
 func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return errors.New(errors.ErrDeviceNotFound, "")
+		return fmt.Errorf("find device for heartbeat: %w", err)
 	}
-
 	if err := s.gbDeviceRepo.UpdateHeartbeat(ctx, gbDevice.ID); err != nil {
-		return fmt.Errorf("update heartbeat: %w", err)
+		zap.L().Warn("update heartbeat failed", zap.String("device_code", deviceID), zap.Error(err))
 	}
-
-	// 同步到 DeviceSipConfig
+	// Sync heartbeat to DeviceSipConfig
 	if s.deviceSipConfigRepo != nil {
 		if err := s.deviceSipConfigRepo.UpdateHeartbeat(ctx, deviceID); err != nil {
 			zap.L().Debug("update DeviceSipConfig heartbeat failed", zap.String("device_code", deviceID), zap.Error(err))
 		}
 	}
-
 	if gbDevice.Status != model.GB28181StatusOnline {
 		if err := s.gbDeviceRepo.UpdateStatus(ctx, gbDevice.ID, model.GB28181StatusOnline); err != nil {
-			return fmt.Errorf("update status to online: %w", err)
+			zap.L().Warn("update device status to online failed", zap.String("device_code", deviceID), zap.Error(err))
 		}
+		s.broadcastStatus(deviceID, model.DeviceStatusOnline)
 	}
-
 	return nil
 }
 
@@ -193,50 +222,56 @@ func (s *SIPService) CheckHeartbeatTimeout(ctx context.Context, timeout time.Dur
 	if err != nil {
 		return nil, fmt.Errorf("find offline devices: %w", err)
 	}
-
 	for _, dev := range offlineDevices {
 		if err := s.gbDeviceRepo.UpdateStatus(ctx, dev.ID, model.GB28181StatusOffline); err != nil {
-			return nil, fmt.Errorf("update device %s to offline: %w", dev.DeviceCode, err)
+			zap.L().Warn("update device to offline failed", zap.String("device_code", dev.DeviceCode), zap.Error(err))
 		}
-
-		// Sync to Device model
 		if dev.DeviceID != nil {
-			_ = s.deviceRepo.UpdateStatus(ctx, *dev.DeviceID, model.DeviceStatusOffline, "", "")
+			if err := s.deviceRepo.UpdateStatus(ctx, *dev.DeviceID, model.DeviceStatusOffline, "", ""); err != nil {
+				zap.L().Warn("update linked device to offline failed", zap.String("device_id", *dev.DeviceID), zap.Error(err))
+			}
 		}
+		s.broadcastStatus(dev.DeviceCode, model.DeviceStatusOffline)
 	}
-
 	return offlineDevices, nil
 }
 
+func (s *SIPService) broadcastStatus(deviceCode, status string) {
+	if s.hub == nil {
+		return
+	}
+	msg := &ws.Message{
+		Type: "device_status_change",
+		Payload: map[string]interface{}{
+			"deviceCode": deviceCode,
+			"status":     status,
+			"time":       time.Now().Unix(),
+		},
+	}
+	s.hub.Broadcast(msg)
+}
+
 // BuildCatalogueResponse generates a GB28181 MANSCDP XML catalogue response.
-// deviceID: the SIP device ID that was queried.
-// sn: the SIP message sequence number from the query.
 func (s *SIPService) BuildCatalogueResponse(ctx context.Context, deviceID, sn string) (string, error) {
-	// Validate device code
 	if err := s.ValidateDeviceCode(deviceID); err != nil {
 		return "", err
 	}
-
-	// Find the device
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return "", errors.New(errors.ErrDeviceNotFound, "")
+		return "", err
 	}
-
-	// Find the associated system device
 	status := "ON"
 	if gbDevice.Status == model.GB28181StatusOffline {
 		status = "OFF"
 	}
-
-	// 构建通道列表，转义 XML 特殊字符防止注入
 	escapedSN := html.EscapeString(sn)
 	escapedDeviceID := html.EscapeString(deviceID)
 	escapedName := html.EscapeString(gbDevice.DeviceCode)
 	escapedManufacturer := html.EscapeString(gbDevice.Manufacturer)
 	escapedModel := html.EscapeString(gbDevice.Model)
+	escapedStatus := html.EscapeString(status)
 
-	catalogXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
@@ -253,282 +288,287 @@ func (s *SIPService) BuildCatalogueResponse(ctx context.Context, deviceID, sn st
 <Latitude>%.6f</Latitude>
 </Item>
 </DeviceList>
-</Response>`, escapedSN, escapedDeviceID, escapedDeviceID, escapedName, escapedManufacturer, escapedModel, status, 0.0, 0.0)
-
-	return catalogXML, nil
+</Response>`, escapedSN, escapedDeviceID, escapedDeviceID, escapedName, escapedManufacturer, escapedModel, escapedStatus, 0.0, 0.0), nil
 }
 
-// ====== GB28181 业务扩展（依赖 ZLM） ======
-
-// HandleUnregister 处理设备主动注销（Expires=0）
+// HandleUnregister processes a device-initiated unregistration (Expires=0).
 func (s *SIPService) HandleUnregister(ctx context.Context, deviceID string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
 	if err != nil {
-		return errors.New(errors.ErrDeviceNotFound, "")
+		return err
 	}
 	if err := s.gbDeviceRepo.UpdateStatus(ctx, gbDevice.ID, model.GB28181StatusOffline); err != nil {
-		return fmt.Errorf("update status: %w", err)
+		zap.L().Warn("update device to offline on unregister failed", zap.String("device_code", deviceID), zap.Error(err))
 	}
 	if gbDevice.DeviceID != nil {
-		_ = s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOffline, "", "")
+		if err := s.deviceRepo.UpdateStatus(ctx, *gbDevice.DeviceID, model.DeviceStatusOffline, "", ""); err != nil {
+			zap.L().Warn("update linked device status on unregister failed", zap.String("device_id", *gbDevice.DeviceID), zap.Error(err))
+		}
 	}
-	zap.L().Info("GB28181 device unregistered", zap.String("device_id", deviceID))
+	s.broadcastStatus(deviceID, model.DeviceStatusOffline)
 	return nil
 }
 
-// QueryCatalog 主动查询设备目录
+// QueryCatalog sends a catalog query to the device via the SIP runtime.
 func (s *SIPService) QueryCatalog(ctx context.Context, deviceCode string) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
 	if err != nil {
-		return errors.New(errors.ErrDeviceNotFound, "")
+		return fmt.Errorf("find device for catalog query: %w", err)
 	}
 	if gbDevice.Status != model.GB28181StatusOnline {
 		return errors.New(errors.ErrGB28181DeviceOffline, "")
 	}
-	// ZLM 内部 SIP 栈处理目录查询
-	// Go 端通过 webhook 接收响应后调用 SyncCatalogChannels
-	zap.L().Info("catalog query requested",
-		zap.String("device_code", deviceCode),
-		zap.String("device_ip", gbDevice.RegisterAddress))
+
+	if s.runtimeSvc == nil || !s.runtimeSvc.IsRunning() {
+		// SIP runtime not available — log and return nil (caller may be using ZLM SIP stack)
+		zap.L().Debug("SIP runtime not available for catalog query, skipping",
+			zap.String("device_code", deviceCode))
+		return nil
+	}
+
+	sn, err := s.runtimeSvc.SendCatalogQuery(ctx, deviceCode)
+	if err != nil {
+		return fmt.Errorf("send catalog query: %w", err)
+	}
+
+	if s.cache != nil {
+		taskID := uuid.NewString()
+		cacheKey := "catalog_task:device:" + deviceCode
+		if err := s.cache.Set(ctx, cacheKey, []byte(taskID), 5*time.Minute); err != nil {
+			zap.L().Warn("set catalog task cache failed", zap.String("device_code", deviceCode), zap.Error(err))
+			return nil // Non-fatal: query was sent, cache is optional
+		}
+		status := map[string]interface{}{"task_id": taskID, "status": "sent", "sn": sn}
+		statusData, _ := json.Marshal(status)
+		if err := s.cache.Set(ctx, "catalog_task:"+taskID, statusData, 5*time.Minute); err != nil {
+			// Clean up the device key if status key fails
+			_ = s.cache.Del(ctx, cacheKey)
+			zap.L().Warn("set catalog task status cache failed", zap.String("task_id", taskID), zap.Error(err))
+		}
+	}
 	return nil
 }
 
-// StartLiveStream 通过 ZLM 控制 GB28181 设备向平台推流
+// StartLiveStream initiates a live stream from a GB28181 device via SIP INVITE + ZLM RTP receive.
 func (s *SIPService) StartLiveStream(ctx context.Context, deviceCode, streamID string) (string, error) {
 	if s.zlmClient == nil {
 		return "", errors.New(errors.ErrZLMNotConfigured, "")
 	}
-	// 1. ZLM 创建 RTP 接收端口
-	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{
-		Port:     0,
-		TCPMode:  0,
-		StreamID: streamID,
-	})
+	if s.runtimeSvc == nil || !s.runtimeSvc.IsRunning() {
+		return "", errors.New(errors.ErrZLMNotConfigured, "SIP runtime not available")
+	}
+
+	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
+	if err != nil {
+		return "", fmt.Errorf("find device: %w", err)
+	}
+
+	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{StreamID: streamID})
 	if err != nil {
 		return "", fmt.Errorf("open rtp server: %w", err)
 	}
-	// 2. ZLM 触发设备推流
-	_, err = s.zlmClient.StartSendRtp(ctx, zlm.StartSendRtpRequest{
-		Vhost:   "__defaultVhost__",
-		App:     "live",
-		Stream:  streamID,
-		SSRC:    "1",
-		DstURL:  s.zlmBaseIP,
-		DstPort: port,
-		IsUDP:   1,
-	})
+
+	ssrc := buildSSRC(deviceCode, "0")
+	callID, err := s.runtimeSvc.SendInvite(ctx, gbDevice.DeviceCode, gbDevice.DeviceCode, port, ssrc)
 	if err != nil {
-		_ = s.zlmClient.CloseRtpServer(ctx, streamID)
-		return "", fmt.Errorf("start send rtp: %w", err)
+		if closeErr := s.zlmClient.CloseRtpServer(ctx, streamID); closeErr != nil {
+			zap.L().Warn("close rtp server after invite failure", zap.Error(closeErr))
+		}
+		return "", fmt.Errorf("send invite: %w", err)
 	}
-	// 3. StreamManager 注册（以 deviceCode 为 key，ZLM 流 ID 作 metadata）
+
+	now := time.Now()
+	session := &model.GB28181StreamSession{
+		StreamID: streamID, DeviceCode: deviceCode, ChannelID: deviceCode,
+		ZLMRTPPort: port, SIPCallID: callID, SSRC: ssrc, Status: "pending", StartTime: &now,
+	}
+	if err := s.streamSessionRepo.Create(ctx, session); err != nil {
+		zap.L().Warn("create stream session failed", zap.String("stream_id", streamID), zap.Error(err))
+	}
+
 	if s.streamManager != nil {
-		_ = s.streamManager.Acquire(ctx, deviceCode, "gb28181_live", map[string]string{
-			"zlm_stream_id": streamID,
-			"device_code":   deviceCode,
-		})
+		if err := s.streamManager.Acquire(ctx, deviceCode, "gb28181_live", map[string]string{"zlm_stream_id": streamID, "sip_call_id": callID}); err != nil {
+			zap.L().Warn("StreamManager Acquire failed", zap.String("device", deviceCode), zap.String("stream", streamID), zap.Error(err))
+		}
 	}
+
 	return fmt.Sprintf("http://%s:%d/live/%s/hls.m3u8", s.zlmBaseIP, s.httpPort, streamID), nil
 }
 
-// StopLiveStream 停止 GB28181 实时预览
-// deviceCode: NVR 设备国标编码（作为 StreamManager key），streamID: ZLM 内部流 ID
+// StopLiveStream stops a live stream by sending SIP BYE and releasing ZLM resources.
 func (s *SIPService) StopLiveStream(ctx context.Context, deviceCode, streamID string) error {
 	if s.zlmClient == nil {
 		return errors.New(errors.ErrZLMNotConfigured, "")
 	}
-	_ = s.zlmClient.StopSendRtp(ctx, zlm.StopSendRtpRequest{
-		Vhost:  "__defaultVhost__",
-		App:    "live",
-		Stream: streamID,
-	})
-	_ = s.zlmClient.CloseRtpServer(ctx, streamID)
+
+	session, err := s.streamSessionRepo.FindByStreamID(ctx, streamID)
+	if err == nil && session != nil && s.runtimeSvc != nil {
+		if err := s.runtimeSvc.SendBye(ctx, session.DeviceCode, session.ChannelID, session.SIPCallID); err != nil {
+			zap.L().Warn("send BYE failed", zap.String("stream_id", streamID), zap.Error(err))
+		}
+	} else if err != nil {
+		zap.L().Warn("stream session not found for stop", zap.String("stream_id", streamID), zap.Error(err))
+	}
+
+	if err := s.zlmClient.CloseRtpServer(ctx, streamID); err != nil {
+		zap.L().Warn("close rtp server failed", zap.String("stream_id", streamID), zap.Error(err))
+	}
+
 	if s.streamManager != nil {
-		_ = s.streamManager.Release(ctx, deviceCode, "gb28181_live")
+		if err := s.streamManager.Release(ctx, deviceCode, "gb28181_live"); err != nil {
+			zap.L().Warn("StreamManager Release failed", zap.String("device", deviceCode), zap.Error(err))
+		}
+	}
+
+	if err := s.streamSessionRepo.Delete(ctx, streamID); err != nil {
+		zap.L().Warn("delete stream session failed", zap.String("stream_id", streamID), zap.Error(err))
 	}
 	return nil
 }
 
-// StartPlayback 发起 GB28181 录像回放
+// StartPlayback initiates a playback stream from a GB28181 device via SIP INVITE.
 func (s *SIPService) StartPlayback(ctx context.Context, deviceCode, streamID string, start, end time.Time) (string, error) {
+	if s.zlmClient == nil {
+		return "", errors.New(errors.ErrZLMNotConfigured, "")
+	}
+	if s.runtimeSvc == nil || !s.runtimeSvc.IsRunning() {
+		return "", errors.New(errors.ErrZLMNotConfigured, "SIP runtime not available")
+	}
 	if err := s.ValidateDeviceCode(deviceCode); err != nil {
 		return "", err
 	}
 	if end.Before(start) {
 		return "", errors.New(errors.ErrTimeRangeOrder, "")
 	}
-	if s.zlmClient == nil {
-		return "", errors.New(errors.ErrZLMNotConfigured, "")
+
+	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
+	if err != nil {
+		return "", fmt.Errorf("find device: %w", err)
 	}
 
-	// 1. ZLM 创建 RTP 接收端口
-	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{
-		Port:     0,
-		TCPMode:  0,
-		StreamID: streamID,
-	})
+	port, err := s.zlmClient.OpenRtpServer(ctx, zlm.OpenRtpServerRequest{StreamID: streamID})
 	if err != nil {
 		return "", fmt.Errorf("open rtp server: %w", err)
 	}
 
-	// 2. ZLM 触发设备回放推流
-	_, err = s.zlmClient.StartSendRtp(ctx, zlm.StartSendRtpRequest{
-		Vhost:   "__defaultVhost__",
-		App:     "rtp",
-		Stream:  streamID,
-		SSRC:    "1",
-		DstURL:  s.zlmBaseIP,
-		DstPort: port,
-		IsUDP:   1,
-	})
+	ssrc := buildSSRC(deviceCode, "1")
+	callID, err := s.runtimeSvc.SendPlaybackInvite(ctx, gbDevice.DeviceCode, gbDevice.DeviceCode, port, ssrc, start, end)
 	if err != nil {
-		_ = s.zlmClient.CloseRtpServer(ctx, streamID)
-		return "", fmt.Errorf("start playback rtp: %w", err)
+		if closeErr := s.zlmClient.CloseRtpServer(ctx, streamID); closeErr != nil {
+			zap.L().Warn("close rtp server after playback invite failure", zap.Error(closeErr))
+		}
+		return "", fmt.Errorf("send playback invite: %w", err)
 	}
 
-	// 3. StreamManager 注册
+	now := time.Now()
+	session := &model.GB28181StreamSession{
+		StreamID: streamID, DeviceCode: deviceCode, ChannelID: deviceCode, StreamType: "playback",
+		ZLMRTPPort: port, SIPCallID: callID, SSRC: ssrc, Status: "pending", StartTime: &now,
+	}
+	if err := s.streamSessionRepo.Create(ctx, session); err != nil {
+		zap.L().Warn("create playback stream session failed", zap.String("stream_id", streamID), zap.Error(err))
+	}
+
+	// Register with StreamManager with rollback on failure
 	if s.streamManager != nil {
-		if err := s.streamManager.Acquire(ctx, deviceCode, "gb28181_playback", map[string]string{
-			"zlm_stream_id": streamID,
-			"device_code":   deviceCode,
-		}); err != nil {
-			// 注册失败，回滚 ZLM 资源
-			_ = s.zlmClient.StopSendRtp(ctx, zlm.StopSendRtpRequest{
-				Vhost:  "__defaultVhost__",
-				App:    "rtp",
-				Stream: streamID,
-			})
+		if err := s.streamManager.Acquire(ctx, deviceCode, "gb28181_playback", map[string]string{"zlm_stream_id": streamID, "sip_call_id": callID}); err != nil {
+			// Rollback ZLM resources
 			_ = s.zlmClient.CloseRtpServer(ctx, streamID)
+			if session.SIPCallID != "" && s.runtimeSvc != nil {
+				_ = s.runtimeSvc.SendBye(ctx, session.DeviceCode, session.ChannelID, session.SIPCallID)
+			}
 			zap.L().Warn("StreamManager Acquire failed, rolled back ZLM resources",
 				zap.String("device", deviceCode), zap.String("stream", streamID), zap.Error(err))
 			return "", fmt.Errorf("stream manager acquire: %w", err)
 		}
 	}
 
-	zap.L().Info("GB28181 playback started",
-		zap.String("device", deviceCode),
-		zap.String("stream", streamID),
-		zap.Time("start", start),
-		zap.Time("end", end))
-
-	return fmt.Sprintf("http://%s:%d/rtp/%s.flv", s.zlmBaseIP, s.httpPort, streamID), nil
+	return fmt.Sprintf("http://%s:%d/live/%s/hls.m3u8", s.zlmBaseIP, s.httpPort, streamID), nil
 }
 
-// PlaybackControl 回放控制
+// PlaybackControl sends playback control commands (pause/play/seek) to the device.
 func (s *SIPService) PlaybackControl(ctx context.Context, streamID, action string, speed float64, stamp int64) error {
-	if s.zlmClient == nil {
-		return errors.New(errors.ErrZLMNotConfigured, "")
+	if s.runtimeSvc == nil || !s.runtimeSvc.IsRunning() {
+		return errors.New(errors.ErrZLMNotConfigured, "SIP runtime not available")
 	}
-	switch action {
-	case "scale":
-		return s.zlmClient.SetRecordSpeed(ctx, zlm.SetRecordSpeedRequest{
-			Vhost:  "__defaultVhost__",
-			App:    "live",
-			Stream: streamID,
-			Speed:  speed,
-		})
-	case "seek":
-		return s.zlmClient.SeekRecordStamp(ctx, zlm.SeekRecordStampRequest{
-			Vhost:  "__defaultVhost__",
-			App:    "live",
-			Stream: streamID,
-			Stamp:  stamp,
-		})
-	default:
-		return errors.New(errors.ErrInvalidPlaybackAction, "")
+	session, err := s.streamSessionRepo.FindByStreamID(ctx, streamID)
+	if err != nil {
+		return fmt.Errorf("find stream session: %w", err)
 	}
+	return s.runtimeSvc.SendPlaybackControl(ctx, session.DeviceCode, session.ChannelID, session.SIPCallID, action, speed, stamp)
 }
 
-// SyncCatalogChannels 同步目录响应到 Device 表（upsert）
+// StopPlayback stops a playback stream.
+func (s *SIPService) StopPlayback(ctx context.Context, deviceCode, streamID string) error {
+	return s.StopLiveStream(ctx, deviceCode, streamID)
+}
+
+// SyncCatalogChannels synchronizes catalog channel responses for an NVR device.
 func (s *SIPService) SyncCatalogChannels(ctx context.Context, nvrDeviceCode string, channels []ChannelInfo) error {
 	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, nvrDeviceCode)
 	if err != nil {
-		return errors.New(errors.ErrDeviceNotFound, "")
+		return fmt.Errorf("find nvr device: %w", err)
 	}
-	successCount := 0
+
+	createdCount := 0
 	updatedCount := 0
 	for _, ch := range channels {
 		if ch.DeviceID == "" {
 			continue
 		}
-		deviceStatus := MapChannelStatus(ch.Status)
-		// 先查现有设备，避免重复创建
+		status := MapChannelStatus(ch.Status)
 		existing, err := s.deviceRepo.FindByGB28181DeviceID(ctx, ch.DeviceID)
 		if err == nil && existing != nil {
 			existing.DeviceName = ch.Name
-			existing.Status = deviceStatus
+			existing.Status = status
 			existing.Manufacturer = ch.Manufacturer
 			existing.Model = ch.Model
 			existing.ParentNvrID = &gbDevice.ID
-			if uerr := s.deviceRepo.Update(ctx, existing); uerr != nil {
-				zap.L().Warn("update channel device failed",
-					zap.String("channel_id", ch.DeviceID), zap.Error(uerr))
+			if err := s.deviceRepo.Update(ctx, existing); err != nil {
+				zap.L().Warn("update channel device failed", zap.String("channel_id", ch.DeviceID), zap.Error(err))
 				continue
 			}
 			updatedCount++
 			continue
 		}
-		// 创建新设备
-		newDevice := &model.Device{
-			DeviceName:       ch.Name,
-			AccessType:       model.DeviceAccessTypeGB28181,
-			GB28181DeviceID:  ch.DeviceID,
-			GB28181ChannelID: ch.DeviceID,
-			Manufacturer:     ch.Manufacturer,
-			Model:            ch.Model,
-			Status:           deviceStatus,
-			Enabled:          true,
-			ParentNvrID:      &gbDevice.ID,
+		newDev := &model.Device{
+			DeviceName: ch.Name, AccessType: model.DeviceAccessTypeGB28181,
+			GB28181DeviceID: ch.DeviceID, GB28181ChannelID: ch.DeviceID,
+			Manufacturer: ch.Manufacturer, Model: ch.Model,
+			Status: status, Enabled: true, ParentNvrID: &gbDevice.ID,
 		}
-		if err := s.deviceRepo.Create(ctx, newDevice); err != nil {
-			zap.L().Warn("create channel device failed",
-				zap.String("channel_id", ch.DeviceID), zap.Error(err))
+		if err := s.deviceRepo.Create(ctx, newDev); err != nil {
+			zap.L().Warn("create channel device failed", zap.String("channel_id", ch.DeviceID), zap.Error(err))
 			continue
 		}
-		successCount++
+		createdCount++
 	}
+
 	zap.L().Info("catalog channels synced",
 		zap.String("nvr", nvrDeviceCode),
 		zap.Int("total", len(channels)),
-		zap.Int("created", successCount),
+		zap.Int("created", createdCount),
 		zap.Int("updated", updatedCount))
 
-	// 更新 GB28181Device 的通道数
-	if uerr := s.gbDeviceRepo.Update(ctx, gbDevice.ID, map[string]interface{}{
-		"channel_count": len(channels),
-	}); uerr != nil {
-		zap.L().Warn("update gb28181 device channel count failed", zap.Error(uerr))
+	if err := s.gbDeviceRepo.Update(ctx, gbDevice.ID, map[string]interface{}{"channel_count": len(channels)}); err != nil {
+		zap.L().Warn("update gb28181 device channel count failed", zap.Error(err))
 	}
 
-	// 更新任务状态和触发 WebSocket 广播
 	if s.cache != nil && s.hub != nil {
 		deviceTaskKey := "catalog_task:device:" + nvrDeviceCode
 		if taskIDBytes, err := s.cache.Get(ctx, deviceTaskKey); err == nil && len(taskIDBytes) > 0 {
 			taskID := string(taskIDBytes)
-			status := map[string]interface{}{
-				"task_id":       taskID,
-				"status":        "completed",
-				"channel_count": len(channels),
-			}
+			status := map[string]interface{}{"task_id": taskID, "status": "completed", "channel_count": len(channels)}
 			statusData, _ := json.Marshal(status)
-			_ = s.cache.Set(ctx, "catalog_task:"+taskID, statusData, 2*time.Minute)
-
-			// 广播 ws 事件
-			msg := &ws.Message{
-				Type: "gb28181_catalog_completed",
-				Payload: map[string]interface{}{
-					"deviceCode":   nvrDeviceCode,
-					"success":      true,
-					"channelCount": len(channels),
-				},
+			if err := s.cache.Set(ctx, "catalog_task:"+taskID, statusData, 2*time.Minute); err != nil {
+				zap.L().Warn("set catalog task status cache failed", zap.Error(err))
 			}
-			s.hub.Broadcast(msg)
+			s.hub.Broadcast(&ws.Message{Type: "gb28181_catalog_completed", Payload: map[string]interface{}{"deviceCode": nvrDeviceCode, "success": true, "channelCount": len(channels)}})
 		}
 	}
-
 	return nil
 }
-
+// alarmDispatchPayload is the payload for alarm dispatch tasks.
 type alarmDispatchPayload struct {
 	SmartRecordID string `json:"smart_record_id"`
 	DeviceID      string `json:"device_id"`
@@ -541,43 +581,16 @@ type alarmDispatchPayload struct {
 	RawResult     string `json:"raw_result,omitempty"`
 }
 
-// enqueueAlarmDispatch 派发告警处理任务到队列
-func (s *SIPService) enqueueAlarmDispatch(ctx context.Context, record *model.SmartRecord, alarm AlarmInfo) {
-	payload := alarmDispatchPayload{
-		SmartRecordID: record.RecordID,
-		DeviceID:      alarm.DeviceID,
-		DeviceName:    record.DeviceName,
-		AlarmType:     record.AlarmType,
-		AlarmLevel:    record.AlarmLevel,
-		CaptureTime:   record.CaptureTime.Format(time.RFC3339),
-		SnapshotURL:   record.SnapshotImageURL,
-		RawResult:     string(record.RawResult),
-	}
-	if err := s.taskClient.Enqueue(ctx, "alarm:dispatch", payload); err != nil {
-		zap.L().Error("failed to enqueue alarm dispatch task",
-			zap.String("record_id", record.RecordID), zap.Error(err))
-	}
-}
-
-// HandleAlarm 处理设备告警上报
+// HandleAlarm processes a GB28181 alarm event from a device.
 func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 	if alarm.DeviceID == "" {
 		return errors.New(errors.ErrAlarmDeviceRequired, "")
 	}
-	zap.L().Info("GB28181 alarm received",
-		zap.String("device_id", alarm.DeviceID),
-		zap.String("alarm_type", alarm.AlarmType),
-		zap.String("alarm_level", alarm.AlarmLevel))
-	// 入库 smart_records（GB28181 告警），RecordType=alarm
 	now := time.Now()
 	record := &model.SmartRecord{
-		RecordID:    uuid.NewString(), // 主键必填
-		RecordType:  model.RecordTypeAlarm,
-		CaptureTime: now,
-		AlarmType:   alarm.AlarmType,
-		AlarmLevel:  alarm.AlarmLevel,
+		RecordID: uuid.NewString(), RecordType: model.RecordTypeAlarm,
+		CaptureTime: now, AlarmType: alarm.AlarmType, AlarmLevel: alarm.AlarmLevel,
 	}
-	// 关联设备（如已入库）
 	if s.gbDeviceRepo != nil {
 		if gbDev, err := s.gbDeviceRepo.FindByDeviceCode(ctx, alarm.DeviceID); err == nil {
 			if gbDev.DeviceID != nil {
@@ -586,31 +599,43 @@ func (s *SIPService) HandleAlarm(ctx context.Context, alarm AlarmInfo) error {
 			record.DeviceName = gbDev.DeviceCode
 		}
 	}
-	// 序列化告警原文
-	rawJSON, _ := json.Marshal(map[string]string{
-		"device_id":   alarm.DeviceID,
-		"alarm_type":  alarm.AlarmType,
-		"alarm_level": alarm.AlarmLevel,
-		"alarm_time":  alarm.AlarmTime,
-	})
+	rawJSON, _ := json.Marshal(alarm)
 	record.RawResult = datatypes.JSON(rawJSON)
-	if s.smartRecordRepo == nil {
-		if s.taskClient != nil {
-			s.enqueueAlarmDispatch(ctx, record, alarm)
+
+	// Persist alarm record
+	if s.smartRecordRepo != nil {
+		if err := s.smartRecordRepo.Create(ctx, record); err != nil {
+			zap.L().Warn("save GB28181 alarm to smart_records failed",
+				zap.String("device_id", alarm.DeviceID), zap.Error(err))
+			// Continue to enqueue dispatch even if persistence fails (old behavior)
 		}
-		return nil
 	}
 
-	if err := s.smartRecordRepo.Create(ctx, record); err != nil {
-		zap.L().Warn("save GB28181 alarm to smart_records failed",
-			zap.String("device_id", alarm.DeviceID), zap.Error(err))
-		return nil
-	}
-
-	// 入库成功后派发告警任务
+	// Enqueue alarm dispatch task (always try, regardless of persistence outcome)
 	if s.taskClient != nil {
-		s.enqueueAlarmDispatch(ctx, record, alarm)
+		payload := alarmDispatchPayload{
+			SmartRecordID: record.RecordID,
+			DeviceID:      alarm.DeviceID,
+			DeviceName:    record.DeviceName,
+			AlarmType:     record.AlarmType,
+			AlarmLevel:    record.AlarmLevel,
+			CaptureTime:   record.CaptureTime.Format(time.RFC3339),
+			SnapshotURL:   record.SnapshotImageURL,
+			RawResult:     string(record.RawResult),
+		}
+		if err := s.taskClient.Enqueue(ctx, "alarm:dispatch", payload); err != nil {
+			zap.L().Error("failed to enqueue alarm dispatch task",
+				zap.String("record_id", record.RecordID), zap.Error(err))
+		}
 	}
-
 	return nil
+}
+
+// buildSSRC constructs an SSRC string from the device code, using a prefix character.
+// Ensures safe slicing even if deviceCode is shorter than expected.
+func buildSSRC(deviceCode, prefix string) string {
+	if len(deviceCode) < 10 {
+		return prefix + deviceCode
+	}
+	return prefix + deviceCode[10:19]
 }

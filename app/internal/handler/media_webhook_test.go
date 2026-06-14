@@ -24,7 +24,7 @@ func setupTestWebhookHandler() *MediaWebhookHandler {
 	stagingRepo := repository.NewDiscoveredDeviceRepository(nil)
 
 	streamManager := service.NewStreamManager(mockClient, devRepo, mediaStreamRepo, logger)
-	stagingSvc := service.NewDeviceStagingService(stagingRepo, devRepo)
+	stagingSvc := service.NewDeviceStagingService(stagingRepo, devRepo, nil, nil)
 
 	// SIPService 不初始化完整 repo，我们用模拟的方式测试 webhook 路由
 	// 注意：OnRegister 会调用 sipService.HandleRegister 导致 panic 如果 db 为 nil

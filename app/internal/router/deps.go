@@ -55,6 +55,7 @@ type RouteDeps struct {
 	MediaGB28181Handler     *handler.MediaGB28181Handler
 	GB28181ConfigHandler    *handler.GB28181ConfigHandler
 	SIPService              *service.SIPService
+	SIPRuntimeSvc           *service.SIPRuntimeService
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -149,8 +150,10 @@ func provideDeviceGroupHandler(groupRepo *repository.DeviceGroupRepository) *han
 func provideDeviceStagingService(
 	stagingRepo *repository.DiscoveredDeviceRepository,
 	deviceRepo *repository.DeviceRepository,
+	gbDeviceRepo *repository.GB28181DeviceRepository,
+	deviceSipConfigRepo *repository.DeviceSipConfigRepository,
 ) *service.DeviceStagingService {
-	return service.NewDeviceStagingService(stagingRepo, deviceRepo)
+	return service.NewDeviceStagingService(stagingRepo, deviceRepo, gbDeviceRepo, deviceSipConfigRepo)
 }
 
 func provideDeviceDiscoveryService(stagingSvc *service.DeviceStagingService) *service.DeviceDiscoveryService {
@@ -208,7 +211,11 @@ func newRouteDeps(
 	mediaGB28181Handler *handler.MediaGB28181Handler,
 	gb28181ConfigHandler *handler.GB28181ConfigHandler,
 	sipService *service.SIPService,
+	sipRuntimeSvc *service.SIPRuntimeService,
 ) *RouteDeps {
+	if sipService != nil {
+		sipService.SetRuntimeService(sipRuntimeSvc)
+	}
 	return &RouteDeps{
 		RBACCache:               permCache,
 		AuditService:            auditSvc,
@@ -240,6 +247,7 @@ func newRouteDeps(
 		MediaGB28181Handler:     mediaGB28181Handler,
 		GB28181ConfigHandler:    gb28181ConfigHandler,
 		SIPService:              sipService,
+		SIPRuntimeSvc:           sipRuntimeSvc,
 	}
 }
 
@@ -294,6 +302,8 @@ func provideSIPServiceWithZLM(
 	cfg *Config,
 	cache cache.Cache,
 	hub *ws.Hub,
+	auditRepo *repository.AuditRepository,
+	streamSessionRepo *repository.GB28181StreamSessionRepository,
 ) *service.SIPService {
 	zlmBaseIP := cfg.ZLMExternalIP
 	if zlmBaseIP == "" {
@@ -308,6 +318,8 @@ func provideSIPServiceWithZLM(
 		zlmClient, streamManager, zlmBaseIP,
 		rtmpPort, rtspPort, httpPort,
 		cache, hub,
+		auditRepo,
+		streamSessionRepo,
 	)
 }
 
@@ -318,8 +330,11 @@ func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.Strea
 	recordingRepo := repository.NewRecordingRepository(db)
 	stagingRepo := repository.NewDiscoveredDeviceRepository(db)
 
+	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
+	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)
+
 	onvifScanner := onvif.NewScanner()
-	stagingSvc := service.NewDeviceStagingService(stagingRepo, deviceRepo)
+	stagingSvc := service.NewDeviceStagingService(stagingRepo, deviceRepo, gbDeviceRepo, deviceSipConfigRepo)
 	discoverySvc := service.NewDeviceDiscoveryService(stagingSvc, onvifScanner, nil)
 
 	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, streamManager, cfg.ZLMAPIURL, cfg.ZLMSecret)
@@ -387,6 +402,15 @@ func provideSmartRecordHandler(svc *service.SmartRecordService) *handler.SmartRe
 	return handler.NewSmartRecordHandler(svc)
 }
 
-func provideGB28181ConfigHandler(zlmClient *zlm.Client) *handler.GB28181ConfigHandler {
-	return handler.NewGB28181ConfigHandler(zlmClient)
+func provideGB28181ConfigHandler(zlmClient *zlm.Client, platformConfigSvc *service.GB28181PlatformConfigService) *handler.GB28181ConfigHandler {
+	return handler.NewGB28181ConfigHandler(zlmClient, platformConfigSvc)
+}
+
+func provideGB28181PlatformConfigService(
+	repo *repository.GB28181PlatformConfigRepository,
+	runtimeSvc *service.SIPRuntimeService,
+) *service.GB28181PlatformConfigService {
+	svc := service.NewGB28181PlatformConfigService(repo)
+	svc.SetNotifier(runtimeSvc)
+	return svc
 }

@@ -47,8 +47,9 @@ func defaultValidProductionConfig() *Config {
 		DB:  DBConfig{SSLMode: "require"},
 		JWT: JWTConfig{Secret: "0123456789abcdef0123456789abcdef"},
 		Storage: StorageConfig{
-			ChunkSizeMB:   5,
-			MaxFileSizeMB: 100,
+			ChunkSizeMB:       5,
+			MaxFileSizeMB:     100,
+			MaxAlgoFileSizeMB: 1024,
 		},
 		CORS: CORSConfig{AllowOrigins: []string{"https://admin.example.com"}},
 		Seed: SeedConfig{

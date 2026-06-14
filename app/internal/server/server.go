@@ -15,6 +15,7 @@ import (
 	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
 	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
+	"github.com/niko-admin/niko-admin/internal/router"
 	"github.com/niko-admin/niko-admin/internal/task"
 )
 
@@ -26,6 +27,7 @@ type App struct {
 	AsynqMux       *asynq.ServeMux
 	AsynqScheduler *asynq.Scheduler
 	Hub            *ws.Hub
+	Router         *router.Router
 }
 
 // Run 启动各个服务器组件并等待退出信号。
@@ -65,6 +67,16 @@ func (a *App) Run() {
 		}
 	}()
 
+	// 启动 Go SIP Server
+	if a.Router != nil && a.Router.SIPRuntimeSvc != nil {
+		go func() {
+			ctx := context.Background()
+			if err := a.Router.SIPRuntimeSvc.Start(ctx); err != nil {
+				zap.L().Error("failed to start Go SIP Runtime", zap.Error(err))
+			}
+		}()
+	}
+
 	// 等待退出信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -74,6 +86,10 @@ func (a *App) Run() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	if a.Router != nil && a.Router.SIPRuntimeSvc != nil {
+		_ = a.Router.SIPRuntimeSvc.Stop(ctx)
+	}
 
 	if err := a.HTTPServer.Shutdown(ctx); err != nil {
 		zap.L().Error("server forced shutdown", zap.Error(err))

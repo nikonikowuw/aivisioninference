@@ -59,3 +59,36 @@ type CatalogTaskStatusResponse struct {
 	ChannelCount int    `json:"channel_count"`
 	Error        string `json:"error,omitempty"`
 }
+
+// GB28181PlatformConfigResponse GB28181 平台配置响应
+type GB28181PlatformConfigResponse struct {
+	Enabled          bool      `json:"enabled"`
+	SipID            string    `json:"sip_id"`
+	SipDomain        string    `json:"sip_domain"`
+	SipRealm         string    `json:"sip_realm"`
+	ListenIP         string    `json:"listen_ip"`
+	ListenPort       int       `json:"listen_port"`
+	Transport        string    `json:"transport"` // udp | tcp
+	AdvertisedIP     string    `json:"advertised_ip"`
+	RtpIP            string    `json:"rtp_ip"`
+	HeartbeatTimeout int       `json:"heartbeat_timeout"`
+	CatalogInterval  int       `json:"catalog_interval"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// GB28181PlatformConfigRequest GB28181 平台配置请求
+type GB28181PlatformConfigRequest struct {
+	Enabled          bool   `json:"enabled"`
+	SipID            string `json:"sip_id" validate:"required,len=20"`
+	SipDomain        string `json:"sip_domain" validate:"required"`
+	SipRealm         string `json:"sip_realm" validate:"required"`
+	SipPassword      string `json:"sip_password" validate:"omitempty"` // Empty means keep unchanged
+	ListenIP         string `json:"listen_ip" validate:"required"`
+	ListenPort       int    `json:"listen_port" validate:"required,min=1024,max=65535"`
+	Transport        string `json:"transport" validate:"required,oneof=udp tcp"`
+	AdvertisedIP     string `json:"advertised_ip"`
+	RtpIP            string `json:"rtp_ip"`
+	HeartbeatTimeout int    `json:"heartbeat_timeout" validate:"required,min=10,max=1800"`
+	CatalogInterval  int    `json:"catalog_interval" validate:"required,min=10,max=86400"`
+}

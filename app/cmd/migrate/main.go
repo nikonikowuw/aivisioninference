@@ -117,6 +117,7 @@ func main() {
 
 		// AIVisionInference: Device License (MVP+).
 		&model.DeviceLicense{},
+		&model.GB28181PlatformConfig{},
 	); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}
@@ -485,6 +486,31 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig, redisCfg config.RedisConfi
 		}
 	} else {
 		log.Printf("Redis not available, skip cache invalidation: %v", err)
+	}
+
+	// Ensure default GB28181PlatformConfig exists.
+	var cfgCount int64
+	if err := db.Model(&model.GB28181PlatformConfig{}).Where("id = ?", "default").Count(&cfgCount).Error; err == nil && cfgCount == 0 {
+		defaultCfg := model.GB28181PlatformConfig{
+			ID:               "default",
+			Enabled:          true,
+			SipID:            "34020000002000000001",
+			SipDomain:         "3402000000",
+			SipRealm:          "3402000000",
+			SipPassword:       "admin123",
+			ListenIP:         "0.0.0.0",
+			ListenPort:       5060,
+			Transport:        "udp",
+			AdvertisedIP:     "",
+			RtpIP:            "",
+			HeartbeatTimeout: 180,
+			CatalogInterval:  3600,
+		}
+		if err := db.Create(&defaultCfg).Error; err != nil {
+			log.Printf("WARNING: failed to seed default GB28181 platform config: %v", err)
+		} else {
+			log.Println("Seeded default GB28181 platform config")
+		}
 	}
 
 	log.Printf("Default data seeded successfully")

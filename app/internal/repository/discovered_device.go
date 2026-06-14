@@ -119,3 +119,16 @@ func (r *DiscoveredDeviceRepository) ResetByDeviceID(ctx context.Context, device
 			"matched_device_id": nil,
 		}).Error
 }
+
+func (r *DiscoveredDeviceRepository) FindByGB28181Code(ctx context.Context, code string) (*model.DiscoveredDevice, error) {
+	var item model.DiscoveredDevice
+	err := r.db.WithContext(ctx).Where("gb28181_code = ?", code).First(&item).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *DiscoveredDeviceRepository) Update(ctx context.Context, id string, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).Model(&model.DiscoveredDevice{}).Where("id = ?", id).Updates(updates).Error
+}

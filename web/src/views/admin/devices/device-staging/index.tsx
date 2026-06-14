@@ -526,9 +526,16 @@ export default function DeviceStaging() {
                         <SourceBadge source={device.source} t={t} />
                       </Td>
                       <Td>
-                        <Text color={textColor} fontWeight="500">
-                          {device.device_name || '-'}
-                        </Text>
+                        <VStack align="start" spacing={0}>
+                          <Text color={textColor} fontWeight="500">
+                            {device.device_name || '-'}
+                          </Text>
+                          {device.gb28181_code && (
+                            <Text fontSize="xs" color="gray.400">
+                              SN: {device.gb28181_code}
+                            </Text>
+                          )}
+                        </VStack>
                       </Td>
                       <Td>
                         <Code fontSize="sm">{device.device_ip || '-'}</Code>

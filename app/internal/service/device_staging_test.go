@@ -89,7 +89,7 @@ func TestDeviceStaging_Upsert(t *testing.T) {
 	_ = zap.NewNop()
 	repo := newMockStagingRepo()
 	devRepo := newMockDeviceRepo()
-	svc := NewDeviceStagingService(repo, devRepo)
+	svc := NewDeviceStagingService(repo, devRepo, nil, nil)
 	ctx := context.Background()
 
 	// 第一次添加
@@ -108,7 +108,7 @@ func TestDeviceStaging_Upsert(t *testing.T) {
 func TestDeviceStaging_BatchOptions(t *testing.T) {
 	repo := newMockStagingRepo()
 	devRepo := newMockDeviceRepo()
-	svc := NewDeviceStagingService(repo, devRepo)
+	svc := NewDeviceStagingService(repo, devRepo, nil, nil)
 	ctx := context.Background()
 
 	// 添加两个设备作为发现记录

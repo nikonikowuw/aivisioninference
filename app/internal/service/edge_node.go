@@ -14,6 +14,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	ver "github.com/niko-admin/niko-admin/internal/pkg/version"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
@@ -28,11 +29,15 @@ type EdgeNodeService struct {
 	nodeAlgoRepo         *repository.EdgeNodeAlgorithmRepository
 	algoPackageRepo      *repository.AlgorithmPackageRepository
 	taskRepo             *repository.AIVisionTaskRepository
+	deviceRepo           *repository.DeviceRepository
+	smartRecordRepo      *repository.SmartRecordRepository
 	jwtManager           *jwt.Manager
 	storage              storage.Storage
 	minCompatibleVersion string
 	versionCheckEnabled  bool
 	hub                  *ws.Hub
+	inferenceChan        chan *ipc.InferenceResultParams
+	stopChan             chan struct{}
 }
 
 // NewEdgeNodeService creates a new EdgeNodeService.
@@ -41,21 +46,29 @@ func NewEdgeNodeService(
 	nodeAlgoRepo *repository.EdgeNodeAlgorithmRepository,
 	algoPackageRepo *repository.AlgorithmPackageRepository,
 	taskRepo *repository.AIVisionTaskRepository,
+	deviceRepo *repository.DeviceRepository,
+	smartRecordRepo *repository.SmartRecordRepository,
 	jwtManager *jwt.Manager,
 	storage storage.Storage,
 	hub *ws.Hub,
 ) *EdgeNodeService {
-	return &EdgeNodeService{
+	svc := &EdgeNodeService{
 		nodeRepo:             nodeRepo,
 		nodeAlgoRepo:         nodeAlgoRepo,
 		algoPackageRepo:      algoPackageRepo,
 		taskRepo:             taskRepo,
+		deviceRepo:           deviceRepo,
+		smartRecordRepo:      smartRecordRepo,
 		jwtManager:           jwtManager,
 		storage:              storage,
 		minCompatibleVersion: "",
 		versionCheckEnabled:  false,
 		hub:                  hub,
+		inferenceChan:        make(chan *ipc.InferenceResultParams, 10000),
+		stopChan:             make(chan struct{}),
 	}
+	go svc.batchInsertWorker()
+	return svc
 }
 
 // SetVersionConfig sets configuration for version compatibility checking.
@@ -323,7 +336,10 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 			return nil, fmt.Errorf("更新算法部署状态失败: %w", err)
 		}
 
-		extractPath := fmt.Sprintf("%s_%s", p.AlgoPackage.AlgorithmName, p.AlgoPackage.Version)
+		extractPath := p.AlgoPackage.ExtractPath
+		if extractPath == "" {
+			extractPath = fmt.Sprintf("%s_%s", p.AlgoPackage.AlgorithmName, p.AlgoPackage.Version)
+		}
 
 		deployments = append(deployments, dto.PendingDeployment{
 			AlgoPackageID: p.AlgoPackageID,
@@ -505,4 +521,123 @@ func loadRate(node model.EdgeNode) float64 {
 		maxLoad = 1
 	}
 	return float64(node.CurrentLoad) / float64(maxLoad)
+}
+
+// PushInferenceResult pushes an inference result to the batch insert queue.
+func (s *EdgeNodeService) PushInferenceResult(params *ipc.InferenceResultParams) {
+	select {
+	case s.inferenceChan <- params:
+	default:
+		zap.L().Warn("EdgeNodeService: inference channel is full, dropping frame")
+	}
+}
+
+// Stop gracefully shuts down the batch insert worker, flushing remaining records.
+func (s *EdgeNodeService) Stop() {
+	close(s.stopChan)
+	close(s.inferenceChan)
+}
+
+type cachedTask struct {
+	name            string
+	deviceChannelID string
+	algoPackageID   string
+}
+
+func (s *EdgeNodeService) batchInsertWorker() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	var batch []model.SmartRecord
+	maxBatchSize := 500
+
+	taskCache := make(map[string]cachedTask)
+	deviceCache := make(map[string]string)
+	algoCache := make(map[string]string)
+
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.smartRecordRepo.CreateInBatches(ctx, batch, maxBatchSize); err != nil {
+			zap.L().Error("MQTT: failed to batch insert smart records", zap.Error(err))
+		}
+		batch = batch[:0]
+	}
+
+	processOne := func(params *ipc.InferenceResultParams) {
+		task, device, algo := s.resolveInferenceMetadata(params, taskCache, deviceCache, algoCache)
+		record := ipc.InferenceResultToSmartRecord(params, task.name, device, algo)
+		if record != nil {
+			batch = append(batch, *record)
+		}
+
+		if len(batch) >= maxBatchSize {
+			flush()
+		}
+	}
+
+	for {
+		select {
+		case <-s.stopChan:
+			// Drain remaining items from inferenceChan before final flush
+			for {
+				select {
+				case params, ok := <-s.inferenceChan:
+					if !ok {
+						flush()
+						return
+					}
+					processOne(params)
+				default:
+					flush()
+					return
+				}
+			}
+		case params, ok := <-s.inferenceChan:
+			if !ok {
+				flush()
+				return
+			}
+			processOne(params)
+		case <-ticker.C:
+			flush()
+		}
+	}
+}
+
+func (s *EdgeNodeService) resolveInferenceMetadata(params *ipc.InferenceResultParams, taskCache map[string]cachedTask, deviceCache map[string]string, algoCache map[string]string) (task cachedTask, deviceName string, algoVersion string) {
+	if params.TaskID != "" {
+		if t, ok := taskCache[params.TaskID]; ok {
+			task = t
+		} else if tObj, err := s.taskRepo.FindByID(context.Background(), params.TaskID); err == nil && tObj != nil {
+			task = cachedTask{name: tObj.Name, deviceChannelID: tObj.DeviceChannelID, algoPackageID: tObj.AlgoPackageID}
+			taskCache[params.TaskID] = task
+		}
+	}
+
+	devID := task.deviceChannelID
+	if devID == "" {
+		devID = params.DeviceID
+	}
+	if devID != "" {
+		if d, ok := deviceCache[devID]; ok {
+			deviceName = d
+		} else if dObj, err := s.deviceRepo.FindByID(context.Background(), devID); err == nil && dObj != nil {
+			deviceName = dObj.DeviceName
+			deviceCache[devID] = deviceName
+		}
+	}
+
+	if task.algoPackageID != "" {
+		if v, ok := algoCache[task.algoPackageID]; ok {
+			algoVersion = v
+		} else if aObj, err := s.algoPackageRepo.FindByID(context.Background(), task.algoPackageID); err == nil && aObj != nil {
+			algoVersion = aObj.Version
+			algoCache[task.algoPackageID] = algoVersion
+		}
+	}
+	return
 }

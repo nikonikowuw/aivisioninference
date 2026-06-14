@@ -4,6 +4,7 @@
 package router
 
 import (
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
@@ -89,6 +90,9 @@ var serviceSet = wire.NewSet(
 	provideGB28181PlatformConfigService,
 	service.NewSIPRuntimeService,
 	provideEdgeNodeService,
+	provideMqttSyncManager,
+	provideMqttMux,
+	provideEdgeMqttHandler,
 )
 
 var handlerSet = wire.NewSet(
@@ -121,7 +125,7 @@ var handlerSet = wire.NewSet(
 )
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。
-func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, scheduler *asynq.Scheduler) (*RouteDeps, error) {
+func InitializeRouteDeps(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, scheduler *asynq.Scheduler, mqttClient mqtt.Client) (*RouteDeps, error) {
 	wire.Build(
 		repositorySet,
 		serviceSet,

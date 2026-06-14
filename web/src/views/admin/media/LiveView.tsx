@@ -58,29 +58,20 @@ const LiveView: React.FC = () => {
   }, [stopTilePlay]);
 
   const addTile = async (deviceId: string) => {
-    const idx = tiles.length;
     setTiles(prev => [...prev, { deviceId, loading: true }]);
 
     try {
       const data = await request<PlayResponse>(
         `/media/play?device_id=${encodeURIComponent(deviceId)}&protocol=hls`
       );
-      setTiles(prev => {
-        const updated = [...prev];
-        if (updated[idx]) {
-          updated[idx] = { ...updated[idx], url: data.url, loading: false };
-        }
-        return updated;
-      });
+      setTiles(prev => prev.map(t =>
+        t.deviceId === deviceId && t.loading ? { ...t, url: data.url, loading: false } : t
+      ));
     } catch (err: any) {
       toast({ title: `获取播放地址失败: ${deviceId}`, status: 'error', duration: 3000 });
-      setTiles(prev => {
-        const updated = [...prev];
-        if (updated[idx]) {
-          updated[idx] = { ...updated[idx], loading: false, error: err.message };
-        }
-        return updated;
-      });
+      setTiles(prev => prev.map(t =>
+        t.deviceId === deviceId && t.loading ? { ...t, loading: false, error: err.message } : t
+      ));
     }
   };
 
@@ -145,7 +136,7 @@ const LiveView: React.FC = () => {
                   <Spinner color="white" />
                 </Center>
               ) : tile.url ? (
-                <VideoPlayer url={tile.url} protocol="hls" />
+                <VideoPlayer url={tile.url} protocol="hls" deviceId={tile.deviceId} />
               ) : (
                 <Center h="100%" bg="gray.800" borderRadius="md" color="red.300" fontSize="sm">
                   {tile.error || t('empty.loadFailed', { defaultValue: '加载失败' })}

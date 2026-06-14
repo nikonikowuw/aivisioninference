@@ -25,6 +25,14 @@ func (r *SmartRecordRepository) Create(ctx context.Context, record *model.SmartR
 	return r.db.WithContext(ctx).Create(record).Error
 }
 
+// CreateInBatches inserts smart records in batches.
+func (r *SmartRecordRepository) CreateInBatches(ctx context.Context, records []model.SmartRecord, batchSize int) error {
+	if len(records) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).CreateInBatches(records, batchSize).Error
+}
+
 // FindByID finds a record by its ID.
 func (r *SmartRecordRepository) FindByID(ctx context.Context, id string) (*model.SmartRecord, error) {
 	var record model.SmartRecord

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -15,6 +16,8 @@ import (
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
+	"github.com/niko-admin/niko-admin/internal/pkg/mqttmux"
+	"github.com/niko-admin/niko-admin/internal/pkg/mqttsync"
 	"github.com/niko-admin/niko-admin/internal/pkg/onvif"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
@@ -59,6 +62,9 @@ type RouteDeps struct {
 	SIPRuntimeSvc           *service.SIPRuntimeService
 	EdgeNodeHandler         *handler.EdgeNodeHandler
 	EdgeNodeMiddleware       *middleware.EdgeNodeMiddleware
+	EdgeNodeSvc             *service.EdgeNodeService
+	EdgeMqttHandler         *handler.EdgeMqttHandler
+	MqttMux                 *mqttmux.Mux
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -217,6 +223,8 @@ func newRouteDeps(
 	sipRuntimeSvc *service.SIPRuntimeService,
 	edgeNodeHandler *handler.EdgeNodeHandler,
 	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
+	edgeMqttHandler *handler.EdgeMqttHandler,
+	mqttMux *mqttmux.Mux,
 ) *RouteDeps {
 	if sipService != nil {
 		sipService.SetRuntimeService(sipRuntimeSvc)
@@ -255,6 +263,8 @@ func newRouteDeps(
 		SIPRuntimeSvc:           sipRuntimeSvc,
 		EdgeNodeHandler:         edgeNodeHandler,
 		EdgeNodeMiddleware:       edgeNodeMiddleware,
+		EdgeMqttHandler:         edgeMqttHandler,
+		MqttMux:                 mqttMux,
 	}
 }
 
@@ -355,12 +365,8 @@ func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.Strea
 	return webhookHandler, playHandler, recordingHandler, stagingHandler
 }
 
-func provideEngineClient(cfg *Config) service.EngineClient {
-	timeout := time.Duration(cfg.EngineTimeoutSec) * time.Second
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	return service.NewIPCEngineClient(cfg.EngineAddr, timeout, zap.L())
+func provideEngineClient(mqttClient mqtt.Client, syncManager *mqttsync.MqttSyncManager) service.EngineClient {
+	return service.NewMqttEngineClient(mqttClient, syncManager, zap.L())
 }
 
 func provideAlgorithmPackageService(
@@ -427,6 +433,8 @@ func provideEdgeNodeService(
 	nodeAlgoRepo *repository.EdgeNodeAlgorithmRepository,
 	algoPackageRepo *repository.AlgorithmPackageRepository,
 	taskRepo *repository.AIVisionTaskRepository,
+	deviceRepo *repository.DeviceRepository,
+	smartRecordRepo *repository.SmartRecordRepository,
 	jwtManager *jwt.Manager,
 	fileStorage storage.Storage,
 	cfg *Config,
@@ -437,6 +445,8 @@ func provideEdgeNodeService(
 		nodeAlgoRepo,
 		algoPackageRepo,
 		taskRepo,
+		deviceRepo,
+		smartRecordRepo,
 		jwtManager,
 		fileStorage,
 		hub,
@@ -451,4 +461,22 @@ func provideEdgeNodeHandler(svc *service.EdgeNodeService) *handler.EdgeNodeHandl
 
 func provideEdgeNodeMiddleware(jwtManager *jwt.Manager) *middleware.EdgeNodeMiddleware {
 	return middleware.NewEdgeNodeMiddleware(jwtManager)
+}
+
+func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
+	return mqttsync.NewMqttSyncManager(rdb)
+}
+
+func provideMqttMux() *mqttmux.Mux {
+	return mqttmux.NewMux()
+}
+
+func provideEdgeMqttHandler(
+	nodeSvc *service.EdgeNodeService,
+	syncManager *mqttsync.MqttSyncManager,
+	taskClient *task.Client,
+	rdb *redis.Client,
+	hub *ws.Hub,
+) *handler.EdgeMqttHandler {
+	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub)
 }

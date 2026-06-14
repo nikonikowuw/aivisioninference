@@ -24,6 +24,17 @@ type Config struct {
 	Proxy     ProxyConfig     `mapstructure:"proxy"`
 	ZLM       ZLMConfig       `mapstructure:"zlm"`
 	Engine    EngineConfig    `mapstructure:"engine"`
+	MQTT      MQTTConfig      `mapstructure:"mqtt"`
+}
+
+// MQTTConfig holds MQTT connection settings.
+type MQTTConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	ClientID string `mapstructure:"client_id"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	UseTLS   bool   `mapstructure:"use_tls"`
 }
 
 // AppConfig holds application-level settings.
@@ -201,20 +212,15 @@ func loadDotEnv(path string) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
+		key, val, ok := strings.Cut(line, "=")
+		if !ok || os.Getenv(strings.TrimSpace(key)) != "" {
 			continue
 		}
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-		// 去除行内注释
-		if idx := strings.Index(value, "#"); idx != -1 {
-			value = strings.TrimSpace(value[:idx])
+		val = strings.TrimSpace(val)
+		if idx := strings.Index(val, "#"); idx != -1 {
+			val = strings.TrimSpace(val[:idx])
 		}
-		value = strings.Trim(value, "\"'")
-		if os.Getenv(key) == "" {
-			os.Setenv(key, value)
-		}
+		os.Setenv(strings.TrimSpace(key), strings.Trim(val, "\"'"))
 	}
 }
 
@@ -240,6 +246,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("redis.port", 6379)
 	v.SetDefault("redis.password", "")
 	v.SetDefault("redis.db", 0)
+
+	// MQTT
+	v.SetDefault("mqtt.host", "localhost")
+	v.SetDefault("mqtt.port", 1883)
+	v.SetDefault("mqtt.client_id", "niko-admin-go")
+	v.SetDefault("mqtt.username", "")
+	v.SetDefault("mqtt.password", "")
+	v.SetDefault("mqtt.use_tls", false)
 
 	// JWT
 	v.SetDefault("jwt.secret", "")
@@ -325,48 +339,53 @@ func setDefaults(v *viper.Viper) {
 	// 已自动处理所有环境变量映射，例如 NIKO_DB_HOST → db.host
 }
 
-// Validate 校验配置是否满足运行安全要求，生产环境会启用更严格的检查。
+// Validate performs configuration validation.
 func (c *Config) Validate() error {
 	if c == nil {
 		return fmt.Errorf("config is nil")
 	}
 
-	if c.Storage.ChunkSizeMB <= 0 {
-		return fmt.Errorf("storage.chunk_size must be greater than 0")
+	checks := []struct {
+		cond bool
+		msg  string
+	}{
+		{c.Storage.ChunkSizeMB <= 0, "storage.chunk_size must be > 0"},
+		{c.Storage.MaxFileSizeMB <= 0, "storage.max_file_size must be > 0"},
+		{c.Storage.MaxAlgoFileSizeMB <= 0, "storage.max_algo_file_size must be > 0"},
+		{c.JWT.Secret == "", "jwt.secret must be configured"},
 	}
-	if c.Storage.MaxFileSizeMB <= 0 {
-		return fmt.Errorf("storage.max_file_size must be greater than 0")
-	}
-	if c.Storage.MaxAlgoFileSizeMB <= 0 {
-		return fmt.Errorf("storage.max_algo_file_size must be greater than 0")
-	}
-	if c.JWT.Secret == "" {
-		return fmt.Errorf("jwt.secret must be configured")
+
+	for _, check := range checks {
+		if check.cond {
+			return fmt.Errorf("%s", check.msg)
+		}
 	}
 
 	if !isProduction(c.App.Env) {
 		return nil
 	}
 
-	if len(c.JWT.Secret) < 32 {
-		return fmt.Errorf("jwt.secret must be at least 32 characters in production")
+	prodChecks := []struct {
+		cond bool
+		msg  string
+	}{
+		{len(c.JWT.Secret) < 32, "jwt.secret must be >= 32 chars in production"},
+		{strings.EqualFold(c.DB.SSLMode, "disable") || c.DB.SSLMode == "", "db.sslmode must not be disable in production"},
+		{c.Seed.Password == "admin123", "seed.password must not use default value in production"},
+		{c.Seed.RootPassword == "root123456", "seed.root_password must not use default value in production"},
+		{c.ZLM.Secret == "", "zlm.secret must be configured via NIKO_ZLM_SECRET in production"},
 	}
+
+	for _, check := range prodChecks {
+		if check.cond {
+			return fmt.Errorf("%s", check.msg)
+		}
+	}
+
 	for _, origin := range c.CORS.AllowOrigins {
 		if origin == "*" {
 			return fmt.Errorf("cors.allow_origins cannot contain wildcard in production")
 		}
-	}
-	if strings.EqualFold(c.DB.SSLMode, "disable") || c.DB.SSLMode == "" {
-		return fmt.Errorf("db.sslmode must not be disable in production")
-	}
-	if c.Seed.Password == "admin123" {
-		return fmt.Errorf("seed.password must not use default value in production")
-	}
-	if c.Seed.RootPassword == "root123456" {
-		return fmt.Errorf("seed.root_password must not use default value in production")
-	}
-	if c.ZLM.Secret == "" {
-		return fmt.Errorf("zlm.secret must be configured via NIKO_ZLM_SECRET environment variable")
 	}
 
 	return nil

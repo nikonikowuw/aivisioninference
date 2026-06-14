@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/beevik/ntp v1.5.0
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1

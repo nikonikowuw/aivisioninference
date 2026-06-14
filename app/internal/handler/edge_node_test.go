@@ -148,7 +148,9 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, jwtManager, fileStorage, nil)
+	deviceRepo := repository.NewDeviceRepository(db)
+	smartRecordRepo := repository.NewSmartRecordRepository(db)
+	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil)
 	h := NewEdgeNodeHandler(svc)
 
 	r := gin.New()

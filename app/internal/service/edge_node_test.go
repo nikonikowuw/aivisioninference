@@ -13,6 +13,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/pkg/storage"
@@ -131,6 +132,86 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 		);
 	`).Error)
 
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS devices (
+			id TEXT PRIMARY KEY,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME,
+			created_by TEXT,
+			updated_by TEXT,
+			device_name TEXT,
+			access_type TEXT,
+			rtsp_url TEXT,
+			gb28181_device_id TEXT,
+			gb28181_channel_id TEXT,
+			username TEXT,
+			password TEXT,
+			manufacturer TEXT,
+			model TEXT,
+			firmware_version TEXT,
+			status TEXT,
+			enabled BOOLEAN,
+			latitude NUMERIC,
+			longitude NUMERIC,
+			location_desc TEXT,
+			last_online_at DATETIME,
+			last_offline_at DATETIME,
+			last_error_code TEXT,
+			last_error_message TEXT,
+			external_key TEXT,
+			remark TEXT,
+			version INTEGER,
+			auto_infer BOOLEAN,
+			parent_nvr_id TEXT
+		);
+	`).Error)
+
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS smart_records (
+			record_id TEXT PRIMARY KEY,
+			record_type TEXT,
+			capture_time DATETIME,
+			task_id TEXT,
+			task_name TEXT,
+			device_id TEXT,
+			device_name TEXT,
+			algorithm_name TEXT,
+			algorithm_version TEXT,
+			category_code INTEGER,
+			confidence NUMERIC,
+			person_record_id TEXT,
+			person_name TEXT,
+			similarity NUMERIC,
+			identity_id TEXT,
+			triggered_line_ids TEXT,
+			direction TEXT,
+			alarm_type TEXT,
+			alarm_level TEXT,
+			alarm_status TEXT,
+			alarm_major TEXT,
+			correlation_id TEXT,
+			business_tags TEXT,
+			snapshot_image_url TEXT,
+			target_crop_url TEXT,
+			background_image_url TEXT,
+			raw_result TEXT,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME,
+			created_by TEXT,
+			updated_by TEXT
+		);
+	`).Error)
+
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS device_group_members (
+			device_id TEXT,
+			group_id TEXT,
+			created_at DATETIME
+		);
+	`).Error)
+
 	return db
 }
 
@@ -143,8 +224,10 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	taskRepo := repository.NewAIVisionTaskRepository(db)
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
+	deviceRepo := repository.NewDeviceRepository(db)
+	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, jwtManager, fileStorage, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil)
 	ctx := context.Background()
 
 	// 1. Create Node
@@ -220,6 +303,7 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 		Version:       "1.0.0",
 		PackageMD5:    "hash123",
 		PackagePath:   "yolov8.tar.gz",
+		ExtractPath:   "/opt/aivision/algo/yolov8_1.0.0",
 	}
 	require.NoError(t, db.Create(algoPkg).Error)
 
@@ -352,7 +436,9 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
 	fileStorage2, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, jwtManager, fileStorage2, nil)
+	deviceRepo := repository.NewDeviceRepository(db)
+	smartRecordRepo := repository.NewSmartRecordRepository(db)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage2, nil)
 	ctx := context.Background()
 
 	// Create an online node
@@ -464,7 +550,9 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
 	fileStorage3, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, jwtManager, fileStorage3, nil)
+	deviceRepo := repository.NewDeviceRepository(db)
+	smartRecordRepo := repository.NewSmartRecordRepository(db)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage3, nil)
 	ctx := context.Background()
 
 	// Create online node
@@ -534,4 +622,76 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 
 	// Verify the package path has leading / stripped
 	assert.NotContains(t, urlMap["algo-presigned-1"], "///", "URL should not have double slashes")
+}
+
+func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
+	db := setupServiceTestDB(t)
+
+	nodeRepo := repository.NewEdgeNodeRepository(db)
+	nodeAlgoRepo := repository.NewEdgeNodeAlgorithmRepository(db)
+	pkgRepo := repository.NewAlgorithmPackageRepository(db)
+	taskRepo := repository.NewAIVisionTaskRepository(db)
+	deviceRepo := repository.NewDeviceRepository(db)
+	smartRecordRepo := repository.NewSmartRecordRepository(db)
+	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
+
+	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil)
+
+	// Create a camera device
+	device := &model.Device{
+		BaseModel:  model.BaseModel{ID: "camera-1"},
+		DeviceName: "Front Gate Camera",
+		AccessType: "rtsp",
+		RtspURL:    "rtsp://127.0.0.1/live",
+		Status:     "online",
+	}
+	require.NoError(t, db.Create(device).Error)
+
+	// Create an algorithm package
+	algoPkg := &model.AlgorithmPackage{
+		BaseModel:     model.BaseModel{ID: "algo-presigned-1"},
+		AlgorithmName: "face_detection",
+		Version:       "1.2.3",
+		PackagePath:   "face.tar.gz",
+		ExtractPath:   "/opt/algo/face",
+		SoPath:        "/opt/algo/face.so",
+	}
+	require.NoError(t, db.Create(algoPkg).Error)
+
+	// Create an AI task
+	task := &model.AIVisionTask{
+		BaseModel:       model.BaseModel{ID: "task-1"},
+		Name:            "Intrusion Detection Task",
+		Status:          model.TaskStatusRunning,
+		DeviceChannelID: "camera-1",
+		AlgoPackageID:   "algo-presigned-1",
+		TargetNodeID:    "node-1",
+	}
+	require.NoError(t, db.Create(task).Error)
+
+	// Push inference result
+	params := &ipc.InferenceResultParams{
+		TaskID:     "task-1",
+		AlgoName:   "face_detection",
+		DeviceID:   "camera-1",
+		FrameTS:    uint64(time.Now().UnixNano()),
+		RecordType: "alarm",
+		AlarmType:  "intrusion",
+		AlarmLevel: "critical",
+	}
+
+	svc.PushInferenceResult(params)
+
+	// Wait for worker to flush
+	time.Sleep(2200 * time.Millisecond)
+
+	// Verify smart record in DB
+	var records []model.SmartRecord
+	require.NoError(t, db.Find(&records).Error)
+	assert.NotEmpty(t, records)
+	assert.Equal(t, "Intrusion Detection Task", records[0].TaskName)
+	assert.Equal(t, "Front Gate Camera", records[0].DeviceName)
+	assert.Equal(t, "1.2.3", records[0].AlgorithmVersion)
+	assert.Equal(t, "intrusion", records[0].AlarmType)
 }

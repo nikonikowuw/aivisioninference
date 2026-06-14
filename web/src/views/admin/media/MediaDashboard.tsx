@@ -40,8 +40,10 @@ const isValidPlayResponse = (data: PlayResponse | null | undefined): data is Pla
 
 const LAYOUTS: Record<number, { cols: number; rows: number }> = { 1: { cols: 1, rows: 1 }, 4: { cols: 2, rows: 2 }, 9: { cols: 3, rows: 3 } };
 const STATUS_MAP: Record<string, { color: string; icon: typeof MdCheckCircle }> = {
-  online: { color: 'green', icon: MdCheckCircle }, offline: { color: 'red', icon: MdCircle },
-  error: { color: 'orange', icon: MdCircle }, unknown: { color: 'gray', icon: MdCircle },
+  online: { color: 'green', icon: MdCheckCircle },
+  offline: { color: 'red', icon: MdCircle },
+  error: { color: 'orange', icon: MdCircle },
+  unknown: { color: 'gray', icon: MdCircle },
 };
 
 function buildTree(groups: DeviceGroup[], devices: Device[]): TreeNode[] {
@@ -78,20 +80,42 @@ const TreeNodeView: React.FC<{ node: TreeNode; depth: number; search: string; on
     const textColor = useColorModeValue('navy.700', 'white');
     const deviceTextColor = isOffline ? 'gray.400' : textColor;
     const hoverBg = useColorModeValue('gray.50', 'whiteAlpha.100');
-    if (search && isDevice && !node.name.toLowerCase().includes(search.toLowerCase())) return null;
-    if (search && !isDevice && !node.children.some(c => c.name.toLowerCase().includes(search.toLowerCase()))) return null;
+
+    const matchesSearch = useMemo(() => {
+      if (!search) return true;
+      const term = search.toLowerCase();
+      if (isDevice) return node.name.toLowerCase().includes(term);
+      return node.children.some(c => c.name.toLowerCase().includes(term));
+    }, [search, isDevice, node.name, node.children]);
+
+    if (!matchesSearch) return null;
+
     return (
       <Box pl={`${depth * 12}px`}>
         {isDevice ? (
           <Flex p="2" pr="3" borderRadius="md" cursor={isOffline ? 'not-allowed' : 'grab'} _hover={{ bg: hoverBg }} align="center" gap="2"
-            draggable={!isOffline} onDragStart={(e) => { 
+            draggable={!isOffline}
+            onDragStart={(e) => {
               if (isOffline) { e.preventDefault(); return; }
-              e.dataTransfer.setData('application/json', JSON.stringify({ id: device!.id, name: device!.device_name, access_type: device!.access_type, rtsp_url: device!.rtsp_url })); e.dataTransfer.effectAllowed = 'copy'; 
+              e.dataTransfer.setData('application/json', JSON.stringify({
+                id: device!.id,
+                name: device!.device_name,
+                access_type: device!.access_type,
+                rtsp_url: device!.rtsp_url
+              }));
+              e.dataTransfer.effectAllowed = 'copy';
             }}
-            onClick={() => { if (!isOffline && device) onPlay(device); }}>
-            <IconButton aria-label={t('play')} icon={<MdPlayCircle />} size="xs" colorScheme={isOffline ? 'gray' : 'green'} variant="ghost" flexShrink={0}
+            onClick={() => !isOffline && device && onPlay(device)}>
+            <IconButton
+              aria-label={t('play')}
+              icon={<MdPlayCircle />}
+              size="xs"
+              colorScheme={isOffline ? 'gray' : 'green'}
+              variant="ghost"
+              flexShrink={0}
               isDisabled={isOffline}
-              onClick={(e) => { e.stopPropagation(); if (!isOffline && device) onPlay(device); }} />
+              onClick={(e) => { e.stopPropagation(); if (!isOffline && device) onPlay(device); }}
+            />
             <Icon as={MdVideocam} color={isOffline ? 'gray.400' : 'blue.500'} boxSize="14px" flexShrink={0} />
             <Text fontSize="sm" color={deviceTextColor} flex={1} noOfLines={1} opacity={isOffline ? 0.6 : 1}>{node.name}</Text>
             {statusInfo && <Icon as={statusInfo.icon} color={`${statusInfo.color}.500`} boxSize="10px" flexShrink={0} opacity={isOffline ? 0.5 : 1} />}
@@ -105,9 +129,11 @@ const TreeNodeView: React.FC<{ node: TreeNode; depth: number; search: string; on
           </Flex>
         )}
         {node.children.length > 0 && (
-          <Collapse in={expanded}><Box pt="1">
-            {node.children.map(c => <TreeNodeView key={c.id} node={c} depth={depth + 1} search={search} onPlay={onPlay} t={t} />)}
-          </Box></Collapse>
+          <Collapse in={expanded}>
+            <Box pt="1">
+              {node.children.map(c => <TreeNodeView key={c.id} node={c} depth={depth + 1} search={search} onPlay={onPlay} t={t} />)}
+            </Box>
+          </Collapse>
         )}
       </Box>
     );
@@ -134,7 +160,7 @@ const GridCell: React.FC<{ index: number; tile: Tile | null; onDrop: (i: number,
             <IconButton aria-label={t('close')} icon={<MdClose />} size="2xs" variant="ghost" color="white" onClick={() => onRemove(index)} />
           </Flex>
           {tile.loading ? <Center h="100%"><Spinner color="white" size="sm" /></Center>
-            : tile.url ? <VideoPlayer url={tile.url} protocol={tile.protocol === 'webrtc' ? 'webrtc' : 'hls'} />
+            : tile.url ? <VideoPlayer url={tile.url} protocol={tile.protocol === 'webrtc' ? 'webrtc' : 'hls'} deviceId={tile.deviceId} />
               : <Center h="100%" flexDirection="column" gap={2}><MdError size="24px" color="#FC8181" /><Text color="red.300" fontSize="xs">{tile.error || t('playFailed')}</Text></Center>}
         </>) : (
           <Center h="100%" flexDirection="column" gap={2}>
@@ -190,11 +216,7 @@ export default function MediaDashboard() {
   }, [stopTilePlay]);
 
   const setTileAtIndex = useCallback((index: number, patch: Partial<Tile>) => {
-    setTiles(cur => {
-      const u = [...cur];
-      if (u[index]) Object.assign(u[index]!, patch);
-      return u;
-    });
+    setTiles(cur => cur.map((t, i) => i === index && t ? { ...t, ...patch } : t));
   }, []);
 
   const playDevice = useCallback((device: Device) => {

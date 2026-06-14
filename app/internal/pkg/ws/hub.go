@@ -5,6 +5,7 @@ package ws
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -12,18 +13,20 @@ import (
 
 // Message is the envelope for all WebSocket messages.
 type Message struct {
-	Type    string      `json:"type"`
-	Payload interface{} `json:"payload"`
+	Type     string      `json:"type"`
+	Payload  interface{} `json:"payload"`
+	DeviceID string      `json:"-"` // used for inference event rate limiting; set before Broadcast
 }
 
 // Hub manages a set of active WebSocket clients and broadcasts messages.
 type Hub struct {
 	// clients maps user IDs to their connected WebSocket clients.
-	clients    map[string]map[*Client]bool
-	broadcast  chan *Message
-	register   chan *Client
-	unregister chan *Client
-	mu         sync.RWMutex
+	clients           map[string]map[*Client]bool
+	broadcast         chan *Message
+	register          chan *Client
+	unregister        chan *Client
+	lastInferenceSent sync.Map // map[string]time.Time — rate limit per device
+	mu                sync.RWMutex
 }
 
 // NewHub creates a new Hub instance.
@@ -75,6 +78,19 @@ func (h *Hub) Run() {
 			)
 
 		case msg := <-h.broadcast:
+			// Rate limit inference messages to 30fps (approx 33.3ms) per device.
+			// DeviceID is set by the caller before Broadcast, avoiding JSON parsing inside the lock.
+			if msg.Type == "inference" && msg.DeviceID != "" {
+				now := time.Now()
+				if lastSentVal, ok := h.lastInferenceSent.Load(msg.DeviceID); ok {
+					lastSent := lastSentVal.(time.Time)
+					if now.Sub(lastSent) < 33*time.Millisecond {
+						continue // rate limit: drop frame
+					}
+				}
+				h.lastInferenceSent.Store(msg.DeviceID, now)
+			}
+
 			data, err := json.Marshal(msg)
 			if err != nil {
 				zap.L().Error("failed to marshal broadcast message", zap.Error(err))

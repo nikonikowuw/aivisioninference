@@ -71,6 +71,7 @@ type HeartbeatRequest struct {
 	HALPlatform         string                   `json:"hal_platform" binding:"required"`
 	HardwareInfo        HardwareInfo             `json:"hardware_info" binding:"required"`
 	InstalledAlgorithms []InstalledAlgorithmInfo `json:"installed_algorithms"`
+	ActiveStreams       []string                 `json:"active_streams"`
 	Status              string                   `json:"status" binding:"omitempty"`
 	ErrorMessage        string                   `json:"error_message" binding:"omitempty"`
 }

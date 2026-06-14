@@ -4,6 +4,7 @@ package ipc
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -107,6 +108,7 @@ type StartStreamParams struct {
 	SoPath            string              `json:"so_path,omitempty"`
 	AlgoParamsJSON    string              `json:"algo_params_json,omitempty"`
 	Algorithms        []AlgoBindingParams `json:"algorithms"`
+	TraceID           string              `json:"trace_id,omitempty"`
 }
 
 type AlgoBindingParams struct {
@@ -216,14 +218,70 @@ type InferenceResultParams struct {
 	InferTimeUS    uint32
 }
 
-// FlatBuffersToInferenceResult TODO: flatc 生成代码后实现 FlatBuffers 读取。
+// FlatBuffersToInferenceResult parses FlatBuffers InferenceResultMsg into InferenceResultParams.
 func FlatBuffersToInferenceResult(fbData []byte) *InferenceResultParams {
 	if len(fbData) == 0 {
 		return nil
 	}
 
-	zap.L().Debug("IPC: FlatBuffersToInferenceResult 待 flatc 生成代码后实现")
-	return nil
+	var msg *fbs.InferenceResultMsg
+	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
+	if env != nil && env.SignalType() == fbs.SignalTypeInferenceResult {
+		payload := env.PayloadBytes()
+		if len(payload) == 0 {
+			return nil
+		}
+		msg = fbs.GetRootAsInferenceResultMsg(payload, 0)
+	} else {
+		msg = fbs.GetRootAsInferenceResultMsg(fbData, 0)
+	}
+
+	if msg == nil {
+		return nil
+	}
+
+	detLen := msg.DetectionsLength()
+	detections := make([]BoundingBoxJSON, 0, detLen)
+	for i := 0; i < detLen; i++ {
+		var detObj fbs.BoundingBoxInfo
+		if msg.Detections(&detObj, i) {
+			detections = append(detections, BoundingBoxJSON{
+				X:          int(detObj.X()),
+				Y:          int(detObj.Y()),
+				W:          int(detObj.W()),
+				H:          int(detObj.H()),
+				Confidence: detObj.Confidence(),
+				LabelID:    int(detObj.LabelId()),
+				LabelName:  string(detObj.LabelName()),
+				TrackID:    int(detObj.TrackId()),
+			})
+		}
+	}
+
+	lineIdsLen := msg.TriggeredLineIdsLength()
+	triggeredIDs := make([]string, 0, lineIdsLen)
+	for i := 0; i < lineIdsLen; i++ {
+		triggeredIDs = append(triggeredIDs, string(msg.TriggeredLineIds(i)))
+	}
+
+	return &InferenceResultParams{
+		TaskID:         string(msg.TaskId()),
+		AlgoName:       string(msg.AlgoName()),
+		DeviceID:       string(msg.DeviceId()),
+		FrameTS:        msg.FrameTsNs(),
+		FrameWidth:     int(msg.FrameWidth()),
+		FrameHeight:    int(msg.FrameHeight()),
+		Detections:     detections,
+		RecordType:     strings.ToLower(msg.RecordType().String()),
+		AlarmType:      string(msg.AlarmType()),
+		AlarmLevel:     string(msg.AlarmLevel()),
+		TriggeredIDs:   triggeredIDs,
+		SnapshotPath:   string(msg.SnapshotPath()),
+		CropPath:       string(msg.CropPath()),
+		BackgroundPath: string(msg.BackgroundPath()),
+		ResultJSON:     string(msg.ResultJson()),
+		InferTimeUS:    msg.InferTimeUs(),
+	}
 }
 
 // InferenceResultToSmartRecord 将推理结果参数转换为 model.SmartRecord。
@@ -250,13 +308,14 @@ func InferenceResultToSmartRecord(params *InferenceResultParams, taskName, devic
 	}
 
 	if len(params.Detections) > 0 {
-		maxConf := float64(0)
-		for _, det := range params.Detections {
-			if float64(det.Confidence) > maxConf {
-				maxConf = float64(det.Confidence)
+		maxConf := params.Detections[0].Confidence
+		for _, det := range params.Detections[1:] {
+			if det.Confidence > maxConf {
+				maxConf = det.Confidence
 			}
 		}
-		record.Confidence = &maxConf
+		conf64 := float64(maxConf)
+		record.Confidence = &conf64
 	}
 
 	rawResult := InferenceResultJSON{
@@ -294,6 +353,7 @@ type StreamStatusParams struct {
 	MaxReconnects  int
 	DeviceID       string
 	PlayURL        string
+	TraceID        string `json:"trace_id,omitempty"`
 }
 
 // FlatBuffersToStreamStatus 解析 FlatBuffers StreamStatusRspMsg
@@ -302,44 +362,45 @@ func FlatBuffersToStreamStatus(fbData []byte) *StreamStatusParams {
 		return nil
 	}
 
-	parseStatus := func(data []byte) *StreamStatusParams {
-		status := fbs.GetRootAsStreamStatusRspMsg(data, 0)
-		if status == nil {
-			return nil
-		}
-		deviceID := string(status.DeviceId())
-		playURL := string(status.PlaybackUrl())
-		if deviceID == "" && playURL == "" && !status.IsRunning() {
-			return nil
-		}
-		statusStr := "unknown"
-		if status.IsRunning() {
-			statusStr = "running"
-		}
-		return &StreamStatusParams{
-			DeviceID: deviceID,
-			PlayURL:  playURL,
-			Status:   statusStr,
-		}
-	}
-
-	// C++ 引擎当前直接返回 StreamStatusRspMsg，必须优先按直接响应解析；
-	// 否则 direct table 可能被误识别为 IPCEnvelope，导致 payload 为空。
-	if params := parseStatus(fbData); params != nil {
+	// C++ 引擎当前直接返回 StreamStatusRspMsg，优先按直接响应解析；
+	// 避免 direct table 被误识别为 IPCEnvelope 导致 payload 为空。
+	if params := parseStreamStatus(fbData); params != nil {
 		return params
 	}
 
-	// 兼容带 IPCEnvelope 的异步状态上报。
+	// 兼容带 IPCEnvelope 的异步状态上报
 	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
 	if env != nil && env.SignalType() == fbs.SignalTypeStreamStatusReport {
 		payload := env.PayloadBytes()
 		if len(payload) == 0 {
 			return nil
 		}
-		return parseStatus(payload)
+		return parseStreamStatus(payload)
 	}
 
 	return nil
+}
+
+// parseStreamStatus 直接解析 StreamStatusRspMsg 并提取状态参数
+func parseStreamStatus(data []byte) *StreamStatusParams {
+	status := fbs.GetRootAsStreamStatusRspMsg(data, 0)
+	if status == nil {
+		return nil
+	}
+	deviceID := string(status.DeviceId())
+	playURL := string(status.PlaybackUrl())
+	if deviceID == "" && playURL == "" && !status.IsRunning() {
+		return nil
+	}
+	statusStr := "unknown"
+	if status.IsRunning() {
+		statusStr = "running"
+	}
+	return &StreamStatusParams{
+		DeviceID: deviceID,
+		PlayURL:  playURL,
+		Status:   statusStr,
+	}
 }
 
 // ============================================================
@@ -424,11 +485,9 @@ func FlatBuffersToEngineMetrics(fbData []byte) *EngineMetricsSnapshot {
 // 辅助函数
 // ============================================================
 
-// nanosToTime 将 Unix 纳秒时间戳转换为 time.Time。
+// nanosToTime converts Unix nanosecond timestamp to time.Time.
 func nanosToTime(nanos uint64) time.Time {
-	sec := int64(nanos / 1e9)
-	nsec := int64(nanos % 1e9)
-	return time.Unix(sec, nsec)
+	return time.Unix(0, int64(nanos))
 }
 
 // StartSelfCheckCmdToFlatBuffers 将自检参数序列化为 FlatBuffers 格式。

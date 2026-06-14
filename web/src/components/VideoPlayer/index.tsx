@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, Spinner, Center, Text, Badge } from '@chakra-ui/react';
 import { streamManager } from './StreamManager';
 import type { Protocol } from './StreamManager';
+import { useThrottledInference } from 'hooks/useThrottledInference';
 
 interface FallbackConfig {
   fallbackOrder: Protocol[];
@@ -23,6 +24,7 @@ interface VideoPlayerProps {
   onError?: (error: string) => void;
   onProtocolChange?: (protocol: Protocol) => void;
   fallbackConfig?: Partial<FallbackConfig>;
+  deviceId?: string;
 }
 
 // ==================== URL 工具 ====================
@@ -61,6 +63,16 @@ function convertUrl(url: string, targetProtocol: Protocol): string | null {
   } catch { return null; }
 }
 
+const PROTOCOL_COLORS: Record<string, string> = {
+  webrtc: 'green',
+  hls: 'blue',
+  flv: 'orange',
+};
+
+function getProtocolColor(p: Protocol): string {
+  return PROTOCOL_COLORS[p] || 'gray';
+}
+
 // ==================== 主组件 ====================
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -71,12 +83,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onError,
   onProtocolChange,
   fallbackConfig,
+  deviceId,
 }) => {
-  const config = { ...DEFAULT_FALLBACK_CONFIG, ...fallbackConfig };
+  const config = React.useMemo(() => ({ ...DEFAULT_FALLBACK_CONFIG, ...fallbackConfig }), [fallbackConfig]);
   const internalVideoRef = useRef<HTMLVideoElement>(null);
   const videoRef = externalVideoRef || internalVideoRef;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
+
+  useThrottledInference(deviceId, videoRef, canvasRef);
 
   const [currentProtocol, setCurrentProtocol] = useState<Protocol | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,10 +100,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [fallbackInfo, setFallbackInfo] = useState<string | null>(null);
 
   const cleanup = useCallback(() => {
-    if (cleanupRef.current) {
-      cleanupRef.current();
-      cleanupRef.current = null;
-    }
+    cleanupRef.current?.();
+    cleanupRef.current = null;
   }, []);
 
   const tryPlay = useCallback(
@@ -205,6 +219,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         playsInline
         muted
       />
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 1,
+        }}
+      />
       {loading && !error && (
         <Center position="absolute" top="0" left="0" w="100%" h="100%">
           <Spinner color="white" size="xl" />
@@ -217,7 +243,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       )}
       {config.showProtocol && currentProtocol && !error && (
         <Badge position="absolute" top={2} right={2}
-          colorScheme={currentProtocol === 'webrtc' ? 'green' : currentProtocol === 'hls' ? 'blue' : 'orange'}
+          colorScheme={getProtocolColor(currentProtocol)}
           fontSize="xs">{currentProtocol.toUpperCase()}</Badge>
       )}
       {fallbackInfo && !error && (

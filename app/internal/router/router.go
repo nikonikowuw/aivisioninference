@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
@@ -14,11 +15,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"github.com/niko-admin/niko-admin/internal/handler"
 	"github.com/niko-admin/niko-admin/internal/middleware"
 	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/httpx"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
+	"github.com/niko-admin/niko-admin/internal/pkg/mqttmux"
+	"github.com/niko-admin/niko-admin/internal/pkg/mqttsync"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/repository"
@@ -28,16 +32,20 @@ import (
 
 // Router holds all dependencies for route registration.
 type Router struct {
-	engine        *gin.Engine
-	db            *gorm.DB
-	rdb           *redis.Client
-	jwtManager    *jwt.Manager
-	hub           *ws.Hub
-	config        *Config
-	accessLogger  *zap.Logger
-	scheduler     *asynq.Scheduler
-	rbacCache     cache.Cache
-	SIPRuntimeSvc *service.SIPRuntimeService
+	engine          *gin.Engine
+	db              *gorm.DB
+	rdb             *redis.Client
+	jwtManager      *jwt.Manager
+	hub             *ws.Hub
+	config          *Config
+	accessLogger    *zap.Logger
+	scheduler       *asynq.Scheduler
+	rbacCache       cache.Cache
+	SIPRuntimeSvc   *service.SIPRuntimeService
+	mqttClient      mqtt.Client
+	MqttMux         *mqttmux.Mux
+	EdgeMqttHandler *handler.EdgeMqttHandler
+	EdgeNodeSvc     *service.EdgeNodeService
 }
 
 // RBAC returns the RBAC middleware, bound to the Router's cached dependencies.
@@ -95,7 +103,7 @@ type RouterEngineConfig struct {
 }
 
 // New creates a new Router with all dependencies wired.
-func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger, scheduler *asynq.Scheduler) *Router {
+func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger, scheduler *asynq.Scheduler, mqttClient mqtt.Client) *Router {
 	engine := gin.New()
 
 	httpx.TrustedProxies = cfg.TrustedProxies
@@ -109,6 +117,7 @@ func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, c
 		config:       cfg,
 		accessLogger: accessLogger,
 		scheduler:    scheduler,
+		mqttClient:   mqttClient,
 	}
 
 	r.setupMiddleware()
@@ -138,12 +147,15 @@ func (r *Router) setupMiddleware() {
 func (r *Router) setupRoutes() {
 	v1 := r.engine.Group("/api/v1")
 
-	deps, err := InitializeRouteDeps(r.db, r.rdb, r.jwtManager, r.hub, r.config, r.scheduler)
+	deps, err := InitializeRouteDeps(r.db, r.rdb, r.jwtManager, r.hub, r.config, r.scheduler, r.mqttClient)
 	if err != nil {
 		zap.L().Fatal("initialize route dependencies failed", zap.Error(err))
 	}
 	r.SIPRuntimeSvc = deps.SIPRuntimeSvc
 	r.rbacCache = deps.RBACCache
+	r.EdgeNodeSvc = deps.EdgeNodeSvc
+	r.EdgeMqttHandler = deps.EdgeMqttHandler
+	r.MqttMux = deps.MqttMux
 
 	// Auth (no auth required)
 	r.registerAuthRoutes(v1, deps)
@@ -571,7 +583,7 @@ func NewAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
 }
 
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
-func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
+func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Client, syncManager *mqttsync.MqttSyncManager) *asynq.ServeMux {
 	deviceRepo := repository.NewDeviceRepository(db)
 	zlmClient := provideZLMClient(cfg)
 
@@ -585,7 +597,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	algorithmPackageRepo := repository.NewAlgorithmPackageRepository(db)
 	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
-	engineClient := provideEngineClient(cfg)
+	engineClient := provideEngineClient(mqttClient, syncManager)
 	streamManager := provideStreamManager(engineClient, deviceRepo, mediaStreamRepo)
 
 	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient, streamManager)
@@ -605,6 +617,10 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config) *asynq.ServeMux {
 	hub := ws.NewHub()
 	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
 	edgeNodeStatusTask.RegisterHandlers(mux)
+
+	// Edge Node State Reconciliation Worker
+	edgeStateWorker := task.NewEdgeStateWorker(aiTaskRepo, nodeRepo, rdb, engineClient)
+	mux.HandleFunc(task.TaskReconcileEdgeState, edgeStateWorker.HandleReconcileEdgeState)
 
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。

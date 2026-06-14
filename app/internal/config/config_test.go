@@ -57,5 +57,6 @@ func defaultValidProductionConfig() *Config {
 			Password:     "changed-admin-password",
 			RootPassword: "changed-root-password",
 		},
+		ZLM: ZLMConfig{Secret: "production-secret"},
 	}
 }

@@ -16,6 +16,7 @@ import (
 	validatorx "github.com/niko-admin/niko-admin/internal/pkg/validator"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/router"
+	"github.com/niko-admin/niko-admin/internal/service"
 	"github.com/niko-admin/niko-admin/internal/task"
 )
 
@@ -28,6 +29,8 @@ type App struct {
 	AsynqScheduler *asynq.Scheduler
 	Hub            *ws.Hub
 	Router         *router.Router
+	MqttServer     *MqttServer
+	EdgeNodeSvc    *service.EdgeNodeService
 }
 
 // Run 启动各个服务器组件并等待退出信号。
@@ -59,6 +62,16 @@ func (a *App) Run() {
 		}
 	}()
 
+	// 启动 MQTT 服务
+	if a.MqttServer != nil {
+		go func() {
+			zap.L().Info("starting MQTT server")
+			if err := a.MqttServer.Start(); err != nil {
+				zap.L().Error("MQTT server start error", zap.Error(err))
+			}
+		}()
+	}
+
 	// 启动 HTTP 服务
 	go func() {
 		zap.L().Info("server starting", zap.String("addr", a.HTTPServer.Addr))
@@ -89,6 +102,14 @@ func (a *App) Run() {
 
 	if a.Router != nil && a.Router.SIPRuntimeSvc != nil {
 		_ = a.Router.SIPRuntimeSvc.Stop(ctx)
+	}
+
+	if a.MqttServer != nil {
+		a.MqttServer.Stop()
+	}
+
+	if a.EdgeNodeSvc != nil {
+		a.EdgeNodeSvc.Stop()
 	}
 
 	if err := a.HTTPServer.Shutdown(ctx); err != nil {

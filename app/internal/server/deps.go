@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -16,7 +17,9 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/database"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
+	"github.com/niko-admin/niko-admin/internal/pkg/mqttsync"
 	"github.com/niko-admin/niko-admin/internal/router"
+	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 func provideLoggers(cfg *config.Config) *applog.Logger {
@@ -83,10 +86,46 @@ func provideHTTPServer(r *router.Router, cfg *config.Config) *http.Server {
 	}
 }
 
-func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config) *asynq.ServeMux {
-	return router.NewAsynqMux(db, rdb, cfg)
+func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config, client mqtt.Client) *asynq.ServeMux {
+	syncManager := mqttsync.NewMqttSyncManager(rdb)
+	return router.NewAsynqMux(db, rdb, cfg, client, syncManager)
 }
 
 func provideAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
 	return router.NewAsynqScheduler(rdb)
+}
+
+func provideMqttClient(cfg *config.Config) (mqtt.Client, error) {
+	opts := mqtt.NewClientOptions()
+	scheme := "tcp"
+	if cfg.MQTT.UseTLS {
+		scheme = "ssl"
+	}
+	broker := fmt.Sprintf("%s://%s:%d", scheme, cfg.MQTT.Host, cfg.MQTT.Port)
+	opts.AddBroker(broker)
+	opts.SetClientID(cfg.MQTT.ClientID)
+	if cfg.MQTT.Username != "" {
+		opts.SetUsername(cfg.MQTT.Username)
+	}
+	if cfg.MQTT.Password != "" {
+		opts.SetPassword(cfg.MQTT.Password)
+	}
+	opts.SetAutoReconnect(true)
+	opts.SetCleanSession(true)
+
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		return nil, fmt.Errorf("MQTT connection failed: %w", token.Error())
+	}
+
+	zap.L().Info("MQTT: connected to broker", zap.String("broker", broker))
+	return client, nil
+}
+
+func provideMqttServer(client mqtt.Client, r *router.Router) *MqttServer {
+	return NewMqttServer(client, r.MqttMux, r.EdgeMqttHandler)
+}
+
+func provideEdgeNodeService(r *router.Router) *service.EdgeNodeService {
+	return r.EdgeNodeSvc
 }

@@ -76,8 +76,6 @@ type Config struct {
 	OSSDomain        string `yaml:"oss_domain" mapstructure:"oss_domain"`
 	ZLMAPIURL        string
 	ZLMSecret        string
-	EngineAddr       string
-	EngineTimeoutSec int
 	// GB28181 GB/T 28181 配置
 	GB28181Enabled        bool          `yaml:"gb28181_enabled" mapstructure:"gb28181_enabled"`
 	GB28181Domain         string        `yaml:"gb28181_domain" mapstructure:"gb28181_domain"`

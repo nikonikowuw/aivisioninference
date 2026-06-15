@@ -65,8 +65,6 @@ func provideRouterConfig(cfg *config.Config) *router.Config {
 		LocalPublicURL:            cfg.Storage.Local.PublicURL,
 		ZLMAPIURL:                 cfg.ZLM.APIURL,
 		ZLMSecret:                 cfg.ZLM.Secret,
-		EngineAddr:                cfg.Engine.Addr,
-		EngineTimeoutSec:          cfg.Engine.TimeoutSec,
 		Engine: router.RouterEngineConfig{
 			MinCompatibleVersion:        cfg.Engine.MinCompatibleVersion,
 			VersionCheckEnabled:         cfg.Engine.VersionCheckEnabled,

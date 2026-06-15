@@ -30,8 +30,6 @@ namespace aivision
     /// 引擎配置
     struct EngineConfig
     {
-        /// IPC 监听地址 (host:port)
-        std::string ipc_addr = "0.0.0.0:9500";
 
         /// Worker 线程数
         uint32_t worker_count = 4;
@@ -82,14 +80,31 @@ namespace aivision
         /// 算法包安装基目录
         std::string algo_dir = "/var/aivision/algo";
 
+        /// 是否启用 MQTT NATIVE 客户端
+        bool enable_mqtt = false;
+
+        /// MQTT Broker 地址
+        std::string mqtt_broker = "tcp://localhost:1883";
+
+        /// MQTT 客户端 ID
+        std::string mqtt_client_id = "";
+
+        /// MQTT 用户名
+        std::string mqtt_username = "";
+
+        /// MQTT 密码
+        std::string mqtt_password = "";
     };
 
     namespace http { class HTTPServer; }
     namespace monitor { class HeartbeatReporter; }
+    class CommandDispatcher;
+    class MqttControlPlane;
 
     /// 推理引擎主类
     class InferenceEngine
     {
+        friend class CommandDispatcher;
     public:
         explicit InferenceEngine(const EngineConfig &config);
         ~InferenceEngine();
@@ -122,7 +137,7 @@ namespace aivision
         // 组件访问器
         // ============================================================
 
-        ipc::IPCServer *GetIPCServer() { return ipc_server_.get(); }
+        ipc::ResponseRouter *GetResponseRouter() { return response_router_.get(); }
         ipc::HeartbeatManager *GetHeartbeatManager() { return heartbeat_.get(); }
         pipeline::WorkerPool *GetWorkerPool() { return worker_pool_.get(); }
         pipeline::HwBufferPool *GetBufferPool() { return buffer_pool_.get(); }
@@ -132,6 +147,12 @@ namespace aivision
         pipeline::PipelineManager *GetPipelineManager() { return pipeline_mgr_.get(); }
         algo::AlgoManager *GetAlgoManager() { return algo_mgr_.get(); }
         monitor::MetricsReporter *GetMetricsReporter() { return metrics_reporter_.get(); }
+
+        /// 统一发布 FlatBuffers 结果事件
+        bool PublishEvent(uint16_t signal_type, flatbuffers::FlatBufferBuilder &fbb);
+
+        CommandDispatcher *GetCommandDispatcher() { return command_dispatcher_.get(); }
+        MqttControlPlane *GetMqttControlPlane() { return mqtt_control_plane_.get(); }
 
     private:
         /// 注册 IPC 指令处理器
@@ -198,7 +219,7 @@ namespace aivision
         std::atomic<bool> shutdown_called_{false};
 
         // 组件
-        std::unique_ptr<ipc::IPCServer> ipc_server_;
+        std::unique_ptr<ipc::ResponseRouter> response_router_;
         std::unique_ptr<ipc::HeartbeatManager> heartbeat_;
         std::unique_ptr<pipeline::StreamQueueManager> queue_mgr_;
         std::unique_ptr<pipeline::SnapshotManager> snapshot_mgr_;
@@ -214,6 +235,10 @@ namespace aivision
 
         // 心跳上报模块（向平台推送引擎状态）
         std::unique_ptr<monitor::HeartbeatReporter> heartbeat_reporter_;
+
+        // MQTT & Command Dispatcher
+        std::unique_ptr<CommandDispatcher> command_dispatcher_;
+        std::unique_ptr<MqttControlPlane> mqtt_control_plane_;
     };
 
 } // namespace aivision

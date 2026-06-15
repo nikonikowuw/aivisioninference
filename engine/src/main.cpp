@@ -157,7 +157,6 @@ static std::string FindEnvFileArg(int argc, char *argv[])
 static EngineConfig LoadConfigFromEnv()
 {
     EngineConfig config;
-    config.ipc_addr = GetEnvString("NIKO_ENGINE_IPC_ADDR", GetEnvString("NIKO_ENGINE_ADDR", config.ipc_addr));
     config.worker_count = GetEnvUInt32("NIKO_ENGINE_WORKERS", config.worker_count);
     config.hal_so_path = GetEnvString("NIKO_ENGINE_HAL_SO", config.hal_so_path);
     config.fallback_hal_so_path = GetEnvString("NIKO_ENGINE_FALLBACK_HAL_SO", config.fallback_hal_so_path);
@@ -173,6 +172,11 @@ static EngineConfig LoadConfigFromEnv()
     config.auth_token = GetEnvString("NIKO_ENGINE_AUTH_TOKEN", config.auth_token);
     config.http_port = GetEnvUInt32("NIKO_ENGINE_HTTP_PORT", config.http_port);
     config.algo_dir = GetEnvString("NIKO_ENGINE_ALGO_DIR", config.algo_dir);
+    config.enable_mqtt = GetEnvBool("NIKO_ENGINE_ENABLE_MQTT", config.enable_mqtt);
+    config.mqtt_broker = GetEnvString("NIKO_ENGINE_MQTT_BROKER", config.mqtt_broker);
+    config.mqtt_client_id = GetEnvString("NIKO_ENGINE_MQTT_CLIENT_ID", config.mqtt_client_id);
+    config.mqtt_username = GetEnvString("NIKO_ENGINE_MQTT_USER", config.mqtt_username);
+    config.mqtt_password = GetEnvString("NIKO_ENGINE_MQTT_PASS", config.mqtt_password);
 
     std::string hal_platform = GetEnvString("NIKO_ENGINE_HAL_PLATFORM");
     if (config.hal_so_path.empty() && !hal_platform.empty())
@@ -192,8 +196,7 @@ static void PrintRuntimeConfig(const EngineConfig &config,
 {
     std::string env_display = env_file.empty() ? GetEnvString("NIKO_ENGINE_ENV_FILE", ".env") : env_file;
     std::cout << "[Config] env_file=" << env_display << std::endl;
-    std::cout << "[Config] ipc_addr=" << config.ipc_addr
-              << " workers=" << config.worker_count
+    std::cout << "[Config] workers=" << config.worker_count
               << " metrics_ms=" << config.metrics_interval_ms << std::endl;
     std::cout << "[Config] hal_platform=" << (hal_platform.empty() ? "<unset>" : hal_platform)
               << " hal_so=" << (config.hal_so_path.empty() ? "<unset>" : config.hal_so_path) << std::endl;
@@ -208,6 +211,11 @@ static void PrintRuntimeConfig(const EngineConfig &config,
               << " auth_token=" << (config.auth_token.empty() ? "<unset>" : "<set>") << std::endl;
     std::cout << "[Config] http_port=" << config.http_port << std::endl;
     std::cout << "[Config] algo_dir=" << config.algo_dir << std::endl;
+    std::cout << "[Config] enable_mqtt=" << (config.enable_mqtt ? "true" : "false")
+              << " mqtt_broker=" << config.mqtt_broker
+              << " mqtt_client_id=" << config.mqtt_client_id
+              << " mqtt_user=" << config.mqtt_username
+              << " mqtt_pass=" << (config.mqtt_password.empty() ? "<empty>" : "<set>") << std::endl;
 }
 
 } // namespace
@@ -243,6 +251,11 @@ static void PrintUsage(const char *prog)
     std::cout << "  --rtsp-push URL      RTSP publish base URL (default: rtsp://localhost:10554)" << std::endl;
     std::cout << "  --zlm-url URL        ZLM API URL (default: http://localhost:80)" << std::endl;
     std::cout << "  --zlm-secret SECRET  ZLM API secret" << std::endl;
+    std::cout << "  --enable-mqtt        Enable native MQTT client" << std::endl;
+    std::cout << "  --mqtt-broker URL    MQTT broker URL (default: tcp://localhost:1883)" << std::endl;
+    std::cout << "  --mqtt-client-id ID  MQTT client ID" << std::endl;
+    std::cout << "  --mqtt-user USER     MQTT username" << std::endl;
+    std::cout << "  --mqtt-pass PASS     MQTT password" << std::endl;
     std::cout << "  --version            Print version and exit" << std::endl;
     std::cout << "  --help               Print this help and exit" << std::endl;
 }
@@ -277,10 +290,7 @@ int main(int argc, char *argv[])
         {
             ++i;
         }
-        else if (arg == "--addr" && i + 1 < argc)
-        {
-            config.ipc_addr = argv[++i];
-        }
+
         else if (arg == "--workers" && i + 1 < argc)
         {
             config.worker_count = static_cast<uint32_t>(std::stoul(argv[++i]));
@@ -327,6 +337,26 @@ int main(int argc, char *argv[])
         {
             config.zlm_secret = argv[++i];
         }
+        else if (arg == "--enable-mqtt")
+        {
+            config.enable_mqtt = true;
+        }
+        else if (arg == "--mqtt-broker" && i + 1 < argc)
+        {
+            config.mqtt_broker = argv[++i];
+        }
+        else if (arg == "--mqtt-client-id" && i + 1 < argc)
+        {
+            config.mqtt_client_id = argv[++i];
+        }
+        else if (arg == "--mqtt-user" && i + 1 < argc)
+        {
+            config.mqtt_username = argv[++i];
+        }
+        else if (arg == "--mqtt-pass" && i + 1 < argc)
+        {
+            config.mqtt_password = argv[++i];
+        }
         else
         {
             std::cerr << "Unknown option: " << arg << std::endl;
@@ -351,8 +381,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "Engine initialized, starting IPC server on "
-              << config.ipc_addr << "..." << std::endl;
+    std::cout << "Engine initialized, starting in MQTT mode..." << std::endl;
 
     // 运行主循环 (阻塞)
     engine.Run([]() { return g_signal_received != 0; });

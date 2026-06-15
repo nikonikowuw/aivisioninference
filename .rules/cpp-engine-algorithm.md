@@ -90,6 +90,19 @@ algorithms/<algorithm_name>/<version>/
   - `cd engine && make build`
   - `cd engine && make clean`
   - `cd engine && make install`
+  - `cd engine && make test` (Google Test，覆盖 Pipeline、Decoder、Algo ABI 加载)
 - 算法包验证优先运行包内 `build.sh`、`test.sh` 或 README 指定命令。
 - 修改 FlatBuffers 后应执行对应 `flatc --go` 与 `flatc --cpp` 生成命令，并编译 Go 与 Engine 双端。
 - 涉及 pipeline、ABI、IPC 的修改必须至少验证：启动、加载算法、开始流、停止流、异常算法包、进程退出清理。
+- 集成测试：`make integration-test`（Docker Compose 编排本地环境，验证 Go 下发任务 → Engine 推理 → 结果回传全链路）。
+
+## 10. 安全
+
+- **算法包验证**：Go 控制面下发前对算法包进行 SHA256 签名校验和元数据白名单验证，拒绝未签名或元数据不匹配的算法包。
+- **IPC 权限**：Unix Domain Socket 权限设为 0600，仅允许同用户/同组进程访问。
+- **资源隔离**：每个 Pipeline 使用独立内存池，防止单个算法包内存泄漏影响其他任务。
+- **异常降级**：算法包崩溃时 Pipeline 自动重启，不中断其他流任务。
+- **节点认证**：边缘节点接入时需提供预分配的 Node Token，控制面验证后才允许注册。
+- **算法包分发**：使用 MinIO 预签名 URL（有效期 1 小时），防止未授权下载。
+- **版本兼容性**：Engine 版本与算法包版本必须匹配，不匹配时拒绝加载。
+- **硬件指纹**：记录节点硬件标识（CPU ID、NPU 序列号等），防止节点伪造。

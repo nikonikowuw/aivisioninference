@@ -2,7 +2,6 @@ import { ChevronLeftIcon, CopyIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
-  Center,
   Code,
   Flex,
   FormControl,
@@ -15,7 +14,6 @@ import {
   NumberInputField,
   NumberInputStepper,
   SimpleGrid,
-  Spinner,
   Stack,
   Text,
   Textarea,
@@ -41,7 +39,6 @@ export default function CreateEdgeNode() {
     name: '',
     description: '',
     endpoint: '',
-    ipc_addr: '',
     max_load: 4,
     remark: '',
   });
@@ -206,14 +203,6 @@ NIKO_ENGINE_PLATFORM_URL=http://your-platform-server:8080`}
                 />
               </FormControl>
 
-              <FormControl>
-                <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.ipcAddr')}</FormLabel>
-                <Input
-                  value={form.ipc_addr || ''}
-                  onChange={(e) => handleChange('ipc_addr', e.target.value)}
-                  placeholder="ipc:///tmp/engine.sock"
-                />
-              </FormControl>
 
               <FormControl isRequired>
                 <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.maxLoad')}</FormLabel>

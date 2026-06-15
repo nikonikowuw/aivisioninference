@@ -33,7 +33,6 @@ func setupTaskTestDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL UNIQUE,
 			description TEXT,
 			endpoint TEXT NOT NULL,
-			ip_c_addr TEXT NOT NULL,
 			auth_token TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'offline',
 			last_heartbeat DATETIME,
@@ -71,7 +70,6 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 		BaseModel:     model.BaseModel{ID: "node-timed-out"},
 		Name:          "Timed Out Node",
 		Endpoint:      "http://127.0.0.1:8080",
-		IPCAddr:       "127.0.0.1:9500",
 		Status:        model.NodeStatusOnline,
 		LastHeartbeat: &oldHeartbeat,
 	}
@@ -81,7 +79,6 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 		BaseModel:     model.BaseModel{ID: "node-healthy"},
 		Name:          "Healthy Node",
 		Endpoint:      "http://127.0.0.1:8081",
-		IPCAddr:       "127.0.0.1:9501",
 		Status:        model.NodeStatusOnline,
 		LastHeartbeat: &recentHeartbeat,
 	}
@@ -91,7 +88,6 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 		BaseModel:     model.BaseModel{ID: "node-already-offline"},
 		Name:          "Already Offline Node",
 		Endpoint:      "http://127.0.0.1:8082",
-		IPCAddr:       "127.0.0.1:9502",
 		Status:        model.NodeStatusOffline,
 		LastHeartbeat: &oldHeartbeat,
 	}

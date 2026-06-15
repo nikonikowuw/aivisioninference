@@ -45,7 +45,6 @@ export default function EdgeNodeCreateModal({ isOpen, onClose, onSuccess }: Edge
     name: '',
     description: '',
     endpoint: '',
-    ipc_addr: '',
     max_load: 4,
     remark: '',
   });
@@ -88,7 +87,7 @@ export default function EdgeNodeCreateModal({ isOpen, onClose, onSuccess }: Edge
   }, [result, toast, t, tCommon]);
 
   const handleClose = useCallback(() => {
-    setForm({ name: '', description: '', endpoint: '', ipc_addr: '', max_load: 4, remark: '' });
+    setForm({ name: '', description: '', endpoint: '', max_load: 4, remark: '' });
     setResult(null);
     setCopied(false);
     onClose();
@@ -195,14 +194,6 @@ NIKO_ENGINE_PLATFORM_URL=http://your-platform-server:8080`}
                 />
               </FormControl>
 
-              <FormControl>
-                <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.ipcAddr')}</FormLabel>
-                <Input
-                  value={form.ipc_addr || ''}
-                  onChange={(e) => handleChange('ipc_addr', e.target.value)}
-                  placeholder="ipc:///tmp/engine.sock"
-                />
-              </FormControl>
 
               <FormControl isRequired>
                 <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.maxLoad')}</FormLabel>

@@ -60,6 +60,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     ca-certificates \
     tzdata \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建运行时用户
@@ -75,14 +76,14 @@ RUN mkdir -p /tmp/ipc /var/lib/aivision/data && \
 # 如果需要 NPU 驱动，在此添加
 # COPY --from=rknpu-driver /lib/firmware /lib/firmware
 
-# 健康检查 (通过 UDS 心跳)
+# 健康检查 (通过 HTTP api /health)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD nc -z localhost 9500 || exit 1
+    CMD curl -f http://localhost:8081/health || exit 1
 
-# IPC 端口
-EXPOSE 9500
+# HTTP 端口
+EXPOSE 8081
 
 USER aivision
 
 ENTRYPOINT ["aivision-engine"]
-CMD ["--addr", "0.0.0.0:9500", "--workers", "4"]
+CMD ["--workers", "4"]

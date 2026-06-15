@@ -43,6 +43,66 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(httplib)
 
+# asio (Networking and concurrency library, header-only)
+# NOTE: Must use Populate, not MakeAvailable — paho.mqtt.cpp does find_package(asio)
+# and we need to provide a Findasio.cmake module first.
+FetchContent_Declare(
+    asio
+    GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+    GIT_TAG asio-1-28-0
+)
+FetchContent_GetProperties(asio)
+if(NOT asio_POPULATED)
+    FetchContent_Populate(asio)
+endif()
+
+# Generate a Findasio.cmake so paho.mqtt.cpp's find_package(asio) can find the fetched headers.
+set(CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}/cmake" ${CMAKE_MODULE_PATH})
+file(WRITE "${CMAKE_BINARY_DIR}/cmake/Findasio.cmake"
+    "if(NOT asio_INCLUDE_DIR)\n"
+    "    find_path(asio_INCLUDE_DIR asio.hpp PATHS \"${asio_SOURCE_DIR}/include\" NO_DEFAULT_PATH)\n"
+    "endif()\n"
+    "if(asio_INCLUDE_DIR)\n"
+    "    add_library(asio::asio INTERFACE IMPORTED)\n"
+    "    target_include_directories(asio::asio INTERFACE \"\${asio_INCLUDE_DIR}\")\n"
+    "    set(asio_FOUND TRUE)\n"
+    "endif()\n"
+)
+
+# paho.mqtt.c
+FetchContent_Declare(
+    paho-mqtt-c
+    GIT_REPOSITORY https://github.com/eclipse/paho.mqtt.c.git
+    GIT_TAG v1.3.13
+)
+set(PAHO_BUILD_SHARED OFF CACHE BOOL "Build shared library" FORCE)
+set(PAHO_BUILD_STATIC ON CACHE BOOL "Build static library" FORCE)
+set(PAHO_ENABLE_TESTING OFF CACHE BOOL "Build tests" FORCE)
+set(PAHO_ENABLE_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
+set(PAHO_WITH_SSL ON CACHE BOOL "Build with SSL support" FORCE)
+FetchContent_MakeAvailable(paho-mqtt-c)
+
+# paho.mqtt.cpp
+FetchContent_Declare(
+    paho-mqtt-cpp
+    GIT_REPOSITORY https://github.com/eclipse/paho.mqtt.cpp.git
+    GIT_TAG v1.2.0
+)
+set(PAHO_BUILD_SHARED OFF CACHE BOOL "Build shared library" FORCE)
+set(PAHO_BUILD_STATIC ON CACHE BOOL "Build static library" FORCE)
+set(PAHO_BUILD_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
+set(PAHO_BUILD_DOCUMENTATION OFF CACHE BOOL "Build documentation" FORCE)
+
+# Force find_package(PahoMqttC) to find the statically built target from FetchContent
+FetchContent_GetProperties(paho-mqtt-c)
+if(NOT paho-mqtt-c_POPULATED)
+    FetchContent_Populate(paho-mqtt-c)
+endif()
+set(PAHO_MQTT_C_LIBRARIES "${CMAKE_BINARY_DIR}/_deps/paho-mqtt-c-build/src/libpaho-mqtt3as.a" CACHE FILEPATH "Paho C library" FORCE)
+set(PAHO_MQTT_C_INCLUDE_DIRS "${paho-mqtt-c_SOURCE_DIR}/src" CACHE PATH "Paho C headers" FORCE)
+
+FetchContent_MakeAvailable(paho-mqtt-cpp)
+
 # FFmpeg + OpenCV software fallback decoder is required.
 # 推理 fallback 必须能完成软件解码、resize，并向 Worker 提供 HostMemory 帧。
 find_package(PkgConfig REQUIRED)
@@ -139,6 +199,8 @@ set(ENGINE_LIB_SOURCES
     src/http/http_server.cpp
     src/monitor/heartbeat_reporter.cpp
     src/algo/algorithm_downloader.cpp
+    src/command_dispatcher.cpp
+    src/mqtt_control_plane.cpp
 )
 
 # 引擎可执行入口
@@ -170,6 +232,8 @@ set(INSTALL_HEADERS
     include/http/http_server.h
     include/monitor/heartbeat_reporter.h
     include/algo/algorithm_downloader.h
+    include/command_dispatcher.h
+    include/mqtt_control_plane.h
 )
 
 # ============================================================
@@ -209,6 +273,7 @@ target_include_directories(aivision-engine-lib PUBLIC
 target_include_directories(aivision-engine-lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${FLATBUFFERS_INCLUDE_DIRS}
+    ${asio_SOURCE_DIR}/asio/include
 )
 
 target_include_directories(aivision-hal-rkmpp PRIVATE
@@ -227,6 +292,7 @@ target_link_libraries(aivision-engine-lib PUBLIC
     CURL::libcurl
     OpenSSL::Crypto
     httplib::httplib
+    paho-mqttpp3-static
     dl
 )
 

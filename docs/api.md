@@ -25,7 +25,6 @@ POST /api/v1/edge-nodes
   "name": "edge-node-01",
   "description": "车间东北角推理节点",
   "endpoint": "http://192.168.1.100:8080",
-  "ipc_addr": "192.168.1.100:9500",
   "max_load": 4,
   "remark": "位置：3 号产线"
 }
@@ -36,7 +35,6 @@ POST /api/v1/edge-nodes
 | name         | string | 是   | 节点名称，1-128 字符     |
 | description  | string | 否   | 描述，最多 500 字符      |
 | endpoint     | string | 是   | 引擎 HTTP 地址，URL 格式 |
-| ipc_addr     | string | 是   | 引擎 IPC 地址            |
 | max_load     | int    | 是   | 最大并行任务数，>= 1     |
 | remark       | string | 否   | 备注，最多 1000 字符     |
 
@@ -50,7 +48,6 @@ POST /api/v1/edge-nodes
     "id": "uuid-string",
     "name": "edge-node-01",
     "endpoint": "http://192.168.1.100:8080",
-    "ipc_addr": "192.168.1.100:9500",
     "max_load": 4,
     "status": "offline",
     "enabled": true,
@@ -162,7 +159,6 @@ PUT /api/v1/edge-nodes/:id
   "name": "edge-node-01-updated",
   "description": "更新后的描述",
   "endpoint": "http://192.168.1.101:8080",
-  "ipc_addr": "192.168.1.101:9500",
   "max_load": 8,
   "enabled": true,
   "status": "online",

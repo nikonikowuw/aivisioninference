@@ -36,7 +36,6 @@ export default function EditEdgeNode() {
 
   const textColor = useColorModeValue('secondaryGray.900', 'white');
   const textColorSecondary = 'gray.400';
-  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const toast = useToast();
 
   const [form, setForm] = useState<UpdateEdgeNodeRequest>({});
@@ -52,7 +51,6 @@ export default function EditEdgeNode() {
           name: node.name,
           description: node.description,
           endpoint: node.endpoint,
-          ipc_addr: node.ipc_addr,
           max_load: node.max_load,
           enabled: node.enabled,
           remark: node.remark,
@@ -135,13 +133,6 @@ export default function EditEdgeNode() {
                 />
               </FormControl>
 
-              <FormControl>
-                <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.ipcAddr')}</FormLabel>
-                <Input
-                  value={form.ipc_addr || ''}
-                  onChange={(e) => handleChange('ipc_addr', e.target.value)}
-                />
-              </FormControl>
 
               <FormControl isRequired>
                 <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.maxLoad')}</FormLabel>

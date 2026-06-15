@@ -41,7 +41,6 @@ export default function EdgeNodeEditModal({ isOpen, onClose, node, onSuccess }: 
   const toast = useToast();
 
   const [form, setForm] = useState<UpdateEdgeNodeRequest>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen && node) {
@@ -49,7 +48,6 @@ export default function EdgeNodeEditModal({ isOpen, onClose, node, onSuccess }: 
         name: node.name,
         description: node.description || '',
         endpoint: node.endpoint,
-        ipc_addr: node.ipc_addr || '',
         max_load: node.max_load,
         enabled: node.enabled,
         remark: node.remark || '',
@@ -124,13 +122,6 @@ export default function EdgeNodeEditModal({ isOpen, onClose, node, onSuccess }: 
                 />
               </FormControl>
 
-              <FormControl>
-                <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.ipcAddr')}</FormLabel>
-                <Input
-                  value={form.ipc_addr || ''}
-                  onChange={(e) => handleChange('ipc_addr', e.target.value)}
-                />
-              </FormControl>
 
               <FormControl isRequired>
                 <FormLabel fontSize="sm" color={textColorSecondary}>{t('fields.maxLoad')}</FormLabel>
@@ -176,7 +167,6 @@ export default function EdgeNodeEditModal({ isOpen, onClose, node, onSuccess }: 
                 colorScheme="brand"
                 type="button"
                 onClick={handleSubmit}
-                isLoading={isSubmitting}
               >
                 {tCommon('button.submit')}
               </Button>

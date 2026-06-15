@@ -22,7 +22,6 @@ type EdgeNode struct {
 
 	Description   string     `gorm:"type:varchar(500);comment:描述" json:"description"`
 	Endpoint      string     `gorm:"type:varchar(255);not null;comment:HTTP访问地址" json:"endpoint"`
-	IPCAddr       string     `gorm:"type:varchar(255);not null;comment:IPC地址" json:"ipc_addr"`
 	AuthToken     string     `gorm:"type:text;not null;comment:JWT认证Token" json:"-"` // Never expose in JSON responses
 	Status        string     `gorm:"type:varchar(50);not null;default:'offline';comment:状态(online/offline/error/disabled)" json:"status"`
 	LastHeartbeat *time.Time `gorm:"index;comment:最后心跳时间" json:"last_heartbeat,omitempty"`

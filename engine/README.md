@@ -52,11 +52,11 @@ make -j4
 
 ### HAL 平台选择
 
-| 平台 | 平台名/别名 | 默认 HAL 库 |
-|------|-------------|-------------|
+| 平台                | 平台名/别名                                        | 默认 HAL 库                                |
+| ------------------- | -------------------------------------------------- | ------------------------------------------ |
 | Apple Silicon/macOS | `macos`, `mac`, `apple`, `mseries`, `videotoolbox` | `libaivision-hal-macos-videotoolbox.dylib` |
-| Rockchip | `rkmpp`, `rknn`, `rockchip`, `rk3568`, `rk3588` | `libaivision-hal-rkmpp.so` |
-| 华为昇腾 | `ascend`, `atlas`, `huawei`, `cann` | `libaivision-hal-ascend.so` |
+| Rockchip            | `rkmpp`, `rknn`, `rockchip`, `rk3568`, `rk3588`    | `libaivision-hal-rkmpp.so`                 |
+| 华为昇腾            | `ascend`, `atlas`, `huawei`, `cann`                | `libaivision-hal-ascend.so`                |
 
 默认 HAL 目录为 `/usr/local/lib/aivision`，可通过 `NIKO_ENGINE_HAL_DIR` 覆盖。
 
@@ -77,13 +77,14 @@ NIKO_ENGINE_HAL_SO=/opt/aivision/lib/libaivision-hal-rkmpp.so aivision-engine
 ### .env 示例
 
 ```ini
-NIKO_ENGINE_IPC_ADDR=0.0.0.0:9500
 NIKO_ENGINE_WORKERS=4
 NIKO_ENGINE_HAL_PLATFORM=macos
 NIKO_ENGINE_HAL_DIR=/usr/local/lib/aivision
 NIKO_ENGINE_HAL_CONFIG={"rga_enable":true,"rga_output_width":640,"rga_output_height":480}
 NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK=true
 NIKO_ENGINE_RTSP_PUSH=rtsp://localhost:10554
+NIKO_ENGINE_ENABLE_MQTT=true
+NIKO_ENGINE_MQTT_BROKER=tcp://localhost:1883
 ```
 
 ```bash
@@ -97,22 +98,21 @@ aivision-engine --env-file /etc/aivision/engine.env
 
 ### 环境变量
 
-| 变量 | 说明 |
-|------|------|
-| `NIKO_ENGINE_ENV_FILE` | `.env` 文件路径 |
-| `NIKO_ENGINE_IPC_ADDR` / `NIKO_ENGINE_ADDR` | IPC 监听地址 |
-| `NIKO_ENGINE_WORKERS` | Worker 线程数 |
-| `NIKO_ENGINE_HAL_PLATFORM` | 主 HAL 平台名 |
-| `NIKO_ENGINE_HAL_SO` | 主 HAL 动态库路径，优先于平台名 |
-| `NIKO_ENGINE_FALLBACK_HAL_PLATFORM` | 备用 HAL 平台名 |
-| `NIKO_ENGINE_FALLBACK_HAL_SO` | 备用 HAL 动态库路径，优先于备用平台名 |
-| `NIKO_ENGINE_HAL_DIR` | 平台名映射时使用的 HAL 库目录 |
-| `NIKO_ENGINE_HAL_CONFIG` | HAL 配置 JSON |
+| 变量                                 | 说明                                        |
+| ------------------------------------ | ------------------------------------------- |
+| `NIKO_ENGINE_ENV_FILE`               | `.env` 文件路径                             |
+| `NIKO_ENGINE_WORKERS`                | Worker 线程数                               |
+| `NIKO_ENGINE_HAL_PLATFORM`           | 主 HAL 平台名                               |
+| `NIKO_ENGINE_HAL_SO`                 | 主 HAL 动态库路径，优先于平台名             |
+| `NIKO_ENGINE_FALLBACK_HAL_PLATFORM`  | 备用 HAL 平台名                             |
+| `NIKO_ENGINE_FALLBACK_HAL_SO`        | 备用 HAL 动态库路径，优先于备用平台名       |
+| `NIKO_ENGINE_HAL_DIR`                | 平台名映射时使用的 HAL 库目录               |
+| `NIKO_ENGINE_HAL_CONFIG`             | HAL 配置 JSON                               |
 | `NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK` | 是否允许 FFmpeg fallback，支持 `true/false` |
-| `NIKO_ENGINE_PLATFORM_URL` | 平台管理端 URL（用于心跳上报） |
-| `NIKO_ENGINE_NODE_ID` | 边缘节点 ID（平台注册后获取） |
-| `NIKO_ENGINE_AUTH_TOKEN` | 引擎认证 Token（平台创建节点后获取） |
-| `NIKO_ENGINE_HTTP_PORT` | 引擎 HTTP 服务端口（默认 8080） |
+| `NIKO_ENGINE_PLATFORM_URL`           | 平台管理端 URL（用于心跳上报）              |
+| `NIKO_ENGINE_NODE_ID`                | 边缘节点 ID（平台注册后获取）               |
+| `NIKO_ENGINE_AUTH_TOKEN`             | 引擎认证 Token（平台创建节点后获取）        |
+| `NIKO_ENGINE_HTTP_PORT`              | 引擎 HTTP 服务端口（默认 8080）             |
 
 | `NIKO_ENGINE_RTSP_PUSH` | RTSP 推流地址 |
 
@@ -126,22 +126,22 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 
 ## RGA 配置项
 
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `rga_enable` | bool | false | 启用 RGA 硬件缩放 |
-| `rga_output_width` | int | - | 缩放目标宽度 |
-| `rga_output_height` | int | - | 缩放目标高度 |
+| 字段                | 类型 | 默认值 | 说明              |
+| ------------------- | ---- | ------ | ----------------- |
+| `rga_enable`        | bool | false  | 启用 RGA 硬件缩放 |
+| `rga_output_width`  | int  | -      | 缩放目标宽度      |
+| `rga_output_height` | int  | -      | 缩放目标高度      |
 
 ## 编码器配置项 (EncodeInit)
 
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `codec` | string | h264 | h264 或 h265/hevc |
-| `width` | int | 1920 | 编码宽度 |
-| `height` | int | 1080 | 编码高度 |
-| `bitrate` | int | 4000000 | 目标码率 bps |
-| `fps` | int | 25 | 帧率 |
-| `gop` | int | 50 | GOP 大小 |
+| 字段      | 类型   | 默认值  | 说明              |
+| --------- | ------ | ------- | ----------------- |
+| `codec`   | string | h264    | h264 或 h265/hevc |
+| `width`   | int    | 1920    | 编码宽度          |
+| `height`  | int    | 1080    | 编码高度          |
+| `bitrate` | int    | 4000000 | 目标码率 bps      |
+| `fps`     | int    | 25      | 帧率              |
+| `gop`     | int    | 50      | GOP 大小          |
 
 ## 边缘节点功能
 
@@ -151,12 +151,12 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 
 引擎内置 HTTP 服务，提供以下管理接口：
 
-| 接口 | 方法 | 说明 |
-|------|------|------|
-| `/health` | GET | 健康检查，返回 status, uptime, current_load, engine_version |
-| `/hardware-info` | GET | 硬件信息，返回 CPU/GPU 型号、内存、平台 |
-| `/deploy-algo` | POST | 部署算法包，参数：algo_package_id, download_url, md5 |
-| `/algorithms` | GET | 查询已加载算法列表 |
+| 接口             | 方法 | 说明                                                        |
+| ---------------- | ---- | ----------------------------------------------------------- |
+| `/health`        | GET  | 健康检查，返回 status, uptime, current_load, engine_version |
+| `/hardware-info` | GET  | 硬件信息，返回 CPU/GPU 型号、内存、平台                     |
+| `/deploy-algo`   | POST | 部署算法包，参数：algo_package_id, download_url, md5        |
+| `/algorithms`    | GET  | 查询已加载算法列表                                          |
 
 ### Heartbeat Reporter
 
@@ -168,7 +168,7 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 - 已安装算法列表（installed_algorithms）
 - 引擎版本（engine_version，当前版本 `1.0.0`）
 
-心跳响应中包含待下发的算法包信息（pending_deployments），引擎自动下载并安装。  
+心跳响应中包含待下发的算法包信息（pending_deployments），引擎自动下载并安装。
 
 ### 算法包下载与安装
 
@@ -196,8 +196,6 @@ NIKO_ENGINE_AUTH_TOKEN=<从平台获取>
 
 # 引擎服务
 NIKO_ENGINE_HTTP_PORT=8080
-NIKO_ENGINE_IPC_ADDR=0.0.0.0:9500
-
 
 # HAL 配置
 NIKO_ENGINE_HAL_PLATFORM=macos

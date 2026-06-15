@@ -28,7 +28,6 @@ type CreateEdgeNodeRequest struct {
 	Name        string `json:"name" binding:"required,min=1,max=128"`
 	Description string `json:"description" binding:"max=500"`
 	Endpoint    string `json:"endpoint" binding:"required,url,max=255"`
-	IPCAddr     string `json:"ipc_addr" binding:"omitempty,max=255"`
 	MaxLoad     int    `json:"max_load" binding:"required,min=1"`
 	Remark      string `json:"remark" binding:"max=1000"`
 }
@@ -38,8 +37,8 @@ type UpdateEdgeNodeRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=1,max=128"`
 	Description string `json:"description" binding:"max=500"`
 	Endpoint    string `json:"endpoint" binding:"omitempty,url,max=255"`
-	IPCAddr     string `json:"ipc_addr" binding:"omitempty,max=255"`
 	MaxLoad     int    `json:"max_load" binding:"omitempty,min=1"`
+
 	Enabled     *bool  `json:"enabled"`
 	Remark      string `json:"remark" binding:"max=1000"`
 	Status      string `json:"status" binding:"omitempty,oneof=online offline error disabled"`

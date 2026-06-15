@@ -33,7 +33,6 @@ func setupRetryTaskTestDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL UNIQUE,
 			description TEXT,
 			endpoint TEXT NOT NULL,
-			ip_c_addr TEXT NOT NULL,
 			auth_token TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'offline',
 			last_heartbeat DATETIME,
@@ -119,7 +118,6 @@ func TestEdgeNodeAlgorithmRetryTask_handleAlgorithmRetry(t *testing.T) {
 		BaseModel: model.BaseModel{ID: "node-1"},
 		Name:      "Online Node",
 		Endpoint:  "http://127.0.0.1:8080",
-		IPCAddr:   "127.0.0.1:9500",
 		Status:    model.NodeStatusOnline,
 	}
 	require.NoError(t, nodeRepo.Create(ctx, node))

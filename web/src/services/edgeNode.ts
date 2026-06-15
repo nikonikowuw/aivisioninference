@@ -6,7 +6,6 @@ export interface EdgeNode {
   name: string;
   description?: string;
   endpoint: string;
-  ipc_addr?: string;
   max_load: number;
   current_load: number;
   status: string; // online, offline, error, disabled
@@ -37,7 +36,6 @@ export interface CreateEdgeNodeRequest {
   name: string;
   description?: string;
   endpoint: string;
-  ipc_addr?: string;
   max_load: number;
   remark?: string;
 }
@@ -46,7 +44,6 @@ export interface UpdateEdgeNodeRequest {
   name?: string;
   description?: string;
   endpoint?: string;
-  ipc_addr?: string;
   max_load?: number;
   enabled?: boolean;
   remark?: string;

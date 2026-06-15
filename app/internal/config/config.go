@@ -318,7 +318,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("zlm.secret", "") // 必须通过环境变量 NIKO_ZLM_SECRET 设置
 
 	// Engine
-	v.SetDefault("engine.addr", "localhost:9500")
+	v.SetDefault("engine.addr", "localhost:8081")
 	v.SetDefault("engine.timeout_sec", 5)
 	v.SetDefault("engine.heartbeat_timeout_sec", 15)
 	v.SetDefault("engine.heartbeat_check_interval_sec", 10)

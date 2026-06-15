@@ -1,212 +1,82 @@
-# AGENTS.md
+# AGENTS.md — AIVisionInference
 
 ## Project Overview
 
-Niko Admin is a backend admin scaffold built with **Gin + GORM + PostgreSQL + Redis**, paired with **React Admin** as the frontend. It provides out-of-the-box auth, RBAC, audit logging, file management, WebSocket, and async task queue capabilities.
+**AIVisionInference** 是面向边缘设备与视频流场景的 AI 视觉推理平台。由 Go 控制面、React 管理端、C++ 推理引擎、ZLMediaKit 流媒体服务、算法包 ABI 与 FlatBuffers IPC 协议组成，涵盖设备接入、算法包管理、推理任务编排、智能记录沉淀与系统运维。
 
 ## Tech Stack
 
-| Layer         | Technology                |
-| ------------- | ------------------------- |
-| Web Framework | Gin v1.10+                |
-| ORM           | GORM v1.26+               |
-| Database      | PostgreSQL 16+            |
-| Cache         | Redis 7+                  |
-| Task Queue    | Asynq (Redis-backed)      |
-| Auth          | JWT (golang-jwt v5)       |
-| WebSocket     | gorilla/websocket         |
-| Config        | Viper                     |
-| CLI           | Cobra                     |
-| Logging       | Zap                       |
-| Swagger       | swaggo/swag + gin-swagger |
-| Hot Reload    | air                       |
+| 层         | 技术                                                             |
+| ---------- | ---------------------------------------------------------------- |
+| 控制面后端 | Go 1.26+, Gin, GORM, PostgreSQL 16+, Redis 7+, Asynq, JWT, Wire  |
+| 推理引擎   | C++17, CMake, FlatBuffers, FFmpeg/OpenCV, RKNN/Ascend/CUDA/Metal |
+| 管理端前端 | React 19, TypeScript, Vite 6, Chakra UI 2, i18next               |
+| 流媒体     | ZLMediaKit (GB28181/RTSP)                                        |
+| IPC 协议   | FlatBuffers (Unix Domain Socket / TCP)                           |
+| 算法包格式 | C ABI 动态库 (.so/.dylib) + 元数据 YAML                          |
 
 ## Project Structure
 
 ```
-app/                  # Go 后端
-  cmd/                # 入口 (server, migrate, gen)
-  internal/
-    config/           # Viper 配置加载
-    middleware/       # Gin 中间件 (auth, rbac, cors, i18n, logger, recovery)
-    router/           # 路由注册
-    server/           # 应用级依赖组装（Wire 注入）
-    handler/          # HTTP Handler（Controller 层）
-    service/          # 业务逻辑层
-    repository/       # 数据访问层 (GORM)
-    model/            # GORM Model 定义
-    dto/              # 请求/响应 DTO
-    pkg/              # 内部工具 (jwt, hash, response, errors, validator)
-    task/             # 异步任务处理
-  pkg/
-    gen/              # CRUD 代码生成器 (parser + templates)
-    storage/          # 文件存储抽象 (local/pg lo/oss)
-    swagger/          # Swagger 初始化
-  configs/            # 多环境 YAML 配置
-  docs/               # Swagger 生成文件 (gitignored)
-web/                  # 前端 React Admin
-docs/                 # 产品文档
-openspec/             # OpenSpec 变更提案
-.claude/              # AI 规范与技能
-.opencode/            # opencode 配置
-docker-compose.yml
-tmp/                  # air 临时文件 (gitignored)
+app/              # Go 控制面（cmd/internal/pkg）
+engine/           # C++ 推理引擎（include/src/cmake）
+algorithms/       # 算法包仓库（RKNN/Ascend/GPU/M）
+web/              # React 管理端
+zlm/              # ZLMediaKit 配置
+proto/            # Protobuf / FlatBuffers Schema
+deploy/           # Dockerfile 与部署编排
+docs/             # 产品文档
+openspec/         # OpenSpec 变更提案
+prd/              # PRD 文档
 ```
 
 ## Architecture
 
-分层架构，单向依赖：
+Go 控制面通过 **FlatBuffers IPC** 与 C++ 推理引擎通信，前端通过 **HTTP / WebSocket** 与 Go 后端交互。
 
-```txt
+```
+React 管理端 ──HTTP/WS──▶ Go 控制面 ──FlatBuffers──▶ C++ 推理引擎
+                              │                          │
+                              ▼                          ▼
+                         PostgreSQL/Redis           RTSP / HAL / NPU
+```
+
+Go 后端分层（单向依赖）：
+
+```
 Handler → Service → Repository → Model (GORM)
-   │         │
-   ▼         ▼
-  DTO     Storage (local/pg/oss)
+   │         │           │
+   ▼         ▼           ▼
+  DTO    IPC/Task    Storage (local/pg/oss)
 ```
 
-- **Handler**: 参数绑定、验证、调用 Service、返回响应。不得包含业务逻辑。
-- **Service**: 业务逻辑、事务管理、权限校验（必要时）。
-- **Repository**: 纯 GORM 数据库操作，不得包含业务逻辑。
-- **DTO**: 请求/响应结构体定义，使用 `validate` tag 校验。
+C++ 推理引擎 Pipeline：
 
-## Dependency Injection
-
-项目使用 **Google Wire** 进行编译时依赖注入，分两层覆盖：
-
-| 层级            | 包                 | 入口                                                              |
-| --------------- | ------------------ | ----------------------------------------------------------------- |
-| 应用层（App）   | `internal/server/` | `InitializeApp()` — 创建 DB、Redis、JWT、WebSocket、Router、Asynq |
-| 路由层（Route） | `internal/router/` | `InitializeRouteDeps()` — 创建 Repo、Service、Handler             |
-
-`internal/server/wire.go` 负责顶层依赖（数据库连接、缓存、JWT 管理器、路由配置映射），`internal/router/wire.go` 负责业务层的 Repo-Service-Handler 构造链。`cmd/server/main.go` 仅调用 `server.InitializeApp()` 后执行 `app.Run()`。
-
-### 工作机制
-
-| 文件          | 职责                                                                        |
-| ------------- | --------------------------------------------------------------------------- |
-| `wire.go`     | 声明 `wire.Build()` 定义依赖拓扑（`//go:build wireinject`，不参与编译）     |
-| `wire_gen.go` | Wire 自动生成的注入代码（标记 `DO NOT EDIT`），包含完整、类型安全的构造顺序 |
-| `deps.go`     | 手写 provider 函数，用于需要自定义构造逻辑的场景（如条件选择缓存后端）      |
-
-### 修改流程
-
-1. 在对应 `deps.go` 中新增 provider 函数（或直接复用已有的 `New*` 构造器）
-2. 在对应 `wire.go` 的 `wire.Build()` 中注册新增的 provider
-3. 执行 `make wire` 重新生成所有 `wire_gen.go`
-4. 编译验证：若依赖缺失或类型不匹配，Wire 会在代码生成阶段报错
-
-### 关键约定
-
-- **不允许**手动在 `wire_gen.go` 中修改代码——下次生成会被覆盖
-- **不允许**绕过 Wire 手动 `new` 依赖对象——统一通过 `InitializeApp` / `InitializeRouteDeps` 入口构造
-- Provider 签名必须返回 `(T, error)` 或 `T`，Wire 自动推导构造顺序
-- 接口绑定使用 `wire.Bind(new(interface), new(impl))`（如 `middleware.AuditLogger` → `*service.AuditService`）
-
-## Conventions
-
-### Go
-
-- 遵循 Effective Go 和项目既定风格
-- 错误处理：一律使用 `internal/pkg/errors` 统一错误码
-- 日志：使用 `zap.L()` 结构化日志，禁止 `fmt.Println`
-- 命名：Go 标准命名（驼峰，导出大写），文件名小写下划线
-- 需要使用i18n支持国际化，默认支持简体中文、繁体中文、英语
-- 所有返回给前端并在前端展示的都要支持i18n进行翻译
-
-### 前端
-
-- 所有的错误都不能直接返回原错误给前端， 必须进行翻译
-- 前端除数据外， 所有的字段都必须支持国际化
-- **前端侧边栏菜单由后端 RBAC/Permission 表控制**：菜单项不在前端硬编码，而是通过 `Permission` 表的 `code` 字段与前端路由配置的 `id` 字段匹配。新增菜单必须在 `app/cmd/migrate/main.go` 的 `defaultMenuList()` 和 `migrateMultiLevelMenu` 中定义权限种子，然后执行迁移才能在后端记录。菜单的可见性由登录用户的角色权限决定。
-
-### API Response Format
-
-```go
-// 成功
-response.OK(c, data)
-
-// 错误
-response.Err(c, errors.New(code, message))
-
-// 分页
-response.Page(c, list, total, page, pageSize)
+```
+IPC Server ──→ Task Manager ──→ Pipeline Pool ──→ Decoder → Preprocess → Inference (Algo .so) → Postprocess → Result Upload
 ```
 
-实际 JSON 格式：
+## Dependency Injection (Google Wire)
 
-```json
-{ "code": 0, "message": "success", "data": {} }
-{ "code": 10001, "message": "用户名或密码错误" }
-{ "code": 0, "message": "success", "data": { "list": [], "total": 100, "page": 1, "page_size": 20 } }
-```
+项目使用 Google Wire 编译时依赖注入，分两层：
 
-### Swagger
+| 层级       | 包                 | 入口                                                  |
+| ---------- | ------------------ | ----------------------------------------------------- |
+| 应用层     | `internal/server/` | `InitializeApp()` — DB、Redis、JWT、WS、Router、Asynq |
+| 路由业务层 | `internal/router/` | `InitializeRouteDeps()` — Repo、Service、Handler      |
 
-Handler 必须包含 Swagger 注解。代码生成器自动注入。
+- Provider 在对应 `deps.go` 中定义，在 `wire.go` 中注册
+- **禁止**手动修改 `wire_gen.go`，统一通过 `make wire` 重新生成
+- **禁止**绕过 Wire 手动 `new` 依赖对象
 
-```go
-// @Summary      创建用户
-// @Tags         用户管理
-// @Accept       json
-// @Produce      json
-// @Param        body  body  dto.CreateUserRequest  true  "用户信息"
-// @Success      200   {object}  dto.Response{data=model.User}
-// @Router       /users [post]
-// @Security     BearerAuth
-```
+## Development Rules
 
-### Configuration
+项目具体开发规范按技术领域拆分在 `.rules/` 目录中，开发前必须阅读对应文件：
 
-加载优先级：`环境变量 > .env > config.yaml > 默认值`
-
-所有环境变量统一 `NIKO_` 前缀，密钥（JWT_SECRET 等）仅通过环境变量注入。
-
-### File Headers
-
-代码生成器生成的文件头部：
-
-```go
-// Code generated by niko-admin. DO NOT EDIT.
-// Model: internal/model/user.go
-// Generate at: 2026-05-15 10:00:00
-```
-
-## Code Generation
-
-```bash
-# 单个 Model
-niko-admin gen user            # 从 internal/model/user.go
-
-# 批量所有
-niko-admin gen --all
-
-# 预览
-niko-admin gen --list
-```
-
-生成 5 个文件：Handler、Service、Repository、Router、DTO。Handler 包含 Swagger 注解。
-
-## Testing
-
-- 框架：Go 标准 `testing` + `testify/assert`
-- 覆盖率目标：>= 70%
-- 文件命名：`*_test.go`
-- 运行：`make unit-test`（带 `-race -coverprofile`）
-
-## Skill Standards
-
-开发时必须遵循 `.claude/rules/` 中定义的规范：
-
-- [golang-pro](.claude/rules/golang-pro.md) — Go 后端：Context 传播、错误处理、测试、层级架构
-- [ui-ux-pro-max](.claude/rules/ui-ux-pro-max.md) — 前端 UI：无障碍、触控、布局、暗色模式
-- [frontend-design](.claude/rules/frontend-design.md) — 前端视觉：字体、配色、动效、独特性
-- [vercel-react-best-practices](.claude/rules/vercel-react-best-practices.md) — React 性能：消瀑布、包体积、缓存、重渲染
-
-## Security Notes
-
-- 密码：bcrypt cost=12，禁止日志输出
-- JWT Secret：环境变量注入，禁止硬编码或写入配置文件
-- 用户输入：一律经过 `go-playground/validator` 校验
-- 文件上传：MIME 白名单 + 大小限制
-- SQL 注入：GORM 参数化查询 + 禁止原生 SQL 拼接
-- 敏感日志脱敏：密码、Token 不出现在日志中
+| 规则文件                                | 内容                                                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `.rules/golang-pro.md`                  | Go 后端：Context 传播、错误处理、i18n、Wire、DB、安全、Swagger、测试、代码生成                          |
+| `.rules/ui-ux-pro-max.md`               | 前端 UI/UX：可访问性、响应式、Chakra 表单、暗色模式、动效                                               |
+| `.rules/frontend-design.md`             | 前端视觉：主题、排版、布局、图表视频、i18n 零硬编码、自检清单                                           |
+| `.rules/vercel-react-best-practices.md` | React 性能：数据请求、路由拆分、Bundle、渲染正确性、高频交互                                            |
+| `.rules/cpp-engine-algorithm.md`        | C++ Engine：架构约定、编码规范、Pipeline 性能、FlatBuffers 协议、算法包规范、C ABI 契约、构建验证、安全 |

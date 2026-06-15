@@ -16,99 +16,61 @@
 #include <thread>
 #include <unordered_map>
 
-#include "transport.h"
 #include "proto/flatbuf/envelope_generated.h"
+#include "transport.h"
 
-namespace aivision
-{
-    namespace ipc
-    {
+namespace aivision {
+class CommandDispatcher;
 
-        /// 指令处理器函数签名
-        using CommandHandler = std::function<void(
-            const uint8_t *payload, size_t size, uint64_t sequence_id)>;
+/// MQTT 上下文 RAII 守护类，确保 thread_local 状态正确清理
+class ScopedMqttContext {
+public:
+  explicit ScopedMqttContext(const std::string &trace_id);
+  ~ScopedMqttContext();
+};
 
-        /// IPC Server 配置
-        struct IPCServerConfig
-        {
-            /// 监听地址 (host:port)
-            std::string addr = "0.0.0.0:9500";
-            /// 最大挂起连接数
-            int backlog = 32;
-            /// 接收缓冲区大小 (字节)
-            size_t recv_buffer_size = 65536;
-            /// 心跳超时 (秒)
-            int heartbeat_timeout_sec = 30;
-        };
+namespace ipc {
 
-        /// IPC Server 类
-        class IPCServer
-        {
-        public:
-            explicit IPCServer(const IPCServerConfig &config);
-            ~IPCServer();
+/// ResponseRouter 类 (负责将内部响应分发到 MQTT 或其他传输层)
+class ResponseRouter {
+public:
+  explicit ResponseRouter();
+  ~ResponseRouter();
 
-            /// 启动服务 (阻塞)
-            bool Start();
+  /// 关联指令分发器
+  void SetCommandDispatcher(aivision::CommandDispatcher *dispatcher) {
+    dispatcher_ = dispatcher;
+  }
 
-            /// 停止服务
-            void Stop();
+  /// 获取当前线程正在处理的客户端 fd (线程局部变量，-2 表示 MQTT)
+  static int GetActiveClientFd();
+  static void SetActiveClientFd(int fd);
+  static void SetActiveMqttTraceId(const std::string &trace_id);
+  static std::string GetActiveMqttTraceId();
 
-            /// 注册指令 Handler
-            void RegisterHandler(uint16_t signal_type, CommandHandler handler);
+  using MqttResponseCallback = std::function<void(
+      uint32_t resp_type, const uint8_t *payload, size_t size)>;
+  void SetMqttResponseCallback(MqttResponseCallback cb) {
+    mqtt_response_callback_ = std::move(cb);
+  }
 
-            /// 获取当前线程正在处理的客户端 fd (线程局部变量)
-            static int GetActiveClientFd();
+  /// 发送同步响应到指定的客户端 fd (如果 fd == -2 则转发给 MQTT)
+  bool SendResponse(int client_fd, uint32_t resp_type, const uint8_t *payload,
+                    size_t payload_len);
 
-            /// 发送同步响应到指定的客户端 fd
-            bool SendResponse(int client_fd, uint32_t resp_type, const uint8_t *payload, size_t payload_len);
+  /// 广播结果消息 (已弃用，无操作)
+  bool BroadcastMessage(uint16_t signal_type,
+                        flatbuffers::FlatBufferBuilder &fbb) { return true; }
 
-            /// 发送结果消息到 Go 侧
-            bool SendMessage(uint16_t signal_type,
-                             flatbuffers::FlatBufferBuilder &fbb);
+  /// 检查是否运行中 (始终返回 true)
+  bool IsRunning() const { return true; }
 
-            /// 广播结果消息到所有连接的客户端
-            bool BroadcastMessage(uint16_t signal_type,
-                                  flatbuffers::FlatBufferBuilder &fbb);
+private:
+  aivision::CommandDispatcher *dispatcher_{nullptr};
+  MqttResponseCallback mqtt_response_callback_;
+};
 
-            /// 获取配置
-            const IPCServerConfig &GetConfig() const { return config_; }
-
-            /// 检查是否运行中
-            bool IsRunning() const { return running_.load(); }
-
-        private:
-            /// 接受连接循环
-            void AcceptLoop();
-
-            /// 处理单个客户端连接
-            void HandleClient(int client_fd);
-
-            /// 读取并处理一条消息
-            bool ProcessMessage(int client_fd, uint8_t *buffer, size_t size);
-
-            IPCServerConfig config_;
-            std::atomic<bool> running_{false};
-            int server_fd_{-1};
-            std::unique_ptr<std::thread> accept_thread_;
-
-            /// 所有已连接的客户端 fd (用于广播)
-            std::vector<int> client_fds_;
-            std::mutex clients_mutex_;
-
-            /// 已连接的客户端处理线程 (Stop 时 join)
-            std::vector<std::unique_ptr<std::thread>> client_threads_;
-            std::mutex threads_mutex_;
-
-            /// 已注册的指令 Handler (独立锁，避免与 clients_mutex_ 交叉死锁)
-            std::unordered_map<uint16_t, CommandHandler> handlers_;
-            std::mutex handlers_mutex_;
-
-            /// Transport 抽象 (当前使用 TCP)
-            std::unique_ptr<Transport> transport_;
-        };
-
-    } // namespace ipc
+} // namespace ipc
 } // namespace aivision
 
 #endif // AIVISION_IPC_SERVER_H

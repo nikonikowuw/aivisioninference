@@ -106,7 +106,6 @@ func (s *EdgeNodeService) Create(ctx context.Context, req dto.CreateEdgeNodeRequ
 		Name:        req.Name,
 		Description: req.Description,
 		Endpoint:    req.Endpoint,
-		IPCAddr:     req.IPCAddr,
 		AuthToken:   token,
 		Status:      model.NodeStatusOffline,
 		MaxLoad:     req.MaxLoad,
@@ -153,9 +152,6 @@ func (s *EdgeNodeService) Update(ctx context.Context, id string, req dto.UpdateE
 	}
 	if req.Endpoint != "" {
 		node.Endpoint = req.Endpoint
-	}
-	if req.IPCAddr != "" {
-		node.IPCAddr = req.IPCAddr
 	}
 	if req.MaxLoad > 0 {
 		node.MaxLoad = req.MaxLoad

@@ -72,7 +72,7 @@ namespace aivision
         class MetricsReporter
         {
         public:
-            MetricsReporter(ipc::IPCServer *ipc_server,
+            MetricsReporter(ipc::ResponseRouter *response_router,
                             pipeline::WorkerPool *worker_pool,
                             pipeline::HwBufferPool *buffer_pool,
                             pipeline::StreamQueueManager *queue_mgr,
@@ -103,7 +103,7 @@ namespace aivision
             /// 采集一次指标
             EngineMetrics CollectMetrics();
 
-            ipc::IPCServer *ipc_server_;
+            ipc::ResponseRouter *response_router_;
             pipeline::WorkerPool *worker_pool_;
             pipeline::HwBufferPool *buffer_pool_;
             pipeline::StreamQueueManager *queue_mgr_;

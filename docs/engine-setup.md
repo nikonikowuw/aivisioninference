@@ -10,21 +10,20 @@
 
 ### 必须配置
 
-| 环境变量                   | 说明                                   | 获取方式                           |
-|----------------------------|----------------------------------------|------------------------------------|
-| `NIKO_ENGINE_PLATFORM_URL` | 平台管理端 URL (如 `http://10.0.0.1:8080`) | 根据实际部署地址填写               |
-| `NIKO_ENGINE_NODE_ID`      | 边缘节点 ID                            | 平台创建节点后获取                 |
-| `NIKO_ENGINE_AUTH_TOKEN`   | 引擎 JWT Token                         | 平台创建节点后获取（仅显示一次）   |
+| 环境变量                   | 说明                                       | 获取方式                         |
+| -------------------------- | ------------------------------------------ | -------------------------------- |
+| `NIKO_ENGINE_PLATFORM_URL` | 平台管理端 URL (如 `http://10.0.0.1:8080`) | 根据实际部署地址填写             |
+| `NIKO_ENGINE_NODE_ID`      | 边缘节点 ID                                | 平台创建节点后获取               |
+| `NIKO_ENGINE_AUTH_TOKEN`   | 引擎 JWT Token                             | 平台创建节点后获取（仅显示一次） |
 
 ### 可选配置
 
-| 环境变量                    | 默认值             | 说明                                       |
-|-----------------------------|--------------------|--------------------------------------------|
-| `NIKO_ENGINE_HTTP_PORT`     | `8080`             | 引擎本地 HTTP 服务端口                      |
-| `NIKO_ENGINE_MINIO_ENDPOINT`| `""`               | MinIO 对象存储地址（算法包下载需要）        |
-| `NIKO_ENGINE_IPC_ADDR`      | `0.0.0.0:9500`     | IPC 通信监听地址                            |
-| `NIKO_ENGINE_WORKERS`       | `4`                | Worker 线程数                               |
-| `NIKO_ENGINE_HAL_PLATFORM`  | `""`               | HAL 平台名 (`macos` / `rkmpp` / `ascend`)   |
+| 环境变量                     | 默认值 | 说明                                      |
+| ---------------------------- | ------ | ----------------------------------------- |
+| `NIKO_ENGINE_HTTP_PORT`      | `8080` | 引擎本地 HTTP 服务端口                    |
+| `NIKO_ENGINE_MINIO_ENDPOINT` | `""`   | MinIO 对象存储地址（算法包下载需要）      |
+| `NIKO_ENGINE_WORKERS`        | `4`    | Worker 线程数                             |
+| `NIKO_ENGINE_HAL_PLATFORM`   | `""`   | HAL 平台名 (`macos` / `rkmpp` / `ascend`) |
 
 ### 完整 .env 示例
 
@@ -40,7 +39,6 @@ NIKO_ENGINE_AUTH_TOKEN=
 # 引擎服务（可选）
 # ====================
 NIKO_ENGINE_HTTP_PORT=8080
-NIKO_ENGINE_IPC_ADDR=0.0.0.0:9500
 NIKO_ENGINE_WORKERS=4
 
 # ====================
@@ -148,12 +146,12 @@ ctest --output-on-failure
 
 测试覆盖：
 
-| 测试项                    | 覆盖内容                         |
-|---------------------------|----------------------------------|
-| `test_http_server`        | HTTP Server 路由注册、健康检查   |
-| `test_heartbeat_reporter` | HeartbeatReporter 心跳 JSON 构建 |
-| `test_algorithm_downloader` | MD5 校验、tar.gz 提取逻辑     |
-| `test_rkmpp_pipeline`     | RKMPP Pipeline 接口              |
+| 测试项                      | 覆盖内容                         |
+| --------------------------- | -------------------------------- |
+| `test_http_server`          | HTTP Server 路由注册、健康检查   |
+| `test_heartbeat_reporter`   | HeartbeatReporter 心跳 JSON 构建 |
+| `test_algorithm_downloader` | MD5 校验、tar.gz 提取逻辑        |
+| `test_rkmpp_pipeline`       | RKMPP Pipeline 接口              |
 
 ---
 
@@ -161,12 +159,12 @@ ctest --output-on-failure
 
 引擎启动后在 `NIKO_ENGINE_HTTP_PORT`（默认 8080）监听以下接口：
 
-| 接口             | 方法 | 说明                         |
-|------------------|------|------------------------------|
-| `/health`        | GET  | 健康检查                     |
-| `/hardware-info` | GET  | 硬件信息查询                 |
-| `/deploy-algo`   | POST | 接收算法包部署请求           |
-| `/algorithms`    | GET  | 查询已加载算法列表           |
+| 接口             | 方法 | 说明               |
+| ---------------- | ---- | ------------------ |
+| `/health`        | GET  | 健康检查           |
+| `/hardware-info` | GET  | 硬件信息查询       |
+| `/deploy-algo`   | POST | 接收算法包部署请求 |
+| `/algorithms`    | GET  | 查询已加载算法列表 |
 
 健康检查示例：
 
@@ -239,13 +237,12 @@ curl http://localhost:8080/health
 **检查项：**
 
 1. 配置文件格式是否正确（无 BOM、无多余空格）
-2. 端口是否被占用（默认 8080 / 9500）
+2. 端口是否被占用（默认 8081）
 3. `cmake ..` 阶段是否缺失依赖
 
 ```bash
 # 检查端口占用
-lsof -i :8080
-lsof -i :9500
+lsof -i :8081
 ```
 
 ### 心跳上报失败
@@ -254,13 +251,13 @@ lsof -i :9500
 
 常见错误：
 
-| 错误信息                              | 可能原因                          |
-|---------------------------------------|-----------------------------------|
-| `Failed to resolve hostname`          | `NIKO_ENGINE_PLATFORM_URL` 不可达  |
-| `HTTP 401` / `HTTP 403`               | `NIKO_ENGINE_AUTH_TOKEN` 无效或过期 |
-| `HTTP 404`                            | `NIKO_ENGINE_NODE_ID` 不存在       |
-| `Connection refused`                  | 平台服务未启动或端口不匹配         |
-| `Timeout`                             | 网络不通或防火墙拦截               |
+| 错误信息                     | 可能原因                            |
+| ---------------------------- | ----------------------------------- |
+| `Failed to resolve hostname` | `NIKO_ENGINE_PLATFORM_URL` 不可达   |
+| `HTTP 401` / `HTTP 403`      | `NIKO_ENGINE_AUTH_TOKEN` 无效或过期 |
+| `HTTP 404`                   | `NIKO_ENGINE_NODE_ID` 不存在        |
+| `Connection refused`         | 平台服务未启动或端口不匹配          |
+| `Timeout`                    | 网络不通或防火墙拦截                |
 
 ### 算法下载失败
 
@@ -288,14 +285,14 @@ lsof -i :9500
 
 平台需要使用 MinIO 存储来存放下发的算法包，并为其生成预签名下载 URL。必须在平台环境（如 `.env` 文件或容器环境变量）中配置以下项：
 
-| 环境变量 | 示例值 | 说明 |
-|----------|--------|------|
-| `NIKO_STORAGE_DRIVER` | `oss` | 启用对象存储作为存储驱动 |
-| `NIKO_STORAGE_OSS_ENDPOINT` | `127.0.0.1:9000` | MinIO 服务的访问地址 |
-| `NIKO_STORAGE_OSS_ACCESS_KEY` | `minioadmin` | MinIO 访问密钥 (Access Key) |
-| `NIKO_STORAGE_OSS_SECRET_KEY` | `minioadmin` | MinIO 秘密密钥 (Secret Key) |
-| `NIKO_STORAGE_OSS_BUCKET` | `aivision-algorithms` | 用于存储算法包的 Bucket 名称 |
-| `NIKO_STORAGE_OSS_USE_SSL` | `false` | 是否启用 SSL 传输加密 |
+| 环境变量                      | 示例值                | 说明                         |
+| ----------------------------- | --------------------- | ---------------------------- |
+| `NIKO_STORAGE_DRIVER`         | `oss`                 | 启用对象存储作为存储驱动     |
+| `NIKO_STORAGE_OSS_ENDPOINT`   | `127.0.0.1:9000`      | MinIO 服务的访问地址         |
+| `NIKO_STORAGE_OSS_ACCESS_KEY` | `minioadmin`          | MinIO 访问密钥 (Access Key)  |
+| `NIKO_STORAGE_OSS_SECRET_KEY` | `minioadmin`          | MinIO 秘密密钥 (Secret Key)  |
+| `NIKO_STORAGE_OSS_BUCKET`     | `aivision-algorithms` | 用于存储算法包的 Bucket 名称 |
+| `NIKO_STORAGE_OSS_USE_SSL`    | `false`               | 是否启用 SSL 传输加密        |
 
 > **安全提示**：请确保该 Bucket 策略设置为 `private`（禁止匿名访问），平台会自动通过预签名安全机制下发临时下载 URL 给引擎。
 
@@ -303,7 +300,7 @@ lsof -i :9500
 
 平台支持对引擎上报的心跳进行版本强校验，防止因版本落后而导致推理任务执行异常。可在平台配置文件（如 `config.dev.yaml` / `config.prod.yaml`）或环境变量中配置：
 
-| 环境变量/配置项 | 默认值 | 说明 |
-|-----------------|--------|------|
-| `NIKO_ENGINE_MIN_COMPATIBLE_VERSION` / `engine.min_compatible_version` | `"1.0.0"` | 引擎最低兼容版本号（遵循 SemVer 规范） |
-| `NIKO_ENGINE_VERSION_CHECK_ENABLED` / `engine.version_check_enabled` | `true` | 是否启用版本兼容性校验。设为 `false` 可临时关闭校验 |
+| 环境变量/配置项                                                        | 默认值    | 说明                                                |
+| ---------------------------------------------------------------------- | --------- | --------------------------------------------------- |
+| `NIKO_ENGINE_MIN_COMPATIBLE_VERSION` / `engine.min_compatible_version` | `"1.0.0"` | 引擎最低兼容版本号（遵循 SemVer 规范）              |
+| `NIKO_ENGINE_VERSION_CHECK_ENABLED` / `engine.version_check_enabled`   | `true`    | 是否启用版本兼容性校验。设为 `false` 可临时关闭校验 |

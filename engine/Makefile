@@ -10,6 +10,7 @@ RK_CROSS_DIR    ?= build-rk3568-cross
 CMAKE_BUILD_TYPE ?= Debug
 JOBS            ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 SED_INPLACE     := $(shell if sed --version >/dev/null 2>&1; then echo "sed -i"; else echo "sed -i ''"; fi)
+CMAKE_POLICY_ARGS ?= -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 # ============================================================
 # 默认目标: 开发模式 (x86_64, stub HAL)
@@ -23,7 +24,7 @@ all: dev
 .PHONY: dev
 dev: flatbuf
 	@mkdir -p $(BUILD_DIR)
-	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE)
+	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_POLICY_ARGS)
 	cmake --build $(BUILD_DIR) -j$(JOBS)
 	@echo ""
 	@echo "✅ 开发构建完成"
@@ -36,7 +37,7 @@ dev: flatbuf
 .PHONY: release
 release: flatbuf
 	@mkdir -p $(BUILD_DIR)
-	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=Release
+	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=Release $(CMAKE_POLICY_ARGS)
 	cmake --build $(BUILD_DIR) -j$(JOBS)
 	@echo ""
 	@echo "✅ Release 构建完成"
@@ -47,7 +48,7 @@ release: flatbuf
 .PHONY: rk3568
 rk3568:
 	@mkdir -p $(RK_BUILD_DIR)
-	cmake -B $(RK_BUILD_DIR) -DAIVISION_WITH_RKMPP=ON -DCMAKE_BUILD_TYPE=Release
+	cmake -B $(RK_BUILD_DIR) -DAIVISION_WITH_RKMPP=ON -DCMAKE_BUILD_TYPE=Release $(CMAKE_POLICY_ARGS)
 	cmake --build $(RK_BUILD_DIR) -j$(JOBS)
 	@echo ""
 	@echo "✅ RK3568 构建完成"
@@ -68,7 +69,8 @@ endif
 		-DCMAKE_TOOLCHAIN_FILE=cmake/rk3568-toolchain.cmake \
 		-DRK_SDK_PATH=$(SYSROOT) \
 		-DAIVISION_WITH_RKMPP=ON \
-		-DCMAKE_BUILD_TYPE=Release
+		-DCMAKE_BUILD_TYPE=Release \
+		$(CMAKE_POLICY_ARGS)
 	cmake --build $(RK_CROSS_DIR) -j$(JOBS)
 	@echo ""
 	@echo "✅ RK3568 交叉编译完成"
@@ -80,7 +82,7 @@ endif
 .PHONY: test
 test:
 	@mkdir -p $(BUILD_DIR)
-	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DBUILD_TESTING=ON
+	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DBUILD_TESTING=ON $(CMAKE_POLICY_ARGS)
 	cmake --build $(BUILD_DIR) --target test_rkmpp_pipeline -j$(JOBS)
 	cd $(BUILD_DIR) && ctest --output-on-failure
 	@echo ""
@@ -119,7 +121,7 @@ clean-rk:
 .PHONY: macos
 macos:
 	@mkdir -p $(BUILD_DIR)
-	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE)
+	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_POLICY_ARGS)
 	cmake --build $(BUILD_DIR) -j$(JOBS)
 	@echo ""
 	@echo "✅ macOS 构建完成"

@@ -38,7 +38,6 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL UNIQUE,
 			description TEXT,
 			endpoint TEXT NOT NULL,
-			ip_c_addr TEXT NOT NULL,
 			auth_token TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'offline',
 			last_heartbeat DATETIME,
@@ -234,7 +233,6 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	createReq := dto.CreateEdgeNodeRequest{
 		Name:     "Edge Node 1",
 		Endpoint: "http://192.168.1.10:8080",
-		IPCAddr:  "192.168.1.10:9500",
 		MaxLoad:  5,
 		Remark:   "Init",
 	}
@@ -405,7 +403,6 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	node2, _, err := svc.Create(ctx, dto.CreateEdgeNodeRequest{
 		Name:     "Edge Node 2",
 		Endpoint: "http://192.168.1.11:8080",
-		IPCAddr:  "192.168.1.11:9500",
 		MaxLoad:  5,
 	})
 	require.NoError(t, err)
@@ -445,7 +442,6 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	node, token, err := svc.Create(ctx, dto.CreateEdgeNodeRequest{
 		Name:     "Suspended State Node",
 		Endpoint: "http://192.168.1.20:8080",
-		IPCAddr:  "192.168.1.20:9500",
 		MaxLoad:  5,
 	})
 	require.NoError(t, err)
@@ -484,7 +480,6 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	otherNode, _, err := svc.Create(ctx, dto.CreateEdgeNodeRequest{
 		Name:     "Other Node",
 		Endpoint: "http://192.168.1.30:8080",
-		IPCAddr:  "192.168.1.30:9500",
 		MaxLoad:  5,
 	})
 	require.NoError(t, err)
@@ -559,7 +554,6 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	node, token, err := svc.Create(ctx, dto.CreateEdgeNodeRequest{
 		Name:     "Presigned URL Node",
 		Endpoint: "http://192.168.1.40:8080",
-		IPCAddr:  "192.168.1.40:9500",
 		MaxLoad:  5,
 	})
 	require.NoError(t, err)

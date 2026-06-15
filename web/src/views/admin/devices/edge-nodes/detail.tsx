@@ -102,10 +102,12 @@ export default function EdgeNodeDetail() {
   useWebSocket({
     onMessage: useCallback((msg: any) => {
       if (msg.payload?.node_id !== id) return;
-      if (msg.type === "edge-node-status") {
+      const statusChanged = msg.type === "edge-node-status";
+      const algoChanged = msg.type === "edge-node-algo-status";
+      if (statusChanged) {
         edgeNodeApi.get(id).then(setNode).catch(() => {});
       }
-      if (msg.type === "edge-node-status" || msg.type === "edge-node-algo-status") {
+      if (statusChanged || algoChanged) {
         edgeNodeApi.getNodeAlgorithms(id).then(setAlgorithms).catch(() => {});
       }
     }, [id]),
@@ -190,9 +192,7 @@ export default function EdgeNodeDetail() {
     }
   }, [node, toast, t]);
 
-  const handleCloseDeleteAlgo = useCallback(() => {
-    setDeletingAlgoId(null);
-  }, []);
+
 
   const handleEditSuccess = useCallback((updatedNode: EdgeNode) => {
     setNode(updatedNode);
@@ -235,8 +235,6 @@ export default function EdgeNodeDetail() {
 
   // 如果 node 已有数据（初始数据或弹窗更新后的数据），立即渲染内容
   if (!node) return null;
-
-  const isVersionCompatible = true;
 
   return (
     <Box pt={{ base: "130px", md: "80px", xl: "80px" }}>
@@ -290,14 +288,6 @@ export default function EdgeNodeDetail() {
               </Text>
               <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
                 {node.endpoint || "-"}
-              </Text>
-            </Box>
-            <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
-              <Text color={textColorSecondary} fontSize="xs">
-                {t("fields.ipcAddr")}
-              </Text>
-              <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
-                {node.ipc_addr || "-"}
               </Text>
             </Box>
             <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">

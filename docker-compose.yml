@@ -79,16 +79,24 @@ services:
       NIKO_REDIS_HOST: redis
       NIKO_REDIS_PORT: 6379
       NIKO_JWT_SECRET: ${NIKO_JWT_SECRET:-change-me-in-production}
-      NIKO_ENGINE_ADDR: engine:9500
+      NIKO_ENGINE_ADDR: engine:8081
       TZ: Asia/Shanghai
     ports:
       - "8080:8080"
-      - "8090:8090"  # WebSocket
+      - "8090:8090" # WebSocket
     volumes:
       - go_uploads:/app/uploads
-      - ./web/dist:/app/web/dist:ro  # 前端静态文件
+      - ./web/dist:/app/web/dist:ro # 前端静态文件
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/health",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -126,10 +134,9 @@ services:
     #   - SYS_ADMIN
     command: >
       aivision-engine
-      --addr 0.0.0.0:9500
       --workers 4
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9500"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 30s
       timeout: 5s
       start_period: 10s

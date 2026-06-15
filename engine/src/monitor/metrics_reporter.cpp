@@ -8,13 +8,13 @@ namespace aivision
     namespace monitor
     {
 
-        MetricsReporter::MetricsReporter(ipc::IPCServer *ipc_server,
+        MetricsReporter::MetricsReporter(ipc::ResponseRouter *response_router,
                                          pipeline::WorkerPool *worker_pool,
                                          pipeline::HwBufferPool *buffer_pool,
                                          pipeline::StreamQueueManager *queue_mgr,
                                          algo::AlgoManager *algo_mgr,
                                          const MetricsReporterConfig &config)
-            : ipc_server_(ipc_server), worker_pool_(worker_pool), buffer_pool_(buffer_pool), queue_mgr_(queue_mgr), algo_mgr_(algo_mgr), config_(config) {}
+            : response_router_(response_router), worker_pool_(worker_pool), buffer_pool_(buffer_pool), queue_mgr_(queue_mgr), algo_mgr_(algo_mgr), config_(config) {}
 
         MetricsReporter::~MetricsReporter() { Stop(); }
 

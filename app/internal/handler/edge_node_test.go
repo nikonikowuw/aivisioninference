@@ -40,7 +40,6 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 			name TEXT NOT NULL UNIQUE,
 			description TEXT,
 			endpoint TEXT NOT NULL,
-			ip_c_addr TEXT NOT NULL,
 			auth_token TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'offline',
 			last_heartbeat DATETIME,
@@ -168,7 +167,6 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	createReq := dto.CreateEdgeNodeRequest{
 		Name:     "Test Node Handler",
 		Endpoint: "http://192.168.1.12:8080",
-		IPCAddr:  "192.168.1.12:9500",
 		MaxLoad:  3,
 	}
 	body, _ := json.Marshal(createReq)

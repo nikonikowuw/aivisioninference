@@ -15,7 +15,7 @@ namespace aivision
     namespace ipc
     {
 
-        class IPCServer;
+        class ResponseRouter;
 
         /// 心跳管理器
         class HeartbeatManager
@@ -27,9 +27,9 @@ namespace aivision
                 : start_time_(std::chrono::steady_clock::now()),
                   last_heartbeat_(std::chrono::steady_clock::now()) {}
 
-            /// 构造并绑定 IPCServer
-            explicit HeartbeatManager(IPCServer *server)
-                : server_(server),
+            /// 构造并绑定 ResponseRouter
+            explicit HeartbeatManager(ResponseRouter *router)
+                : router_(router),
                   start_time_(std::chrono::steady_clock::now()),
                   last_heartbeat_(std::chrono::steady_clock::now()) {}
 
@@ -85,7 +85,7 @@ namespace aivision
                 }
             }
 
-            IPCServer *server_{nullptr};
+            ResponseRouter *router_{nullptr};
             std::atomic<bool> running_{false};
             std::atomic<uint64_t> sequence_{0};
             std::chrono::steady_clock::time_point start_time_;
@@ -95,8 +95,8 @@ namespace aivision
             TimeoutCallback timeout_cb_;
 
         public:
-            /// 绑定 IPCServer (延迟绑定)
-            void SetServer(IPCServer *server) { server_ = server; }
+            /// 绑定 ResponseRouter (延迟绑定)
+            void SetServer(ResponseRouter *router) { router_ = router; }
         };
 
     } // namespace ipc

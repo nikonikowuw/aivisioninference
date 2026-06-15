@@ -71,18 +71,19 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 		return StreamInfo{}, fmt.Errorf("MQTT: wait stream status timeout: %w", err)
 	}
 
-	status := ipc.FlatBuffersToStreamStatus([]byte(respPayload))
+	var status *ipc.StreamStatusParams
+	var jsStatus struct {
+		Status  string `json:"status"`
+		PlayURL string `json:"play_url"`
+	}
+	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
+		status = &ipc.StreamStatusParams{
+			Status:  jsStatus.Status,
+			PlayURL: jsStatus.PlayURL,
+		}
+	}
 	if status == nil {
-		var jsStatus struct {
-			Status  string `json:"status"`
-			PlayURL string `json:"play_url"`
-		}
-		if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-			status = &ipc.StreamStatusParams{
-				Status:  jsStatus.Status,
-				PlayURL: jsStatus.PlayURL,
-			}
-		}
+		status = ipc.FlatBuffersToStreamStatus([]byte(respPayload))
 	}
 
 	if status == nil || status.Status != "running" {
@@ -158,18 +159,19 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 		return "", fmt.Errorf("MQTT: wait playback status timeout: %w", err)
 	}
 
-	status := ipc.FlatBuffersToStreamStatus([]byte(respPayload))
+	var status *ipc.StreamStatusParams
+	var jsStatus struct {
+		Status  string `json:"status"`
+		PlayURL string `json:"play_url"`
+	}
+	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
+		status = &ipc.StreamStatusParams{
+			Status:  jsStatus.Status,
+			PlayURL: jsStatus.PlayURL,
+		}
+	}
 	if status == nil {
-		var jsStatus struct {
-			Status  string `json:"status"`
-			PlayURL string `json:"play_url"`
-		}
-		if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-			status = &ipc.StreamStatusParams{
-				Status:  jsStatus.Status,
-				PlayURL: jsStatus.PlayURL,
-			}
-		}
+		status = ipc.FlatBuffersToStreamStatus([]byte(respPayload))
 	}
 
 	if status == nil || status.Status != "running" {
@@ -233,18 +235,19 @@ func (c *MqttEngineClient) GetStreamStatus(ctx context.Context, deviceID string)
 		return StreamStatus{}, fmt.Errorf("MQTT: wait stream status check timeout: %w", err)
 	}
 
-	status := ipc.FlatBuffersToStreamStatus([]byte(respPayload))
+	var status *ipc.StreamStatusParams
+	var jsStatus struct {
+		Status  string `json:"status"`
+		PlayURL string `json:"play_url"`
+	}
+	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
+		status = &ipc.StreamStatusParams{
+			Status:  jsStatus.Status,
+			PlayURL: jsStatus.PlayURL,
+		}
+	}
 	if status == nil {
-		var jsStatus struct {
-			Status  string `json:"status"`
-			PlayURL string `json:"play_url"`
-		}
-		if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-			status = &ipc.StreamStatusParams{
-				Status:  jsStatus.Status,
-				PlayURL: jsStatus.PlayURL,
-			}
-		}
+		status = ipc.FlatBuffersToStreamStatus([]byte(respPayload))
 	}
 
 	if status != nil {
@@ -290,20 +293,21 @@ func (c *MqttEngineClient) StartSelfCheck(ctx context.Context, downloadURL, toke
 		return fmt.Errorf("MQTT: self check wait timeout: %w", err)
 	}
 
-	result := ipc.FlatBuffersToAlgoLoadResult([]byte(respPayload))
+	var result *ipc.AlgoLoadResultParams
+	var jsResult struct {
+		Success      bool   `json:"success"`
+		ErrorMessage string `json:"error_message"`
+		ErrorCode    string `json:"error_code"`
+	}
+	if json.Unmarshal([]byte(respPayload), &jsResult) == nil {
+		result = &ipc.AlgoLoadResultParams{
+			Success:      jsResult.Success,
+			ErrorMessage: jsResult.ErrorMessage,
+			ErrorCode:    jsResult.ErrorCode,
+		}
+	}
 	if result == nil {
-		var jsResult struct {
-			Success      bool   `json:"success"`
-			ErrorMessage string `json:"error_message"`
-			ErrorCode    string `json:"error_code"`
-		}
-		if json.Unmarshal([]byte(respPayload), &jsResult) == nil {
-			result = &ipc.AlgoLoadResultParams{
-				Success:      jsResult.Success,
-				ErrorMessage: jsResult.ErrorMessage,
-				ErrorCode:    jsResult.ErrorCode,
-			}
-		}
+		result = ipc.FlatBuffersToAlgoLoadResult([]byte(respPayload))
 	}
 
 	if result == nil {

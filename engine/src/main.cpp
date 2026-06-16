@@ -85,29 +85,19 @@ static void LoadDotEnv()
 
 static bool GetEnvBool(const char *name, bool default_value)
 {
-    std::string value = GetEnvString(name);
-    if (value.empty())
-        return default_value;
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (value == "1" || value == "true" || value == "yes" || value == "on")
-        return true;
-    if (value == "0" || value == "false" || value == "no" || value == "off")
-        return false;
-    return default_value;
+    std::string val = GetEnvString(name);
+    if (val.empty()) return default_value;
+    for (auto &c : val) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return (val == "1" || val == "true" || val == "yes" || val == "on");
 }
 
 static uint32_t GetEnvUInt32(const char *name, uint32_t default_value)
 {
-    std::string value = GetEnvString(name);
-    if (value.empty())
-        return default_value;
-    try
-    {
-        return static_cast<uint32_t>(std::stoul(value));
-    }
-    catch (...)
-    {
-        std::cerr << "Invalid uint32 env " << name << "=" << value << ", using default " << default_value << std::endl;
+    std::string val = GetEnvString(name);
+    if (val.empty()) return default_value;
+    try {
+        return static_cast<uint32_t>(std::stoul(val));
+    } catch (...) {
         return default_value;
     }
 }
@@ -121,24 +111,22 @@ static std::string JoinPath(const std::string &dir, const std::string &file)
     return dir + "/" + file;
 }
 
-static std::string NormalizePlatform(std::string platform)
-{
-    std::transform(platform.begin(), platform.end(), platform.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    platform.erase(std::remove_if(platform.begin(), platform.end(), [](char c) { return c == '-' || c == '_' || c == ' '; }), platform.end());
-    return platform;
-}
-
 static std::string DefaultHalPathForPlatform(const std::string &platform)
 {
-    const std::string normalized = NormalizePlatform(platform);
+    std::string norm = platform;
+    for (char &c : norm) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    norm.erase(std::remove_if(norm.begin(), norm.end(), [](char c) { 
+        return c == '-' || c == '_' || c == ' '; 
+    }), norm.end());
+
     const std::string hal_dir = GetEnvString("NIKO_ENGINE_HAL_DIR", "/usr/local/lib/aivision");
-    if (normalized.empty() || normalized == "none")
-        return "";
-    if (normalized == "mac" || normalized == "macos" || normalized == "apple" || normalized == "applesilicon" || normalized == "mseries" || normalized == "videotoolbox")
+    if (norm.empty() || norm == "none") return "";
+    
+    if (norm == "mac" || norm == "macos" || norm == "apple" || norm == "applesilicon" || norm == "mseries" || norm == "videotoolbox")
         return JoinPath(hal_dir, "libaivision-hal-macos-videotoolbox.dylib");
-    if (normalized == "rk" || normalized == "rknn" || normalized == "rkmpp" || normalized == "rockchip" || normalized == "rk3568" || normalized == "rk3588")
+    if (norm == "rk" || norm == "rknn" || norm == "rkmpp" || norm == "rockchip" || norm == "rk3568" || norm == "rk3588")
         return JoinPath(hal_dir, "libaivision-hal-rkmpp.so");
-    if (normalized == "ascend" || normalized == "atlas" || normalized == "huawei" || normalized == "cann")
+    if (norm == "ascend" || norm == "atlas" || norm == "huawei" || norm == "cann")
         return JoinPath(hal_dir, "libaivision-hal-ascend.so");
     return platform;
 }
@@ -170,13 +158,17 @@ static EngineConfig LoadConfigFromEnv()
     config.platform_url = GetEnvString("NIKO_ENGINE_PLATFORM_URL", config.platform_url);
     config.node_id = GetEnvString("NIKO_ENGINE_NODE_ID", config.node_id);
     config.auth_token = GetEnvString("NIKO_ENGINE_AUTH_TOKEN", config.auth_token);
-    config.http_port = GetEnvUInt32("NIKO_ENGINE_HTTP_PORT", config.http_port);
     config.algo_dir = GetEnvString("NIKO_ENGINE_ALGO_DIR", config.algo_dir);
     config.enable_mqtt = GetEnvBool("NIKO_ENGINE_ENABLE_MQTT", config.enable_mqtt);
     config.mqtt_broker = GetEnvString("NIKO_ENGINE_MQTT_BROKER", config.mqtt_broker);
     config.mqtt_client_id = GetEnvString("NIKO_ENGINE_MQTT_CLIENT_ID", config.mqtt_client_id);
     config.mqtt_username = GetEnvString("NIKO_ENGINE_MQTT_USER", config.mqtt_username);
     config.mqtt_password = GetEnvString("NIKO_ENGINE_MQTT_PASS", config.mqtt_password);
+
+    config.device_platform = GetEnvString("NIKO_ENGINE_DEVICE_PLATFORM", config.device_platform);
+    config.device_storage_path = GetEnvString("NIKO_ENGINE_DEVICE_STORAGE_PATH", config.algo_dir.empty() ? "/" : config.algo_dir);
+    config.device_enable_external_commands = GetEnvBool("NIKO_ENGINE_DEVICE_ENABLE_COMMANDS", config.device_enable_external_commands);
+    config.device_command_timeout_ms = GetEnvUInt32("NIKO_ENGINE_DEVICE_COMMAND_TIMEOUT_MS", config.device_command_timeout_ms);
 
     std::string hal_platform = GetEnvString("NIKO_ENGINE_HAL_PLATFORM");
     if (config.hal_so_path.empty() && !hal_platform.empty())
@@ -209,13 +201,16 @@ static void PrintRuntimeConfig(const EngineConfig &config,
     std::cout << "[Config] platform_url=" << (config.platform_url.empty() ? "<unset>" : config.platform_url)
               << " node_id=" << (config.node_id.empty() ? "<unset>" : config.node_id)
               << " auth_token=" << (config.auth_token.empty() ? "<unset>" : "<set>") << std::endl;
-    std::cout << "[Config] http_port=" << config.http_port << std::endl;
     std::cout << "[Config] algo_dir=" << config.algo_dir << std::endl;
     std::cout << "[Config] enable_mqtt=" << (config.enable_mqtt ? "true" : "false")
               << " mqtt_broker=" << config.mqtt_broker
               << " mqtt_client_id=" << config.mqtt_client_id
               << " mqtt_user=" << config.mqtt_username
               << " mqtt_pass=" << (config.mqtt_password.empty() ? "<empty>" : "<set>") << std::endl;
+    std::cout << "[Config] device_platform=" << (config.device_platform.empty() ? "<unset>" : config.device_platform)
+              << " device_storage_path=" << config.device_storage_path
+              << " device_enable_commands=" << (config.device_enable_external_commands ? "true" : "false")
+              << " device_command_timeout_ms=" << config.device_command_timeout_ms << std::endl;
 }
 
 } // namespace

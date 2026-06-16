@@ -1,6 +1,6 @@
 #include "engine.h"
-#include "http/http_server.h"
 #include "monitor/heartbeat_reporter.h"
+#include "monitor/device_monitor.h"
 #include "pipeline/pipeline_manager.h"
 #include "command_dispatcher.h"
 #include "mqtt_control_plane.h"
@@ -191,9 +191,19 @@ namespace aivision
             queue_mgr_.get(), algo_mgr_.get(),
             monitor::MetricsReporterConfig{config.metrics_interval_ms});
 
-        // 创建 HTTP Server 和 HeartbeatReporter
-        http_server_ = std::make_unique<http::HTTPServer>(this);
+        // 创建 HeartbeatReporter
         heartbeat_reporter_ = std::make_unique<monitor::HeartbeatReporter>(this);
+
+        // 创建 DeviceMonitor
+        device_monitor_ = std::make_unique<monitor::DeviceMonitor>(monitor::DeviceMonitorConfig{
+            config.device_platform,
+            config.device_storage_path,
+            "/proc", "/sys",
+            config.device_enable_external_commands,
+            config.device_command_timeout_ms,
+            config.device_light_probe_interval_ms,
+            config.device_expensive_probe_interval_ms
+        });
 
         // 创建 MQTT & Command Dispatcher 组件并建立绑定
         command_dispatcher_ = std::make_unique<CommandDispatcher>(this);
@@ -322,6 +332,15 @@ namespace aivision
         Shutdown();
     }
 
+    std::string InferenceEngine::GetHalPlatform() const
+    {
+#ifdef __APPLE__
+        return "macos";
+#else
+        return "rkmpp";
+#endif
+    }
+
     bool InferenceEngine::Initialize()
     {
         if (initialized_.load())
@@ -391,6 +410,12 @@ namespace aivision
             PublishEvent(0x0200, fbb); // SignalInferenceResult = 0x0200
         });
 
+        if (device_monitor_)
+        {
+            device_monitor_->Initialize();
+            device_monitor_->Start();
+        }
+
         initialized_.store(true);
         return true;
     }
@@ -434,15 +459,6 @@ namespace aivision
         // 启动 Metrics 上报
         metrics_reporter_->Start();
 
-        // 启动 HTTP Server（如果配置了端口）
-        if (config_.http_port > 0)
-        {
-            if (!http_server_->Start(config_.http_port))
-            {
-                std::cerr << "Failed to start HTTP Server on port " << config_.http_port << std::endl;
-            }
-        }
-
         // 启动 HeartbeatReporter（如果配置了平台连接）
         if (!config_.platform_url.empty() && !config_.node_id.empty() && !config_.auth_token.empty())
         {
@@ -478,8 +494,8 @@ namespace aivision
             pipeline_mgr_->StopAll();
         if (heartbeat_reporter_)
             heartbeat_reporter_->Stop();
-        if (http_server_)
-            http_server_->Stop();
+        if (device_monitor_)
+            device_monitor_->Stop();
         if (metrics_reporter_)
             metrics_reporter_->Stop();
         if (worker_pool_)

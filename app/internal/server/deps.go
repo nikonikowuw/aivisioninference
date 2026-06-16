@@ -51,6 +51,7 @@ func provideJWTManager(cfg *config.Config, rdb *redis.Client) *jwt.Manager {
 }
 
 func provideRouterConfig(cfg *config.Config) *router.Config {
+	e := cfg.Engine
 	return &router.Config{
 		AppEnv:                    cfg.App.Env,
 		AllowOrigins:              cfg.CORS.AllowOrigins,
@@ -66,10 +67,10 @@ func provideRouterConfig(cfg *config.Config) *router.Config {
 		ZLMAPIURL:                 cfg.ZLM.APIURL,
 		ZLMSecret:                 cfg.ZLM.Secret,
 		Engine: router.RouterEngineConfig{
-			MinCompatibleVersion:        cfg.Engine.MinCompatibleVersion,
-			VersionCheckEnabled:         cfg.Engine.VersionCheckEnabled,
-			HeartbeatTimeoutSec:         cfg.Engine.HeartbeatTimeoutSec,
-			HeartbeatCheckIntervalSec:   cfg.Engine.HeartbeatCheckInterval,
+			MinCompatibleVersion:      e.MinCompatibleVersion,
+			VersionCheckEnabled:       e.VersionCheckEnabled,
+			HeartbeatTimeoutSec:       e.HeartbeatTimeoutSec,
+			HeartbeatCheckIntervalSec: e.HeartbeatCheckInterval,
 		},
 	}
 }
@@ -109,7 +110,7 @@ func provideMqttClient(cfg *config.Config) (mqtt.Client, error) {
 		opts.SetPassword(cfg.MQTT.Password)
 	}
 	opts.SetAutoReconnect(true)
-	opts.SetCleanSession(true)
+	opts.SetCleanSession(false)
 
 	client := mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {

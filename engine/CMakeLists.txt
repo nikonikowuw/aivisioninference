@@ -35,14 +35,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# cpp-httplib (HTTP Server library, header-only)
-FetchContent_Declare(
-    httplib
-    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-    GIT_TAG v0.11.2
-)
-FetchContent_MakeAvailable(httplib)
-
 # asio (Networking and concurrency library, header-only)
 # NOTE: Must use Populate, not MakeAvailable — paho.mqtt.cpp does find_package(asio)
 # and we need to provide a Findasio.cmake module first.
@@ -57,17 +49,15 @@ if(NOT asio_POPULATED)
 endif()
 
 # Generate a Findasio.cmake so paho.mqtt.cpp's find_package(asio) can find the fetched headers.
-set(CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}/cmake" ${CMAKE_MODULE_PATH})
-file(WRITE "${CMAKE_BINARY_DIR}/cmake/Findasio.cmake"
-    "if(NOT asio_INCLUDE_DIR)\n"
-    "    find_path(asio_INCLUDE_DIR asio.hpp PATHS \"${asio_SOURCE_DIR}/include\" NO_DEFAULT_PATH)\n"
-    "endif()\n"
-    "if(asio_INCLUDE_DIR)\n"
-    "    add_library(asio::asio INTERFACE IMPORTED)\n"
-    "    target_include_directories(asio::asio INTERFACE \"\${asio_INCLUDE_DIR}\")\n"
-    "    set(asio_FOUND TRUE)\n"
-    "endif()\n"
-)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_BINARY_DIR}/cmake")
+file(WRITE "${CMAKE_BINARY_DIR}/cmake/Findasio.cmake" "
+    find_path(asio_INCLUDE_DIR asio.hpp PATHS \"${asio_SOURCE_DIR}/include\" NO_DEFAULT_PATH)
+    if(asio_INCLUDE_DIR)
+        add_library(asio::asio INTERFACE IMPORTED)
+        target_include_directories(asio::asio INTERFACE \"\${asio_INCLUDE_DIR}\")
+        set(asio_FOUND TRUE)
+    endif()
+")
 
 # paho.mqtt.c
 FetchContent_Declare(
@@ -80,7 +70,8 @@ set(PAHO_BUILD_STATIC ON CACHE BOOL "Build static library" FORCE)
 set(PAHO_ENABLE_TESTING OFF CACHE BOOL "Build tests" FORCE)
 set(PAHO_ENABLE_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
 set(PAHO_WITH_SSL ON CACHE BOOL "Build with SSL support" FORCE)
-FetchContent_MakeAvailable(paho-mqtt-c)
+# Use find_package instead of FetchContent to avoid network dependency
+find_package(eclipse-paho-mqtt-c 1.3.14 REQUIRED)
 
 # paho.mqtt.cpp
 FetchContent_Declare(
@@ -93,15 +84,13 @@ set(PAHO_BUILD_STATIC ON CACHE BOOL "Build static library" FORCE)
 set(PAHO_BUILD_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
 set(PAHO_BUILD_DOCUMENTATION OFF CACHE BOOL "Build documentation" FORCE)
 
-# Force find_package(PahoMqttC) to find the statically built target from FetchContent
-FetchContent_GetProperties(paho-mqtt-c)
-if(NOT paho-mqtt-c_POPULATED)
-    FetchContent_Populate(paho-mqtt-c)
-endif()
-set(PAHO_MQTT_C_LIBRARIES "${CMAKE_BINARY_DIR}/_deps/paho-mqtt-c-build/src/libpaho-mqtt3as.a" CACHE FILEPATH "Paho C library" FORCE)
-set(PAHO_MQTT_C_INCLUDE_DIRS "${paho-mqtt-c_SOURCE_DIR}/src" CACHE PATH "Paho C headers" FORCE)
+# Use pre-built paho-mqtt libraries (skip FetchContent to avoid network dependency)
+list(APPEND CMAKE_PREFIX_PATH /tmp/paho-cpp-install)
+find_package(PahoMqttCpp REQUIRED)
 
-FetchContent_MakeAvailable(paho-mqtt-cpp)
+if(TARGET PahoMqttCpp::paho-mqttpp3)
+    message(STATUS "Using pre-built paho-mqtt-cpp")
+endif()
 
 # FFmpeg + OpenCV software fallback decoder is required.
 # 推理 fallback 必须能完成软件解码、resize，并向 Worker 提供 HostMemory 帧。
@@ -196,11 +185,18 @@ set(ENGINE_LIB_SOURCES
     src/algo/algo_instance.cpp
     src/algo/algo_manager.cpp
     src/monitor/metrics_reporter.cpp
-    src/http/http_server.cpp
     src/monitor/heartbeat_reporter.cpp
     src/algo/algorithm_downloader.cpp
     src/command_dispatcher.cpp
     src/mqtt_control_plane.cpp
+    src/monitor/device_monitor.cpp
+    src/monitor/device_snapshot_json.cpp
+    src/monitor/probes/command_runner.cpp
+    src/monitor/probes/linux_generic_probe.cpp
+    src/monitor/probes/rockchip_probe.cpp
+    src/monitor/probes/nvidia_probe.cpp
+    src/monitor/probes/ascend_probe.cpp
+    src/monitor/probes/macos_probe.cpp
 )
 
 # 引擎可执行入口
@@ -229,8 +225,8 @@ set(INSTALL_HEADERS
     include/algo/algo_instance.h
     include/algo/algo_manager.h
     include/monitor/metrics_reporter.h
-    include/http/http_server.h
     include/monitor/heartbeat_reporter.h
+    include/monitor/device_monitor.h
     include/algo/algorithm_downloader.h
     include/command_dispatcher.h
     include/mqtt_control_plane.h
@@ -269,9 +265,8 @@ endif()
 
 target_include_directories(aivision-engine-lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_include_directories(aivision-engine-lib PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/monitor
     ${FLATBUFFERS_INCLUDE_DIRS}
     ${asio_SOURCE_DIR}/asio/include
 )
@@ -291,8 +286,7 @@ target_link_libraries(aivision-engine-lib PUBLIC
     Threads::Threads
     CURL::libcurl
     OpenSSL::Crypto
-    httplib::httplib
-    paho-mqttpp3-static
+    PahoMqttCpp::paho-mqttpp3-static
     dl
 )
 
@@ -385,18 +379,6 @@ if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
 
     add_test(NAME rkmpp_pipeline COMMAND test_rkmpp_pipeline)
 
-    add_executable(test_http_server
-        tests/test_http_server.cpp
-    )
-    target_include_directories(test_http_server PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_link_libraries(test_http_server PRIVATE
-        Threads::Threads
-        httplib::httplib
-    )
-    add_test(NAME http_server COMMAND test_http_server)
-
     add_executable(test_heartbeat_reporter
         tests/test_heartbeat_reporter.cpp
     )
@@ -419,6 +401,83 @@ if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
         OpenSSL::Crypto
     )
     add_test(NAME algorithm_downloader COMMAND test_algorithm_downloader)
+
+    add_executable(test_device_monitor
+        tests/test_device_monitor.cpp
+    )
+    target_include_directories(test_device_monitor PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_monitor PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_monitor COMMAND test_device_monitor)
+
+    add_executable(test_device_snapshot_json
+        tests/test_device_snapshot_json.cpp
+    )
+    target_include_directories(test_device_snapshot_json PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_snapshot_json PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_snapshot_json COMMAND test_device_snapshot_json)
+
+    add_executable(test_device_probe_linux_generic
+        tests/test_device_probe_linux_generic.cpp
+    )
+    target_include_directories(test_device_probe_linux_generic PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_probe_linux_generic PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_probe_linux_generic COMMAND test_device_probe_linux_generic)
+
+    add_executable(test_device_probe_rockchip
+        tests/test_device_probe_rockchip.cpp
+    )
+    target_include_directories(test_device_probe_rockchip PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_probe_rockchip PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_probe_rockchip COMMAND test_device_probe_rockchip)
+
+    add_executable(test_device_probe_nvidia
+        tests/test_device_probe_nvidia.cpp
+    )
+    target_include_directories(test_device_probe_nvidia PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_probe_nvidia PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_probe_nvidia COMMAND test_device_probe_nvidia)
+
+    add_executable(test_device_probe_ascend
+        tests/test_device_probe_ascend.cpp
+    )
+    target_include_directories(test_device_probe_ascend PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_probe_ascend PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_probe_ascend COMMAND test_device_probe_ascend)
+
+    add_executable(test_device_probe_macos
+        tests/test_device_probe_macos.cpp
+    )
+    target_include_directories(test_device_probe_macos PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_device_probe_macos PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME device_probe_macos COMMAND test_device_probe_macos)
 endif()
 
 # ============================================================

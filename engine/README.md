@@ -26,7 +26,7 @@ cmake .. -DAIVISION_WITH_RKMPP=OFF
 make -j4
 ```
 
-生成 `libaivision-hal-rkmpp.so`（不包含 MPP/RGA 功能，仅用于测试接口）
+生成 `libaivision-hal-rkmpp.so` (Stub 模式)
 
 ### RK3568 目标机 — 本地编译（推荐）
 
@@ -112,9 +112,11 @@ aivision-engine --env-file /etc/aivision/engine.env
 | `NIKO_ENGINE_PLATFORM_URL`           | 平台管理端 URL（用于心跳上报）              |
 | `NIKO_ENGINE_NODE_ID`                | 边缘节点 ID（平台注册后获取）               |
 | `NIKO_ENGINE_AUTH_TOKEN`             | 引擎认证 Token（平台创建节点后获取）        |
-| `NIKO_ENGINE_HTTP_PORT`              | 引擎 HTTP 服务端口（默认 8080）             |
-
-| `NIKO_ENGINE_RTSP_PUSH` | RTSP 推流地址 |
+| `NIKO_ENGINE_RTSP_PUSH`              | RTSP 推流地址                               |
+| `NIKO_ENGINE_DEVICE_PLATFORM`        | 强制指定设备监控探测的平台类型              |
+| `NIKO_ENGINE_DEVICE_STORAGE_PATH`    | 设备监控探测存储容量和利用率的挂载点路径    |
+| `NIKO_ENGINE_DEVICE_ENABLE_COMMANDS` | 是否允许执行外部命令（如 `nvidia-smi` 等）  |
+| `NIKO_ENGINE_DEVICE_COMMAND_TIMEOUT` | 外部命令执行的最大超时时长（毫秒，默认 1500）|
 
 命令行也支持同名能力：
 
@@ -147,17 +149,6 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 
 引擎支持作为边缘节点连接到 Niko Admin 平台，实现状态上报、算法包下发和远程管理。
 
-### HTTP Server（端口 8080）
-
-引擎内置 HTTP 服务，提供以下管理接口：
-
-| 接口             | 方法 | 说明                                                        |
-| ---------------- | ---- | ----------------------------------------------------------- |
-| `/health`        | GET  | 健康检查，返回 status, uptime, current_load, engine_version |
-| `/hardware-info` | GET  | 硬件信息，返回 CPU/GPU 型号、内存、平台                     |
-| `/deploy-algo`   | POST | 部署算法包，参数：algo_package_id, download_url, md5        |
-| `/algorithms`    | GET  | 查询已加载算法列表                                          |
-
 ### Heartbeat Reporter
 
 引擎每 5 秒向平台上报一次心跳，包含：
@@ -169,6 +160,15 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 - 引擎版本（engine_version，当前版本 `1.0.0`）
 
 心跳响应中包含待下发的算法包信息（pending_deployments），引擎自动下载并安装。
+
+### 设备与指标监控 (Device Monitor)
+
+引擎内置 `DeviceMonitor` 子系统，后台自动收集硬件规格、运行指标及 NPU/GPU 状态。
+
+- **静态规格 (10 min)**：系统型号、主机名、OS、内存/存储总量。
+- **轻量指标 (5 sec)**：CPU/内存利用率、存储利用率、温度。
+- **外部探测 (20 sec)**：执行 `nvidia-smi` 或 `npu-smi`，支持失败退避逻辑。
+- **集成**：支持 HTTP API (`/api/engine/device`) 和心跳包异步同步。
 
 ### 算法包下载与安装
 
@@ -193,9 +193,6 @@ aivision-engine --hal-so /opt/aivision/lib/libaivision-hal-rkmpp.so --hal-config
 NIKO_ENGINE_PLATFORM_URL=http://your-platform:8080
 NIKO_ENGINE_NODE_ID=<从平台获取>
 NIKO_ENGINE_AUTH_TOKEN=<从平台获取>
-
-# 引擎服务
-NIKO_ENGINE_HTTP_PORT=8080
 
 # HAL 配置
 NIKO_ENGINE_HAL_PLATFORM=macos

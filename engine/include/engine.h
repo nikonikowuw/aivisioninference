@@ -74,9 +74,6 @@ namespace aivision
         /// 引擎认证 Token（平台创建节点后获取）
         std::string auth_token = "";
 
-        /// 引擎 HTTP 服务端口（默认 8080）
-        int http_port = 8080;
-
         /// 算法包安装基目录
         std::string algo_dir = "/var/aivision/algo";
 
@@ -94,10 +91,27 @@ namespace aivision
 
         /// MQTT 密码
         std::string mqtt_password = "";
+
+        /// 设备监控平台覆盖 (如 "rockchip", "nvidia", "ascend", "macos", "linux_generic" 等)
+        std::string device_platform = "";
+
+        /// 设备监控存储路径
+        std::string device_storage_path = "/";
+
+        /// 是否允许设备监控执行外部命令
+        bool device_enable_external_commands = true;
+
+        /// 设备监控外部命令超时时间 (毫秒)
+        uint32_t device_command_timeout_ms = 1500;
+
+        /// 设备监控轻量指标采样周期 (毫秒)
+        uint32_t device_light_probe_interval_ms = 5000;
+
+        /// 设备监控昂贵指标采样周期 (毫秒)
+        uint32_t device_expensive_probe_interval_ms = 20000;
     };
 
-    namespace http { class HTTPServer; }
-    namespace monitor { class HeartbeatReporter; }
+    namespace monitor { class HeartbeatReporter; class DeviceMonitor; }
     class CommandDispatcher;
     class MqttControlPlane;
 
@@ -133,6 +147,9 @@ namespace aivision
         /// 获取引擎配置引用
         const EngineConfig& GetConfig() const { return config_; }
 
+        /// 获取当前 HAL 平台名称
+        std::string GetHalPlatform() const;
+
         // ============================================================
         // 组件访问器
         // ============================================================
@@ -147,6 +164,7 @@ namespace aivision
         pipeline::PipelineManager *GetPipelineManager() { return pipeline_mgr_.get(); }
         algo::AlgoManager *GetAlgoManager() { return algo_mgr_.get(); }
         monitor::MetricsReporter *GetMetricsReporter() { return metrics_reporter_.get(); }
+        monitor::DeviceMonitor *GetDeviceMonitor() { return device_monitor_.get(); }
 
         /// 统一发布 FlatBuffers 结果事件
         bool PublishEvent(uint16_t signal_type, flatbuffers::FlatBufferBuilder &fbb);
@@ -230,11 +248,11 @@ namespace aivision
         std::unique_ptr<algo::AlgoManager> algo_mgr_;
         std::unique_ptr<monitor::MetricsReporter> metrics_reporter_;
 
-        // HTTP 服务端（用于健康检查、算法部署等管理接口）
-        std::unique_ptr<http::HTTPServer> http_server_;
-
         // 心跳上报模块（向平台推送引擎状态）
         std::unique_ptr<monitor::HeartbeatReporter> heartbeat_reporter_;
+
+        // 设备状态监控模块
+        std::unique_ptr<monitor::DeviceMonitor> device_monitor_;
 
         // MQTT & Command Dispatcher
         std::unique_ptr<CommandDispatcher> command_dispatcher_;

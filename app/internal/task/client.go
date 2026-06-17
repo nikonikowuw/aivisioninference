@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
@@ -44,6 +45,7 @@ func (c *Client) Enqueue(ctx context.Context, taskType string, payload interface
 
 // EnqueueWithID 与 Enqueue 相同，但使用指定的 taskID 替代自动生成的随机 ID。
 // 同一 ID 在队列中唯一存在，可用于后续通过 RemovePending 精准删除。
+// 若任务已存在，自动忽略 asynq.ErrTaskIDConflict，实现幂等。
 func (c *Client) EnqueueWithID(ctx context.Context, taskType string, payload interface{}, taskID string) error {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -51,6 +53,9 @@ func (c *Client) EnqueueWithID(ctx context.Context, taskType string, payload int
 	}
 	t := asynq.NewTask(taskType, payloadBytes)
 	_, err = c.client.EnqueueContext(ctx, t, asynq.TaskID(taskID))
+	if err != nil && errors.Is(err, asynq.ErrTaskIDConflict) {
+		return nil
+	}
 	return err
 }
 

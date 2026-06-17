@@ -133,6 +133,10 @@ namespace aivision
             /// 获取所有部署记录
             std::vector<DeploymentInfo> GetDeployments() const;
 
+            /// 清理长时间未使用的空闲算法实例
+            /// @param idle_timeout_ms 空闲时间阈值（毫秒）
+            void GarbageCollect(uint32_t idle_timeout_ms);
+
             /// 设置热更新状态变更回调
             using StateChangeCallback = std::function<void(HotReloadState, HotReloadState)>;
             void SetStateChangeCallback(StateChangeCallback cb)

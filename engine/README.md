@@ -98,25 +98,25 @@ aivision-engine --env-file /etc/aivision/engine.env
 
 ### 环境变量
 
-| 变量                                 | 说明                                        |
-| ------------------------------------ | ------------------------------------------- |
-| `NIKO_ENGINE_ENV_FILE`               | `.env` 文件路径                             |
-| `NIKO_ENGINE_WORKERS`                | Worker 线程数                               |
-| `NIKO_ENGINE_HAL_PLATFORM`           | 主 HAL 平台名                               |
-| `NIKO_ENGINE_HAL_SO`                 | 主 HAL 动态库路径，优先于平台名             |
-| `NIKO_ENGINE_FALLBACK_HAL_PLATFORM`  | 备用 HAL 平台名                             |
-| `NIKO_ENGINE_FALLBACK_HAL_SO`        | 备用 HAL 动态库路径，优先于备用平台名       |
-| `NIKO_ENGINE_HAL_DIR`                | 平台名映射时使用的 HAL 库目录               |
-| `NIKO_ENGINE_HAL_CONFIG`             | HAL 配置 JSON                               |
-| `NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK` | 是否允许 FFmpeg fallback，支持 `true/false` |
-| `NIKO_ENGINE_PLATFORM_URL`           | 平台管理端 URL（用于心跳上报）              |
-| `NIKO_ENGINE_NODE_ID`                | 边缘节点 ID（平台注册后获取）               |
-| `NIKO_ENGINE_AUTH_TOKEN`             | 引擎认证 Token（平台创建节点后获取）        |
-| `NIKO_ENGINE_RTSP_PUSH`              | RTSP 推流地址                               |
-| `NIKO_ENGINE_DEVICE_PLATFORM`        | 强制指定设备监控探测的平台类型              |
-| `NIKO_ENGINE_DEVICE_STORAGE_PATH`    | 设备监控探测存储容量和利用率的挂载点路径    |
-| `NIKO_ENGINE_DEVICE_ENABLE_COMMANDS` | 是否允许执行外部命令（如 `nvidia-smi` 等）  |
-| `NIKO_ENGINE_DEVICE_COMMAND_TIMEOUT` | 外部命令执行的最大超时时长（毫秒，默认 1500）|
+| 变量                                 | 说明                                          |
+| ------------------------------------ | --------------------------------------------- |
+| `NIKO_ENGINE_ENV_FILE`               | `.env` 文件路径                               |
+| `NIKO_ENGINE_WORKERS`                | Worker 线程数                                 |
+| `NIKO_ENGINE_HAL_PLATFORM`           | 主 HAL 平台名                                 |
+| `NIKO_ENGINE_HAL_SO`                 | 主 HAL 动态库路径，优先于平台名               |
+| `NIKO_ENGINE_FALLBACK_HAL_PLATFORM`  | 备用 HAL 平台名                               |
+| `NIKO_ENGINE_FALLBACK_HAL_SO`        | 备用 HAL 动态库路径，优先于备用平台名         |
+| `NIKO_ENGINE_HAL_DIR`                | 平台名映射时使用的 HAL 库目录                 |
+| `NIKO_ENGINE_HAL_CONFIG`             | HAL 配置 JSON                                 |
+| `NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK` | 是否允许 FFmpeg fallback，支持 `true/false`   |
+| `NIKO_ENGINE_PLATFORM_URL`           | 平台管理端 URL（用于心跳上报）                |
+| `NIKO_ENGINE_NODE_ID`                | 边缘节点 ID（平台注册后获取）                 |
+| `NIKO_ENGINE_AUTH_TOKEN`             | 引擎认证 Token（平台创建节点后获取）          |
+| `NIKO_ENGINE_RTSP_PUSH`              | RTSP 推流地址                                 |
+| `NIKO_ENGINE_DEVICE_PLATFORM`        | 强制指定设备监控探测的平台类型                |
+| `NIKO_ENGINE_DEVICE_STORAGE_PATH`    | 设备监控探测存储容量和利用率的挂载点路径      |
+| `NIKO_ENGINE_DEVICE_ENABLE_COMMANDS` | 是否允许执行外部命令（如 `nvidia-smi` 等）    |
+| `NIKO_ENGINE_DEVICE_COMMAND_TIMEOUT` | 外部命令执行的最大超时时长（毫秒，默认 1500） |
 
 命令行也支持同名能力：
 

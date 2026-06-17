@@ -22,6 +22,27 @@ namespace aivision
             instances_.clear();
         }
 
+        void AlgoManager::GarbageCollect(uint32_t idle_timeout_ms)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (hot_reload_state_.load() != HotReloadState::Idle)
+                return; // 正在热更新，不执行 GC
+
+            for (auto it = instances_.begin(); it != instances_.end(); )
+            {
+                if (it->second->GetRefCount() == 0 && it->second->GetIdleTimeMs() >= idle_timeout_ms)
+                {
+                    std::cout << "[AlgoManager] GC destroying idle instance: " << it->first << std::endl;
+                    it->second->Destroy();
+                    it = instances_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
         AlgoInstancePtr AlgoManager::Load(const std::string &algo_name,
                                           const std::string &version,
                                           const std::string &so_path,
@@ -98,6 +119,7 @@ namespace aivision
             }
 
             it->second->AddRef();
+            it->second->UpdateAccessTime();
             return {it->second, true};
         }
 

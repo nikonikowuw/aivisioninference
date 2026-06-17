@@ -5,17 +5,7 @@
 
 namespace
 {
-    constexpr size_t kInferResultLogMaxBytes = 2048;
     std::mutex g_infer_log_mutex;
-
-    std::string TruncateInferResult(const std::string &result_json)
-    {
-        if (result_json.size() <= kInferResultLogMaxBytes)
-        {
-            return result_json;
-        }
-        return result_json.substr(0, kInferResultLogMaxBytes) + "...<truncated>";
-    }
 
     void AppendInferInputFields(std::ostream &out, const hw_buffer_desc_t &desc)
     {
@@ -36,7 +26,10 @@ namespace aivision
         AlgoInstance::AlgoInstance(std::shared_ptr<SoHandle> so_handle,
                                    const std::string &algo_name,
                                    const std::string &version)
-            : so_handle_(std::move(so_handle)), algo_name_(algo_name), version_(version) {}
+            : so_handle_(std::move(so_handle)), algo_name_(algo_name), version_(version)
+        {
+            UpdateAccessTime();
+        }
 
         AlgoInstance::~AlgoInstance()
         {
@@ -67,19 +60,18 @@ namespace aivision
                                  std::string &result_json,
                                  uint32_t &infer_time_us)
         {
-            if (!algo_handle_ || !so_handle_)
+            if (!so_handle_)
             {
                 std::lock_guard<std::mutex> lock(g_infer_log_mutex);
                 std::cerr << "[AlgoInstance] infer skipped"
                           << " algo=" << algo_name_
                           << " version=" << version_
-                          << " reason=not_initialized"
-                          << " algo_handle=" << algo_handle_
-                          << " so_handle=" << so_handle_.get()
+                          << " reason=no_so_handle"
                           << std::endl;
                 return false;
             }
 
+            active_infer_count_.fetch_add(1);
             state_.store(AlgoInstanceState::Running);
 
             hw_buffer_desc_t fb_desc{};
@@ -94,28 +86,32 @@ namespace aivision
             fb_desc.stride = input_desc.stride;
 
             infer_result_t result{};
-            int ret = so_handle_->Infer(
-                algo_handle_,
-                &fb_desc,
-                context_json.empty() ? nullptr : context_json.c_str(),
-                &result);
+            int ret = 0;
+            {
+                std::lock_guard<std::mutex> instance_infer_lock(infer_mutex_);
+                if (!algo_handle_)
+                {
+                    if (active_infer_count_.fetch_sub(1) == 1) {
+                        state_.store(AlgoInstanceState::Ready);
+                    }
+                    std::lock_guard<std::mutex> lock(g_infer_log_mutex);
+                    std::cerr << "[AlgoInstance] infer skipped reason=not_initialized algo=" << algo_name_ << std::endl;
+                    return false;
+                }
+                ret = so_handle_->Infer(
+                    algo_handle_,
+                    &fb_desc,
+                    context_json.empty() ? nullptr : context_json.c_str(),
+                    &result);
+            }
 
             if (ret == 0 && result.result_json)
             {
                 result_json = result.result_json;
                 infer_time_us = result.infer_time_us;
-                std::lock_guard<std::mutex> lock(g_infer_log_mutex);
-                std::cout << "[AlgoInstance] infer result"
-                          << " algo=" << algo_name_
-                          << " version=" << version_
-                          << " infer_time_us=" << infer_time_us;
-                AppendInferInputFields(std::cout, fb_desc);
-                std::cout << " result_size=" << result_json.size()
-                          << " result=" << TruncateInferResult(result_json)
-                          << std::endl;
                 algo_free_result(&result);
             }
-            else
+            else if (ret != 0)
             {
                 std::lock_guard<std::mutex> lock(g_infer_log_mutex);
                 std::cerr << "[AlgoInstance] infer failed"
@@ -126,7 +122,9 @@ namespace aivision
                 std::cerr << std::endl;
             }
 
-            state_.store(AlgoInstanceState::Ready);
+            if (active_infer_count_.fetch_sub(1) == 1) {
+                state_.store(AlgoInstanceState::Ready);
+            }
             return ret == 0;
         }
 
@@ -149,6 +147,7 @@ namespace aivision
 
         bool AlgoInstance::UpdateFaceLibrary(const std::string &face_library_json)
         {
+            std::lock_guard<std::mutex> lock(infer_mutex_);
             if (!algo_handle_ || !so_handle_)
             {
                 std::cerr << "[AlgoInstance] face library update skipped"
@@ -191,12 +190,29 @@ namespace aivision
 
         void AlgoInstance::DestroyInternal()
         {
+            std::lock_guard<std::mutex> lock(infer_mutex_);
             if (so_handle_ && algo_handle_)
             {
                 so_handle_->Destroy(algo_handle_);
                 algo_handle_ = nullptr;
             }
             state_.store(AlgoInstanceState::Unloading);
+        }
+
+        void AlgoInstance::UpdateAccessTime()
+        {
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+            last_access_timestamp_ms_.store(now_ms);
+        }
+
+        int64_t AlgoInstance::GetIdleTimeMs() const
+        {
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+            return now_ms - last_access_timestamp_ms_.load();
         }
 
     } // namespace algo

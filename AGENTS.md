@@ -82,8 +82,11 @@ IPC Server ──→ Task Manager ──→ Pipeline Pool ──→ Decoder → 
 | `.rules/cpp-engine-algorithm.md`        | C++ Engine：架构约定、编码规范、Pipeline 性能、FlatBuffers 协议、算法包规范、C ABI 契约、构建验证、安全 |
 
 <!-- TRELLIS:START -->
+
 ## Trellis Context
+
 Managed by Trellis. Knowledge base in `.trellis/`:
+
 - `workflow.md`: Development phases.
 - `spec/`: Coding guidelines.
 - `tasks/`: Active/Archived tasks.

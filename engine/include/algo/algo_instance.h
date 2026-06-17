@@ -12,6 +12,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <mutex>
 
 #include "so_handle.h"
 #include "pipeline/hw_buffer.h"
@@ -99,6 +100,12 @@ namespace aivision
             /// 显式销毁算法上下文，由 AlgoManager 卸载/析构时调用。
             void Destroy() { DestroyInternal(); }
 
+            /// 更新最后活跃时间（毫秒级）
+            void UpdateAccessTime();
+
+            /// 获取空闲时间（毫秒级）
+            int64_t GetIdleTimeMs() const;
+
         private:
             /// 内部销毁
             void DestroyInternal();
@@ -108,9 +115,14 @@ namespace aivision
             std::string version_;
             std::atomic<AlgoInstanceState> state_{AlgoInstanceState::Loading};
             std::atomic<int> ref_count_{0};
+            std::atomic<int> active_infer_count_{0};
+            std::atomic<int64_t> last_access_timestamp_ms_{0};
 
             /// 算法上下文句柄 (由 detector_init 返回)
             algo_handle_t algo_handle_{nullptr};
+
+            /// 推理互斥锁，确保多线程并发调用 Infer 时算法上下文的安全
+            std::mutex infer_mutex_;
         };
 
         /// AlgoInstance 的智能指针

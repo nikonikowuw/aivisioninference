@@ -37,6 +37,9 @@ namespace aivision
 
         void MetricsReporter::ReportLoop()
         {
+            uint32_t gc_counter = 0;
+            constexpr uint32_t GC_INTERVAL_CYCLES = 10; // Run GC every 10 metrics cycles
+
             while (running_.load())
             {
                 std::unique_lock<std::mutex> lock(stop_mutex_);
@@ -46,6 +49,12 @@ namespace aivision
                         [this]() { return !running_.load(); }))
                 {
                     break;
+                }
+
+                // Run GC less frequently than metrics collection
+                if (algo_mgr_ && (++gc_counter % GC_INTERVAL_CYCLES == 0))
+                {
+                    algo_mgr_->GarbageCollect(300000); // 5 minutes idle timeout
                 }
 
                 auto metrics = CollectMetrics();

@@ -63,15 +63,18 @@ file(WRITE "${CMAKE_BINARY_DIR}/cmake/Findasio.cmake" "
 FetchContent_Declare(
     paho-mqtt-c
     GIT_REPOSITORY https://github.com/eclipse/paho.mqtt.c.git
-    GIT_TAG v1.3.13
+    GIT_TAG v1.3.14
 )
 set(PAHO_BUILD_SHARED OFF CACHE BOOL "Build shared library" FORCE)
 set(PAHO_BUILD_STATIC ON CACHE BOOL "Build static library" FORCE)
 set(PAHO_ENABLE_TESTING OFF CACHE BOOL "Build tests" FORCE)
 set(PAHO_ENABLE_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
 set(PAHO_WITH_SSL ON CACHE BOOL "Build with SSL support" FORCE)
-# Use find_package instead of FetchContent to avoid network dependency
-find_package(eclipse-paho-mqtt-c 1.3.14 REQUIRED)
+FetchContent_MakeAvailable(paho-mqtt-c)
+
+# Set variables for FindPahoMqttC - provide the library path directly
+set(PAHO_MQTT_C_LIBRARIES "${CMAKE_BINARY_DIR}/_deps/paho-mqtt-c-build/src/libpaho-mqtt3as.a" CACHE FILEPATH "Paho MQTT C library path")
+set(PAHO_MQTT_C_INCLUDE_DIRS "${paho-mqtt-c_SOURCE_DIR}/src" CACHE PATH "Paho MQTT C include directory")
 
 # paho.mqtt.cpp
 FetchContent_Declare(
@@ -83,14 +86,7 @@ set(PAHO_BUILD_SHARED OFF CACHE BOOL "Build shared library" FORCE)
 set(PAHO_BUILD_STATIC ON CACHE BOOL "Build static library" FORCE)
 set(PAHO_BUILD_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
 set(PAHO_BUILD_DOCUMENTATION OFF CACHE BOOL "Build documentation" FORCE)
-
-# Use pre-built paho-mqtt libraries (skip FetchContent to avoid network dependency)
-list(APPEND CMAKE_PREFIX_PATH /tmp/paho-cpp-install)
-find_package(PahoMqttCpp REQUIRED)
-
-if(TARGET PahoMqttCpp::paho-mqttpp3)
-    message(STATUS "Using pre-built paho-mqtt-cpp")
-endif()
+FetchContent_MakeAvailable(paho-mqtt-cpp)
 
 # FFmpeg + OpenCV software fallback decoder is required.
 # 推理 fallback 必须能完成软件解码、resize，并向 Worker 提供 HostMemory 帧。
@@ -286,7 +282,7 @@ target_link_libraries(aivision-engine-lib PUBLIC
     Threads::Threads
     CURL::libcurl
     OpenSSL::Crypto
-    PahoMqttCpp::paho-mqttpp3-static
+    paho-mqttpp3-static
     dl
 )
 

@@ -453,12 +453,25 @@ func resolveRuntimeSoPath(algoPackage *model.AlgorithmPackage) (string, error) {
 		}
 	}
 
-	packagePath := strings.TrimSpace(algoPackage.PackagePath)
+	packagePath := strings.TrimSpace(algoPackage.ExtractPath)
+	if packagePath == "" {
+		packagePath = strings.TrimSpace(algoPackage.PackagePath)
+	}
 	if packagePath == "" {
 		return "", fmt.Errorf("algorithm package path is empty")
 	}
 	if info, err := os.Stat(packagePath); err != nil || info.IsDir() {
-		return "", fmt.Errorf("algorithm package tar is unavailable: %s", packagePath)
+		// Fallback for relative PackagePath without uploads/ prefix
+		if !strings.HasPrefix(packagePath, "uploads/") {
+			fallbackPath := filepath.Join("uploads", packagePath)
+			if info, err := os.Stat(fallbackPath); err == nil && !info.IsDir() {
+				packagePath = fallbackPath
+			}
+		}
+		// Check again after fallback attempt
+		if info, err := os.Stat(packagePath); err != nil || info.IsDir() {
+			return "", fmt.Errorf("algorithm package tar is unavailable: %s", packagePath)
+		}
 	}
 
 	extractDir := strings.TrimSuffix(packagePath, filepath.Ext(packagePath)) + "_runtime"

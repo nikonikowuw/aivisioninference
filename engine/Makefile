@@ -10,7 +10,7 @@ RK_CROSS_DIR    ?= build-rk3568-cross
 CMAKE_BUILD_TYPE ?= Debug
 JOBS            ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 SED_INPLACE     := $(shell if sed --version >/dev/null 2>&1; then echo "sed -i"; else echo "sed -i ''"; fi)
-CMAKE_POLICY_ARGS ?= -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+CMAKE_POLICY_ARGS ?=
 
 # ============================================================
 # 默认目标: 开发模式 (x86_64, stub HAL)

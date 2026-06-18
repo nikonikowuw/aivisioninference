@@ -95,7 +95,7 @@ func (r *EdgeNodeRepository) List(ctx context.Context, req dto.EdgeNodeListReque
 func (r *EdgeNodeRepository) UpdateHeartbeatFields(ctx context.Context, id string, fields map[string]interface{}) error {
 	// Build allowed column set for heartbeat updates
 	allowed := []string{"status", "last_heartbeat", "current_load", "uptime", "engine_version",
-		"hal_platform", "cpu_model", "gpu_model", "total_memory", "remark"}
+		"hal_platform", "cpu_model", "gpu_model", "total_memory", "embedding_capacity", "remark"}
 	return r.db.WithContext(ctx).Model(&model.EdgeNode{}).
 		Where("id = ?", id).
 		Select(allowed).
@@ -115,17 +115,76 @@ func (r *EdgeNodeRepository) FindByIDForUpdate(ctx context.Context, id string) (
 	return &item, nil
 }
 
-// FindOnlineNodesWithAlgorithm retrieves all online and enabled nodes that have the specified algorithm installed.
-func (r *EdgeNodeRepository) FindOnlineNodesWithAlgorithm(ctx context.Context, algoPackageID string) ([]model.EdgeNode, error) {
+// edgeNodeAlgoQueryOptions controls optional filters for the shared edge-node + edge-node-algorithm join query.
+type edgeNodeAlgoQueryOptions struct {
+	runtimeStatus      []string // empty = no filter; single = equality; multiple = IN
+	supportsEmbedding   *bool
+	supportsFaceLibrary *bool
+	order               string
+}
+
+// findNodesByAlgoJoin is the shared query builder for the four Find*NodesByAlgorithm methods.
+// It joins edge_nodes with edge_node_algorithms and applies the common base filters
+// (online, enabled, installed, algo_package_id) plus any optional filters from opts.
+func (r *EdgeNodeRepository) findNodesByAlgoJoin(ctx context.Context, algoPackageID string, opts edgeNodeAlgoQueryOptions) ([]model.EdgeNode, error) {
 	var nodes []model.EdgeNode
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Joins("JOIN edge_node_algorithms ON edge_nodes.id = edge_node_algorithms.node_id").
-		Where("edge_nodes.status = ?", "online").
+		Where("edge_nodes.status = ?", model.NodeStatusOnline).
 		Where("edge_nodes.enabled = ?", true).
 		Where("edge_node_algorithms.algo_package_id = ?", algoPackageID).
-		Where("edge_node_algorithms.status = ?", "installed").
-		Find(&nodes).Error
+		Where("edge_node_algorithms.status = ?", model.AlgoDeployInstalled)
+	if len(opts.runtimeStatus) == 1 {
+		query = query.Where("edge_node_algorithms.runtime_status = ?", opts.runtimeStatus[0])
+	} else if len(opts.runtimeStatus) > 1 {
+		query = query.Where("edge_node_algorithms.runtime_status IN ?", opts.runtimeStatus)
+	}
+	if opts.supportsEmbedding != nil {
+		query = query.Where("edge_node_algorithms.supports_embedding = ?", *opts.supportsEmbedding)
+	}
+	if opts.supportsFaceLibrary != nil {
+		query = query.Where("edge_node_algorithms.supports_face_library = ?", *opts.supportsFaceLibrary)
+	}
+	if opts.order != "" {
+		query = query.Order(opts.order)
+	}
+	err := query.Find(&nodes).Error
 	return nodes, err
+}
+
+// FindOnlineNodesWithAlgorithm retrieves all online and enabled nodes that have the specified algorithm installed.
+func (r *EdgeNodeRepository) FindOnlineNodesWithAlgorithm(ctx context.Context, algoPackageID string) ([]model.EdgeNode, error) {
+	return r.findNodesByAlgoJoin(ctx, algoPackageID, edgeNodeAlgoQueryOptions{})
+}
+
+// FindReadyEmbeddingNodesByAlgorithm returns online nodes that can immediately serve embedding extraction.
+func (r *EdgeNodeRepository) FindReadyEmbeddingNodesByAlgorithm(ctx context.Context, algoPackageID string) ([]model.EdgeNode, error) {
+	supportsEmbedding := true
+	return r.findNodesByAlgoJoin(ctx, algoPackageID, edgeNodeAlgoQueryOptions{
+		runtimeStatus:     []string{model.AlgoRuntimeReady},
+		supportsEmbedding: &supportsEmbedding,
+		order:             "edge_nodes.current_load ASC, edge_nodes.updated_at DESC",
+	})
+}
+
+// FindInstalledEmbeddingNodesByAlgorithm returns online nodes that have the package installed but are not yet ready.
+func (r *EdgeNodeRepository) FindInstalledEmbeddingNodesByAlgorithm(ctx context.Context, algoPackageID string) ([]model.EdgeNode, error) {
+	supportsEmbedding := true
+	return r.findNodesByAlgoJoin(ctx, algoPackageID, edgeNodeAlgoQueryOptions{
+		runtimeStatus:     []string{model.AlgoRuntimeInstalled, model.AlgoRuntimeFailed, model.AlgoRuntimeUnknown},
+		supportsEmbedding: &supportsEmbedding,
+		order:             "edge_nodes.current_load ASC, edge_nodes.updated_at DESC",
+	})
+}
+
+// FindReadyFaceLibraryNodesByAlgorithm returns nodes that should receive face library snapshots.
+func (r *EdgeNodeRepository) FindReadyFaceLibraryNodesByAlgorithm(ctx context.Context, algoPackageID string) ([]model.EdgeNode, error) {
+	supportsFaceLibrary := true
+	return r.findNodesByAlgoJoin(ctx, algoPackageID, edgeNodeAlgoQueryOptions{
+		runtimeStatus:       []string{model.AlgoRuntimeReady},
+		supportsFaceLibrary: &supportsFaceLibrary,
+		order:               "edge_nodes.updated_at DESC",
+	})
 }
 
 // FindTimedOutNodes finds all online edge nodes whose last heartbeat is older than the cutoff time.

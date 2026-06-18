@@ -42,6 +42,7 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			total_memory INTEGER,
 			current_load INTEGER DEFAULT 0,
 			max_load INTEGER DEFAULT 1,
+			embedding_capacity INTEGER DEFAULT 1,
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
@@ -61,6 +62,10 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			algo_package_id TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'pending',
 			install_path TEXT,
+			runtime_status TEXT NOT NULL DEFAULT 'unknown',
+			supports_embedding INTEGER DEFAULT 0,
+			supports_face_library INTEGER DEFAULT 0,
+			embedding_capacity INTEGER DEFAULT 0,
 			deployed_at DATETIME,
 			error_message TEXT,
 			retry_count INTEGER DEFAULT 0,
@@ -153,7 +158,7 @@ func TestEdgeNodeRepository_CRUD(t *testing.T) {
 
 	// 5. List
 	req := dto.EdgeNodeListRequest{
-		Status:  "error",
+		Status: "error",
 	}
 	req.Page = 1
 	req.PageSize = 10
@@ -342,12 +347,12 @@ func TestEdgeNodeRepository_FindOnlineNodesWithAlgorithm_LoadBalancing(t *testin
 	// - Node F: has algorithm but offline - should NOT be returned
 
 	nodes := []struct {
-		id        string
-		name      string
-		status    string
-		enabled   bool
-		maxLoad   int
-		currLoad  int
+		id       string
+		name     string
+		status   string
+		enabled  bool
+		maxLoad  int
+		currLoad int
 	}{
 		{"node-lb-a", "Low Load Node", "online", true, 4, 1},
 		{"node-lb-b", "High Load Node", "online", true, 4, 3},
@@ -438,4 +443,195 @@ func TestEdgeNodeRepository_FindOnlineNodesWithAlgorithm_EmptyResults(t *testing
 	nodes, err = nodeRepo.FindOnlineNodesWithAlgorithm(ctx, "some-algo")
 	require.NoError(t, err)
 	assert.Empty(t, nodes, "should return empty slice when no node has the algorithm installed")
+}
+
+func TestEdgeNodeRepository_FindReadyEmbeddingNodesByAlgorithm(t *testing.T) {
+	db := setupEdgeNodeTestDB(t)
+	nodeRepo := NewEdgeNodeRepository(db)
+	algoRepo := NewEdgeNodeAlgorithmRepository(db)
+	ctx := context.Background()
+
+	// Create algorithm package
+	pkg := &model.AlgorithmPackage{
+		BaseModel:     model.BaseModel{ID: "algo-emb-1"},
+		AlgorithmName: "face_embedding",
+		Version:       "1.0.0",
+		PackageMD5:    "md5-emb",
+		PackagePath:   "face_embedding.tar.gz",
+		ExtractPath:   "/opt/algo/face_embedding",
+		SoPath:        "/opt/algo/face_embedding/face_embedding.so",
+	}
+	require.NoError(t, db.Create(pkg).Error)
+
+	// Create nodes:
+	// - Node A: online, runtime=ready, supports_embedding=true  (should be found)
+	// - Node B: online, runtime=installed, supports_embedding=true  (not ready → excluded)
+	// - Node C: online, runtime=ready, supports_embedding=false (no embedding cap → excluded)
+	// - Node D: disabled, runtime=ready, supports_embedding=true (disabled → excluded)
+	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
+		BaseModel:         model.BaseModel{ID: "node-emb-a"},
+		Name:              "Ready Embedding Node",
+		Endpoint:          "http://127.0.0.1:8080",
+		Status:            model.NodeStatusOnline,
+		Enabled:           true,
+		EmbeddingCapacity: 2,
+	}))
+	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
+		BaseModel: model.BaseModel{ID: "node-emb-b"},
+		Name:     "Installed But Not Ready Node",
+		Endpoint: "http://127.0.0.1:8081",
+		Status:   model.NodeStatusOnline,
+		Enabled:  true,
+	}))
+	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
+		BaseModel: model.BaseModel{ID: "node-emb-c"},
+		Name:     "Ready But No Embedding Cap",
+		Endpoint: "http://127.0.0.1:8082",
+		Status:   model.NodeStatusOnline,
+		Enabled:  true,
+	}))
+	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
+		BaseModel: model.BaseModel{ID: "node-emb-d"},
+		Name:     "Disabled Embedding Node",
+		Endpoint: "http://127.0.0.1:8083",
+		Status:   model.NodeStatusOnline,
+		Enabled:  false,
+	}))
+
+	// Install algorithm on all four nodes
+	for _, id := range []string{"node-emb-a", "node-emb-b", "node-emb-c", "node-emb-d"} {
+		require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
+			BaseModel:     model.BaseModel{ID: id + "-deploy"},
+			NodeID:        id,
+			AlgoPackageID: "algo-emb-1",
+			Status:        model.AlgoDeployInstalled,
+		}))
+	}
+	// Set runtime status and capabilities
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-emb-a").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeReady, "supports_embedding": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-emb-b").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeInstalled, "supports_embedding": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-emb-c").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeReady, "supports_embedding": false}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-emb-d").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeReady, "supports_embedding": true}).Error)
+
+	// FindReadyEmbeddingNodesByAlgorithm should return only node A
+	nodes, err := nodeRepo.FindReadyEmbeddingNodesByAlgorithm(ctx, "algo-emb-1")
+	require.NoError(t, err)
+	require.Len(t, nodes, 1, "only node A should be a ready embedding node")
+	assert.Equal(t, "node-emb-a", nodes[0].ID)
+}
+
+func TestEdgeNodeRepository_FindInstalledEmbeddingNodesByAlgorithm(t *testing.T) {
+	db := setupEdgeNodeTestDB(t)
+	nodeRepo := NewEdgeNodeRepository(db)
+	algoRepo := NewEdgeNodeAlgorithmRepository(db)
+	ctx := context.Background()
+
+	pkg := &model.AlgorithmPackage{
+		BaseModel:     model.BaseModel{ID: "algo-emb-2"},
+		AlgorithmName: "face_embedding",
+		Version:       "1.0.0",
+		PackageMD5:    "md5-emb2",
+		PackagePath:   "face_embedding.tar.gz",
+		ExtractPath:   "/opt/algo/face_embedding",
+		SoPath:        "/opt/algo/face_embedding/face_embedding.so",
+	}
+	require.NoError(t, db.Create(pkg).Error)
+
+	// Create nodes with different runtime_status values
+	// - Node A: runtime=installed, supports_embedding=true (should be found)
+	// - Node B: runtime=ready, supports_embedding=true (excluded -- already ready)
+	// - Node C: runtime=failed, supports_embedding=true (should be found)
+	// - Node D: runtime=unknown, supports_embedding=true (should be found)
+	// - Node E: runtime=installed, supports_embedding=false (excluded)
+	for _, id := range []string{"node-inst-a", "node-inst-b", "node-inst-c", "node-inst-d", "node-inst-e"} {
+		require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
+			BaseModel: model.BaseModel{ID: id},
+			Name:     id,
+			Endpoint: "http://127.0.0.1:8080",
+			Status:   model.NodeStatusOnline,
+			Enabled:  true,
+		}))
+		require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
+			BaseModel:     model.BaseModel{ID: id + "-deploy"},
+			NodeID:        id,
+			AlgoPackageID: "algo-emb-2",
+			Status:        model.AlgoDeployInstalled,
+		}))
+	}
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-inst-a").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeInstalled, "supports_embedding": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-inst-b").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeReady, "supports_embedding": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-inst-c").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeFailed, "supports_embedding": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-inst-d").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeUnknown, "supports_embedding": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-inst-e").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeInstalled, "supports_embedding": false}).Error)
+
+	nodes, err := nodeRepo.FindInstalledEmbeddingNodesByAlgorithm(ctx, "algo-emb-2")
+	require.NoError(t, err)
+	// Should find nodes A, C, D (installed, failed, unknown with supports_embedding=true)
+	// Node B is ready (excluded), Node E has supports_embedding=false (excluded)
+	foundIDs := make(map[string]bool)
+	for _, n := range nodes {
+		foundIDs[n.ID] = true
+	}
+	assert.True(t, foundIDs["node-inst-a"], "node with runtime=installed should be included")
+	assert.False(t, foundIDs["node-inst-b"], "node with runtime=ready should be excluded")
+	assert.True(t, foundIDs["node-inst-c"], "node with runtime=failed should be included")
+	assert.True(t, foundIDs["node-inst-d"], "node with runtime=unknown should be included")
+	assert.False(t, foundIDs["node-inst-e"], "node with supports_embedding=false should be excluded")
+}
+
+func TestEdgeNodeRepository_FindReadyFaceLibraryNodesByAlgorithm(t *testing.T) {
+	db := setupEdgeNodeTestDB(t)
+	nodeRepo := NewEdgeNodeRepository(db)
+	algoRepo := NewEdgeNodeAlgorithmRepository(db)
+	ctx := context.Background()
+
+	pkg := &model.AlgorithmPackage{
+		BaseModel:     model.BaseModel{ID: "algo-fl-1"},
+		AlgorithmName: "face_recognition",
+		Version:       "1.0.0",
+		PackageMD5:    "md5-fl",
+		PackagePath:   "face_recognition.tar.gz",
+		ExtractPath:   "/opt/algo/face_recognition",
+		SoPath:        "/opt/algo/face_recognition/face_recognition.so",
+	}
+	require.NoError(t, db.Create(pkg).Error)
+
+	// - Node A: runtime=ready, supports_face_library=true (should be found)
+	// - Node B: runtime=ready, supports_face_library=false (excluded)
+	// - Node C: runtime=installed, supports_face_library=true (not ready → excluded)
+	for _, id := range []string{"node-fl-a", "node-fl-b", "node-fl-c"} {
+		require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
+			BaseModel: model.BaseModel{ID: id},
+			Name:     id,
+			Endpoint: "http://127.0.0.1:8080",
+			Status:   model.NodeStatusOnline,
+			Enabled:  true,
+		}))
+		require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
+			BaseModel:     model.BaseModel{ID: id + "-deploy"},
+			NodeID:        id,
+			AlgoPackageID: "algo-fl-1",
+			Status:        model.AlgoDeployInstalled,
+		}))
+	}
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-fl-a").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeReady, "supports_face_library": true}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-fl-b").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeReady, "supports_face_library": false}).Error)
+	require.NoError(t, db.Model(&model.EdgeNodeAlgorithm{}).Where("node_id = ?", "node-fl-c").
+		Updates(map[string]interface{}{"runtime_status": model.AlgoRuntimeInstalled, "supports_face_library": true}).Error)
+
+	nodes, err := nodeRepo.FindReadyFaceLibraryNodesByAlgorithm(ctx, "algo-fl-1")
+	require.NoError(t, err)
+	require.Len(t, nodes, 1, "only node A should be a ready face library target")
+	assert.Equal(t, "node-fl-a", nodes[0].ID)
 }

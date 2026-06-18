@@ -76,9 +76,14 @@ export interface PendingDeployment {
 
 export interface InstalledAlgorithmInfo {
   algo_package_id: string;
+  algo_name?: string;
   status: string; // installed, failed
   version?: string;
   install_path?: string;
+  runtime_status?: string;
+  supports_embedding?: boolean;
+  supports_face_library?: boolean;
+  embedding_capacity?: number;
   error_message?: string;
 }
 

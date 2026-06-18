@@ -161,8 +161,6 @@ namespace aivision
             impl_->client_->subscribe(cmd_topic, 1)->wait();
 
             impl_->client_->subscribe("aivision/edge/self_check/cmd", 1)->wait();
-            impl_->client_->subscribe("aivision/edge/face_library/cmd", 1)->wait();
-            impl_->client_->subscribe("aivision/edge/face_embedding/cmd", 1)->wait();
 
             std::cout << "[MQTT] Subscribed to command topics." << std::endl;
 

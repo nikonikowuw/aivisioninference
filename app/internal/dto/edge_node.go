@@ -39,9 +39,9 @@ type UpdateEdgeNodeRequest struct {
 	Endpoint    string `json:"endpoint" binding:"omitempty,url,max=255"`
 	MaxLoad     int    `json:"max_load" binding:"omitempty,min=1"`
 
-	Enabled     *bool  `json:"enabled"`
-	Remark      string `json:"remark" binding:"max=1000"`
-	Status      string `json:"status" binding:"omitempty,oneof=online offline error disabled"`
+	Enabled *bool  `json:"enabled"`
+	Remark  string `json:"remark" binding:"max=1000"`
+	Status  string `json:"status" binding:"omitempty,oneof=online offline error disabled"`
 }
 
 // HardwareInfo 硬件信息
@@ -54,10 +54,15 @@ type HardwareInfo struct {
 
 // InstalledAlgorithmInfo 已安装算法信息
 type InstalledAlgorithmInfo struct {
-	AlgoPackageID string `json:"algo_package_id" binding:"required,uuid"`
-	Version       string `json:"version" binding:"required"`
-	InstallPath   string `json:"install_path" binding:"required"`
-	Status        string `json:"status" binding:"required"`
+	AlgoPackageID       string `json:"algo_package_id" binding:"required,uuid"`
+	AlgoName            string `json:"algo_name,omitempty"`
+	Version             string `json:"version" binding:"required"`
+	InstallPath         string `json:"install_path" binding:"required"`
+	Status              string `json:"status" binding:"required"`
+	RuntimeStatus       string `json:"runtime_status,omitempty"`
+	SupportsEmbedding   bool   `json:"supports_embedding,omitempty"`
+	SupportsFaceLibrary bool   `json:"supports_face_library,omitempty"`
+	EmbeddingCapacity   int    `json:"embedding_capacity,omitempty" binding:"min=0"`
 }
 
 // HeartbeatRequest 边缘节点心跳上报请求

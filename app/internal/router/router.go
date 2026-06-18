@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
@@ -67,15 +67,15 @@ type Config struct {
 	LocalUploadDir            string
 	LocalPublicURL            string
 	// Storage 存储配置
-	StorageType      string `yaml:"storage_type" mapstructure:"storage_type"` // "local" 或 "oss"
-	OSSEndpoint      string `yaml:"oss_endpoint" mapstructure:"oss_endpoint"`
-	OSSAccessKey     string `yaml:"oss_access_key" mapstructure:"oss_access_key"`
-	OSSSecretKey     string `yaml:"oss_secret_key" mapstructure:"oss_secret_key"`
-	OSSBucket        string `yaml:"oss_bucket" mapstructure:"oss_bucket"`
-	OSSUseSSL        bool   `yaml:"oss_use_ssl" mapstructure:"oss_use_ssl"`
-	OSSDomain        string `yaml:"oss_domain" mapstructure:"oss_domain"`
-	ZLMAPIURL        string
-	ZLMSecret        string
+	StorageType  string `yaml:"storage_type" mapstructure:"storage_type"` // "local" 或 "oss"
+	OSSEndpoint  string `yaml:"oss_endpoint" mapstructure:"oss_endpoint"`
+	OSSAccessKey string `yaml:"oss_access_key" mapstructure:"oss_access_key"`
+	OSSSecretKey string `yaml:"oss_secret_key" mapstructure:"oss_secret_key"`
+	OSSBucket    string `yaml:"oss_bucket" mapstructure:"oss_bucket"`
+	OSSUseSSL    bool   `yaml:"oss_use_ssl" mapstructure:"oss_use_ssl"`
+	OSSDomain    string `yaml:"oss_domain" mapstructure:"oss_domain"`
+	ZLMAPIURL    string
+	ZLMSecret    string
 	// GB28181 GB/T 28181 配置
 	GB28181Enabled        bool          `yaml:"gb28181_enabled" mapstructure:"gb28181_enabled"`
 	GB28181Domain         string        `yaml:"gb28181_domain" mapstructure:"gb28181_domain"`
@@ -630,9 +630,10 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	personRepo := repository.NewPersonRepository(db)
 	embeddingRepo := repository.NewPersonEmbeddingRepository(db)
 	importTaskRepo := repository.NewImportTaskRepository(db)
-	faceLibrarySyncSvc := service.NewFaceLibrarySyncService(embeddingRepo, engineClient)
+	faceEmbeddingScheduler := service.NewFaceEmbeddingScheduler(nodeRepo, rdb)
+	faceLibrarySyncSvc := service.NewFaceLibrarySyncService(embeddingRepo, algorithmPackageRepo, faceEmbeddingScheduler, engineClient)
 	taskClient := task.NewClient(rdb)
-	task.NewPersonEmbeddingHandler(personRepo, embeddingRepo, algorithmPackageRepo, faceLibrarySyncSvc, engineClient, avatarStorage).RegisterHandlers(mux)
+	task.NewPersonEmbeddingHandler(personRepo, embeddingRepo, algorithmPackageRepo, faceLibrarySyncSvc, faceEmbeddingScheduler, engineClient, avatarStorage).RegisterHandlers(mux)
 	task.NewPersonImportHandler(personRepo, embeddingRepo, importTaskRepo, avatarStorage, taskClient).RegisterHandlers(mux)
 
 	return mux

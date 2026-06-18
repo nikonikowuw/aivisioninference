@@ -264,11 +264,18 @@ namespace aivision
             {
                 if (!first) ss << ",";
                 first = false;
+                const std::string runtime_status =
+                    engine_->GetAlgoManager()->IsLoaded(dep.algo_name) ? "ready" : "installed";
                 ss << "{"
                    << "\"algo_package_id\":\"" << dep.algo_package_id << "\","
+                   << "\"algo_name\":\"" << dep.algo_name << "\","
                    << "\"version\":\"" << dep.version << "\","
                    << "\"install_path\":\"" << dep.install_path << "\","
-                   << "\"status\":\"" << dep.status << "\""
+                   << "\"status\":\"" << dep.status << "\","
+                   << "\"runtime_status\":\"" << runtime_status << "\","
+                   << "\"supports_embedding\":true,"
+                   << "\"supports_face_library\":true,"
+                   << "\"embedding_capacity\":1"
                    << "}";
             }
             ss << "]";

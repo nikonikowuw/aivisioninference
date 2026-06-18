@@ -52,8 +52,9 @@ type EngineClient interface {
 	StopPlayback(ctx context.Context, deviceID string) error
 	GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error)
 	StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error
-	UpdateFaceLibrary(ctx context.Context, algoName string, faceLibraryJSON []byte) error
-	ExtractFaceEmbedding(ctx context.Context, algoName, algoVersion, soPath, algoParamsJSON string, imageBytes []byte) (FaceEmbeddingResult, error)
+	WarmupAlgorithm(ctx context.Context, nodeID, algoName, algoVersion string) error
+	UpdateFaceLibrary(ctx context.Context, nodeID, algoName string, faceLibraryJSON []byte) error
+	ExtractFaceEmbedding(ctx context.Context, nodeID, algoName, algoVersion string, imageBytes []byte) (FaceEmbeddingResult, error)
 }
 
 // MockEngineClient 模拟实现
@@ -91,10 +92,14 @@ func (m *MockEngineClient) StartSelfCheck(ctx context.Context, downloadURL, toke
 	return nil
 }
 
-func (m *MockEngineClient) UpdateFaceLibrary(ctx context.Context, algoName string, faceLibraryJSON []byte) error {
+func (m *MockEngineClient) WarmupAlgorithm(ctx context.Context, nodeID, algoName, algoVersion string) error {
 	return nil
 }
 
-func (m *MockEngineClient) ExtractFaceEmbedding(ctx context.Context, algoName, algoVersion, soPath, algoParamsJSON string, imageBytes []byte) (FaceEmbeddingResult, error) {
+func (m *MockEngineClient) UpdateFaceLibrary(ctx context.Context, nodeID, algoName string, faceLibraryJSON []byte) error {
+	return nil
+}
+
+func (m *MockEngineClient) ExtractFaceEmbedding(ctx context.Context, nodeID, algoName, algoVersion string, imageBytes []byte) (FaceEmbeddingResult, error) {
 	return FaceEmbeddingResult{Success: true, Embedding: make([]float32, 512)}, nil
 }

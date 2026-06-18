@@ -61,7 +61,7 @@ type RouteDeps struct {
 	SIPService              *service.SIPService
 	SIPRuntimeSvc           *service.SIPRuntimeService
 	EdgeNodeHandler         *handler.EdgeNodeHandler
-	EdgeNodeMiddleware       *middleware.EdgeNodeMiddleware
+	EdgeNodeMiddleware      *middleware.EdgeNodeMiddleware
 	EdgeNodeSvc             *service.EdgeNodeService
 	EdgeMqttHandler         *handler.EdgeMqttHandler
 	MqttMux                 *mqttmux.Mux
@@ -262,7 +262,7 @@ func newRouteDeps(
 		SIPService:              sipService,
 		SIPRuntimeSvc:           sipRuntimeSvc,
 		EdgeNodeHandler:         edgeNodeHandler,
-		EdgeNodeMiddleware:       edgeNodeMiddleware,
+		EdgeNodeMiddleware:      edgeNodeMiddleware,
 		EdgeMqttHandler:         edgeMqttHandler,
 		MqttMux:                 mqttMux,
 	}
@@ -397,9 +397,12 @@ func providePersonHandler(
 	taskClient *task.Client,
 	embeddingRepo *repository.PersonEmbeddingRepository,
 	algorithmPackageRepo *repository.AlgorithmPackageRepository,
+	nodeRepo *repository.EdgeNodeRepository,
+	rdb *redis.Client,
 	engine service.EngineClient,
 ) *handler.PersonHandler {
-	personSvc := service.NewPersonService(personRepo, groupRepo, tagRepo, tagRelationRepo, importTaskRepo, fileStorage, taskClient, embeddingRepo, algorithmPackageRepo, engine)
+	embeddingScheduler := service.NewFaceEmbeddingScheduler(nodeRepo, rdb)
+	personSvc := service.NewPersonService(personRepo, groupRepo, tagRepo, tagRelationRepo, importTaskRepo, fileStorage, taskClient, embeddingRepo, algorithmPackageRepo, embeddingScheduler, engine)
 	return handler.NewPersonHandler(personSvc)
 }
 

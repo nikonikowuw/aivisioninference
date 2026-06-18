@@ -57,14 +57,14 @@ namespace aivision
             std::cout << "[AlgorithmDownloader] Starting deployment of " << algo_name 
                       << " (package " << algo_package_id << ")" << std::endl;
 
-            algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "downloading");
+            algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "downloading");
 
             // Secure temporary path for downloaded tar.gz
             char temp_template[] = "/tmp/aivision_algo_XXXXXX";
             int temp_fd = mkstemp(temp_template);
             if (temp_fd == -1) {
                 std::cerr << "[AlgorithmDownloader] Failed to create temp file" << std::endl;
-                algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "failed", "创建临时文件失败");
+                algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "failed", "创建临时文件失败");
                 return;
             }
             close(temp_fd);
@@ -74,7 +74,7 @@ namespace aivision
             if (!DownloadFile(download_url, temp_tar))
             {
                 std::cerr << "[AlgorithmDownloader] Failed to download algorithm package" << std::endl;
-                algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "failed", "下载算法包失败");
+                algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "failed", "下载算法包失败");
                 return;
             }
 
@@ -82,7 +82,7 @@ namespace aivision
             if (!VerifyMD5(temp_tar, expected_md5))
             {
                 std::cerr << "[AlgorithmDownloader] MD5 verification failed" << std::endl;
-                algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "failed", "MD5 校验不匹配");
+                algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "failed", "MD5 校验不匹配");
                 std::filesystem::remove(temp_tar);
                 return;
             }
@@ -91,7 +91,7 @@ namespace aivision
             if (!ExtractTarGz(temp_tar, extract_path))
             {
                 std::cerr << "[AlgorithmDownloader] Extraction failed" << std::endl;
-                algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "failed", "解压算法包失败");
+                algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "failed", "解压算法包失败");
                 std::filesystem::remove(temp_tar);
                 return;
             }
@@ -125,7 +125,7 @@ namespace aivision
                 if (!found)
                 {
                     std::cerr << "[AlgorithmDownloader] No .so file found in " << extract_path << std::endl;
-                    algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "failed", "未找到算法动态库文件");
+                    algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "failed", "未找到算法动态库文件");
                     return;
                 }
             }
@@ -137,13 +137,13 @@ namespace aivision
             if (!instance)
             {
                 std::cerr << "[AlgorithmDownloader] Failed to load algorithm library into manager" << std::endl;
-                algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "failed", "加载算法动态库失败");
+                algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "failed", "加载算法动态库失败");
                 return;
             }
 
             // Success!
             std::cout << "[AlgorithmDownloader] Deployment of " << algo_name << " successful!" << std::endl;
-            algo_mgr->UpdateDeploymentStatus(algo_package_id, version, extract_path, "installed");
+            algo_mgr->UpdateDeploymentStatus(algo_package_id, algo_name, version, extract_path, "installed");
         }
 
         bool AlgorithmDownloader::DownloadFile(const std::string& url, const std::string& local_path)

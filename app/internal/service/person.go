@@ -7,7 +7,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"image"
-	_ "image/gif" // registers gif decoder with image.Decode
+	_ "image/gif"  // registers gif decoder with image.Decode
 	_ "image/jpeg" // registers jpeg decoder with image.Decode
 	"image/png"
 	"io"
@@ -109,21 +109,22 @@ var imageExtSet = map[string]bool{
 
 // PersonService 处理人员管理的业务逻辑。
 type PersonService struct {
-	personRepo          personRepo
-	groupRepo           personGroupRepo
-	tagRepo             personTagRepo
-	tagRelationRepo     personTagRelationRepo
-	importTaskRepo      importTaskRepo
-	storage             storage.Storage
-	taskClient          taskClient
-	embeddingRepo       *repository.PersonEmbeddingRepository
+	personRepo           personRepo
+	groupRepo            personGroupRepo
+	tagRepo              personTagRepo
+	tagRelationRepo      personTagRelationRepo
+	importTaskRepo       importTaskRepo
+	storage              storage.Storage
+	taskClient           taskClient
+	embeddingRepo        *repository.PersonEmbeddingRepository
 	algorithmPackageRepo *repository.AlgorithmPackageRepository
-	engine              EngineClient
+	embeddingScheduler   *FaceEmbeddingScheduler
+	engine               EngineClient
 }
 
 // NewPersonService 创建人员 Service。
-func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, tagRepo personTagRepo, tagRelationRepo personTagRelationRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, engine EngineClient) *PersonService {
-	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, tagRepo: tagRepo, tagRelationRepo: tagRelationRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient, embeddingRepo: embeddingRepo, algorithmPackageRepo: algorithmPackageRepo, engine: engine}
+func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, tagRepo personTagRepo, tagRelationRepo personTagRelationRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, embeddingScheduler *FaceEmbeddingScheduler, engine EngineClient) *PersonService {
+	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, tagRepo: tagRepo, tagRelationRepo: tagRelationRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient, embeddingRepo: embeddingRepo, algorithmPackageRepo: algorithmPackageRepo, embeddingScheduler: embeddingScheduler, engine: engine}
 }
 
 // List 查询人员列表。
@@ -188,7 +189,7 @@ func (s *PersonService) getStoragePath(imageURL string) string {
 // processImage 处理上传的图片或已有的 URL，返回 URL 和 MD5
 func (s *PersonService) processImage(ctx context.Context, imageURL string, fileHeader *multipart.FileHeader, excludeID string) (string, string, error) {
 	var (
-		url string
+		url     string
 		md5Hash string
 	)
 
@@ -344,7 +345,7 @@ func (s *PersonService) Update(ctx context.Context, id string, req dto.PersonUpd
 		person.EmbeddingErrorCode = ""
 		person.EmbeddingErrorMessageKey = ""
 		person.EmbeddingRetryable = false
-		
+
 		_ = s.taskClient.EnqueueWithID(ctx, personEmbeddingTaskType, map[string]string{"person_id": person.ID}, personEmbeddingTaskType+":"+person.ID)
 	}
 
@@ -816,20 +817,33 @@ func (s *PersonService) SearchByFace(ctx context.Context, fileHeader *multipart.
 	}
 
 	// 解析最新 face_recognition 算法包运行时
-	if s.algorithmPackageRepo == nil || s.engine == nil {
+	if s.algorithmPackageRepo == nil || s.embeddingScheduler == nil || s.engine == nil {
 		zap.L().Error("face recognition engine or algorithm package repo not configured")
 		return nil, apperrors.New(apperrors.ErrEngineNotReady, "")
 	}
-	algoVersion, soPath, algoParamsJSON, err := s.resolveFaceRecognitionRuntime(ctx)
+	algoPackage, err := s.algorithmPackageRepo.FindLatestPassedByAlgorithm(ctx, "face_recognition")
 	if err != nil {
 		zap.L().Error("resolve face recognition runtime failed", zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrFaceExtractFailed, "")
 	}
+	if _, err := s.embeddingScheduler.EnsureReadyNode(ctx, "face_recognition", algoPackage.Version, algoPackage.ID, s.engine); err != nil {
+		zap.L().Error("ensure face recognition runtime ready failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrEngineNotReady, "")
+	}
 
 	// 调用引擎提取特征
-	result, err := s.engine.ExtractFaceEmbedding(ctx, "face_recognition", algoVersion, soPath, algoParamsJSON, imageBytes)
+	var result FaceEmbeddingResult
+	reservation, err := s.embeddingScheduler.Acquire(ctx, algoPackage.ID)
 	if err != nil {
-		zap.L().Error("extract face embedding failed", zap.Error(err))
+		zap.L().Error("acquire face embedding node failed", zap.Error(err))
+		return nil, apperrors.New(apperrors.ErrEngineNotReady, "")
+	}
+	result, err = s.engine.ExtractFaceEmbedding(ctx, reservation.NodeID, "face_recognition", algoPackage.Version, imageBytes)
+	if releaseErr := s.embeddingScheduler.Release(ctx, reservation); releaseErr != nil {
+		zap.L().Warn("release face search embedding reservation failed", zap.Error(releaseErr))
+	}
+	if err != nil {
+		zap.L().Error("extract face embedding failed", zap.String("node_id", reservation.NodeID), zap.Error(err))
 		return nil, apperrors.New(apperrors.ErrFaceExtractFailed, "")
 	}
 	if len(result.Embedding) != 512 {
@@ -866,19 +880,6 @@ func (s *PersonService) SearchByFace(ctx context.Context, fileHeader *multipart.
 		}
 	}
 	return resp, nil
-}
-
-// resolveFaceRecognitionRuntime 查找最新通过的 face_recognition 算法包，返回 version、soPath、algoParamsJSON。
-func (s *PersonService) resolveFaceRecognitionRuntime(ctx context.Context) (string, string, string, error) {
-	algoPackage, err := s.algorithmPackageRepo.FindLatestPassedByAlgorithm(ctx, "face_recognition")
-	if err != nil {
-		return "", "", "", fmt.Errorf("find face_recognition algorithm package: %w", err)
-	}
-	soPath, err := ResolveRuntimeSoPath(algoPackage)
-	if err != nil {
-		return "", "", "", fmt.Errorf("resolve face_recognition runtime so: %w", err)
-	}
-	return algoPackage.Version, soPath, "", nil
 }
 
 // Helper functions

@@ -71,9 +71,9 @@ func (r *EdgeNodeAlgorithmRepository) UpdateInstallInfo(ctx context.Context, nod
 		Model(&model.EdgeNodeAlgorithm{}).
 		Where("node_id = ? AND algo_package_id = ?", nodeID, algoPackageID).
 		Updates(map[string]interface{}{
-			"status":       model.AlgoDeployInstalled,
-			"install_path": installPath,
-			"deployed_at":  deployedAt,
+			"status":        model.AlgoDeployInstalled,
+			"install_path":  installPath,
+			"deployed_at":   deployedAt,
 			"error_message": "",
 		}).Error
 }
@@ -109,17 +109,37 @@ func (r *EdgeNodeAlgorithmRepository) SyncInstalled(ctx context.Context, nodeID 
 				item.InstallPath = info.InstallPath
 				item.DeployedAt = &now
 				item.ErrorMessage = ""
-				if err := r.db.WithContext(ctx).Save(&item).Error; err != nil {
-					return err
-				}
+			}
+			if info.RuntimeStatus != "" {
+				item.RuntimeStatus = info.RuntimeStatus
+			} else if item.RuntimeStatus == "" {
+				item.RuntimeStatus = model.AlgoRuntimeInstalled
+			}
+			item.SupportsEmbedding = info.SupportsEmbedding
+			item.SupportsFaceLibrary = info.SupportsFaceLibrary
+			if info.EmbeddingCapacity > 0 {
+				item.EmbeddingCapacity = info.EmbeddingCapacity
+			}
+			if err := r.db.WithContext(ctx).Save(&item).Error; err != nil {
+				return err
 			}
 		} else if info.Status == "failed" {
 			if item.Status != model.AlgoDeployFailed {
 				item.Status = model.AlgoDeployFailed
 				item.ErrorMessage = "引擎端安装失败"
-				if err := r.db.WithContext(ctx).Save(&item).Error; err != nil {
-					return err
-				}
+			}
+			if info.RuntimeStatus != "" {
+				item.RuntimeStatus = info.RuntimeStatus
+			} else {
+				item.RuntimeStatus = model.AlgoRuntimeFailed
+			}
+			item.SupportsEmbedding = info.SupportsEmbedding
+			item.SupportsFaceLibrary = info.SupportsFaceLibrary
+			if info.EmbeddingCapacity > 0 {
+				item.EmbeddingCapacity = info.EmbeddingCapacity
+			}
+			if err := r.db.WithContext(ctx).Save(&item).Error; err != nil {
+				return err
 			}
 		}
 	}
@@ -184,4 +204,3 @@ func (r *EdgeNodeAlgorithmRepository) RestoreDeleted(ctx context.Context, nodeID
 	}
 	return &item, nil
 }
-

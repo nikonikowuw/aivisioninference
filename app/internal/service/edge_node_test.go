@@ -14,8 +14,8 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
-	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
+	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/pkg/storage"
 	"gorm.io/datatypes"
 )
@@ -47,6 +47,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			total_memory INTEGER,
 			current_load INTEGER DEFAULT 0,
 			max_load INTEGER DEFAULT 1,
+			embedding_capacity INTEGER DEFAULT 1,
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
@@ -66,6 +67,10 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			algo_package_id TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'pending',
 			install_path TEXT,
+			runtime_status TEXT NOT NULL DEFAULT 'unknown',
+			supports_embedding INTEGER DEFAULT 0,
+			supports_face_library INTEGER DEFAULT 0,
+			embedding_capacity INTEGER DEFAULT 0,
 			deployed_at DATETIME,
 			error_message TEXT,
 			retry_count INTEGER DEFAULT 0,

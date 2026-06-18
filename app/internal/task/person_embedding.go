@@ -41,17 +41,19 @@ type PersonEmbeddingHandler struct {
 	embeddingRepo        *repository.PersonEmbeddingRepository
 	algorithmPackageRepo *repository.AlgorithmPackageRepository
 	faceSync             *service.FaceLibrarySyncService
+	scheduler            *service.FaceEmbeddingScheduler
 	engine               service.EngineClient
 	storage              storage.Storage
 }
 
 // NewPersonEmbeddingHandler 创建特征提取任务处理器。
-func NewPersonEmbeddingHandler(personRepo *repository.PersonRepository, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, faceSync *service.FaceLibrarySyncService, engine service.EngineClient, storage storage.Storage) *PersonEmbeddingHandler {
+func NewPersonEmbeddingHandler(personRepo *repository.PersonRepository, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, faceSync *service.FaceLibrarySyncService, scheduler *service.FaceEmbeddingScheduler, engine service.EngineClient, storage storage.Storage) *PersonEmbeddingHandler {
 	return &PersonEmbeddingHandler{
 		personRepo:           personRepo,
 		embeddingRepo:        embeddingRepo,
 		algorithmPackageRepo: algorithmPackageRepo,
 		faceSync:             faceSync,
+		scheduler:            scheduler,
 		engine:               engine,
 		storage:              storage,
 	}
@@ -189,7 +191,7 @@ func (h *PersonEmbeddingHandler) rebuildPersonEmbedding(ctx context.Context, per
 }
 
 func (h *PersonEmbeddingHandler) extractEmbedding(ctx context.Context, person *model.Person) ([]float32, error) {
-	if h.engine == nil {
+	if h.engine == nil || h.scheduler == nil {
 		return nil, fmt.Errorf("engine client is not configured")
 	}
 	imageBytes, err := h.readPersonImage(person.ImageURL)
@@ -197,34 +199,54 @@ func (h *PersonEmbeddingHandler) extractEmbedding(ctx context.Context, person *m
 		return nil, err
 	}
 
-	algoVersion, soPath, algoParamsJSON, err := h.resolveFaceRecognitionRuntime(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := h.engine.ExtractFaceEmbedding(ctx, "face_recognition", algoVersion, soPath, algoParamsJSON, imageBytes)
-	if err != nil {
-		return nil, err
-	}
-	if len(result.Embedding) != 512 {
-		return nil, fmt.Errorf("unexpected embedding dimension: %d", len(result.Embedding))
-	}
-	return result.Embedding, nil
-}
-
-func (h *PersonEmbeddingHandler) resolveFaceRecognitionRuntime(ctx context.Context) (string, string, string, error) {
 	if h.algorithmPackageRepo == nil {
-		return "", "", "", fmt.Errorf("algorithm package repository is not configured")
+		return nil, fmt.Errorf("algorithm package repository is not configured")
 	}
 	algoPackage, err := h.algorithmPackageRepo.FindLatestPassedByAlgorithm(ctx, "face_recognition")
 	if err != nil {
-		return "", "", "", fmt.Errorf("find face_recognition algorithm package: %w", err)
+		return nil, fmt.Errorf("find face_recognition algorithm package: %w", err)
 	}
-	soPath, err := service.ResolveRuntimeSoPath(algoPackage)
-	if err != nil {
-		return "", "", "", fmt.Errorf("resolve face_recognition runtime so: %w", err)
+
+	if _, err := h.scheduler.EnsureReadyNode(ctx, "face_recognition", algoPackage.Version, algoPackage.ID, h.engine); err != nil {
+		return nil, err
 	}
-	return algoPackage.Version, soPath, "", nil
+
+	excludedNodeIDs := make([]string, 0, service.MaxEmbeddingAlternateRetries()+1)
+	var lastErr error
+	for attempt := 1; attempt <= service.MaxEmbeddingAlternateRetries()+1; attempt++ {
+		reservation, err := h.scheduler.AcquireExcept(ctx, algoPackage.ID, excludedNodeIDs)
+		if err != nil {
+			lastErr = err
+			break
+		}
+
+		result, extractErr := h.engine.ExtractFaceEmbedding(ctx, reservation.NodeID, "face_recognition", algoPackage.Version, imageBytes)
+		if releaseErr := h.scheduler.Release(ctx, reservation); releaseErr != nil {
+			zap.L().Warn("release embedding reservation failed",
+				zap.String("person_id", person.ID),
+				zap.String("node_id", reservation.NodeID),
+				zap.String("reservation_id", reservation.ReservationID),
+				zap.Error(releaseErr),
+			)
+		}
+
+		if extractErr == nil {
+			if len(result.Embedding) != 512 {
+				return nil, fmt.Errorf("unexpected embedding dimension: %d", len(result.Embedding))
+			}
+			return result.Embedding, nil
+		}
+
+		lastErr = extractErr
+		if !isRetryableEmbeddingError(extractErr, result.ErrorCode) {
+			break
+		}
+		excludedNodeIDs = append(excludedNodeIDs, reservation.NodeID)
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("embedding extraction failed without result")
 }
 
 func (h *PersonEmbeddingHandler) readPersonImage(imageURL string) ([]byte, error) {
@@ -260,4 +282,18 @@ func (h *PersonEmbeddingHandler) personImageStoragePath(imageURL string) string 
 		baseURL = h.storage.GetURL("")
 	}
 	return service.ExtractPersonImageStoragePath(imageURL, baseURL)
+}
+
+func isRetryableEmbeddingError(err error, errorCode string) bool {
+	if err == nil {
+		return false
+	}
+	switch errorCode {
+	case "ENGINE_TIMEOUT", "NODE_OFFLINE", "ALGO_NOT_READY", "ALGO_WARMUP_TIMEOUT":
+		return true
+	case "INVALID_IMAGE", "INVALID_IMAGE_BASE64", "MISSING_IMAGE":
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "ALGO_NOT_READY")
 }

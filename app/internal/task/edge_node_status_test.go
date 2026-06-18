@@ -42,6 +42,7 @@ func setupTaskTestDB(t *testing.T) *gorm.DB {
 			total_memory INTEGER,
 			current_load INTEGER DEFAULT 0,
 			max_load INTEGER DEFAULT 1,
+			embedding_capacity INTEGER DEFAULT 1,
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,

@@ -331,9 +331,61 @@ func (c *MqttEngineClient) StartSelfCheck(ctx context.Context, downloadURL, toke
 	return nil
 }
 
+// WarmupAlgorithm asks one node to load a locally installed algorithm runtime.
+func (c *MqttEngineClient) WarmupAlgorithm(ctx context.Context, nodeID, algoName, algoVersion string) error {
+	c.logger.Info("MQTT: WarmupAlgorithm",
+		zap.String("node_id", nodeID),
+		zap.String("algo_name", algoName),
+		zap.String("algo_version", algoVersion),
+	)
+
+	traceID := uuid.New().String()
+	payload, err := json.Marshal(struct {
+		TraceID     string `json:"trace_id"`
+		AlgoName    string `json:"algo_name"`
+		AlgoVersion string `json:"algo_version,omitempty"`
+	}{
+		TraceID:     traceID,
+		AlgoName:    algoName,
+		AlgoVersion: algoVersion,
+	})
+	if err != nil {
+		return err
+	}
+
+	topic := fmt.Sprintf("aivision/edge/%s/cmd/algo_warmup", nodeID)
+	if err := c.ensureClient(); err != nil {
+		return err
+	}
+
+	tokenPub := c.mqttClient.Publish(topic, 1, false, payload)
+	tokenPub.Wait()
+	if tokenPub.Error() != nil {
+		return tokenPub.Error()
+	}
+
+	respPayload, err := c.syncManager.Wait(ctx, traceID, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("MQTT: algorithm warmup wait timeout: %w", err)
+	}
+
+	var result struct {
+		Success      bool   `json:"success"`
+		ErrorCode    string `json:"error_code"`
+		ErrorMessage string `json:"error_message"`
+	}
+	if err := json.Unmarshal([]byte(respPayload), &result); err != nil {
+		return fmt.Errorf("MQTT: algorithm warmup response unparseable: %w", err)
+	}
+	if !result.Success {
+		return fmt.Errorf("MQTT: algorithm warmup failed: %s (error code: %s)", result.ErrorMessage, result.ErrorCode)
+	}
+	return nil
+}
+
 // UpdateFaceLibrary publishes an UpdateFaceLibrary command via MQTT.
-func (c *MqttEngineClient) UpdateFaceLibrary(ctx context.Context, algoName string, faceLibraryJSON []byte) error {
-	c.logger.Info("MQTT: UpdateFaceLibrary", zap.String("algo_name", algoName))
+func (c *MqttEngineClient) UpdateFaceLibrary(ctx context.Context, nodeID, algoName string, faceLibraryJSON []byte) error {
+	c.logger.Info("MQTT: UpdateFaceLibrary", zap.String("node_id", nodeID), zap.String("algo_name", algoName))
 
 	traceID := uuid.New().String()
 	payload, err := json.Marshal(struct {
@@ -349,7 +401,7 @@ func (c *MqttEngineClient) UpdateFaceLibrary(ctx context.Context, algoName strin
 		return err
 	}
 
-	topic := "aivision/edge/face_library/cmd"
+	topic := fmt.Sprintf("aivision/edge/%s/cmd/face_library", nodeID)
 	if err := c.ensureClient(); err != nil {
 		return err
 	}
@@ -381,30 +433,26 @@ func (c *MqttEngineClient) UpdateFaceLibrary(ctx context.Context, algoName strin
 }
 
 // ExtractFaceEmbedding publishes an ExtractFaceEmbedding command via MQTT.
-func (c *MqttEngineClient) ExtractFaceEmbedding(ctx context.Context, algoName, algoVersion, soPath, algoParamsJSON string, imageBytes []byte) (FaceEmbeddingResult, error) {
-	c.logger.Info("MQTT: ExtractFaceEmbedding", zap.String("algo_name", algoName))
+func (c *MqttEngineClient) ExtractFaceEmbedding(ctx context.Context, nodeID, algoName, algoVersion string, imageBytes []byte) (FaceEmbeddingResult, error) {
+	c.logger.Info("MQTT: ExtractFaceEmbedding", zap.String("node_id", nodeID), zap.String("algo_name", algoName))
 
 	traceID := uuid.New().String()
 	payload, err := json.Marshal(struct {
-		TraceID        string `json:"trace_id"`
-		AlgoName       string `json:"algo_name"`
-		AlgoVersion    string `json:"algo_version,omitempty"`
-		SoPath         string `json:"so_path,omitempty"`
-		AlgoParamsJSON string `json:"algo_params_json,omitempty"`
-		ImageBytes     []byte `json:"image_bytes"`
+		TraceID     string `json:"trace_id"`
+		AlgoName    string `json:"algo_name"`
+		AlgoVersion string `json:"algo_version,omitempty"`
+		ImageBytes  []byte `json:"image_bytes"`
 	}{
-		TraceID:        traceID,
-		AlgoName:       algoName,
-		AlgoVersion:    algoVersion,
-		SoPath:         soPath,
-		AlgoParamsJSON: algoParamsJSON,
-		ImageBytes:     imageBytes,
+		TraceID:     traceID,
+		AlgoName:    algoName,
+		AlgoVersion: algoVersion,
+		ImageBytes:  imageBytes,
 	})
 	if err != nil {
 		return FaceEmbeddingResult{}, err
 	}
 
-	topic := "aivision/edge/face_embedding/cmd"
+	topic := fmt.Sprintf("aivision/edge/%s/cmd/face_embedding", nodeID)
 	if err := c.ensureClient(); err != nil {
 		return FaceEmbeddingResult{}, err
 	}

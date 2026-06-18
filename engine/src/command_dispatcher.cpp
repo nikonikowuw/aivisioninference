@@ -81,6 +81,10 @@ namespace aivision
         {
             engine_->HandleFaceLibraryUpdate(payload_ptr, payload_size, 0);
         }
+        else if (cmd_name == "algo_warmup" || cmd_name == "algorithm_warmup")
+        {
+            engine_->HandleAlgoWarmup(payload_ptr, payload_size, 0);
+        }
         else if (cmd_name == "face_embedding" || cmd_name == "face_embedding_extract")
         {
             if (js.contains("image_bytes") && !js.contains("image_base64")) {

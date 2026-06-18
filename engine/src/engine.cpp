@@ -142,6 +142,34 @@ std::string EnsurePackageDirConfig(const std::string &algo_params_json,
   merged.insert(pos, std::string(needs_comma ? "," : "") + package_field);
   return merged;
 }
+
+std::string FindAlgorithmSo(const std::string &install_path,
+                            const std::string &algo_name) {
+  namespace fs = std::filesystem;
+  if (install_path.empty())
+    return "";
+
+  std::error_code ec;
+  fs::path root = fs::weakly_canonical(fs::path(install_path), ec);
+  if (ec || !fs::exists(root))
+    return "";
+
+  fs::path conventional = root / (algo_name + ".so");
+  if (fs::exists(conventional, ec) && fs::is_regular_file(conventional, ec)) {
+    return conventional.string();
+  }
+
+  for (const auto &entry : fs::recursive_directory_iterator(root, ec)) {
+    if (ec)
+      break;
+    if (entry.is_symlink(ec))
+      continue;
+    if (entry.is_regular_file(ec) && entry.path().extension() == ".so") {
+      return entry.path().string();
+    }
+  }
+  return "";
+}
 } // namespace
 
 InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
@@ -968,6 +996,77 @@ void InferenceEngine::HandleFaceLibraryUpdate(const uint8_t *payload,
   }
 }
 
+void InferenceEngine::HandleAlgoWarmup(const uint8_t *payload, size_t size,
+                                       uint64_t seq) {
+  (void)seq;
+  const std::string payload_str = PayloadToString(payload, size);
+  std::string algo_name = ExtractJsonField(payload_str, "algo_name");
+  if (algo_name.empty()) {
+    algo_name = "face_recognition";
+  }
+  std::string algo_version = ExtractJsonField(payload_str, "algo_version");
+
+  bool success = false;
+  std::string error_code;
+  std::string error_message;
+
+  if (!algo_mgr_) {
+    error_code = "ENGINE_NOT_READY";
+    error_message = "algo manager not initialized";
+  } else if (algo_mgr_->IsLoaded(algo_name)) {
+    success = true;
+  } else {
+    std::string install_path;
+    for (const auto &dep : algo_mgr_->GetDeployments()) {
+      if (dep.status != "installed")
+        continue;
+      if (!dep.algo_name.empty() && dep.algo_name != algo_name)
+        continue;
+      if (!algo_version.empty() && dep.version != algo_version)
+        continue;
+      install_path = dep.install_path;
+      break;
+    }
+
+    if (install_path.empty()) {
+      error_code = "ALGO_NOT_INSTALLED";
+      error_message = "algorithm package is not installed on this node";
+    } else {
+      const std::string so_path = FindAlgorithmSo(install_path, algo_name);
+      if (so_path.empty()) {
+        error_code = "SO_NOT_FOUND";
+        error_message = "algorithm library not found under install path";
+      } else {
+        const std::string config_json = EnsurePackageDirConfig("{}", so_path);
+        auto instance = algo_mgr_->Load(algo_name, algo_version, so_path, config_json);
+        success = instance != nullptr;
+        if (!success) {
+          error_code = "ALGO_WARMUP_FAILED";
+          error_message = "failed to load algorithm runtime instance";
+        }
+      }
+    }
+  }
+
+  std::cout << "[Control] AlgoWarmup"
+            << " algo=" << algo_name
+            << " version=" << algo_version
+            << " success=" << success << std::endl;
+
+  const std::string response =
+      std::string("{\"success\":") + (success ? "true" : "false") +
+      ",\"algo_name\":\"" + JsonEscape(algo_name) +
+      "\",\"algo_version\":\"" + JsonEscape(algo_version) +
+      "\",\"error_code\":\"" + JsonEscape(error_code) +
+      "\",\"error_message\":\"" + JsonEscape(error_message) + "\"}";
+  int client_fd = response_router_->GetActiveClientFd();
+  if (client_fd != -1) {
+    response_router_->SendResponse(
+        client_fd, 309, reinterpret_cast<const uint8_t *>(response.data()),
+        response.size());
+  }
+}
+
 void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
                                                  size_t size, uint64_t seq) {
   (void)seq;
@@ -980,10 +1079,6 @@ void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
   if (algo_version.empty()) {
     algo_version = "1.0.0";
   }
-  const std::string so_path = ExtractJsonField(payload_str, "so_path");
-  const std::string algo_params_json =
-      ExtractJsonField(payload_str, "algo_params_json");
-
   const std::string image_base64 =
       ExtractJsonField(payload_str, "image_base64");
   std::string response;
@@ -1017,30 +1112,13 @@ void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
         desc.height = static_cast<uint32_t>(image.rows);
         desc.pixel_format = kPixelFormatBGR24;
 
-        // Try to acquire existing instance; load if needed
-        auto [instance, ok] = algo_mgr_->Acquire(algo_name, 30000);
-        if (instance) {
-          algo_mgr_->Release(algo_name);
-        } else if (!so_path.empty()) {
-          static std::mutex s_load_mutex;
-          std::lock_guard<std::mutex> lock(s_load_mutex);
-
-          // Check again inside lock to avoid duplicate loads
-          auto [locked_instance, locked_ok] = algo_mgr_->Acquire(algo_name, 30000);
-          if (locked_instance) {
-            algo_mgr_->Release(algo_name);
-          } else {
-            const std::string config_json =
-                EnsurePackageDirConfig(algo_params_json, so_path);
-            algo_mgr_->Load(algo_name, algo_version, so_path, config_json);
+        if (response.empty()) {
+          success = algo_mgr_->ExtractFaceEmbedding(algo_name, desc, response,
+                                                    infer_time_us);
+          if (!success) {
+            response = JsonError("EXTRACT_FAILED",
+                                 "algorithm unavailable or extract failed");
           }
-        }
-
-        success = algo_mgr_->ExtractFaceEmbedding(algo_name, desc, response,
-                                                  infer_time_us);
-        if (!success) {
-          response = JsonError("EXTRACT_FAILED",
-                               "algorithm unavailable or extract failed");
         }
       }
     }

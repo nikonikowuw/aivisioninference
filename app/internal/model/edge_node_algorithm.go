@@ -10,19 +10,29 @@ const (
 	AlgoDeployDownloading = "downloading"
 	AlgoDeployInstalled   = "installed"
 	AlgoDeployFailed      = "failed"
+
+	AlgoRuntimeUnknown   = "unknown"
+	AlgoRuntimeInstalled = "installed"
+	AlgoRuntimeWarming   = "warming"
+	AlgoRuntimeReady     = "ready"
+	AlgoRuntimeFailed    = "failed"
 )
 
 // EdgeNodeAlgorithm 边缘节点-算法关联模型
 type EdgeNodeAlgorithm struct {
 	BaseModel
-	NodeID        string            `gorm:"type:uuid;not null;uniqueIndex:idx_node_algo;comment:关联边缘节点ID" json:"node_id"`
-	AlgoPackageID string            `gorm:"type:uuid;not null;uniqueIndex:idx_node_algo;comment:关联算法包ID" json:"algo_package_id"`
-	Status        string            `gorm:"type:varchar(50);not null;default:'pending';comment:安装状态(pending/downloading/installed/failed)" json:"status"`
-	InstallPath   string            `gorm:"type:varchar(500);comment:安装路径" json:"install_path"`
-	DeployedAt    *time.Time        `json:"deployed_at,omitempty"`
-	ErrorMessage  string            `gorm:"type:varchar(1000);comment:错误消息" json:"error_message"`
-	RetryCount    int               `gorm:"default:0;comment:重试次数" json:"retry_count"`
-	LastRetryAt   *time.Time        `json:"last_retry_at,omitempty"`
+	NodeID              string     `gorm:"type:uuid;not null;uniqueIndex:idx_node_algo;comment:关联边缘节点ID" json:"node_id"`
+	AlgoPackageID       string     `gorm:"type:uuid;not null;uniqueIndex:idx_node_algo;comment:关联算法包ID" json:"algo_package_id"`
+	Status              string     `gorm:"type:varchar(50);not null;default:'pending';comment:安装状态(pending/downloading/installed/failed)" json:"status"`
+	InstallPath         string     `gorm:"type:varchar(500);comment:安装路径" json:"install_path"`
+	RuntimeStatus       string     `gorm:"type:varchar(32);not null;default:'unknown';comment:运行时状态" json:"runtime_status"`
+	SupportsEmbedding   bool       `gorm:"default:false;comment:是否支持embedding提取" json:"supports_embedding"`
+	SupportsFaceLibrary bool       `gorm:"default:false;comment:是否支持人脸库同步" json:"supports_face_library"`
+	EmbeddingCapacity   int        `gorm:"default:0;comment:embedding容量上报" json:"embedding_capacity"`
+	DeployedAt          *time.Time `json:"deployed_at,omitempty"`
+	ErrorMessage        string     `gorm:"type:varchar(1000);comment:错误消息" json:"error_message"`
+	RetryCount          int        `gorm:"default:0;comment:重试次数" json:"retry_count"`
+	LastRetryAt         *time.Time `json:"last_retry_at,omitempty"`
 
 	// Relations
 	Node        *EdgeNode         `gorm:"foreignKey:NodeID;references:ID;constraint:OnDelete:CASCADE" json:"node,omitempty"`

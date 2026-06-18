@@ -209,6 +209,9 @@ namespace aivision
         /// 处理人脸库快照热更新指令
         void HandleFaceLibraryUpdate(const uint8_t *payload, size_t size, uint64_t seq);
 
+        /// 处理算法按需预热指令
+        void HandleAlgoWarmup(const uint8_t *payload, size_t size, uint64_t seq);
+
         /// 处理单张图片人脸特征提取指令
         void HandleFaceEmbeddingExtract(const uint8_t *payload, size_t size, uint64_t seq);
 

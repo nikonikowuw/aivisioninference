@@ -52,6 +52,7 @@ namespace aivision
         struct DeploymentInfo
         {
             std::string algo_package_id;
+            std::string algo_name;
             std::string version;
             std::string install_path;
             std::string status;
@@ -123,8 +124,12 @@ namespace aivision
             /// 获取算法实例数
             size_t InstanceCount() const;
 
+            /// 检查指定算法运行时是否已加载。
+            bool IsLoaded(const std::string &algo_name) const;
+
             /// 更新算法部署状态（线程安全）
             void UpdateDeploymentStatus(const std::string& algo_package_id,
+                                        const std::string& algo_name,
                                         const std::string& version,
                                         const std::string& install_path,
                                         const std::string& status,

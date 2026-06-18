@@ -166,7 +166,11 @@ static EngineConfig LoadConfigFromEnv()
     config.mqtt_password = GetEnvString("NIKO_ENGINE_MQTT_PASS", config.mqtt_password);
 
     config.device_platform = GetEnvString("NIKO_ENGINE_DEVICE_PLATFORM", config.device_platform);
-    config.device_storage_path = GetEnvString("NIKO_ENGINE_DEVICE_STORAGE_PATH", config.algo_dir.empty() ? "/" : config.algo_dir);
+    std::string default_storage = config.algo_dir;
+    if (default_storage.empty()) {
+        default_storage = "/";
+    }
+    config.device_storage_path = GetEnvString("NIKO_ENGINE_DEVICE_STORAGE_PATH", default_storage);
     config.device_enable_external_commands = GetEnvBool("NIKO_ENGINE_DEVICE_ENABLE_COMMANDS", config.device_enable_external_commands);
     config.device_command_timeout_ms = GetEnvUInt32("NIKO_ENGINE_DEVICE_COMMAND_TIMEOUT_MS", config.device_command_timeout_ms);
 
@@ -181,35 +185,52 @@ static EngineConfig LoadConfigFromEnv()
     return config;
 }
 
+static std::string DisplayVal(const std::string& val, const std::string& empty_label = "<unset>") {
+    if (val.empty()) {
+        return empty_label;
+    }
+    return val;
+}
+
+static std::string DisplayBool(bool val, const std::string& t_label = "true", const std::string& f_label = "false") {
+    if (val) {
+        return t_label;
+    }
+    return f_label;
+}
+
 static void PrintRuntimeConfig(const EngineConfig &config,
                                const std::string &env_file,
                                const std::string &hal_platform,
                                const std::string &fallback_hal_platform)
 {
-    std::string env_display = env_file.empty() ? GetEnvString("NIKO_ENGINE_ENV_FILE", ".env") : env_file;
+    std::string env_display = env_file;
+    if (env_display.empty()) {
+        env_display = GetEnvString("NIKO_ENGINE_ENV_FILE", ".env");
+    }
     std::cout << "[Config] env_file=" << env_display << std::endl;
     std::cout << "[Config] workers=" << config.worker_count
               << " metrics_ms=" << config.metrics_interval_ms << std::endl;
-    std::cout << "[Config] hal_platform=" << (hal_platform.empty() ? "<unset>" : hal_platform)
-              << " hal_so=" << (config.hal_so_path.empty() ? "<unset>" : config.hal_so_path) << std::endl;
-    std::cout << "[Config] fallback_hal_platform=" << (fallback_hal_platform.empty() ? "<unset>" : fallback_hal_platform)
-              << " fallback_hal_so=" << (config.fallback_hal_so_path.empty() ? "<unset>" : config.fallback_hal_so_path) << std::endl;
-    std::cout << "[Config] ffmpeg_fallback=" << (config.enable_ffmpeg_fallback ? "enabled" : "disabled")
+    std::cout << "[Config] hal_platform=" << DisplayVal(hal_platform)
+              << " hal_so=" << DisplayVal(config.hal_so_path) << std::endl;
+    std::cout << "[Config] fallback_hal_platform=" << DisplayVal(fallback_hal_platform)
+              << " fallback_hal_so=" << DisplayVal(config.fallback_hal_so_path) << std::endl;
+    std::cout << "[Config] ffmpeg_fallback=" << DisplayBool(config.enable_ffmpeg_fallback, "enabled", "disabled")
               << " rtsp_push=" << config.rtsp_push_server
               << " zlm_url=" << config.zlm_api_url
-              << " zlm_secret=" << (config.zlm_secret.empty() ? "<empty>" : "<set>") << std::endl;
-    std::cout << "[Config] platform_url=" << (config.platform_url.empty() ? "<unset>" : config.platform_url)
-              << " node_id=" << (config.node_id.empty() ? "<unset>" : config.node_id)
-              << " auth_token=" << (config.auth_token.empty() ? "<unset>" : "<set>") << std::endl;
+              << " zlm_secret=" << DisplayVal(config.zlm_secret, "<empty>") << std::endl;
+    std::cout << "[Config] platform_url=" << DisplayVal(config.platform_url)
+              << " node_id=" << DisplayVal(config.node_id)
+              << " auth_token=" << DisplayVal(config.auth_token, "<empty>") << std::endl;
     std::cout << "[Config] algo_dir=" << config.algo_dir << std::endl;
-    std::cout << "[Config] enable_mqtt=" << (config.enable_mqtt ? "true" : "false")
+    std::cout << "[Config] enable_mqtt=" << DisplayBool(config.enable_mqtt)
               << " mqtt_broker=" << config.mqtt_broker
               << " mqtt_client_id=" << config.mqtt_client_id
               << " mqtt_user=" << config.mqtt_username
-              << " mqtt_pass=" << (config.mqtt_password.empty() ? "<empty>" : "<set>") << std::endl;
-    std::cout << "[Config] device_platform=" << (config.device_platform.empty() ? "<unset>" : config.device_platform)
+              << " mqtt_pass=" << DisplayVal(config.mqtt_password, "<empty>") << std::endl;
+    std::cout << "[Config] device_platform=" << DisplayVal(config.device_platform)
               << " device_storage_path=" << config.device_storage_path
-              << " device_enable_commands=" << (config.device_enable_external_commands ? "true" : "false")
+              << " device_enable_commands=" << DisplayBool(config.device_enable_external_commands)
               << " device_command_timeout_ms=" << config.device_command_timeout_ms << std::endl;
 }
 
@@ -233,7 +254,6 @@ static void PrintUsage(const char *prog)
 {
     std::cout << "Usage: " << prog << " [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  --addr HOST:PORT     IPC listen address (default: 0.0.0.0:9500)" << std::endl;
     std::cout << "  --env-file PATH      Load environment variables from file (default: .env)" << std::endl;
     std::cout << "  --workers N          Worker thread count (default: 4)" << std::endl;
     std::cout << "  --hal-platform NAME  HAL platform name: macos/rkmpp/ascend" << std::endl;
@@ -285,7 +305,6 @@ int main(int argc, char *argv[])
         {
             ++i;
         }
-
         else if (arg == "--workers" && i + 1 < argc)
         {
             config.worker_count = static_cast<uint32_t>(std::stoul(argv[++i]));
@@ -376,7 +395,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "Engine initialized, starting in MQTT mode..." << std::endl;
+    std::cout << "Engine initialized, starting main loop..." << std::endl;
 
     // 运行主循环 (阻塞)
     engine.Run([]() { return g_signal_received != 0; });

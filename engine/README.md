@@ -11,7 +11,7 @@ aivision-engine (主进程)
   ├── libaivision-hal-macos-videotoolbox.so  (macOS)
   │     └── VideoToolboxPipeline
   │
-  └── FLatBuffers IPC + 算法 .so
+  └── FlatBuffers payloads + 算法 .so
 
 配置: hal_so_path 指向对应平台的 .so
 ```

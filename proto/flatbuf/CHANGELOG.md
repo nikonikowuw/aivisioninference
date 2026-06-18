@@ -1,6 +1,6 @@
-# FlatBuffers IPC 协议变更日志
+# FlatBuffers 消息 Schema 变更日志
 
-所有版本的结构性变更和兼容性说明。
+所有版本的结构性变更和兼容性说明。当前传输主链路为 MQTT/HTTP；本文件只描述 FlatBuffers 消息 schema 的演进。
 
 ---
 

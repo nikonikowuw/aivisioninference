@@ -1,11 +1,11 @@
-// IPC Envelope — wraps every message with version metadata.
+// Control envelope — wraps every message with version metadata.
 // schema_version = major * 100 + minor
 //   Major bump: structural change requiring dual-write migration.
 //   Minor bump: new optional fields, fully backward compatible.
 
 include "common.fbs";
 
-namespace aivision.ipc;
+namespace aivision.control;
 
 /// 信令类型枚举：区分每个消息的 payload 类型
 enum SignalType:ushort {
@@ -33,8 +33,8 @@ enum SignalType:ushort {
     Log = 0x0301,
 }
 
-/// IPC 信封：所有消息的最外层包装
-table IPCEnvelope {
+/// 控制信封：所有消息的最外层包装
+table ControlEnvelope {
     /// Schema 版本号 (major*100 + minor)
     schema_version: uint = 100;
 
@@ -54,4 +54,4 @@ table IPCEnvelope {
     payload: [ubyte] (required);
 }
 
-root_type IPCEnvelope;
+root_type ControlEnvelope;

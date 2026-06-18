@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**AIVisionInference** 是面向边缘设备与视频流场景的 AI 视觉推理平台。由 Go 控制面、React 管理端、C++ 推理引擎、ZLMediaKit 流媒体服务、算法包 ABI 与 FlatBuffers IPC 协议组成，涵盖设备接入、算法包管理、推理任务编排、智能记录沉淀与系统运维。
+**AIVisionInference** 是面向边缘设备与视频流场景的 AI 视觉推理平台。由 Go 控制面、React 管理端、C++ 推理引擎、ZLMediaKit 流媒体服务、算法包 ABI、MQTT 控制通道与 FlatBuffers 事件载荷组成，涵盖设备接入、算法包管理、推理任务编排、智能记录沉淀与系统运维。
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@
 | 推理引擎   | C++17, CMake, FlatBuffers, FFmpeg/OpenCV, RKNN/Ascend/CUDA/Metal |
 | 管理端前端 | React 19, TypeScript, Vite 6, Chakra UI 2, i18next               |
 | 流媒体     | ZLMediaKit (GB28181/RTSP)                                        |
-| IPC 协议   | FlatBuffers (Unix Domain Socket / TCP)                           |
+| Engine 通信 | MQTT 命令/响应、HTTP 节点心跳、FlatBuffers 事件载荷              |
 | 算法包格式 | C ABI 动态库 (.so/.dylib) + 元数据 YAML                          |
 
 ## Project Structure
@@ -32,10 +32,10 @@ prd/              # PRD 文档
 
 ## Architecture
 
-Go 控制面通过 **FlatBuffers IPC** 与 C++ 推理引擎通信，前端通过 **HTTP / WebSocket** 与 Go 后端交互。
+Go 控制面当前通过 **MQTT 命令/响应** 与 C++ 推理引擎通信，边缘节点心跳通过 **HTTP** 上报，推理事件 payload 使用 **FlatBuffers**。前端通过 **HTTP / WebSocket** 与 Go 后端交互。
 
 ```
-React 管理端 ──HTTP/WS──▶ Go 控制面 ──FlatBuffers──▶ C++ 推理引擎
+React 管理端 ──HTTP/WS──▶ Go 控制面 ◀─MQTT/HTTP/FlatBuffers─▶ C++ 推理引擎
                               │                          │
                               ▼                          ▼
                          PostgreSQL/Redis           RTSP / HAL / NPU
@@ -47,13 +47,13 @@ Go 后端分层（单向依赖）：
 Handler → Service → Repository → Model (GORM)
    │         │           │
    ▼         ▼           ▼
-  DTO    IPC/Task    Storage (local/pg/oss)
+  DTO    MQTT/Task    Storage (local/pg/oss)
 ```
 
 C++ 推理引擎 Pipeline：
 
 ```
-IPC Server ──→ Task Manager ──→ Pipeline Pool ──→ Decoder → Preprocess → Inference (Algo .so) → Postprocess → Result Upload
+MQTT Control Plane ──→ Command Dispatcher ──→ Pipeline Pool ──→ Decoder → Preprocess → Inference (Algo .so) → Postprocess → Result Upload
 ```
 
 ## Dependency Injection (Google Wire)

@@ -8,7 +8,7 @@
 - Web 框架使用 Gin，ORM 使用 GORM，数据库默认 PostgreSQL，缓存/队列使用 Redis + Asynq。
 - 依赖注入使用 Google Wire，应用层入口在 `app/internal/server/`，路由业务层入口在 `app/internal/router/`。
 - 业务分层保持单向依赖：`Handler → Service → Repository → Model`。
-- C++ 推理引擎、FlatBuffers IPC 与算法包不写在 Go 业务分层中，Go 侧只保留控制面、任务调度、协议转换和结果落库职责。
+- C++ 推理引擎、MQTT/HTTP 通信、FlatBuffers 消息转换与算法包不写在 Go 业务分层中，Go 侧只保留控制面、任务调度、协议适配和结果落库职责。
 
 ## 2. 目录职责
 

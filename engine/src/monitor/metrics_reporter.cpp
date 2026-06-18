@@ -8,7 +8,7 @@ namespace aivision
     namespace monitor
     {
 
-        MetricsReporter::MetricsReporter(ipc::ResponseRouter *response_router,
+        MetricsReporter::MetricsReporter(ResponseRouter *response_router,
                                          pipeline::WorkerPool *worker_pool,
                                          pipeline::HwBufferPool *buffer_pool,
                                          pipeline::StreamQueueManager *queue_mgr,

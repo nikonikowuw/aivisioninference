@@ -1,7 +1,7 @@
 // Common types shared across all IPC messages.
 // schema_version = major * 100 + minor
 
-namespace aivision.ipc;
+namespace aivision.control;
 
 /// 像素坐标点
 struct Point {

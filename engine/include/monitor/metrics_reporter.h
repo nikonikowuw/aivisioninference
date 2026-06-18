@@ -17,7 +17,7 @@
 #include <thread>
 #include <vector>
 
-#include "ipc/ipc_server.h"
+#include "response_router.h"
 #include "pipeline/worker_pool.h"
 #include "pipeline/hw_buffer.h"
 #include "pipeline/ring_queue.h"
@@ -72,7 +72,7 @@ namespace aivision
         class MetricsReporter
         {
         public:
-            MetricsReporter(ipc::ResponseRouter *response_router,
+            MetricsReporter(ResponseRouter *response_router,
                             pipeline::WorkerPool *worker_pool,
                             pipeline::HwBufferPool *buffer_pool,
                             pipeline::StreamQueueManager *queue_mgr,
@@ -103,7 +103,7 @@ namespace aivision
             /// 采集一次指标
             EngineMetrics CollectMetrics();
 
-            ipc::ResponseRouter *response_router_;
+            ResponseRouter *response_router_;
             pipeline::WorkerPool *worker_pool_;
             pipeline::HwBufferPool *buffer_pool_;
             pipeline::StreamQueueManager *queue_mgr_;

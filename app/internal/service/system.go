@@ -11,7 +11,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/buildinfo"
 	"github.com/niko-admin/niko-admin/internal/model"
-	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -87,7 +87,7 @@ func (s *SystemService) GetEngineStatus() *EngineMetricsSummary {
 }
 
 // GetStreamsStatus 获取各流推理指标
-func (s *SystemService) GetStreamsStatus() []ipc.StreamMetricsSnapshot {
+func (s *SystemService) GetStreamsStatus() []controlproto.StreamMetricsSnapshot {
 	if s.engineMetricsStore == nil {
 		return nil
 	}

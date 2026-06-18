@@ -1,6 +1,15 @@
-# FlatBuffers IPC 协议定义
+# FlatBuffers 消息 Schema
 
-Go 控制面与 C++ 数据面之间的进程间通信协议。
+本目录定义 Go 控制面与 C++ 数据面共享的 FlatBuffers 消息结构。
+
+当前运行链路不是纯 TCP/Unix Socket IPC：
+
+- 控制命令主链路为 MQTT JSON：Go `MqttEngineClient` 发布命令，C++ `MqttControlPlane` 订阅并分发。
+- 命令响应由 C++ handler 构造内部响应后，经 `ResponseRouter` 转成 MQTT JSON response。
+- 推理事件通过 MQTT 上报，payload 使用 `ControlEnvelope` 包装 FlatBuffers 消息。
+- 边缘节点心跳通过 HTTP `POST /api/v1/edge-nodes/{id}/heartbeat` 上报。
+
+因此这里的 schema 主要用于事件载荷、部分内部响应结构、兼容保留的命令/状态消息，以及后续恢复或扩展二进制 IPC 时的协议基础。
 
 ## 文件结构
 
@@ -8,9 +17,9 @@ Go 控制面与 C++ 数据面之间的进程间通信协议。
 proto/flatbuf/
 ├── README.md           # 本文件
 ├── common.fbs          # 共享基础类型 (坐标、枚举、几何)
-├── envelope.fbs        # IPC 信封 (版本、消息类型、路由)
-├── commands.fbs        # Go → C++ 控制指令
-├── results.fbs         # C++ → Go 结果/状态上报
+├── envelope.fbs        # 消息信封 (版本、消息类型、路由)
+├── commands.fbs        # Go → C++ 控制指令 schema (兼容保留/部分转换使用)
+├── results.fbs         # C++ → Go 结果/状态上报 schema
 ├── CHANGELOG.md        # 版本变更日志
 └── COMPATIBILITY.md    # 兼容性矩阵
 ```
@@ -19,7 +28,7 @@ proto/flatbuf/
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    IPCEnvelope                           │
+│                  ControlEnvelope                         │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │ schema_version: ushort                            │  │
 │  │ message_type:   MessageType                       │  │
@@ -48,7 +57,7 @@ proto/flatbuf/
 
 ```bash
 flatbuf_dir="proto/flatbuf"
-out_dir="app/internal/pkg/ipc/flatbuf"
+out_dir="app/internal/pkg/controlproto/fbs"
 
 # 生成 Go 代码
 flatc --go \
@@ -62,7 +71,7 @@ flatc --go \
 
 ```bash
 flatbuf_dir="proto/flatbuf"
-out_dir="engine/include/ipc"
+out_dir="engine/include/proto/flatbuf"
 
 # 生成 C++ 头文件
 flatc --cpp \
@@ -84,23 +93,23 @@ flatc --conform "$flatbuf_dir/envelope.fbs" \
 
 | Go Model | FlatBuffers Table | 转换层 |
 |----------|------------------|--------|
-| `InferTask` | `StartStreamCmd` | Go IPC 发送端 |
-| `InferTaskAlgorithm` | `AlgoBinding` (在 StartStreamCmd 中) | Go IPC 发送端 |
+| `InferTask` | `StartStreamCmd` / `StartStreamParams` | Go MQTT 命令转换层 |
+| `InferTaskAlgorithm` | `AlgoBinding` (在 StartStreamCmd 中) | Go MQTT/FlatBuffers 转换层 |
 | `InferTaskAlgorithm.AIParams` | `AlgoBinding.algo_params_json` | JSON 透传 |
 | `InferTaskAlgorithm.ROIRegions` | `AlgoBinding.roi_regions` | JSON → FlatBuffers |
-| `AlgorithmPackage` | `LoadAlgoCmd` | Go IPC 发送端 |
-| `SmartRecord` | `InferenceResultMsg` (接收后映射) | Go IPC 接收端 |
-| `InferTask.Status` | `StreamStatusMsg.status` | Go IPC 接收端 |
+| `AlgorithmPackage` | `LoadAlgoCmd` / self-check payload | Go MQTT 命令转换层 |
+| `SmartRecord` | `InferenceResultMsg` (接收后映射) | Go MQTT 事件接收端 |
+| `InferTask.Status` | `StreamStatusMsg.status` | Go MQTT response 接收端 |
 
 ## 隐含任务: Go 侧 JSON → FlatBuffers 转换层
 
 Go 侧的 ROI/MARK/LINE 区域存储为 `datatypes.JSON` (JSONB),
 需要转换为 FlatBuffers 的 `[Polygon]` 结构。
 
-建议新增 `app/internal/pkg/ipc/converter.go`:
+建议新增 `app/internal/pkg/controlproto/converter.go`:
 
 ```go
-package ipc
+package controlproto
 
 // JSONToPolygons 将 JSONB 格式的区域数据转换为 FlatBuffers Polygon 列表
 // 输入: [{"points": [{"x": 100, "y": 200}, ...]}, ...]

@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 	"github.com/niko-admin/niko-admin/internal/pkg/mqttsync"
 )
 
@@ -34,12 +34,35 @@ func NewMqttEngineClient(
 	}
 }
 
+// ensureClient returns an error if the MQTT client is nil.
+func (c *MqttEngineClient) ensureClient() error {
+	if c.mqttClient == nil {
+		return fmt.Errorf("MQTT client is nil")
+	}
+	return nil
+}
+
+// parseStreamStatus attempts JSON unmarshal first, falling back to FlatBuffers.
+func parseStreamStatus(respPayload string) *controlproto.StreamStatusParams {
+	var jsStatus struct {
+		Status  string `json:"status"`
+		PlayURL string `json:"play_url"`
+	}
+	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
+		return &controlproto.StreamStatusParams{
+			Status:  jsStatus.Status,
+			PlayURL: jsStatus.PlayURL,
+		}
+	}
+	return controlproto.FlatBuffersToStreamStatus([]byte(respPayload))
+}
+
 // StartStream publishes a StreamStart command via MQTT.
 func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error) {
 	c.logger.Info("MQTT: StartStream", zap.String("device_id", req.DeviceID))
 
 	traceID := uuid.New().String()
-	params := &ipc.StartStreamParams{
+	params := &controlproto.StartStreamParams{
 		TaskID:         req.DeviceID,
 		DeviceID:       req.DeviceID,
 		StreamURL:      req.RtspURL,
@@ -56,8 +79,8 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 	payload, _ := json.Marshal(params)
 	topic := fmt.Sprintf("aivision/edge/%s/cmd/start_stream", req.DeviceID)
 
-	if c.mqttClient == nil {
-		return StreamInfo{}, fmt.Errorf("MQTT client is nil")
+	if err := c.ensureClient(); err != nil {
+		return StreamInfo{}, err
 	}
 
 	token := c.mqttClient.Publish(topic, 1, false, payload)
@@ -71,20 +94,7 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 		return StreamInfo{}, fmt.Errorf("MQTT: wait stream status timeout: %w", err)
 	}
 
-	var status *ipc.StreamStatusParams
-	var jsStatus struct {
-		Status  string `json:"status"`
-		PlayURL string `json:"play_url"`
-	}
-	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-		status = &ipc.StreamStatusParams{
-			Status:  jsStatus.Status,
-			PlayURL: jsStatus.PlayURL,
-		}
-	}
-	if status == nil {
-		status = ipc.FlatBuffersToStreamStatus([]byte(respPayload))
-	}
+	status := parseStreamStatus(respPayload)
 
 	if status == nil || status.Status != "running" {
 		return StreamInfo{}, fmt.Errorf("MQTT: engine failed to start stream")
@@ -132,7 +142,7 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 	c.logger.Info("MQTT: StartPlayback", zap.String("device_id", req.DeviceID))
 
 	traceID := uuid.New().String()
-	params := &ipc.StartStreamParams{
+	params := &controlproto.StartStreamParams{
 		TaskID:         req.DeviceID,
 		DeviceID:       req.DeviceID,
 		StreamURL:      req.RtspURL,
@@ -159,19 +169,19 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 		return "", fmt.Errorf("MQTT: wait playback status timeout: %w", err)
 	}
 
-	var status *ipc.StreamStatusParams
+	var status *controlproto.StreamStatusParams
 	var jsStatus struct {
 		Status  string `json:"status"`
 		PlayURL string `json:"play_url"`
 	}
 	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-		status = &ipc.StreamStatusParams{
+		status = &controlproto.StreamStatusParams{
 			Status:  jsStatus.Status,
 			PlayURL: jsStatus.PlayURL,
 		}
 	}
 	if status == nil {
-		status = ipc.FlatBuffersToStreamStatus([]byte(respPayload))
+		status = controlproto.FlatBuffersToStreamStatus([]byte(respPayload))
 	}
 
 	if status == nil || status.Status != "running" {
@@ -235,19 +245,19 @@ func (c *MqttEngineClient) GetStreamStatus(ctx context.Context, deviceID string)
 		return StreamStatus{}, fmt.Errorf("MQTT: wait stream status check timeout: %w", err)
 	}
 
-	var status *ipc.StreamStatusParams
+	var status *controlproto.StreamStatusParams
 	var jsStatus struct {
 		Status  string `json:"status"`
 		PlayURL string `json:"play_url"`
 	}
 	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-		status = &ipc.StreamStatusParams{
+		status = &controlproto.StreamStatusParams{
 			Status:  jsStatus.Status,
 			PlayURL: jsStatus.PlayURL,
 		}
 	}
 	if status == nil {
-		status = ipc.FlatBuffersToStreamStatus([]byte(respPayload))
+		status = controlproto.FlatBuffersToStreamStatus([]byte(respPayload))
 	}
 
 	if status != nil {
@@ -278,8 +288,8 @@ func (c *MqttEngineClient) StartSelfCheck(ctx context.Context, downloadURL, toke
 	})
 	topic := fmt.Sprintf("aivision/edge/self_check/cmd") // Generic topic or node specific if we want
 
-	if c.mqttClient == nil {
-		return fmt.Errorf("MQTT client is nil")
+	if err := c.ensureClient(); err != nil {
+		return err
 	}
 
 	tokenPub := c.mqttClient.Publish(topic, 1, false, payload)
@@ -293,21 +303,21 @@ func (c *MqttEngineClient) StartSelfCheck(ctx context.Context, downloadURL, toke
 		return fmt.Errorf("MQTT: self check wait timeout: %w", err)
 	}
 
-	var result *ipc.AlgoLoadResultParams
+	var result *controlproto.AlgoLoadResultParams
 	var jsResult struct {
 		Success      bool   `json:"success"`
 		ErrorMessage string `json:"error_message"`
 		ErrorCode    string `json:"error_code"`
 	}
 	if json.Unmarshal([]byte(respPayload), &jsResult) == nil {
-		result = &ipc.AlgoLoadResultParams{
+		result = &controlproto.AlgoLoadResultParams{
 			Success:      jsResult.Success,
 			ErrorMessage: jsResult.ErrorMessage,
 			ErrorCode:    jsResult.ErrorCode,
 		}
 	}
 	if result == nil {
-		result = ipc.FlatBuffersToAlgoLoadResult([]byte(respPayload))
+		result = controlproto.FlatBuffersToAlgoLoadResult([]byte(respPayload))
 	}
 
 	if result == nil {
@@ -340,8 +350,8 @@ func (c *MqttEngineClient) UpdateFaceLibrary(ctx context.Context, algoName strin
 	}
 
 	topic := "aivision/edge/face_library/cmd"
-	if c.mqttClient == nil {
-		return fmt.Errorf("MQTT client is nil")
+	if err := c.ensureClient(); err != nil {
+		return err
 	}
 
 	tokenPub := c.mqttClient.Publish(topic, 1, false, payload)
@@ -395,8 +405,8 @@ func (c *MqttEngineClient) ExtractFaceEmbedding(ctx context.Context, algoName, a
 	}
 
 	topic := "aivision/edge/face_embedding/cmd"
-	if c.mqttClient == nil {
-		return FaceEmbeddingResult{}, fmt.Errorf("MQTT client is nil")
+	if err := c.ensureClient(); err != nil {
+		return FaceEmbeddingResult{}, err
 	}
 
 	tokenPub := c.mqttClient.Publish(topic, 1, false, payload)

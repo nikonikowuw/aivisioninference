@@ -13,7 +13,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
-	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	"github.com/niko-admin/niko-admin/pkg/storage"
@@ -665,7 +665,7 @@ func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
 	require.NoError(t, db.Create(task).Error)
 
 	// Push inference result
-	params := &ipc.InferenceResultParams{
+	params := &controlproto.InferenceResultParams{
 		TaskID:     "task-1",
 		AlgoName:   "face_detection",
 		DeviceID:   "camera-1",

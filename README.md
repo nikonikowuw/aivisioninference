@@ -11,12 +11,13 @@
   <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL"></a>
   <a href="https://redis.io/"><img src="https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white" alt="Redis"></a>
   <a href="https://isocpp.org/"><img src="https://img.shields.io/badge/C++-17-00599C?logo=cplusplus&logoColor=white" alt="C++17"></a>
-  <a href="https://flatbuffers.dev/"><img src="https://img.shields.io/badge/FlatBuffers-IPC-orange" alt="FlatBuffers"></a>
+  <a href="https://mqtt.org/"><img src="https://img.shields.io/badge/MQTT-Control%20Plane-660066" alt="MQTT"></a>
+  <a href="https://flatbuffers.dev/"><img src="https://img.shields.io/badge/FlatBuffers-Event%20Payload-orange" alt="FlatBuffers"></a>
   <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white" alt="Vite"></a>
   <a href="https://chakra-ui.com/"><img src="https://img.shields.io/badge/Chakra--UI-2.x-319795?logo=chakra-ui&logoColor=white" alt="Chakra UI"></a>
 </p>
 
-AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理平台**。项目由 Go 控制面、React 管理端、C++ 推理数据面、ZLMediaKit 流媒体服务、算法包 ABI 与 FlatBuffers IPC 协议组成，支持设备接入、算法包管理、推理任务编排、智能记录沉淀与系统运维配置。
+AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理平台**。项目由 Go 控制面、React 管理端、C++ 推理数据面、ZLMediaKit 流媒体服务、算法包 ABI、MQTT 控制通道与 FlatBuffers 事件载荷组成，支持设备接入、算法包管理、推理任务编排、智能记录沉淀与系统运维配置。
 
 ---
 
@@ -29,7 +30,7 @@ AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理�
 - [模块说明](#-模块说明)
 - [常用命令](#-常用命令)
 - [算法包规范](#-算法包规范)
-- [IPC 协议](#-ipc-协议)
+- [Engine 通信协议](#-engine-通信协议)
 - [配置说明](#-配置说明)
 - [相关文档](#-相关文档)
 
@@ -54,9 +55,9 @@ AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理�
 │ React 管理端 web/     │
 └──────────┬───────────┘
            │ HTTP / WebSocket
-┌──────────▼───────────┐        FlatBuffers IPC        ┌──────────────────────┐
-│ Go 控制面 app/        │ ───────────────────────────▶ │ C++ 推理引擎 engine/  │
-│ Gin + GORM + Redis    │ ◀─────────────────────────── │ Pipeline + Algo .so   │
+┌──────────▼───────────┐      MQTT 命令/响应 + 事件       ┌──────────────────────┐
+│ Go 控制面 app/        │ ◀──────────────────────────▶ │ C++ 推理引擎 engine/  │
+│ Gin + GORM + Redis    │ ───── HTTP 节点心跳/下发 ───▶ │ Pipeline + Algo .so   │
 └──────┬─────────┬──────┘      状态 / 结果 / 指标        └──────────┬───────────┘
        │         │                                                  │
        ▼         ▼                                                  ▼
@@ -72,7 +73,7 @@ AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理�
 Handler → Service → Repository → Model
    │         │
    ▼         ▼
-  DTO     Storage / IPC / Task
+  DTO     Storage / MQTT / Task
 ```
 
 ---
@@ -81,12 +82,12 @@ Handler → Service → Repository → Model
 
 ### 控制面与管理端
 
-- **后端**：Go 1.23+、Gin、GORM、PostgreSQL 16、Redis 7、Asynq、JWT、Wire、Viper、Zap、Swagger。
+- **后端**：Go 1.23+、Gin、GORM、PostgreSQL 16、Redis 7、Asynq、MQTT、JWT、Wire、Viper、Zap、Swagger。
 - **前端**：React 19、TypeScript、Vite 6、Chakra UI 2、React Router、TanStack Table、i18next。
 
 ### 数据面与协议
 
-- **推理引擎**：C++17、CMake、FlatBuffers、FFmpeg、OpenCV、动态库算法 ABI。
+- **推理引擎**：C++17、CMake、MQTT、FlatBuffers、FFmpeg、OpenCV、动态库算法 ABI。
 - **硬件适配**：RKMPP、RGA、DMA Buffer、VideoToolbox/macOS stub、x86_64 stub fallback。
 - **流媒体**：ZLMediaKit，项目根目录 `docker-compose.yml` 默认使用 `zlmediakit/zlmediakit:latest`。
 
@@ -165,11 +166,11 @@ docker-compose up -d --build
 
 ```txt
 AIVisionInference/
-├── app/                    # Go 控制面：API、RBAC、设备、算法、任务、记录、IPC、迁移
+├── app/                    # Go 控制面：API、RBAC、设备、算法、任务、记录、MQTT、迁移
 ├── web/                    # React 管理端：设备、媒体预览、算法包、AI 任务、系统配置等页面
 ├── engine/                 # C++ 推理数据面：流处理、HAL、算法动态库加载、结果上报
 ├── algorithms/             # 算法包示例与模型资源，如 face_recognition、fall_detection
-├── proto/flatbuf/          # Go/C++ IPC FlatBuffers schema 与兼容性说明
+├── proto/flatbuf/          # Go/C++ FlatBuffers 消息 schema 与兼容性说明
 ├── zlm/                    # ZLMediaKit 相关配置、数据与源码依赖
 ├── deploy/                 # 部署文件：engine Dockerfile、systemd、网络回滚脚本
 ├── docs/                   # 产品与设计文档
@@ -242,9 +243,17 @@ C++ engine 通过动态库加载算法，算法包需遵循统一 C ABI，例如
 
 ---
 
-## 🔌 IPC 协议
+## 🔌 Engine 通信协议
 
-Go 控制面与 C++ 数据面使用 `proto/flatbuf/` 下的 FlatBuffers schema 通信，核心消息包括：
+当前运行链路以 MQTT 为主：
+
+- **控制命令**：Go 侧 `EngineClient` 通过 MQTT 发布 JSON 命令，C++ `MqttControlPlane` 订阅并交给 `CommandDispatcher`。
+- **同步等待**：命令 payload 带 `trace_id`，Go 侧通过 Redis Pub/Sub 等待对应响应，形成“同步接口、异步传输”的调用模型。
+- **命令响应**：C++ handler 内部仍构造部分 FlatBuffers 响应，再由 `ResponseRouter` 转成 JSON 发布到 `aivision/edge/{node_id}/response/{cmd}`。
+- **推理事件**：C++ 通过 MQTT 上报 `InferenceResultMsg`，payload 使用 FlatBuffers envelope。
+- **节点心跳**：C++ `HeartbeatReporter` 通过 HTTP `POST /api/v1/edge-nodes/{id}/heartbeat` 上报状态，并从响应中获取待部署算法包。
+
+`proto/flatbuf/` 下的 FlatBuffers schema 仍用于事件载荷、部分内部响应结构，以及当前 MQTT/HTTP 链路复用的消息模型，核心消息包括：
 
 - `StartStreamCmd` / `StopStreamCmd`：启动或停止视频流推理任务。
 - `UpdateConfigCmd`：更新任务或算法参数。
@@ -252,7 +261,7 @@ Go 控制面与 C++ 数据面使用 `proto/flatbuf/` 下的 FlatBuffers schema �
 - `InferenceResultMsg`：上报推理结果。
 - `StreamStatusMsg`：上报流状态。
 - `EngineMetricsMsg`：上报引擎指标。
-- `HeartbeatCmd` / `HeartbeatAckMsg`：双向心跳。
+- `HeartbeatCmd` / `HeartbeatAckMsg`：历史保留的 FlatBuffers 心跳模型；当前边缘节点心跳主链路为 HTTP。
 
 协议详情见 `proto/flatbuf/README.md`、`proto/flatbuf/CHANGELOG.md` 与 `proto/flatbuf/COMPATIBILITY.md`。
 
@@ -325,7 +334,11 @@ NIKO_DB_NAME=aivision
 NIKO_REDIS_HOST=localhost
 NIKO_REDIS_PORT=6379
 NIKO_JWT_SECRET=change-me-in-production
-NIKO_ENGINE_ADDR=127.0.0.1:8081
+NIKO_MQTT_HOST=localhost
+NIKO_MQTT_PORT=1883
+NIKO_ENGINE_PLATFORM_URL=http://your-platform:8080
+NIKO_ENGINE_NODE_ID=<node-id>
+NIKO_ENGINE_AUTH_TOKEN=<jwt-token>
 NIKO_STORAGE_DRIVER=local
 ```
 
@@ -340,7 +353,7 @@ NIKO_STORAGE_DRIVER=local
 ## 📚 相关文档
 
 - `engine/README.md`：C++ 推理引擎与 RKMPP/RGA 流水线说明。
-- `proto/flatbuf/README.md`：FlatBuffers IPC 协议说明。
+- `proto/flatbuf/README.md`：FlatBuffers 消息 schema 与当前通信链路说明。
 - `algorithms/face_recognition/1.0.0/README.md`：人脸识别算法包示例。
 - `algorithms/fall_detection/1.0.0/README.md`：跌倒检测算法包示例。
 - `prd/prd-draft.md`：产品需求草案。

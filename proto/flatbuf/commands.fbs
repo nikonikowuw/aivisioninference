@@ -1,9 +1,9 @@
 // Go → C++ 控制指令。
-// 每个 table 对应一种 SignalType，作为 IPCEnvelope.payload 的具体内容。
+// 每个 table 对应一种 SignalType，作为 ControlEnvelope.payload 的具体内容。
 
 include "common.fbs";
 
-namespace aivision.ipc;
+namespace aivision.control;
 
 /// 算法绑定参数
 table AlgoBinding {

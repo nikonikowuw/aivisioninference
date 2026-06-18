@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
-	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 	"github.com/niko-admin/niko-admin/internal/pkg/mqttsync"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/service"
@@ -125,7 +125,7 @@ func (h *EdgeMqttHandler) HandleStreamStatus(msg mqtt.Message) {
 
 // HandleInferenceResult processes real-time bounding box outputs from an edge node.
 func (h *EdgeMqttHandler) HandleInferenceResult(msg mqtt.Message) {
-	params := ipc.FlatBuffersToInferenceResult(msg.Payload())
+	params := controlproto.FlatBuffersToInferenceResult(msg.Payload())
 	if params == nil {
 		return
 	}

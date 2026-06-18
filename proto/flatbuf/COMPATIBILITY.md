@@ -1,4 +1,6 @@
-# IPC 协议兼容性矩阵
+# FlatBuffers 消息 Schema 兼容性矩阵
+
+当前传输主链路为 MQTT/HTTP；本矩阵只约束 FlatBuffers 消息 schema 的版本兼容性。
 
 ## 版本号规则
 
@@ -34,7 +36,7 @@ Go  v3.0    │    ❌    │    ❌    │    ✅*   │    ✅    │
 
 ```cpp
 // 伪代码: C++ 接收消息时的版本检查
-void onMessageReceived(const IPCEnvelope* envelope) {
+void onMessageReceived(const ControlEnvelope* envelope) {
     uint16_t received = envelope->schema_version();
     uint16_t recv_major = received / 100;
     uint16_t recv_minor = received % 100;
@@ -69,7 +71,7 @@ void onMessageReceived(const IPCEnvelope* envelope) {
 
 ```go
 // 伪代码: Go 接收消息时的版本检查
-func (r *Receiver) onMessage(envelope *ipc.IPCEnvelope) error {
+func (r *Receiver) onMessage(envelope *controlproto.ControlEnvelope) error {
     received := envelope.SchemaVersion()
     recvMajor := received / 100
     recvMinor := received % 100

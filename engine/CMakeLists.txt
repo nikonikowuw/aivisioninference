@@ -165,7 +165,7 @@ endif()
 # 核心库源文件（不含 main，包含新模块）
 set(ENGINE_LIB_SOURCES
     src/engine.cpp
-    src/ipc_server.cpp
+    src/response_router.cpp
     src/pipeline/hw_buffer.cpp
     src/pipeline/ring_queue.cpp
     src/pipeline/worker_pool.cpp
@@ -202,9 +202,7 @@ set(ENGINE_SOURCES
 
 set(INSTALL_HEADERS
     include/engine.h
-    include/ipc/transport.h
-    include/ipc/ipc_server.h
-    include/ipc/heartbeat.h
+    include/response_router.h
     include/pipeline/hw_buffer.h
     include/pipeline/ring_queue.h
     include/pipeline/snapshot.h

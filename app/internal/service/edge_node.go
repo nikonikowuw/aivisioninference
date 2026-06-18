@@ -14,7 +14,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
-	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	ver "github.com/niko-admin/niko-admin/internal/pkg/version"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
@@ -36,7 +36,7 @@ type EdgeNodeService struct {
 	minCompatibleVersion string
 	versionCheckEnabled  bool
 	hub                  *ws.Hub
-	inferenceChan        chan *ipc.InferenceResultParams
+	inferenceChan        chan *controlproto.InferenceResultParams
 	stopChan             chan struct{}
 }
 
@@ -64,7 +64,7 @@ func NewEdgeNodeService(
 		minCompatibleVersion: "",
 		versionCheckEnabled:  false,
 		hub:                  hub,
-		inferenceChan:        make(chan *ipc.InferenceResultParams, 10000),
+		inferenceChan:        make(chan *controlproto.InferenceResultParams, 10000),
 		stopChan:             make(chan struct{}),
 	}
 	go svc.batchInsertWorker()
@@ -166,11 +166,7 @@ func (s *EdgeNodeService) Update(ctx context.Context, id string, req dto.UpdateE
 		node.Status = req.Status
 	}
 
-	if err := s.nodeRepo.Update(ctx, node); err != nil {
-		return err
-	}
-
-	return nil
+	return s.nodeRepo.Update(ctx, node)
 }
 
 func (s *EdgeNodeService) Delete(ctx context.Context, id string) error {
@@ -520,7 +516,7 @@ func loadRate(node model.EdgeNode) float64 {
 }
 
 // PushInferenceResult pushes an inference result to the batch insert queue.
-func (s *EdgeNodeService) PushInferenceResult(params *ipc.InferenceResultParams) {
+func (s *EdgeNodeService) PushInferenceResult(params *controlproto.InferenceResultParams) {
 	select {
 	case s.inferenceChan <- params:
 	default:
@@ -563,9 +559,9 @@ func (s *EdgeNodeService) batchInsertWorker() {
 		batch = batch[:0]
 	}
 
-	processOne := func(params *ipc.InferenceResultParams) {
+	processOne := func(params *controlproto.InferenceResultParams) {
 		task, device, algo := s.resolveInferenceMetadata(params, taskCache, deviceCache, algoCache)
-		record := ipc.InferenceResultToSmartRecord(params, task.name, device, algo)
+		record := controlproto.InferenceResultToSmartRecord(params, task.name, device, algo)
 		if record != nil {
 			batch = append(batch, *record)
 		}
@@ -604,7 +600,7 @@ func (s *EdgeNodeService) batchInsertWorker() {
 	}
 }
 
-func (s *EdgeNodeService) resolveInferenceMetadata(params *ipc.InferenceResultParams, taskCache map[string]cachedTask, deviceCache map[string]string, algoCache map[string]string) (task cachedTask, deviceName string, algoVersion string) {
+func (s *EdgeNodeService) resolveInferenceMetadata(params *controlproto.InferenceResultParams, taskCache map[string]cachedTask, deviceCache map[string]string, algoCache map[string]string) (task cachedTask, deviceName string, algoVersion string) {
 	if params.TaskID != "" {
 		if t, ok := taskCache[params.TaskID]; ok {
 			task = t

@@ -1,6 +1,6 @@
-// Package ipc 提供 Go 控制面与 C++ 数据面之间的 IPC 通信支持。
-// 包含 FlatBuffers 与 Go model 之间的类型转换、IPC 通信客户端等。
-package ipc
+// Package controlproto 提供 Go 控制面与 C++ 数据面之间的控制协议类型转换。
+// 包含 FlatBuffers 与 Go model 之间的类型转换、控制消息解析与事件载荷适配。
+package controlproto
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/niko-admin/niko-admin/internal/model"
-	fbs "github.com/niko-admin/niko-admin/internal/pkg/ipc/fbs/aivision/ipc"
+	fbs "github.com/niko-admin/niko-admin/internal/pkg/controlproto/fbs/aivision/control"
 )
 
 // ============================================================
@@ -225,7 +225,7 @@ func FlatBuffersToInferenceResult(fbData []byte) *InferenceResultParams {
 	}
 
 	var msg *fbs.InferenceResultMsg
-	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
+	env := fbs.GetRootAsControlEnvelope(fbData, 0)
 	if env != nil && env.SignalType() == fbs.SignalTypeInferenceResult {
 		payload := env.PayloadBytes()
 		if len(payload) == 0 {
@@ -363,13 +363,13 @@ func FlatBuffersToStreamStatus(fbData []byte) *StreamStatusParams {
 	}
 
 	// C++ 引擎当前直接返回 StreamStatusRspMsg，优先按直接响应解析；
-	// 避免 direct table 被误识别为 IPCEnvelope 导致 payload 为空。
+	// 避免 direct table 被误识别为 ControlEnvelope 导致 payload 为空。
 	if params := parseStreamStatus(fbData); params != nil {
 		return params
 	}
 
-	// 兼容带 IPCEnvelope 的异步状态上报
-	env := fbs.GetRootAsIPCEnvelope(fbData, 0)
+	// 兼容带 ControlEnvelope 的异步状态上报
+	env := fbs.GetRootAsControlEnvelope(fbData, 0)
 	if env != nil && env.SignalType() == fbs.SignalTypeStreamStatusReport {
 		payload := env.PayloadBytes()
 		if len(payload) == 0 {

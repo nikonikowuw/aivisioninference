@@ -146,9 +146,7 @@ std::string EnsurePackageDirConfig(const std::string &algo_params_json,
 
 InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
   // 创建组件
-  response_router_ = std::make_unique<ipc::ResponseRouter>();
-  heartbeat_ = std::make_unique<ipc::HeartbeatManager>();
-  // heartbeat_->SetServer(response_router_.get()); // Deprecated
+  response_router_ = std::make_unique<ResponseRouter>();
 
   // 原有的 StreamQueueManager 可能会被 PipelineManager 取代
   // 但为了兼容现有代码（如果有的话），先保留或重构
@@ -191,21 +189,35 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
   // 创建 MQTT & Command Dispatcher 组件并建立绑定
   command_dispatcher_ = std::make_unique<CommandDispatcher>(this);
   mqtt_control_plane_ = std::make_unique<MqttControlPlane>(this);
-  response_router_ = std::make_unique<ipc::ResponseRouter>();
-  response_router_->SetCommandDispatcher(command_dispatcher_.get());
 
   // 注册 MQTT 响应拦截回调，将内部响应适配为 MQTT JSON 并发布
   response_router_->SetMqttResponseCallback([this](uint32_t resp_type,
                                                    const uint8_t *payload,
                                                    size_t payload_len) {
-    std::string trace_id = ipc::ResponseRouter::GetActiveMqttTraceId();
+    // Helper: parse JSON payload with trace_id injection, fallback on error
+    auto parseJsonPayload = [](const uint8_t *p, size_t len,
+                              const std::string &tid) -> std::string {
+      try {
+        auto js = json::parse(std::string(reinterpret_cast<const char *>(p), len));
+        js["trace_id"] = tid;
+        return js.dump();
+      } catch (...) {
+        json js;
+        js["trace_id"] = tid;
+        js["success"] = false;
+        js["error_message"] = "Invalid response payload";
+        return js.dump();
+      }
+    };
+
+    std::string trace_id = ResponseRouter::GetActiveMqttTraceId();
     std::string cmd_type = "";
     std::string json_res = "";
 
     if (resp_type == 301) {
       cmd_type = "start_stream";
       auto msg =
-          flatbuffers::GetRoot<aivision::ipc::StreamStatusRspMsg>(payload);
+          flatbuffers::GetRoot<aivision::control::StreamStatusRspMsg>(payload);
       json js;
       js["trace_id"] = trace_id;
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
@@ -215,7 +227,7 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
     } else if (resp_type == 302) {
       cmd_type = "stop_stream";
       auto msg =
-          flatbuffers::GetRoot<aivision::ipc::StreamStatusRspMsg>(payload);
+          flatbuffers::GetRoot<aivision::control::StreamStatusRspMsg>(payload);
       json js;
       js["trace_id"] = trace_id;
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
@@ -224,7 +236,7 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
     } else if (resp_type == 303) {
       cmd_type = "start_playback";
       auto msg =
-          flatbuffers::GetRoot<aivision::ipc::StreamStatusRspMsg>(payload);
+          flatbuffers::GetRoot<aivision::control::StreamStatusRspMsg>(payload);
       json js;
       js["trace_id"] = trace_id;
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
@@ -234,7 +246,7 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
     } else if (resp_type == 304) {
       cmd_type = "stop_playback";
       auto msg =
-          flatbuffers::GetRoot<aivision::ipc::StreamStatusRspMsg>(payload);
+          flatbuffers::GetRoot<aivision::control::StreamStatusRspMsg>(payload);
       json js;
       js["trace_id"] = trace_id;
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
@@ -243,7 +255,7 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
     } else if (resp_type == 305) {
       cmd_type = "stream_status";
       auto msg =
-          flatbuffers::GetRoot<aivision::ipc::StreamStatusRspMsg>(payload);
+          flatbuffers::GetRoot<aivision::control::StreamStatusRspMsg>(payload);
       json js;
       js["trace_id"] = trace_id;
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
@@ -252,36 +264,14 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
       json_res = js.dump();
     } else if (resp_type == 307) {
       cmd_type = "face_library";
-      try {
-        auto js = json::parse(
-            std::string(reinterpret_cast<const char *>(payload), payload_len));
-        js["trace_id"] = trace_id;
-        json_res = js.dump();
-      } catch (...) {
-        json js;
-        js["trace_id"] = trace_id;
-        js["success"] = false;
-        js["error_message"] = "Invalid response payload";
-        json_res = js.dump();
-      }
+      json_res = parseJsonPayload(payload, payload_len, trace_id);
     } else if (resp_type == 308) {
       cmd_type = "face_embedding";
-      try {
-        auto js = json::parse(
-            std::string(reinterpret_cast<const char *>(payload), payload_len));
-        js["trace_id"] = trace_id;
-        json_res = js.dump();
-      } catch (...) {
-        json js;
-        js["trace_id"] = trace_id;
-        js["success"] = false;
-        js["error_message"] = "Invalid response payload";
-        json_res = js.dump();
-      }
+      json_res = parseJsonPayload(payload, payload_len, trace_id);
     } else if (resp_type == 514) {
       cmd_type = "self_check";
       auto msg =
-          flatbuffers::GetRoot<aivision::ipc::AlgoLoadResultMsg>(payload);
+          flatbuffers::GetRoot<aivision::control::AlgoLoadResultMsg>(payload);
       json js;
       js["trace_id"] = trace_id;
       js["success"] = msg->success();
@@ -313,24 +303,18 @@ bool InferenceEngine::Initialize() {
   if (initialized_.load())
     return true;
 
-  // 1. 初始化算法管理器
-  // algo_mgr_->Initialize();
-
-  // 2. 初始化 Worker 池
+  // 1. 初始化 Worker 池
   worker_pool_->SetQueueManager(queue_mgr_.get());
   worker_pool_->SetSnapshotManager(snapshot_mgr_.get());
   worker_pool_->SetAlgoManager(algo_mgr_.get());
 
-  // 3. 注册 IPC 指令处理器
-  RegisterIPCCommandHandlers();
-
-  // 4. 设置 NPU 推理结果回调
+  // 2. 设置 NPU 推理结果回调
   worker_pool_->SetResultCallback([this](const pipeline::InferResult &result) {
     if (!result.success)
       return;
 
     flatbuffers::FlatBufferBuilder fbb(1024);
-    std::vector<flatbuffers::Offset<aivision::ipc::BoundingBoxInfo>>
+    std::vector<flatbuffers::Offset<aivision::control::BoundingBoxInfo>>
         detections_vec;
     std::string alarm_type = "";
     std::string alarm_level = "";
@@ -341,7 +325,7 @@ bool InferenceEngine::Initialize() {
         for (const auto &det : js["detections"]) {
           auto label_name_offset =
               fbb.CreateString(det.value("label_name", ""));
-          aivision::ipc::BoundingBoxInfoBuilder det_builder(fbb);
+          aivision::control::BoundingBoxInfoBuilder det_builder(fbb);
           det_builder.add_x(det.value("x", 0));
           det_builder.add_y(det.value("y", 0));
           det_builder.add_w(det.value("w", 0));
@@ -366,10 +350,10 @@ bool InferenceEngine::Initialize() {
     auto result_json_offset = fbb.CreateString(result.result_json);
     auto detections_offset = fbb.CreateVector(detections_vec);
 
-    auto root = aivision::ipc::CreateInferenceResultMsg(
+    auto root = aivision::control::CreateInferenceResultMsg(
         fbb, task_id_offset, algo_name_offset, device_id_offset,
         result.frame_ts_ns, 0, 0, detections_offset,
-        aivision::ipc::RecordType_Capture, alarm_type_offset,
+        aivision::control::RecordType_Capture, alarm_type_offset,
         alarm_level_offset, 0, 0, 0, 0, result_json_offset,
         result.infer_time_us);
     fbb.Finish(root);
@@ -396,13 +380,6 @@ void InferenceEngine::Run(const std::function<bool()> &should_stop) {
 
   running_.store(true);
   shutdown_called_.store(false);
-
-  // 启动 IPC Server
-  if (!true /* response_router always ready */) {
-    std::cerr << "Failed to start IPC Server" << std::endl;
-    running_.store(false);
-    return;
-  }
 
   // 启动 MQTT Control Plane
   if (config_.enable_mqtt && mqtt_control_plane_) {
@@ -469,18 +446,12 @@ bool InferenceEngine::PublishEvent(uint16_t signal_type,
   return success;
 }
 
-void InferenceEngine::RegisterIPCCommandHandlers() {
-  // IPC command handlers are registered via
-  // CommandDispatcher::DispatchIPCCommand. Legacy handler codes (101-105,
-  // 201-208) are used in command_dispatcher.cpp.
-}
-
 void InferenceEngine::HandleStartStream(const uint8_t *payload, size_t size,
                                         uint64_t seq) {
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[IPC] Received StartStream" << std::endl;
+  std::cout << "[Control] Received StartStream" << std::endl;
 }
 
 void InferenceEngine::HandleStopStream(const uint8_t *payload, size_t size,
@@ -488,7 +459,7 @@ void InferenceEngine::HandleStopStream(const uint8_t *payload, size_t size,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[IPC] Received StopStream" << std::endl;
+  std::cout << "[Control] Received StopStream" << std::endl;
 }
 
 void InferenceEngine::HandleUpdateAlgoConfig(const uint8_t *payload,
@@ -496,7 +467,7 @@ void InferenceEngine::HandleUpdateAlgoConfig(const uint8_t *payload,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[IPC] Received UpdateAlgoConfig" << std::endl;
+  std::cout << "[Control] Received UpdateAlgoConfig" << std::endl;
 }
 
 void InferenceEngine::HandleHeartbeat(const uint8_t *payload, size_t size,
@@ -504,7 +475,6 @@ void InferenceEngine::HandleHeartbeat(const uint8_t *payload, size_t size,
   (void)payload;
   (void)size;
   (void)seq;
-  // heartbeat_->OnHeartbeat(seq);
 }
 
 void InferenceEngine::HandleShutdown(const uint8_t *payload, size_t size,
@@ -512,149 +482,12 @@ void InferenceEngine::HandleShutdown(const uint8_t *payload, size_t size,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[IPC] Received Shutdown command" << std::endl;
+  std::cout << "[Control] Received Shutdown command" << std::endl;
   Shutdown();
 }
 
-std::string InferenceEngine::ExtractJsonField(const std::string &json,
-                                              const std::string &field_name) {
-  std::string search = "\"" + field_name + "\"";
-  size_t pos = json.find(search);
-  if (pos == std::string::npos)
-    return "";
-
-  size_t start = json.find(":", pos);
-  if (start == std::string::npos)
-    return "";
-
-  // 跳过空白
-  start++;
-  while (start < json.size() && (json[start] == ' ' || json[start] == '\t'))
-    start++;
-
-  if (start >= json.size())
-    return "";
-
-  // 字符串值
-  if (json[start] == '"') {
-    start++;
-    std::string value;
-    bool escaped = false;
-    for (size_t i = start; i < json.size(); ++i) {
-      char ch = json[i];
-      if (escaped) {
-        switch (ch) {
-        case 'n':
-          value.push_back('\n');
-          break;
-        case 'r':
-          value.push_back('\r');
-          break;
-        case 't':
-          value.push_back('\t');
-          break;
-        default:
-          value.push_back(ch);
-          break;
-        }
-        escaped = false;
-        continue;
-      }
-      if (ch == '\\') {
-        escaped = true;
-        continue;
-      }
-      if (ch == '"') {
-        return value;
-      }
-      value.push_back(ch);
-    }
-    return "";
-  }
-
-  // 数字或布尔值
-  size_t end = json.find_first_of(",}\n", start);
-  if (end == std::string::npos)
-    end = json.size();
-  return json.substr(start, end - start);
-}
-
-bool InferenceEngine::ExtractJsonBoolField(const std::string &json,
-                                           const std::string &field_name,
-                                           bool default_value) {
-  std::string value = ExtractJsonField(json, field_name);
-  if (value.empty())
-    return default_value;
-  value.erase(std::remove_if(value.begin(), value.end(), ::isspace),
-              value.end());
-  std::transform(
-      value.begin(), value.end(), value.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (value == "true" || value == "1")
-    return true;
-  if (value == "false" || value == "0")
-    return false;
-  return default_value;
-}
-
-std::string
-InferenceEngine::ExtractJsonRawField(const std::string &json,
-                                     const std::string &field_name) {
-  std::string search = "\"" + field_name + "\"";
-  size_t pos = json.find(search);
-  if (pos == std::string::npos)
-    return "";
-
-  size_t start = json.find(":", pos);
-  if (start == std::string::npos)
-    return "";
-
-  start++;
-  while (start < json.size() && (json[start] == ' ' || json[start] == '\t' ||
-                                 json[start] == '\r' || json[start] == '\n')) {
-    start++;
-  }
-  if (start >= json.size())
-    return "";
-
-  const char open = json[start];
-  const char close = open == '{' ? '}' : (open == '[' ? ']' : '\0');
-  if (close == '\0')
-    return "";
-
-  int depth = 0;
-  bool in_string = false;
-  bool escaped = false;
-  for (size_t i = start; i < json.size(); ++i) {
-    const char ch = json[i];
-    if (in_string) {
-      if (escaped) {
-        escaped = false;
-      } else if (ch == '\\') {
-        escaped = true;
-      } else if (ch == '"') {
-        in_string = false;
-      }
-      continue;
-    }
-
-    if (ch == '"') {
-      in_string = true;
-      continue;
-    }
-    if (ch == open) {
-      depth++;
-    } else if (ch == close) {
-      depth--;
-      if (depth == 0) {
-        return json.substr(start, i - start + 1);
-      }
-    }
-  }
-  return "";
-}
-
 namespace {
+
 /// libcurl 写回调，将响应追加到 std::string
 size_t curl_string_write_callback(void *ptr, size_t size, size_t nmemb,
                                   void *userdata) {
@@ -662,6 +495,56 @@ size_t curl_string_write_callback(void *ptr, size_t size, size_t nmemb,
   str->append(static_cast<const char *>(ptr), size * nmemb);
   return size * nmemb;
 }
+
+std::string ExtractJsonField(const std::string &json_str,
+                             const std::string &field_name) {
+  try {
+    auto j = json::parse(json_str);
+    if (j.contains(field_name)) {
+      if (j[field_name].is_string()) {
+        return j[field_name].get<std::string>();
+      } else if (j[field_name].is_number() || j[field_name].is_boolean()) {
+        return j[field_name].dump();
+      }
+    }
+  } catch (...) {
+  }
+  return "";
+}
+
+bool ExtractJsonBoolField(const std::string &json_str,
+                          const std::string &field_name,
+                          bool default_value) {
+  try {
+    auto j = json::parse(json_str);
+    if (j.contains(field_name)) {
+      if (j[field_name].is_boolean()) {
+        return j[field_name].get<bool>();
+      } else if (j[field_name].is_string()) {
+        std::string s = j[field_name].get<std::string>();
+        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+        return (s == "true" || s == "1");
+      } else if (j[field_name].is_number_integer()) {
+        return j[field_name].get<int>() != 0;
+      }
+    }
+  } catch (...) {
+  }
+  return default_value;
+}
+
+std::string ExtractJsonRawField(const std::string &json_str,
+                                const std::string &field_name) {
+  try {
+    auto j = json::parse(json_str);
+    if (j.contains(field_name) && (j[field_name].is_object() || j[field_name].is_array())) {
+      return j[field_name].dump();
+    }
+  } catch (...) {
+  }
+  return "";
+}
+
 } // namespace
 
 std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
@@ -802,7 +685,7 @@ bool InferenceEngine::CloseStreamProxy(const std::string &device_id) {
 void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
                                         uint64_t seq) {
   (void)seq;
-  std::cout << "[IPC] Received StreamStart" << std::endl;
+  std::cout << "[Control] Received StreamStart" << std::endl;
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -819,7 +702,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
     algo_params_json = "{}";
   }
 
-  std::cout << "[IPC] StreamStart device_id=" << device_id
+  std::cout << "[Control] StreamStart device_id=" << device_id
             << ", stream_url=" << stream_url
             << ", enable_infer=" << enable_infer
             << ", enable_playback=" << enable_playback << ", algo=" << algo_name
@@ -827,12 +710,12 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
 
   if (device_id.empty() || stream_url.empty()) {
     std::cerr
-        << "[IPC] Invalid StreamStart payload: missing device_id or stream_url"
+        << "[Control] Invalid StreamStart payload: missing device_id or stream_url"
         << std::endl;
     flatbuffers::FlatBufferBuilder fbb(256);
     auto device_id_str = fbb.CreateString("");
     auto resp =
-        aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+        aivision::control::CreateStreamStatusRspMsg(fbb, device_id_str, false);
     fbb.Finish(resp);
     int client_fd = response_router_->GetActiveClientFd();
     if (client_fd != -1)
@@ -845,14 +728,14 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   if (enable_infer) {
     if (algo_name.empty() || so_path.empty()) {
       std::cerr
-          << "[IPC] StreamStart infer enabled but algo_name or so_path is empty"
+          << "[Control] StreamStart infer enabled but algo_name or so_path is empty"
           << std::endl;
       algo_ready = false;
     } else {
       auto instance =
           algo_mgr_->Load(algo_name, algo_version, so_path, algo_params_json);
       if (!instance) {
-        std::cerr << "[IPC] Failed to load algorithm for stream: " << algo_name
+        std::cerr << "[Control] Failed to load algorithm for stream: " << algo_name
                   << ", so_path=" << so_path << std::endl;
         algo_ready = false;
       } else {
@@ -862,7 +745,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
         config.algo_params_json = algo_params_json;
         snapshot_mgr_->UpdateConfig(algo_name, config);
         snapshot_mgr_->BindStreamAlgos(device_id, {algo_name});
-        std::cout << "[IPC] Algorithm bound to stream device_id=" << device_id
+        std::cout << "[Control] Algorithm bound to stream device_id=" << device_id
                   << ", algo=" << algo_name << std::endl;
       }
     }
@@ -875,7 +758,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   }
   if (!started) {
     snapshot_mgr_->RemoveStreamBinding(device_id);
-    std::cerr << "[IPC] Failed to create hardware pipeline for device: "
+    std::cerr << "[Control] Failed to create hardware pipeline for device: "
               << device_id << std::endl;
   }
 
@@ -883,7 +766,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   flatbuffers::FlatBufferBuilder fbb(512);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = fbb.CreateString(started ? play_url : "");
-  auto resp = aivision::ipc::CreateStreamStatusRspMsg(
+  auto resp = aivision::control::CreateStreamStatusRspMsg(
       fbb, device_id_str, started, 0, 0, 0, play_url_str);
   fbb.Finish(resp);
 
@@ -891,11 +774,11 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 301, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[IPC] StreamStart response sent for device: " << device_id
+    std::cout << "[Control] StreamStart response sent for device: " << device_id
               << ", started=" << started
               << ", play_url=" << (started ? play_url : "") << std::endl;
   } else {
-    std::cerr << "[IPC] Failed to send StreamStart response: no active client"
+    std::cerr << "[Control] Failed to send StreamStart response: no active client"
               << std::endl;
   }
 }
@@ -903,7 +786,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
 void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
                                        uint64_t seq) {
   (void)seq;
-  std::cout << "[IPC] Received StreamStop" << std::endl;
+  std::cout << "[Control] Received StreamStop" << std::endl;
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -911,7 +794,7 @@ void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
     device_id = payload_str;
   }
 
-  std::cout << "[IPC] StreamStop device_id=" << device_id << std::endl;
+  std::cout << "[Control] StreamStop device_id=" << device_id << std::endl;
 
   if (!device_id.empty()) {
     pipeline_mgr_->DestroyPipeline(device_id);
@@ -922,14 +805,14 @@ void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
   flatbuffers::FlatBufferBuilder fbb(256);
   auto device_id_str = fbb.CreateString(device_id);
   auto resp =
-      aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+      aivision::control::CreateStreamStatusRspMsg(fbb, device_id_str, false);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 302, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[IPC] StreamStop response sent for device: " << device_id
+    std::cout << "[Control] StreamStop response sent for device: " << device_id
               << std::endl;
   }
 }
@@ -937,7 +820,7 @@ void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
 void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
                                                 size_t size, uint64_t seq) {
   (void)seq;
-  std::cout << "[IPC] Received StreamPlaybackStart" << std::endl;
+  std::cout << "[Control] Received StreamPlaybackStart" << std::endl;
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -946,7 +829,7 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
     device_id = payload_str;
   }
 
-  std::cout << "[IPC] StreamPlaybackStart device_id=" << device_id
+  std::cout << "[Control] StreamPlaybackStart device_id=" << device_id
             << ", stream_url=" << stream_url << std::endl;
 
   bool started = false;
@@ -964,7 +847,7 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
   flatbuffers::FlatBufferBuilder fbb(256);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = started ? fbb.CreateString(play_url) : 0;
-  auto resp = aivision::ipc::CreateStreamStatusRspMsg(
+  auto resp = aivision::control::CreateStreamStatusRspMsg(
       fbb, device_id_str, started, 0, 0, 0, play_url_str);
   fbb.Finish(resp);
 
@@ -972,7 +855,7 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 303, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[IPC] StreamPlaybackStart response sent for device: "
+    std::cout << "[Control] StreamPlaybackStart response sent for device: "
               << device_id << std::endl;
   }
 }
@@ -980,7 +863,7 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
 void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
                                                size_t size, uint64_t seq) {
   (void)seq;
-  std::cout << "[IPC] Received StreamPlaybackStop" << std::endl;
+  std::cout << "[Control] Received StreamPlaybackStop" << std::endl;
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -988,7 +871,7 @@ void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
     device_id = payload_str;
   }
 
-  std::cout << "[IPC] StreamPlaybackStop device_id=" << device_id << std::endl;
+  std::cout << "[Control] StreamPlaybackStop device_id=" << device_id << std::endl;
 
   if (!device_id.empty()) {
     pipeline_mgr_->DestroyPipeline(device_id);
@@ -998,14 +881,14 @@ void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
   flatbuffers::FlatBufferBuilder fbb(256);
   auto device_id_str = fbb.CreateString(device_id);
   auto resp =
-      aivision::ipc::CreateStreamStatusRspMsg(fbb, device_id_str, false);
+      aivision::control::CreateStreamStatusRspMsg(fbb, device_id_str, false);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 304, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[IPC] StreamPlaybackStop response sent for device: "
+    std::cout << "[Control] StreamPlaybackStop response sent for device: "
               << device_id << std::endl;
   }
 }
@@ -1026,7 +909,7 @@ void InferenceEngine::HandleStreamStatus(const uint8_t *payload, size_t size,
   flatbuffers::FlatBufferBuilder fbb(512);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = fbb.CreateString(running ? play_url : "");
-  auto resp = aivision::ipc::CreateStreamStatusRspMsg(
+  auto resp = aivision::control::CreateStreamStatusRspMsg(
       fbb, device_id_str, running, 0, 0, 0, play_url_str);
   fbb.Finish(resp);
 
@@ -1068,7 +951,7 @@ void InferenceEngine::HandleFaceLibraryUpdate(const uint8_t *payload,
     }
   }
 
-  std::cout << "[IPC] FaceLibraryUpdate"
+  std::cout << "[Control] FaceLibraryUpdate"
             << " algo=" << algo_name
             << " payload_size=" << face_library_json.size()
             << " success=" << success << std::endl;
@@ -1152,7 +1035,6 @@ void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
             algo_mgr_->Load(algo_name, algo_version, so_path, config_json);
           }
         }
-        }
 
         success = algo_mgr_->ExtractFaceEmbedding(algo_name, desc, response,
                                                   infer_time_us);
@@ -1164,7 +1046,7 @@ void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
     }
   }
 
-  std::cout << "[IPC] FaceEmbeddingExtract"
+  std::cout << "[Control] FaceEmbeddingExtract"
             << " algo=" << algo_name << " success=" << success
             << " infer_time_us=" << infer_time_us
             << " response_size=" << response.size() << std::endl;
@@ -1194,10 +1076,10 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
                                            uint64_t seq) {
   (void)size;
   (void)seq;
-  std::cout << "[IPC] Received StartSelfCheck command" << std::endl;
+  std::cout << "[Control] Received StartSelfCheck command" << std::endl;
 
-  const aivision::ipc::StartSelfCheckCmd *cmd =
-      flatbuffers::GetRoot<aivision::ipc::StartSelfCheckCmd>(payload);
+  const aivision::control::StartSelfCheckCmd *cmd =
+      flatbuffers::GetRoot<aivision::control::StartSelfCheckCmd>(payload);
   if (!cmd) {
     std::cerr << "Failed to parse StartSelfCheckCmd" << std::endl;
     return;
@@ -1253,7 +1135,10 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
       err_code = "FILE_CREATE_ERROR";
     } else {
       curl_easy_setopt(curl, CURLOPT_URL, download_url.c_str());
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callback);
+      curl_easy_setopt(
+          curl, CURLOPT_WRITEFUNCTION,
+          static_cast<size_t (*)(void *, size_t, size_t, FILE *)>(
+              curl_write_callback));
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
       curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
       curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -1393,11 +1278,11 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
   // 7. Build response flatbuffer
   flatbuffers::FlatBufferBuilder fbb(1024);
 
-  aivision::ipc::SelfCheckStatus status =
-      success ? aivision::ipc::SelfCheckStatus_Passed
-              : aivision::ipc::SelfCheckStatus_Failed;
+  aivision::control::SelfCheckStatus status =
+      success ? aivision::control::SelfCheckStatus_Passed
+              : aivision::control::SelfCheckStatus_Failed;
 
-  auto response_offset = aivision::ipc::CreateAlgoLoadResultMsgDirect(
+  auto response_offset = aivision::control::CreateAlgoLoadResultMsgDirect(
       fbb, token.c_str(), algo_name.c_str(), version.c_str(), token.c_str(),
       success, status, err_code.c_str(), err_msg.c_str(), load_time_ms,
       npu_mem_bytes);

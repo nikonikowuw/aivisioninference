@@ -1,4 +1,4 @@
-package ipc
+package controlproto
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/stretchr/testify/assert"
 
-	fbs "github.com/niko-admin/niko-admin/internal/pkg/ipc/fbs/aivision/ipc"
+	fbs "github.com/niko-admin/niko-admin/internal/pkg/controlproto/fbs/aivision/control"
 )
 
 func TestFlatBuffersToInferenceResult(t *testing.T) {

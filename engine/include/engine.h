@@ -4,25 +4,26 @@
 // 推理引擎主入口 — 组装所有组件并启动。
 // 职责：
 //   1. 加载配置。
-//   2. 创建 IPC Server 等待 Go 控制面连接。
+//   2. 启动 MQTT 控制面并接收 Go 控制面命令。
 //   3. 初始化硬件流水线 (HAL)。
 //   4. 启动 Worker 线程池。
 //   5. 启动 MetricsReporter。
-//   6. 处理 Go 控制面指令 (启动/停止流、热更新等)。
+//   6. 通过 HTTP HeartbeatReporter 上报边缘节点状态。
+//   7. 通过 MQTT 事件上报推理结果。
 
 #include <atomic>
+#include <flatbuffers/flatbuffers.h>
 #include <functional>
 #include <memory>
 #include <string>
 
-#include "ipc/ipc_server.h"
-#include "ipc/heartbeat.h"
 #include "pipeline/hw_buffer.h"
 #include "pipeline/ring_queue.h"
 #include "pipeline/snapshot.h"
 #include "pipeline/worker_pool.h"
 #include "pipeline/pipeline_manager.h"
 #include "monitor/metrics_reporter.h"
+#include "response_router.h"
 
 namespace aivision
 {
@@ -154,8 +155,7 @@ namespace aivision
         // 组件访问器
         // ============================================================
 
-        ipc::ResponseRouter *GetResponseRouter() { return response_router_.get(); }
-        ipc::HeartbeatManager *GetHeartbeatManager() { return heartbeat_.get(); }
+        ResponseRouter *GetResponseRouter() { return response_router_.get(); }
         pipeline::WorkerPool *GetWorkerPool() { return worker_pool_.get(); }
         pipeline::HwBufferPool *GetBufferPool() { return buffer_pool_.get(); }
         pipeline::StreamQueueManager *GetQueueManager() { return queue_mgr_.get(); }
@@ -173,9 +173,6 @@ namespace aivision
         MqttControlPlane *GetMqttControlPlane() { return mqtt_control_plane_.get(); }
 
     private:
-        /// 注册 IPC 指令处理器
-        void RegisterIPCCommandHandlers();
-
         /// 处理 StartStream 指令
         void HandleStartStream(const uint8_t *payload, size_t size, uint64_t seq);
 
@@ -222,23 +219,13 @@ namespace aivision
         /// 调用 ZLM closeStream API 停止拉流
         bool CloseStreamProxy(const std::string &device_id);
 
-        /// 解析简单的 JSON 字段
-        std::string ExtractJsonField(const std::string &json, const std::string &field_name);
-
-        /// 解析简单 JSON 中的原始对象/数组字段，返回原始 JSON 片段
-        std::string ExtractJsonRawField(const std::string &json, const std::string &field_name);
-
-        /// 解析简单的 JSON 布尔字段
-        bool ExtractJsonBoolField(const std::string &json, const std::string &field_name, bool default_value);
-
         EngineConfig config_;
         std::atomic<bool> running_{false};
         std::atomic<bool> initialized_{false};
         std::atomic<bool> shutdown_called_{false};
 
         // 组件
-        std::unique_ptr<ipc::ResponseRouter> response_router_;
-        std::unique_ptr<ipc::HeartbeatManager> heartbeat_;
+        std::unique_ptr<ResponseRouter> response_router_;
         std::unique_ptr<pipeline::StreamQueueManager> queue_mgr_;
         std::unique_ptr<pipeline::SnapshotManager> snapshot_mgr_;
         std::unique_ptr<pipeline::HwBufferPool> buffer_pool_;

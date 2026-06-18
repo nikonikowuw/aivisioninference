@@ -5,7 +5,7 @@
 ## 1. 工程边界
 
 - `engine/` 是 C++17 推理引擎，可执行产物为 `aivision-engine`。
-- `proto/flatbuf/` 定义 Go 与 C++ 之间的 FlatBuffers IPC 协议。
+- `proto/flatbuf/` 定义 Go 与 C++ 共享的 FlatBuffers 消息 schema；当前控制命令主链路为 MQTT JSON，推理事件 payload 使用 FlatBuffers。
 - `algorithms/<name>/<version>/` 是可上传、可自检、可动态加载的算法包。
 - Go 后端不得直接承载视频解码和单帧推理重活；这些能力应放在 Engine 或算法包中。
 - 算法包不得依赖 Go 进程内存或 Go 私有类型，只能通过约定 ABI、配置 JSON、FlatBuffers 消息和结果 JSON 交互。
@@ -13,7 +13,7 @@
 ## 2. Engine 架构约定
 
 - 入口为 `engine/src/main.cpp`，核心编排在 `engine/src/engine.cpp`。
-- IPC 服务在 `engine/src/ipc_server.cpp` 与 `engine/include/ipc/`。
+- MQTT 控制面在 `engine/src/mqtt_control_plane.cpp` 与 `engine/include/mqtt_control_plane.h`；同步控制响应路由在 `engine/src/response_router.cpp` 与 `engine/include/response_router.h`。
 - Pipeline 相关代码在 `engine/src/pipeline/` 与 `engine/include/pipeline/`。
 - 算法动态库管理在 `engine/src/algo/` 与 `engine/include/algo/`。
 - 指标上报在 `engine/src/monitor/`。
@@ -25,7 +25,7 @@
 - 资源管理优先使用 RAII、`std::unique_ptr`、`std::shared_ptr`、标准容器，避免裸 `new/delete`。
 - 跨线程状态必须明确所有权和同步方式，使用 mutex、condition_variable、atomic 或无锁结构时必须说明生命周期。
 - Engine 主流程禁止因单路流、单个算法或单条坏消息崩溃；错误应隔离到任务/流级别。
-- 对外 IPC、动态库调用、线程入口必须捕获异常，禁止异常穿透进程边界或 C ABI 边界。
+- 对外 MQTT/HTTP、动态库调用、线程入口必须捕获异常，禁止异常穿透进程边界或 C ABI 边界。
 - 日志应可控、结构清晰；禁止在热路径中大量 `std::cout` / `std::cerr` 刷屏。
 
 ## 4. Pipeline 与性能
@@ -33,15 +33,15 @@
 - 视频流处理链路应保持背压策略明确，队列容量、丢帧策略、线程数和停止流程必须可解释。
 - 热路径避免不必要内存拷贝；硬件 buffer、DMA fd、编码帧和推理输入应尽量零拷贝传递。
 - `detector_infer` 调用必须可超时、可失败、可统计耗时，不能无限阻塞 pipeline worker。
-- 停止 stream 时必须释放解码器、encoder、算法实例、buffer、线程和 IPC 关联状态。
+- 停止 stream 时必须释放解码器、encoder、算法实例、buffer、线程和 MQTT/响应路由关联状态。
 - 指标上报不能阻塞推理主路径，失败时应降级而非影响业务流。
 
 ## 5. FlatBuffers 协议规范
 
-- Schema 文件位于 `proto/flatbuf/*.fbs`，`envelope.fbs` 是 IPC 信封入口。
+- Schema 文件位于 `proto/flatbuf/*.fbs`，`envelope.fbs` 是 FlatBuffers 事件/兼容消息信封入口。
 - 字段演进必须遵守兼容性：新增可选字段优先，禁止重排字段 ID，废弃字段只标记 deprecated。
 - 修改 schema 后必须同步生成 Go 和 C++ 代码，并更新 `proto/flatbuf/CHANGELOG.md` 与 `COMPATIBILITY.md`。
-- Go 生成目标为 `app/internal/pkg/ipc/flatbuf`，C++ 生成目标为 `engine/include/ipc`。
+- Go 生成目标为 `app/internal/pkg/controlproto/fbs/aivision/control`，C++ 生成目标为 `engine/include/proto/flatbuf`。
 - 不要手工修改生成的 FlatBuffers 代码。
 - 消息必须包含可追踪的 sequence、timestamp、task/stream 标识，便于跨进程定位问题。
 
@@ -93,13 +93,13 @@ algorithms/<algorithm_name>/<version>/
   - `cd engine && make test` (Google Test，覆盖 Pipeline、Decoder、Algo ABI 加载)
 - 算法包验证优先运行包内 `build.sh`、`test.sh` 或 README 指定命令。
 - 修改 FlatBuffers 后应执行对应 `flatc --go` 与 `flatc --cpp` 生成命令，并编译 Go 与 Engine 双端。
-- 涉及 pipeline、ABI、IPC 的修改必须至少验证：启动、加载算法、开始流、停止流、异常算法包、进程退出清理。
+- 涉及 pipeline、ABI、MQTT/HTTP/FlatBuffers 通信的修改必须至少验证：启动、加载算法、开始流、停止流、异常算法包、进程退出清理。
 - 集成测试：`make integration-test`（Docker Compose 编排本地环境，验证 Go 下发任务 → Engine 推理 → 结果回传全链路）。
 
 ## 10. 安全
 
 - **算法包验证**：Go 控制面下发前对算法包进行 SHA256 签名校验和元数据白名单验证，拒绝未签名或元数据不匹配的算法包。
-- **IPC 权限**：Unix Domain Socket 权限设为 0600，仅允许同用户/同组进程访问。
+- **通信权限**：MQTT broker 与 HTTP 心跳 Token 都必须限制访问；禁止重新引入未受控的本地 IPC 监听端口或 Socket。
 - **资源隔离**：每个 Pipeline 使用独立内存池，防止单个算法包内存泄漏影响其他任务。
 - **异常降级**：算法包崩溃时 Pipeline 自动重启，不中断其他流任务。
 - **节点认证**：边缘节点接入时需提供预分配的 Node Token，控制面验证后才允许注册。

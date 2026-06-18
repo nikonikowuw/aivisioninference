@@ -1,9 +1,11 @@
 #include "command_dispatcher.h"
 #include "engine.h"
+#include "response_router.h"
+
 #include <iostream>
 #include <nlohmann/json.hpp>
+
 #include "proto/flatbuf/commands_generated.h"
-#include "ipc/ipc_server.h"
 
 using json = nlohmann::json;
 
@@ -11,57 +13,6 @@ namespace aivision
 {
     CommandDispatcher::CommandDispatcher(InferenceEngine *engine)
         : engine_(engine) {}
-
-    void CommandDispatcher::DispatchIPCCommand(uint32_t cmd_type, const uint8_t *payload, size_t size, int client_fd)
-    {
-        // client_fd is set via ScopedMqttContext for MQTT commands, or passed from IPC directly
-        
-        switch (cmd_type)
-        {
-        case 101: // HandleStartStream
-            engine_->HandleStartStream(payload, size, 0);
-            break;
-        case 102: // HandleStopStream
-            engine_->HandleStopStream(payload, size, 0);
-            break;
-        case 103: // HandleUpdateAlgoConfig
-            engine_->HandleUpdateAlgoConfig(payload, size, 0);
-            break;
-        case 104: // HandleHeartbeat
-            engine_->HandleHeartbeat(payload, size, 0);
-            break;
-        case 105: // HandleShutdown
-            engine_->HandleShutdown(payload, size, 0);
-            break;
-        case 201: // StreamStart
-            engine_->HandleStreamStart(payload, size, 0);
-            break;
-        case 202: // StreamStop
-            engine_->HandleStreamStop(payload, size, 0);
-            break;
-        case 203: // StreamPlaybackStart
-            engine_->HandleStreamPlaybackStart(payload, size, 0);
-            break;
-        case 204: // StreamPlaybackStop
-            engine_->HandleStreamPlaybackStop(payload, size, 0);
-            break;
-        case 205: // StreamStatus
-            engine_->HandleStreamStatus(payload, size, 0);
-            break;
-        case 206: // StartSelfCheck
-            engine_->HandleStartSelfCheck(payload, size, 0);
-            break;
-        case 207: // FaceLibraryUpdate
-            engine_->HandleFaceLibraryUpdate(payload, size, 0);
-            break;
-        case 208: // FaceEmbeddingExtract
-            engine_->HandleFaceEmbeddingExtract(payload, size, 0);
-            break;
-        default:
-            std::cerr << "[CommandDispatcher] Unknown IPC command type: " << cmd_type << std::endl;
-            break;
-        }
-    }
 
     void CommandDispatcher::DispatchMqttCommand(const std::string &cmd_name, const std::string &payload_json)
     {
@@ -121,7 +72,7 @@ namespace aivision
             auto name_offset = fbb.CreateString(algo_name);
             auto ver_offset = fbb.CreateString(version);
 
-            auto cmd = aivision::ipc::CreateStartSelfCheckCmd(fbb, url_offset, token_offset, name_offset, ver_offset);
+            auto cmd = aivision::control::CreateStartSelfCheckCmd(fbb, url_offset, token_offset, name_offset, ver_offset);
             fbb.Finish(cmd);
 
             engine_->HandleStartSelfCheck(fbb.GetBufferPointer(), fbb.GetSize(), 0);

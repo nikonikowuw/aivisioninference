@@ -42,7 +42,9 @@ type FaceEmbeddingResult struct {
 	EmbeddingNorm  float64   `json:"embedding_norm,omitempty"`
 }
 
-// EngineClient 抽象 Go 控制面与 C++ 推理引擎的 IPC 通讯
+// EngineClient 抽象 Go 控制面与 C++ 推理引擎的通信能力。
+// 当前生产实现为 MqttEngineClient：控制命令经 MQTT 下发，响应通过 trace_id
+// 与 Redis Pub/Sub 配对；MockEngineClient 仅用于测试和本地降级。
 type EngineClient interface {
 	StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error)
 	StopStream(ctx context.Context, deviceID string) error

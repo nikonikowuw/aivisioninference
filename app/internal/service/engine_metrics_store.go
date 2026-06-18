@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/niko-admin/niko-admin/internal/pkg/ipc"
+	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 )
 
 // EngineMetricsStore 引擎指标存储
@@ -17,10 +17,10 @@ type EngineMetricsStore struct {
 	mu sync.RWMutex
 
 	// 最新全局指标
-	lastMetrics *ipc.EngineMetricsSnapshot
+	lastMetrics *controlproto.EngineMetricsSnapshot
 
 	// 每流最新指标 (task_id -> StreamMetricsSnapshot)
-	streamMetrics map[string]*ipc.StreamMetricsSnapshot
+	streamMetrics map[string]*controlproto.StreamMetricsSnapshot
 
 	// 历史缓冲区 (用于趋势图)
 	historyBuffer *HistoryBuffer
@@ -37,7 +37,7 @@ type EngineMetricsStore struct {
 // NewEngineMetricsStore 创建引擎指标存储
 func NewEngineMetricsStore(historyBuffer *HistoryBuffer) *EngineMetricsStore {
 	store := &EngineMetricsStore{
-		streamMetrics: make(map[string]*ipc.StreamMetricsSnapshot),
+		streamMetrics: make(map[string]*controlproto.StreamMetricsSnapshot),
 		historyBuffer: historyBuffer,
 		logger:        zap.L().With(zap.String("component", "engine_metrics_store")),
 	}
@@ -46,7 +46,7 @@ func NewEngineMetricsStore(historyBuffer *HistoryBuffer) *EngineMetricsStore {
 }
 
 // Update 更新指标 (由 MetricsReceiver 调用)
-func (s *EngineMetricsStore) Update(snapshot *ipc.EngineMetricsSnapshot) {
+func (s *EngineMetricsStore) Update(snapshot *controlproto.EngineMetricsSnapshot) {
 	if snapshot == nil {
 		return
 	}
@@ -59,7 +59,7 @@ func (s *EngineMetricsStore) Update(snapshot *ipc.EngineMetricsSnapshot) {
 	s.updateCount.Add(1)
 
 	// 更新每流指标
-	s.streamMetrics = make(map[string]*ipc.StreamMetricsSnapshot,
+	s.streamMetrics = make(map[string]*controlproto.StreamMetricsSnapshot,
 		len(snapshot.Streams))
 	for i := range snapshot.Streams {
 		stream := &snapshot.Streams[i]
@@ -79,7 +79,7 @@ func (s *EngineMetricsStore) Update(snapshot *ipc.EngineMetricsSnapshot) {
 }
 
 // GetLatest 获取最新全局指标
-func (s *EngineMetricsStore) GetLatest() *ipc.EngineMetricsSnapshot {
+func (s *EngineMetricsStore) GetLatest() *controlproto.EngineMetricsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -90,7 +90,7 @@ func (s *EngineMetricsStore) GetLatest() *ipc.EngineMetricsSnapshot {
 	// 返回深度拷贝
 	cp := *s.lastMetrics
 	if len(s.lastMetrics.Streams) > 0 {
-		cp.Streams = make([]ipc.StreamMetricsSnapshot,
+		cp.Streams = make([]controlproto.StreamMetricsSnapshot,
 			len(s.lastMetrics.Streams))
 		copy(cp.Streams, s.lastMetrics.Streams)
 	}
@@ -98,7 +98,7 @@ func (s *EngineMetricsStore) GetLatest() *ipc.EngineMetricsSnapshot {
 }
 
 // GetStreamMetrics 获取指定流的指标
-func (s *EngineMetricsStore) GetStreamMetrics(taskID string) *ipc.StreamMetricsSnapshot {
+func (s *EngineMetricsStore) GetStreamMetrics(taskID string) *controlproto.StreamMetricsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -112,11 +112,11 @@ func (s *EngineMetricsStore) GetStreamMetrics(taskID string) *ipc.StreamMetricsS
 }
 
 // GetAllStreamMetrics 获取所有流的指标
-func (s *EngineMetricsStore) GetAllStreamMetrics() []ipc.StreamMetricsSnapshot {
+func (s *EngineMetricsStore) GetAllStreamMetrics() []controlproto.StreamMetricsSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make([]ipc.StreamMetricsSnapshot, 0, len(s.streamMetrics))
+	result := make([]controlproto.StreamMetricsSnapshot, 0, len(s.streamMetrics))
 	for _, stream := range s.streamMetrics {
 		result = append(result, *stream)
 	}

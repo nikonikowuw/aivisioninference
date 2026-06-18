@@ -495,8 +495,10 @@ func TestEdgeNodeRepository_FindReadyEmbeddingNodesByAlgorithm(t *testing.T) {
 		Name:     "Disabled Embedding Node",
 		Endpoint: "http://127.0.0.1:8083",
 		Status:   model.NodeStatusOnline,
-		Enabled:  false,
+		Enabled:  true,
 	}))
+	// Use explicit UPDATE because GORM skips the zero-value bool field on INSERT
+	require.NoError(t, db.Model(&model.EdgeNode{}).Where("id = ?", "node-emb-d").Update("enabled", false).Error)
 
 	// Install algorithm on all four nodes
 	for _, id := range []string{"node-emb-a", "node-emb-b", "node-emb-c", "node-emb-d"} {

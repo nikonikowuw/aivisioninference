@@ -122,9 +122,36 @@ type PersonService struct {
 	engine               EngineClient
 }
 
+// PersonServiceDeps 聚合 PersonService 的构造依赖。
+type PersonServiceDeps struct {
+	PersonRepo           personRepo
+	GroupRepo            personGroupRepo
+	TagRepo              personTagRepo
+	TagRelationRepo      personTagRelationRepo
+	ImportTaskRepo       importTaskRepo
+	Storage              storage.Storage
+	TaskClient           taskClient
+	EmbeddingRepo        *repository.PersonEmbeddingRepository
+	AlgorithmPackageRepo *repository.AlgorithmPackageRepository
+	EmbeddingScheduler   *FaceEmbeddingScheduler
+	Engine               EngineClient
+}
+
 // NewPersonService 创建人员 Service。
-func NewPersonService(personRepo personRepo, groupRepo personGroupRepo, tagRepo personTagRepo, tagRelationRepo personTagRelationRepo, importTaskRepo importTaskRepo, storage storage.Storage, taskClient taskClient, embeddingRepo *repository.PersonEmbeddingRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, embeddingScheduler *FaceEmbeddingScheduler, engine EngineClient) *PersonService {
-	return &PersonService{personRepo: personRepo, groupRepo: groupRepo, tagRepo: tagRepo, tagRelationRepo: tagRelationRepo, importTaskRepo: importTaskRepo, storage: storage, taskClient: taskClient, embeddingRepo: embeddingRepo, algorithmPackageRepo: algorithmPackageRepo, embeddingScheduler: embeddingScheduler, engine: engine}
+func NewPersonService(deps PersonServiceDeps) *PersonService {
+	return &PersonService{
+		personRepo:           deps.PersonRepo,
+		groupRepo:            deps.GroupRepo,
+		tagRepo:              deps.TagRepo,
+		tagRelationRepo:      deps.TagRelationRepo,
+		importTaskRepo:       deps.ImportTaskRepo,
+		storage:              deps.Storage,
+		taskClient:           deps.TaskClient,
+		embeddingRepo:        deps.EmbeddingRepo,
+		algorithmPackageRepo: deps.AlgorithmPackageRepo,
+		embeddingScheduler:   deps.EmbeddingScheduler,
+		engine:               deps.Engine,
+	}
 }
 
 // List 查询人员列表。

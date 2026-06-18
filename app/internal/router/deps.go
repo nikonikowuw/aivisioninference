@@ -402,7 +402,19 @@ func providePersonHandler(
 	engine service.EngineClient,
 ) *handler.PersonHandler {
 	embeddingScheduler := service.NewFaceEmbeddingScheduler(nodeRepo, rdb)
-	personSvc := service.NewPersonService(personRepo, groupRepo, tagRepo, tagRelationRepo, importTaskRepo, fileStorage, taskClient, embeddingRepo, algorithmPackageRepo, embeddingScheduler, engine)
+	personSvc := service.NewPersonService(service.PersonServiceDeps{
+		PersonRepo:           personRepo,
+		GroupRepo:            groupRepo,
+		TagRepo:              tagRepo,
+		TagRelationRepo:      tagRelationRepo,
+		ImportTaskRepo:       importTaskRepo,
+		Storage:              fileStorage,
+		TaskClient:           taskClient,
+		EmbeddingRepo:        embeddingRepo,
+		AlgorithmPackageRepo: algorithmPackageRepo,
+		EmbeddingScheduler:   embeddingScheduler,
+		Engine:               engine,
+	})
 	return handler.NewPersonHandler(personSvc)
 }
 

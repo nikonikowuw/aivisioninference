@@ -76,6 +76,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			retry_count INTEGER DEFAULT 0,
 			last_retry_at DATETIME
 		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_node_algo ON edge_node_algorithms(node_id, algo_package_id);
 	`).Error)
 
 	require.NoError(t, db.Exec(`

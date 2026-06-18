@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pgvector/pgvector-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -275,6 +276,64 @@ func TestPersonRepository_UpdateEmbeddingStatus(t *testing.T) {
 	assert.Equal(t, model.EmbeddingStatusFailed, found.EmbeddingStatus)
 	assert.Equal(t, "NO_FACE", found.EmbeddingErrorCode)
 	assert.False(t, found.EmbeddingRetryable)
+}
+
+func TestPersonEmbeddingRepository_ListActiveFaceLibraryPage(t *testing.T) {
+	db := setupPersonTestDB(t)
+	personRepo := repository.NewPersonRepository(db)
+	embeddingRepo := repository.NewPersonEmbeddingRepository(db)
+	ctx := context.Background()
+
+	baseTime := time.Now().Truncate(time.Second)
+	personIDs := []string{
+		createTestPerson(t, personRepo, "P015", "A"),
+		createTestPerson(t, personRepo, "P016", "B"),
+		createTestPerson(t, personRepo, "P017", "C"),
+	}
+	for i, personID := range personIDs {
+		updatedAt := baseTime.Add(time.Duration(i) * time.Minute)
+		require.NoError(t, db.Model(&model.Person{}).
+			Where("id = ?", personID).
+			Updates(map[string]interface{}{
+				"embedding_status": model.EmbeddingStatusActive,
+				"updated_at":       updatedAt,
+			}).Error)
+		require.NoError(t, embeddingRepo.Create(ctx, &model.PersonEmbedding{
+			BaseModel:      model.BaseModel{ID: uuid.New().String()},
+			PersonRecordID: personID,
+			Embedding:      pgvector.NewVector([]float32{float32(i + 1), float32(i + 2)}),
+		}))
+	}
+
+	disabledID := createTestPerson(t, personRepo, "P018", "Disabled")
+	require.NoError(t, db.Model(&model.Person{}).
+		Where("id = ?", disabledID).
+		Updates(map[string]interface{}{
+			"enabled":          false,
+			"embedding_status": model.EmbeddingStatusActive,
+			"updated_at":       baseTime.Add(3 * time.Minute),
+		}).Error)
+	require.NoError(t, embeddingRepo.Create(ctx, &model.PersonEmbedding{
+		BaseModel:      model.BaseModel{ID: uuid.New().String()},
+		PersonRecordID: disabledID,
+		Embedding:      pgvector.NewVector([]float32{9, 9}),
+	}))
+
+	page1, cursor, err := embeddingRepo.ListActiveFaceLibraryPage(ctx, repository.FaceLibraryCursor{}, 2)
+	require.NoError(t, err)
+	require.Len(t, page1, 2)
+	assert.Equal(t, []string{personIDs[2], personIDs[1]}, []string{page1[0].PersonID, page1[1].PersonID})
+	assert.Equal(t, personIDs[1], cursor.PersonID)
+
+	page2, cursor, err := embeddingRepo.ListActiveFaceLibraryPage(ctx, cursor, 2)
+	require.NoError(t, err)
+	require.Len(t, page2, 1)
+	assert.Equal(t, personIDs[0], page2[0].PersonID)
+	assert.Equal(t, personIDs[0], cursor.PersonID)
+
+	page3, _, err := embeddingRepo.ListActiveFaceLibraryPage(ctx, cursor, 2)
+	require.NoError(t, err)
+	assert.Empty(t, page3)
 }
 
 func TestPersonGroupRepository_CRUD(t *testing.T) {

@@ -71,6 +71,7 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			retry_count INTEGER DEFAULT 0,
 			last_retry_at DATETIME
 		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_node_algo ON edge_node_algorithms(node_id, algo_package_id);
 	`).Error)
 
 	require.NoError(t, db.Exec(`
@@ -421,6 +422,88 @@ func TestEdgeNodeRepository_FindOnlineNodesWithAlgorithm_LoadBalancing(t *testin
 	}
 }
 
+func TestEdgeNodeAlgorithmRepository_SyncInstalledBatch(t *testing.T) {
+	db := setupEdgeNodeTestDB(t)
+	algoRepo := NewEdgeNodeAlgorithmRepository(db)
+	ctx := context.Background()
+
+	require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
+		BaseModel:           model.BaseModel{ID: "deploy-batch-1"},
+		NodeID:              "node-batch",
+		AlgoPackageID:       "algo-batch-installed",
+		Status:              model.AlgoDeployDownloading,
+		RuntimeStatus:       model.AlgoRuntimeUnknown,
+		InstallPath:         "",
+		ErrorMessage:        "old error",
+		RetryCount:          1,
+		EmbeddingCapacity:   1,
+		SupportsEmbedding:   false,
+		SupportsFaceLibrary: false,
+	}))
+	require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
+		BaseModel:           model.BaseModel{ID: "deploy-batch-2"},
+		NodeID:              "node-batch",
+		AlgoPackageID:       "algo-batch-failed",
+		Status:              model.AlgoDeployDownloading,
+		RuntimeStatus:       model.AlgoRuntimeWarming,
+		InstallPath:         "/old/path",
+		RetryCount:          2,
+		EmbeddingCapacity:   2,
+		SupportsEmbedding:   true,
+		SupportsFaceLibrary: true,
+	}))
+
+	err := algoRepo.SyncInstalled(ctx, "node-batch", []dto.InstalledAlgorithmInfo{
+		{
+			AlgoPackageID:       "algo-batch-installed",
+			Version:             "1.0.0",
+			InstallPath:         "/opt/algo/installed",
+			Status:              "installed",
+			RuntimeStatus:       model.AlgoRuntimeReady,
+			SupportsEmbedding:   true,
+			SupportsFaceLibrary: true,
+			EmbeddingCapacity:   4,
+		},
+		{
+			AlgoPackageID:       "algo-batch-failed",
+			Version:             "1.0.0",
+			Status:              "failed",
+			SupportsEmbedding:   false,
+			SupportsFaceLibrary: false,
+		},
+		{
+			AlgoPackageID: "algo-batch-missing",
+			Version:       "1.0.0",
+			InstallPath:   "/opt/algo/missing",
+			Status:        "installed",
+		},
+	})
+	require.NoError(t, err)
+
+	installed, err := algoRepo.FindByNodeAndAlgo(ctx, "node-batch", "algo-batch-installed")
+	require.NoError(t, err)
+	assert.Equal(t, model.AlgoDeployInstalled, installed.Status)
+	assert.Equal(t, model.AlgoRuntimeReady, installed.RuntimeStatus)
+	assert.Equal(t, "/opt/algo/installed", installed.InstallPath)
+	assert.True(t, installed.SupportsEmbedding)
+	assert.True(t, installed.SupportsFaceLibrary)
+	assert.Equal(t, 4, installed.EmbeddingCapacity)
+	assert.Empty(t, installed.ErrorMessage)
+	assert.NotNil(t, installed.DeployedAt)
+
+	failed, err := algoRepo.FindByNodeAndAlgo(ctx, "node-batch", "algo-batch-failed")
+	require.NoError(t, err)
+	assert.Equal(t, model.AlgoDeployFailed, failed.Status)
+	assert.Equal(t, model.AlgoRuntimeFailed, failed.RuntimeStatus)
+	assert.Equal(t, "引擎端安装失败", failed.ErrorMessage)
+	assert.Equal(t, 2, failed.EmbeddingCapacity)
+	assert.False(t, failed.SupportsEmbedding)
+	assert.False(t, failed.SupportsFaceLibrary)
+
+	_, err = algoRepo.FindByNodeAndAlgo(ctx, "node-batch", "algo-batch-missing")
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
 func TestEdgeNodeRepository_FindOnlineNodesWithAlgorithm_EmptyResults(t *testing.T) {
 	db := setupEdgeNodeTestDB(t)
 	nodeRepo := NewEdgeNodeRepository(db)
@@ -478,24 +561,24 @@ func TestEdgeNodeRepository_FindReadyEmbeddingNodesByAlgorithm(t *testing.T) {
 	}))
 	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
 		BaseModel: model.BaseModel{ID: "node-emb-b"},
-		Name:     "Installed But Not Ready Node",
-		Endpoint: "http://127.0.0.1:8081",
-		Status:   model.NodeStatusOnline,
-		Enabled:  true,
+		Name:      "Installed But Not Ready Node",
+		Endpoint:  "http://127.0.0.1:8081",
+		Status:    model.NodeStatusOnline,
+		Enabled:   true,
 	}))
 	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
 		BaseModel: model.BaseModel{ID: "node-emb-c"},
-		Name:     "Ready But No Embedding Cap",
-		Endpoint: "http://127.0.0.1:8082",
-		Status:   model.NodeStatusOnline,
-		Enabled:  true,
+		Name:      "Ready But No Embedding Cap",
+		Endpoint:  "http://127.0.0.1:8082",
+		Status:    model.NodeStatusOnline,
+		Enabled:   true,
 	}))
 	require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
 		BaseModel: model.BaseModel{ID: "node-emb-d"},
-		Name:     "Disabled Embedding Node",
-		Endpoint: "http://127.0.0.1:8083",
-		Status:   model.NodeStatusOnline,
-		Enabled:  true,
+		Name:      "Disabled Embedding Node",
+		Endpoint:  "http://127.0.0.1:8083",
+		Status:    model.NodeStatusOnline,
+		Enabled:   true,
 	}))
 	// Use explicit UPDATE because GORM skips the zero-value bool field on INSERT
 	require.NoError(t, db.Model(&model.EdgeNode{}).Where("id = ?", "node-emb-d").Update("enabled", false).Error)
@@ -552,10 +635,10 @@ func TestEdgeNodeRepository_FindInstalledEmbeddingNodesByAlgorithm(t *testing.T)
 	for _, id := range []string{"node-inst-a", "node-inst-b", "node-inst-c", "node-inst-d", "node-inst-e"} {
 		require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
 			BaseModel: model.BaseModel{ID: id},
-			Name:     id,
-			Endpoint: "http://127.0.0.1:8080",
-			Status:   model.NodeStatusOnline,
-			Enabled:  true,
+			Name:      id,
+			Endpoint:  "http://127.0.0.1:8080",
+			Status:    model.NodeStatusOnline,
+			Enabled:   true,
 		}))
 		require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
 			BaseModel:     model.BaseModel{ID: id + "-deploy"},
@@ -613,10 +696,10 @@ func TestEdgeNodeRepository_FindReadyFaceLibraryNodesByAlgorithm(t *testing.T) {
 	for _, id := range []string{"node-fl-a", "node-fl-b", "node-fl-c"} {
 		require.NoError(t, nodeRepo.Create(ctx, &model.EdgeNode{
 			BaseModel: model.BaseModel{ID: id},
-			Name:     id,
-			Endpoint: "http://127.0.0.1:8080",
-			Status:   model.NodeStatusOnline,
-			Enabled:  true,
+			Name:      id,
+			Endpoint:  "http://127.0.0.1:8080",
+			Status:    model.NodeStatusOnline,
+			Enabled:   true,
 		}))
 		require.NoError(t, algoRepo.Create(ctx, &model.EdgeNodeAlgorithm{
 			BaseModel:     model.BaseModel{ID: id + "-deploy"},

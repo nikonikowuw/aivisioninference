@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
@@ -90,21 +91,49 @@ func (r *EdgeNodeAlgorithmRepository) ListPendingByNode(ctx context.Context, nod
 
 // SyncInstalled synchronizes the installed algorithms status reported by the node.
 func (r *EdgeNodeAlgorithmRepository) SyncInstalled(ctx context.Context, nodeID string, installed []dto.InstalledAlgorithmInfo) error {
+	if len(installed) == 0 {
+		return nil
+	}
+
+	packageIDs := make([]string, 0, len(installed))
+	latestByPackageID := make(map[string]dto.InstalledAlgorithmInfo, len(installed))
 	for _, info := range installed {
-		var item model.EdgeNodeAlgorithm
-		err := r.db.WithContext(ctx).
-			Where("node_id = ? AND algo_package_id = ?", nodeID, info.AlgoPackageID).
-			First(&item).Error
-		if err == gorm.ErrRecordNotFound {
-			continue // Skip auto-creation
+		if info.AlgoPackageID == "" {
+			continue
 		}
-		if err != nil {
-			return err
+		if _, exists := latestByPackageID[info.AlgoPackageID]; !exists {
+			packageIDs = append(packageIDs, info.AlgoPackageID)
+		}
+		latestByPackageID[info.AlgoPackageID] = info
+	}
+	if len(packageIDs) == 0 {
+		return nil
+	}
+
+	var existing []model.EdgeNodeAlgorithm
+	if err := r.db.WithContext(ctx).
+		Where("node_id = ? AND algo_package_id IN ?", nodeID, packageIDs).
+		Find(&existing).Error; err != nil {
+		return err
+	}
+
+	existingByPackageID := make(map[string]model.EdgeNodeAlgorithm, len(existing))
+	for _, item := range existing {
+		existingByPackageID[item.AlgoPackageID] = item
+	}
+
+	now := time.Now()
+	updates := make([]model.EdgeNodeAlgorithm, 0, len(existing))
+	for _, algoPackageID := range packageIDs {
+		info := latestByPackageID[algoPackageID]
+		item, ok := existingByPackageID[algoPackageID]
+		if !ok {
+			continue // Skip auto-creation.
 		}
 
-		if info.Status == "installed" {
+		switch info.Status {
+		case "installed":
 			if item.Status != model.AlgoDeployInstalled {
-				now := time.Now()
 				item.Status = model.AlgoDeployInstalled
 				item.InstallPath = info.InstallPath
 				item.DeployedAt = &now
@@ -115,15 +144,7 @@ func (r *EdgeNodeAlgorithmRepository) SyncInstalled(ctx context.Context, nodeID 
 			} else if item.RuntimeStatus == "" {
 				item.RuntimeStatus = model.AlgoRuntimeInstalled
 			}
-			item.SupportsEmbedding = info.SupportsEmbedding
-			item.SupportsFaceLibrary = info.SupportsFaceLibrary
-			if info.EmbeddingCapacity > 0 {
-				item.EmbeddingCapacity = info.EmbeddingCapacity
-			}
-			if err := r.db.WithContext(ctx).Save(&item).Error; err != nil {
-				return err
-			}
-		} else if info.Status == "failed" {
+		case "failed":
 			if item.Status != model.AlgoDeployFailed {
 				item.Status = model.AlgoDeployFailed
 				item.ErrorMessage = "引擎端安装失败"
@@ -133,17 +154,41 @@ func (r *EdgeNodeAlgorithmRepository) SyncInstalled(ctx context.Context, nodeID 
 			} else {
 				item.RuntimeStatus = model.AlgoRuntimeFailed
 			}
-			item.SupportsEmbedding = info.SupportsEmbedding
-			item.SupportsFaceLibrary = info.SupportsFaceLibrary
-			if info.EmbeddingCapacity > 0 {
-				item.EmbeddingCapacity = info.EmbeddingCapacity
-			}
-			if err := r.db.WithContext(ctx).Save(&item).Error; err != nil {
-				return err
-			}
+		default:
+			continue
 		}
+
+		item.SupportsEmbedding = info.SupportsEmbedding
+		item.SupportsFaceLibrary = info.SupportsFaceLibrary
+		if info.EmbeddingCapacity > 0 {
+			item.EmbeddingCapacity = info.EmbeddingCapacity
+		}
+		item.UpdatedAt = now
+		updates = append(updates, item)
 	}
-	return nil
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return r.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{
+				{Name: "node_id"},
+				{Name: "algo_package_id"},
+			},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"status",
+				"install_path",
+				"runtime_status",
+				"supports_embedding",
+				"supports_face_library",
+				"embedding_capacity",
+				"deployed_at",
+				"error_message",
+				"updated_at",
+			}),
+		}).
+		CreateInBatches(updates, 100).Error
 }
 
 // FindFailedWithRetries finds failed algorithm deployments with less than 3 retries.

@@ -225,6 +225,18 @@ type FaceEmbeddingRecord struct {
 	PersonID   string          `gorm:"column:person_id"`
 	PersonName string          `gorm:"column:person_name"`
 	Embedding  pgvector.Vector `gorm:"column:embedding"`
+	UpdatedAt  time.Time       `gorm:"column:updated_at"`
+}
+
+// FaceLibraryCursor 表示人脸库 keyset 分页游标。
+type FaceLibraryCursor struct {
+	UpdatedAt time.Time
+	PersonID  string
+}
+
+// IsZero reports whether the cursor points to the first page.
+func (c FaceLibraryCursor) IsZero() bool {
+	return c.UpdatedAt.IsZero() || c.PersonID == ""
 }
 
 // NewPersonEmbeddingRepository 创建人员向量 Repository。
@@ -251,16 +263,36 @@ func (r *PersonEmbeddingRepository) ListActiveFaceLibrary(ctx context.Context, l
 	if limit <= 0 || limit > 100000 {
 		limit = 100000
 	}
+	items, _, err := r.ListActiveFaceLibraryPage(ctx, FaceLibraryCursor{}, limit)
+	return items, err
+}
+
+// ListActiveFaceLibraryPage returns active face library rows using keyset pagination.
+func (r *PersonEmbeddingRepository) ListActiveFaceLibraryPage(ctx context.Context, cursor FaceLibraryCursor, limit int) ([]FaceEmbeddingRecord, FaceLibraryCursor, error) {
+	if limit <= 0 || limit > 5000 {
+		limit = 1000
+	}
 	var items []FaceEmbeddingRecord
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Table("person_embeddings pe").
-		Select("p.id AS person_id, p.person_name, pe.embedding").
+		Select("p.id AS person_id, p.person_name, pe.embedding, p.updated_at").
 		Joins("JOIN persons p ON p.id = pe.person_record_id").
-		Where("p.enabled = ? AND p.embedding_status = ? AND p.deleted_at IS NULL", true, model.EmbeddingStatusActive).
-		Order("p.updated_at DESC").
+		Where("p.enabled = ? AND p.embedding_status = ? AND p.deleted_at IS NULL", true, model.EmbeddingStatusActive)
+	if !cursor.IsZero() {
+		query = query.Where("(p.updated_at < ? OR (p.updated_at = ? AND p.id < ?))", cursor.UpdatedAt, cursor.UpdatedAt, cursor.PersonID)
+	}
+	err := query.
+		Order("p.updated_at DESC, p.id DESC").
 		Limit(limit).
 		Scan(&items).Error
-	return items, err
+	if err != nil {
+		return nil, FaceLibraryCursor{}, err
+	}
+	if len(items) == 0 {
+		return items, FaceLibraryCursor{}, nil
+	}
+	last := items[len(items)-1]
+	return items, FaceLibraryCursor{UpdatedAt: last.UpdatedAt, PersonID: last.PersonID}, nil
 }
 
 // PersonSearchByFaceRecord 以图搜人查询结果行。

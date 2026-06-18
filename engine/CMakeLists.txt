@@ -215,6 +215,7 @@ set(INSTALL_HEADERS
     include/pipeline/inference_stage.h
     include/pipeline/rtsp_push_stage.h
     include/algo/abi_contract.h
+    include/algo/algo_utils.h
     include/algo/so_handle.h
     include/algo/algo_instance.h
     include/algo/algo_manager.h

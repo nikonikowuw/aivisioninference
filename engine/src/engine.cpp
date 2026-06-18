@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "algo/algo_utils.h"
 #include "algo/so_handle.h"
 #include "command_dispatcher.h"
 #include "monitor/device_monitor.h"
@@ -143,33 +144,6 @@ std::string EnsurePackageDirConfig(const std::string &algo_params_json,
   return merged;
 }
 
-std::string FindAlgorithmSo(const std::string &install_path,
-                            const std::string &algo_name) {
-  namespace fs = std::filesystem;
-  if (install_path.empty())
-    return "";
-
-  std::error_code ec;
-  fs::path root = fs::weakly_canonical(fs::path(install_path), ec);
-  if (ec || !fs::exists(root))
-    return "";
-
-  fs::path conventional = root / (algo_name + ".so");
-  if (fs::exists(conventional, ec) && fs::is_regular_file(conventional, ec)) {
-    return conventional.string();
-  }
-
-  for (const auto &entry : fs::recursive_directory_iterator(root, ec)) {
-    if (ec)
-      break;
-    if (entry.is_symlink(ec))
-      continue;
-    if (entry.is_regular_file(ec) && entry.path().extension() == ".so") {
-      return entry.path().string();
-    }
-  }
-  return "";
-}
 } // namespace
 
 InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
@@ -224,9 +198,10 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
                                                    size_t payload_len) {
     // Helper: parse JSON payload with trace_id injection, fallback on error
     auto parseJsonPayload = [](const uint8_t *p, size_t len,
-                              const std::string &tid) -> std::string {
+                               const std::string &tid) -> std::string {
       try {
-        auto js = json::parse(std::string(reinterpret_cast<const char *>(p), len));
+        auto js =
+            json::parse(std::string(reinterpret_cast<const char *>(p), len));
         js["trace_id"] = tid;
         return js.dump();
       } catch (...) {
@@ -541,8 +516,7 @@ std::string ExtractJsonField(const std::string &json_str,
 }
 
 bool ExtractJsonBoolField(const std::string &json_str,
-                          const std::string &field_name,
-                          bool default_value) {
+                          const std::string &field_name, bool default_value) {
   try {
     auto j = json::parse(json_str);
     if (j.contains(field_name)) {
@@ -565,7 +539,8 @@ std::string ExtractJsonRawField(const std::string &json_str,
                                 const std::string &field_name) {
   try {
     auto j = json::parse(json_str);
-    if (j.contains(field_name) && (j[field_name].is_object() || j[field_name].is_array())) {
+    if (j.contains(field_name) &&
+        (j[field_name].is_object() || j[field_name].is_array())) {
       return j[field_name].dump();
     }
   } catch (...) {
@@ -737,9 +712,9 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
             << ", so_path=" << so_path << std::endl;
 
   if (device_id.empty() || stream_url.empty()) {
-    std::cerr
-        << "[Control] Invalid StreamStart payload: missing device_id or stream_url"
-        << std::endl;
+    std::cerr << "[Control] Invalid StreamStart payload: missing device_id or "
+                 "stream_url"
+              << std::endl;
     flatbuffers::FlatBufferBuilder fbb(256);
     auto device_id_str = fbb.CreateString("");
     auto resp =
@@ -755,16 +730,16 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   bool algo_ready = true;
   if (enable_infer) {
     if (algo_name.empty() || so_path.empty()) {
-      std::cerr
-          << "[Control] StreamStart infer enabled but algo_name or so_path is empty"
-          << std::endl;
+      std::cerr << "[Control] StreamStart infer enabled but algo_name or "
+                   "so_path is empty"
+                << std::endl;
       algo_ready = false;
     } else {
       auto instance =
           algo_mgr_->Load(algo_name, algo_version, so_path, algo_params_json);
       if (!instance) {
-        std::cerr << "[Control] Failed to load algorithm for stream: " << algo_name
-                  << ", so_path=" << so_path << std::endl;
+        std::cerr << "[Control] Failed to load algorithm for stream: "
+                  << algo_name << ", so_path=" << so_path << std::endl;
         algo_ready = false;
       } else {
         pipeline::AlgoConfig config;
@@ -773,8 +748,8 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
         config.algo_params_json = algo_params_json;
         snapshot_mgr_->UpdateConfig(algo_name, config);
         snapshot_mgr_->BindStreamAlgos(device_id, {algo_name});
-        std::cout << "[Control] Algorithm bound to stream device_id=" << device_id
-                  << ", algo=" << algo_name << std::endl;
+        std::cout << "[Control] Algorithm bound to stream device_id="
+                  << device_id << ", algo=" << algo_name << std::endl;
       }
     }
   }
@@ -806,8 +781,9 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
               << ", started=" << started
               << ", play_url=" << (started ? play_url : "") << std::endl;
   } else {
-    std::cerr << "[Control] Failed to send StreamStart response: no active client"
-              << std::endl;
+    std::cerr
+        << "[Control] Failed to send StreamStart response: no active client"
+        << std::endl;
   }
 }
 
@@ -899,7 +875,8 @@ void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
     device_id = payload_str;
   }
 
-  std::cout << "[Control] StreamPlaybackStop device_id=" << device_id << std::endl;
+  std::cout << "[Control] StreamPlaybackStop device_id=" << device_id
+            << std::endl;
 
   if (!device_id.empty()) {
     pipeline_mgr_->DestroyPipeline(device_id);
@@ -1032,13 +1009,14 @@ void InferenceEngine::HandleAlgoWarmup(const uint8_t *payload, size_t size,
       error_code = "ALGO_NOT_INSTALLED";
       error_message = "algorithm package is not installed on this node";
     } else {
-      const std::string so_path = FindAlgorithmSo(install_path, algo_name);
+      const std::string so_path = algo::FindAlgorithmSo(install_path);
       if (so_path.empty()) {
         error_code = "SO_NOT_FOUND";
-        error_message = "algorithm library not found under install path";
+        error_message = "nikoniko_detector.so not found under install path";
       } else {
         const std::string config_json = EnsurePackageDirConfig("{}", so_path);
-        auto instance = algo_mgr_->Load(algo_name, algo_version, so_path, config_json);
+        auto instance =
+            algo_mgr_->Load(algo_name, algo_version, so_path, config_json);
         success = instance != nullptr;
         if (!success) {
           error_code = "ALGO_WARMUP_FAILED";
@@ -1049,16 +1027,15 @@ void InferenceEngine::HandleAlgoWarmup(const uint8_t *payload, size_t size,
   }
 
   std::cout << "[Control] AlgoWarmup"
-            << " algo=" << algo_name
-            << " version=" << algo_version
+            << " algo=" << algo_name << " version=" << algo_version
             << " success=" << success << std::endl;
 
   const std::string response =
       std::string("{\"success\":") + (success ? "true" : "false") +
-      ",\"algo_name\":\"" + JsonEscape(algo_name) +
-      "\",\"algo_version\":\"" + JsonEscape(algo_version) +
-      "\",\"error_code\":\"" + JsonEscape(error_code) +
-      "\",\"error_message\":\"" + JsonEscape(error_message) + "\"}";
+      ",\"algo_name\":\"" + JsonEscape(algo_name) + "\",\"algo_version\":\"" +
+      JsonEscape(algo_version) + "\",\"error_code\":\"" +
+      JsonEscape(error_code) + "\",\"error_message\":\"" +
+      JsonEscape(error_message) + "\"}";
   int client_fd = response_router_->GetActiveClientFd();
   if (client_fd != -1) {
     response_router_->SendResponse(
@@ -1213,10 +1190,9 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
       err_code = "FILE_CREATE_ERROR";
     } else {
       curl_easy_setopt(curl, CURLOPT_URL, download_url.c_str());
-      curl_easy_setopt(
-          curl, CURLOPT_WRITEFUNCTION,
-          static_cast<size_t (*)(void *, size_t, size_t, FILE *)>(
-              curl_write_callback));
+      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+                       static_cast<size_t (*)(void *, size_t, size_t, FILE *)>(
+                           curl_write_callback));
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
       curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
       curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -1252,39 +1228,14 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
     }
   }
 
-  // 3. Traversal to find .so file and validate it's within extract_dir
+  // 3. Resolve the required algorithm library from the fixed package layout.
   std::string so_path;
   if (success) {
-    try {
-      namespace fs = std::filesystem;
-      auto canonical_extract = fs::weakly_canonical(fs::path(extract_dir));
-      if (fs::exists(canonical_extract)) {
-        for (const auto &entry :
-             fs::recursive_directory_iterator(canonical_extract)) {
-          // 拒绝符号链接
-          if (entry.is_symlink())
-            continue;
-          if (entry.is_regular_file() && entry.path().extension() == ".so") {
-            auto abs_so = fs::weakly_canonical(entry.path());
-            // 验证 .so 文件在 extract_dir 内
-            auto rel = fs::relative(abs_so, canonical_extract);
-            if (rel.string().find("..") != std::string::npos) {
-              continue; // 路径遍历攻击
-            }
-            so_path = abs_so.string();
-            break;
-          }
-        }
-      }
-    } catch (const std::exception &e) {
-      success = false;
-      err_msg = std::string("Traversal failed: ") + e.what();
-      err_code = "TRAVERSAL_ERROR";
-    }
+    so_path = algo::FindAlgorithmSo(extract_dir);
 
     if (success && so_path.empty()) {
       success = false;
-      err_msg = "No .so file found in the algorithm package";
+      err_msg = "nikoniko_detector.so not found in the algorithm package";
       err_code = "SO_NOT_FOUND";
     }
   }

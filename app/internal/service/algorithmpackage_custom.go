@@ -251,7 +251,14 @@ func (s *AlgorithmPackageService) enqueueFaceEmbeddingRebuild(ctx context.Contex
 	)
 }
 
-// RepackZipToTar checks zip entries for Zip Slip, extracts meta and .so, and writes a flat .tar file.
+// RepackZipToTar checks zip entries for Zip Slip, extracts meta and .so,
+// and writes a flat .tar file with the common top-level directory stripped.
+//
+// Algorithm package zips often ship with a versioned top-level directory
+// (e.g. "face_recognition_1.0.0/nikoniko_detector.so"), but Engine expects
+// the .so at the tar root ("nikoniko_detector.so"). When all entries share
+// a common top-level directory, it is stripped. Nested sub-directories such
+// as "models/..." are preserved relative to the stripped root.
 func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -262,9 +269,14 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 	var meta *AlgoMeta
 	var foundSo bool
 
-	// 1. First pass: Validate Zip Slip and extract metadata
+	// 1. First pass: Validate Zip Slip, extract metadata, detect common top-level prefix
+	var commonPrefix string
+	prefixInitialized := false
+
 	for _, f := range zr.File {
 		cleanedPath := filepath.Clean(f.Name)
+
+		// Zip Slip security check
 		if filepath.IsAbs(cleanedPath) || strings.HasPrefix(cleanedPath, "..") || strings.Contains(cleanedPath, "/../") {
 			return nil, 0, "", fmt.Errorf("zip slip security exception: %s", f.Name)
 		}
@@ -290,6 +302,32 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 		if strings.HasSuffix(filepath.Base(cleanedPath), ".so") {
 			foundSo = true
 		}
+
+		// Detect common top-level directory prefix.
+		// e.g. all entries under "face_recognition_1.0.0/" share prefix "face_recognition_1.0.0".
+		firstComponent := strings.SplitN(cleanedPath, "/", 2)[0]
+		if !prefixInitialized {
+			commonPrefix = firstComponent
+			prefixInitialized = true
+		} else if firstComponent != commonPrefix {
+			commonPrefix = "" // mix of prefixes → no stripping
+		}
+	}
+
+	// Verify commonPrefix is a real directory, not a single root-level filename.
+	// e.g. a zip with only "nikoniko_detector.so" has no directory structure.
+	if commonPrefix != "" {
+		hasSubpath := false
+		for _, f := range zr.File {
+			cleanedPath := filepath.Clean(f.Name)
+			if strings.Contains(cleanedPath, "/") && strings.HasPrefix(cleanedPath, commonPrefix+"/") {
+				hasSubpath = true
+				break
+			}
+		}
+		if !hasSubpath {
+			commonPrefix = ""
+		}
 	}
 
 	if meta == nil {
@@ -310,7 +348,7 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 		return nil, 0, "", fmt.Errorf("invalid version: must match ^[a-zA-Z0-9_\\-\\.]+$")
 	}
 
-	// 2. Second pass: Create tar and write entries
+	// 2. Second pass: Create tar and write entries with flattened paths
 	tarFile, err := os.Create(tarPath)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("create tar file failed: %w", err)
@@ -327,6 +365,17 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 
 	for _, f := range zr.File {
 		cleanedPath := filepath.Clean(f.Name)
+
+		// Strip common top-level directory if detected
+		tarEntryName := cleanedPath
+		if commonPrefix != "" {
+			if cleanedPath == commonPrefix {
+				// Top-level directory entry itself → skip, no need in tar
+				continue
+			}
+			tarEntryName = strings.TrimPrefix(cleanedPath, commonPrefix+"/")
+		}
+
 		rc, err := f.Open()
 		if err != nil {
 			return nil, 0, "", fmt.Errorf("open zip entry %s failed: %w", f.Name, err)
@@ -338,7 +387,7 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 			rc.Close()
 			return nil, 0, "", fmt.Errorf("create tar header for %s failed: %w", f.Name, err)
 		}
-		hdr.Name = cleanedPath
+		hdr.Name = tarEntryName
 
 		if err := tw.WriteHeader(hdr); err != nil {
 			rc.Close()

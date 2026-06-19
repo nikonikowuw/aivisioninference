@@ -113,10 +113,11 @@ type LogConfig struct {
 type LogFileConfig struct {
 	Enabled    bool   `mapstructure:"enabled"`
 	Path       string `mapstructure:"path"`
-	MaxSize    int    `mapstructure:"max_size"`    // MB
+	MaxSize    int    `mapstructure:"max_size"`    // MB; used by lumberjack (size-based rotation)
 	MaxBackups int    `mapstructure:"max_backups"` // file count
 	MaxAge     int    `mapstructure:"max_age"`     // days
 	Compress   bool   `mapstructure:"compress"`
+	TimeBased  bool   `mapstructure:"time_based"`  // enable daily time-based rotation with date-named files
 }
 
 // CORSConfig holds CORS settings.
@@ -286,6 +287,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.access.max_backups", 7)
 	v.SetDefault("log.access.max_age", 7)
 	v.SetDefault("log.access.compress", true)
+	v.SetDefault("log.access.time_based", false)
 
 	// Log - App
 	v.SetDefault("log.app.enabled", true)
@@ -294,6 +296,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.app.max_backups", 7)
 	v.SetDefault("log.app.max_age", 7)
 	v.SetDefault("log.app.compress", true)
+	v.SetDefault("log.app.time_based", false)
 
 	// Log - Error
 	v.SetDefault("log.error.enabled", true)
@@ -302,6 +305,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.error.max_backups", 30)
 	v.SetDefault("log.error.max_age", 30)
 	v.SetDefault("log.error.compress", true)
+	v.SetDefault("log.error.time_based", false)
 
 	// CORS
 	v.SetDefault("cors.allow_origins", []string{"http://localhost:3000"})

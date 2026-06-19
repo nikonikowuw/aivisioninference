@@ -109,13 +109,22 @@ func parseLevel(s string) zap.AtomicLevel {
 	}
 }
 
-// newFileWriter creates a lumberjack-backed WriteSyncer for log file rotation.
+// newFileWriter creates a WriteSyncer for log file output.
+// When cfg.TimeBased is true, it returns a dailyRotateSyncer that splits
+// logs by date with date-named files. Otherwise, it returns a lumberjack-backed
+// WriteSyncer with size-based rotation.
 // Returns a no-op WriteSyncer if file logging is disabled to prevent silent output to stdout.
 func newFileWriter(cfg config.LogFileConfig) zapcore.WriteSyncer {
 	if !cfg.Enabled || cfg.Path == "" {
 		return zapcore.AddSync(io.Discard)
 	}
-	// Ensure log directory exists
+
+	// Time-based (daily) rotation with date-named files
+	if cfg.TimeBased {
+		return zapcore.AddSync(newDailyRotateSyncer(cfg))
+	}
+
+	// Size-based rotation via lumberjack (original behavior)
 	dir := filepath.Dir(cfg.Path)
 	if dir != "" {
 		_ = os.MkdirAll(dir, 0o755)

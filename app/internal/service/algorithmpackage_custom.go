@@ -272,12 +272,13 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 	// 1. First pass: Validate Zip Slip, extract metadata, detect common top-level prefix
 	var commonPrefix string
 	prefixInitialized := false
+	prefixHasChild := false
 
 	for _, f := range zr.File {
 		cleanedPath := filepath.Clean(f.Name)
 
-		// Zip Slip security check
-		if filepath.IsAbs(cleanedPath) || strings.HasPrefix(cleanedPath, "..") || strings.Contains(cleanedPath, "/../") {
+		// Zip Slip security check (after filepath.Clean, "/../" segments cannot exist)
+		if filepath.IsAbs(cleanedPath) || strings.HasPrefix(cleanedPath, "..") {
 			return nil, 0, "", fmt.Errorf("zip slip security exception: %s", f.Name)
 		}
 
@@ -312,22 +313,16 @@ func RepackZipToTar(zipPath, tarPath string) (*AlgoMeta, int64, string, error) {
 		} else if firstComponent != commonPrefix {
 			commonPrefix = "" // mix of prefixes → no stripping
 		}
+		// Track whether any entry has a child path under commonPrefix
+		if commonPrefix != "" && strings.HasPrefix(cleanedPath, commonPrefix+"/") {
+			prefixHasChild = true
+		}
 	}
 
 	// Verify commonPrefix is a real directory, not a single root-level filename.
 	// e.g. a zip with only "nikoniko_detector.so" has no directory structure.
-	if commonPrefix != "" {
-		hasSubpath := false
-		for _, f := range zr.File {
-			cleanedPath := filepath.Clean(f.Name)
-			if strings.Contains(cleanedPath, "/") && strings.HasPrefix(cleanedPath, commonPrefix+"/") {
-				hasSubpath = true
-				break
-			}
-		}
-		if !hasSubpath {
-			commonPrefix = ""
-		}
+	if commonPrefix != "" && !prefixHasChild {
+		commonPrefix = ""
 	}
 
 	if meta == nil {

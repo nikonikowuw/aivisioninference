@@ -111,8 +111,32 @@ func (rcv *StreamStatusRspMsg) PlaybackUrl() []byte {
 	return nil
 }
 
+/// ZLM 外部可访问地址，供 Go 构造 HLS 播放 URL
+func (rcv *StreamStatusRspMsg) ZlmHost() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+/// ZLM 外部可访问地址，供 Go 构造 HLS 播放 URL
+/// ZLM HTTP 端口（HLS），默认 80
+func (rcv *StreamStatusRspMsg) ZlmHttpPort() uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetUint16(o + rcv._tab.Pos)
+	}
+	return 80
+}
+
+/// ZLM HTTP 端口（HLS），默认 80
+func (rcv *StreamStatusRspMsg) MutateZlmHttpPort(n uint16) bool {
+	return rcv._tab.MutateUint16Slot(18, n)
+}
+
 func StreamStatusRspMsgStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(8)
 }
 func StreamStatusRspMsgAddDeviceId(builder *flatbuffers.Builder, deviceId flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(deviceId), 0)
@@ -134,6 +158,12 @@ func StreamStatusRspMsgAddQueueCapacity(builder *flatbuffers.Builder, queueCapac
 }
 func StreamStatusRspMsgAddPlaybackUrl(builder *flatbuffers.Builder, playbackUrl flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(playbackUrl), 0)
+}
+func StreamStatusRspMsgAddZlmHost(builder *flatbuffers.Builder, zlmHost flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(zlmHost), 0)
+}
+func StreamStatusRspMsgAddZlmHttpPort(builder *flatbuffers.Builder, zlmHttpPort uint16) {
+	builder.PrependUint16Slot(7, zlmHttpPort, 80)
 }
 func StreamStatusRspMsgEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

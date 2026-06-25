@@ -84,11 +84,11 @@ const ACCESS_TOKEN_KEY = 'access_token';
 export function getFileUrl(path?: string): string {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  
-  const baseUrl = import.meta.env.VITE_API_URL || '';
-  // 确保路径以 / 开头
+
+  // 相对路径，由浏览器自动按当前 host 解析
+  // 开发环境 Vite 代理 /uploads → Go 8080，生产环境同源
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${baseUrl}${normalizedPath}`;
+  return normalizedPath;
 }
 
 export function getAccessToken(): string | null {

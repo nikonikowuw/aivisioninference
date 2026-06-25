@@ -42,6 +42,10 @@ type StreamState struct {
 	PlayURLFlv    string
 	PlayURLWebrtc string
 	PlayURLHls    string
+
+	// ZLM 外部可访问地址（引擎上报），供构造 HLS 播放 URL
+	ZLMHost     string
+	ZLMHTTPPort int
 }
 
 // DeviceEvent 设备状态事件
@@ -176,6 +180,8 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 
 		state.Status = info.Status
 		state.PlayURLRtsp = info.PlayURL
+		state.ZLMHost = info.ZLMHost
+		state.ZLMHTTPPort = info.ZLMHTTPPort
 
 		go m.syncToDatabase(ctx, state, reason)
 	} else {

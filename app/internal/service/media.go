@@ -73,13 +73,6 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		stream = deviceID + "_sub"
 	}
 
-	if s.zlmClient != nil {
-		items, err := s.zlmClient.GetMediaList(ctx, zlm.GetMediaListRequest{App: app, Stream: stream})
-		if err == nil && len(items) > 0 {
-			return s.buildPlayURL(protocol, app, stream), nil
-		}
-	}
-
 	// 1. 通过 StreamManager 获取流引用
 	err := s.streamManager.Acquire(ctx, deviceID, "play", map[string]string{
 		"protocol":    protocol,
@@ -96,30 +89,33 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		return "", errors.New(errors.ErrStreamStateNotFound, "")
 	}
 
-	return s.buildPlayURL(protocol, app, stream), nil
+	return s.buildPlayURL(app, stream, state.ZLMHost, state.ZLMHTTPPort), nil
 }
 
-func (s *MediaService) buildPlayURL(protocol, app, stream string) string {
+func (s *MediaService) buildPlayURL(app, stream string, zlmHost string, zlmHTTPPort int) string {
 	token := s.GeneratePlayToken(stream, "anonymous", 30*time.Minute)
 
-	host := s.zlmBaseURL
-	if u, err := url.Parse(s.zlmBaseURL); err == nil && u.Hostname() != "" {
-		host = u.Hostname()
+	host := zlmHost
+	httpPort := zlmHTTPPort
+	if host == "" {
+		// Fallback: 从 zlmBaseURL 提取 host
+		if u, err := url.Parse(s.zlmBaseURL); err == nil && u.Hostname() != "" {
+			host = u.Hostname()
+		}
+		if host == "" {
+			host = s.zlmBaseURL
+		}
+		host = strings.TrimPrefix(host, "http://")
+		host = strings.TrimPrefix(host, "https://")
+		if idx := strings.Index(host, ":"); idx > 0 {
+			host = host[:idx]
+		}
 	}
-	host = strings.TrimPrefix(host, "http://")
-	host = strings.TrimPrefix(host, "https://")
-	if idx := strings.Index(host, ":"); idx > 0 {
-		host = host[:idx]
+	if httpPort == 0 {
+		httpPort = 80
 	}
 
-	switch protocol {
-	case "flv":
-		return fmt.Sprintf("http://%s:80/%s/%s.flv?token=%s", host, app, stream, token)
-	case "hls":
-		return fmt.Sprintf("http://%s:80/%s/%s/hls.m3u8?token=%s", host, app, stream, token)
-	default:
-		return fmt.Sprintf("webrtc://%s:8000/%s/%s?token=%s", host, app, stream, token)
-	}
+	return fmt.Sprintf("http://%s:%d/%s/%s/hls.m3u8?token=%s", host, httpPort, app, stream, token)
 }
 
 // StopPlayURL closes the stream proxy for a device (stop preview).

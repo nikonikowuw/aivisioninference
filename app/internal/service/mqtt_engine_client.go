@@ -45,13 +45,17 @@ func (c *MqttEngineClient) ensureClient() error {
 // parseStreamStatus attempts JSON unmarshal first, falling back to FlatBuffers.
 func parseStreamStatus(respPayload string) *controlproto.StreamStatusParams {
 	var jsStatus struct {
-		Status  string `json:"status"`
-		PlayURL string `json:"play_url"`
+		Status      string `json:"status"`
+		PlayURL     string `json:"play_url"`
+		ZLMHost     string `json:"zlm_host"`
+		ZLMHTTPPort int    `json:"zlm_http_port"`
 	}
 	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
 		return &controlproto.StreamStatusParams{
-			Status:  jsStatus.Status,
-			PlayURL: jsStatus.PlayURL,
+			Status:      jsStatus.Status,
+			PlayURL:     jsStatus.PlayURL,
+			ZLMHost:     jsStatus.ZLMHost,
+			ZLMHTTPPort: jsStatus.ZLMHTTPPort,
 		}
 	}
 	return controlproto.FlatBuffersToStreamStatus([]byte(respPayload))
@@ -105,10 +109,18 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 		playURL = "rtsp://engine:554/live/" + req.DeviceID
 	}
 
+	zlmHost := status.ZLMHost
+	zlmHTTPPort := status.ZLMHTTPPort
+	if zlmHTTPPort == 0 {
+		zlmHTTPPort = 80
+	}
+
 	return StreamInfo{
-		DeviceID: req.DeviceID,
-		Status:   "active",
-		PlayURL:  playURL,
+		DeviceID:    req.DeviceID,
+		Status:      "active",
+		PlayURL:     playURL,
+		ZLMHost:     zlmHost,
+		ZLMHTTPPort: zlmHTTPPort,
 	}, nil
 }
 
@@ -169,21 +181,7 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 		return "", fmt.Errorf("MQTT: wait playback status timeout: %w", err)
 	}
 
-	var status *controlproto.StreamStatusParams
-	var jsStatus struct {
-		Status  string `json:"status"`
-		PlayURL string `json:"play_url"`
-	}
-	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-		status = &controlproto.StreamStatusParams{
-			Status:  jsStatus.Status,
-			PlayURL: jsStatus.PlayURL,
-		}
-	}
-	if status == nil {
-		status = controlproto.FlatBuffersToStreamStatus([]byte(respPayload))
-	}
-
+	status := parseStreamStatus(respPayload)
 	if status == nil || status.Status != "running" {
 		return "", fmt.Errorf("MQTT: engine failed to start playback")
 	}
@@ -245,26 +243,14 @@ func (c *MqttEngineClient) GetStreamStatus(ctx context.Context, deviceID string)
 		return StreamStatus{}, fmt.Errorf("MQTT: wait stream status check timeout: %w", err)
 	}
 
-	var status *controlproto.StreamStatusParams
-	var jsStatus struct {
-		Status  string `json:"status"`
-		PlayURL string `json:"play_url"`
-	}
-	if json.Unmarshal([]byte(respPayload), &jsStatus) == nil && jsStatus.Status != "" {
-		status = &controlproto.StreamStatusParams{
-			Status:  jsStatus.Status,
-			PlayURL: jsStatus.PlayURL,
-		}
-	}
-	if status == nil {
-		status = controlproto.FlatBuffersToStreamStatus([]byte(respPayload))
-	}
-
+	status := parseStreamStatus(respPayload)
 	if status != nil {
 		return StreamStatus{
-			DeviceID: deviceID,
-			Status:   status.Status,
-			PlayURL:  status.PlayURL,
+			DeviceID:    deviceID,
+			Status:      status.Status,
+			PlayURL:     status.PlayURL,
+			ZLMHost:     status.ZLMHost,
+			ZLMHTTPPort: status.ZLMHTTPPort,
 		}, nil
 	}
 

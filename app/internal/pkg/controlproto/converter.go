@@ -353,6 +353,8 @@ type StreamStatusParams struct {
 	MaxReconnects  int
 	DeviceID       string
 	PlayURL        string
+	ZLMHost        string
+	ZLMHTTPPort    int
 	TraceID        string `json:"trace_id,omitempty"`
 }
 
@@ -397,9 +399,11 @@ func parseStreamStatus(data []byte) *StreamStatusParams {
 		statusStr = "running"
 	}
 	return &StreamStatusParams{
-		DeviceID: deviceID,
-		PlayURL:  playURL,
-		Status:   statusStr,
+		DeviceID:    deviceID,
+		PlayURL:     playURL,
+		Status:      statusStr,
+		ZLMHost:     string(status.ZlmHost()),
+		ZLMHTTPPort: int(status.ZlmHttpPort()),
 	}
 }
 

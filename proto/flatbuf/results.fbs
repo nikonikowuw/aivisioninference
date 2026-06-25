@@ -122,6 +122,10 @@ table StreamStatusRspMsg {
     queue_size: uint;
     queue_capacity: uint;
     playback_url: string;
+    /// ZLM 外部可访问地址，供 Go 构造 HLS 播放 URL
+    zlm_host: string;
+    /// ZLM HTTP 端口（HLS），默认 80
+    zlm_http_port: uint16 = 80;
 }
 
 root_type InferenceResultMsg;

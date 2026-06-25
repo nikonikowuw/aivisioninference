@@ -41,6 +41,22 @@ std::string BuildLivePlayURL(const std::string &base_url,
   return play_url + "/live/" + device_id;
 }
 
+std::string ExtractZLMHost(const std::string &zlm_api_url) {
+  std::string host = zlm_api_url;
+  // 移除协议前缀
+  size_t proto_end = host.find("://");
+  if (proto_end != std::string::npos)
+    host = host.substr(proto_end + 3);
+  // 移除端口和路径
+  size_t colon_pos = host.find(":");
+  if (colon_pos != std::string::npos)
+    host = host.substr(0, colon_pos);
+  size_t slash_pos = host.find("/");
+  if (slash_pos != std::string::npos)
+    host = host.substr(0, slash_pos);
+  return host;
+}
+
 constexpr uint32_t FourCC(char a, char b, char c, char d) {
   return static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8) |
          (static_cast<uint32_t>(c) << 16) | (static_cast<uint32_t>(d) << 24);
@@ -226,6 +242,8 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
       js["status"] = msg->is_running() ? "running" : "failed";
       js["play_url"] = msg->playback_url() ? msg->playback_url()->str() : "";
+      js["zlm_host"] = msg->zlm_host() ? msg->zlm_host()->str() : "";
+      js["zlm_http_port"] = msg->zlm_http_port();
       json_res = js.dump();
     } else if (resp_type == 302) {
       cmd_type = "stop_stream";
@@ -245,6 +263,8 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
       js["status"] = msg->is_running() ? "running" : "failed";
       js["play_url"] = msg->playback_url() ? msg->playback_url()->str() : "";
+      js["zlm_host"] = msg->zlm_host() ? msg->zlm_host()->str() : "";
+      js["zlm_http_port"] = msg->zlm_http_port();
       json_res = js.dump();
     } else if (resp_type == 304) {
       cmd_type = "stop_playback";
@@ -264,6 +284,8 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
       js["device_id"] = msg->device_id() ? msg->device_id()->str() : "";
       js["status"] = msg->is_running() ? "running" : "stopped";
       js["play_url"] = msg->playback_url() ? msg->playback_url()->str() : "";
+      js["zlm_host"] = msg->zlm_host() ? msg->zlm_host()->str() : "";
+      js["zlm_http_port"] = msg->zlm_http_port();
       json_res = js.dump();
     } else if (resp_type == 307) {
       cmd_type = "face_library";
@@ -626,19 +648,8 @@ std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
   // 构建播放 URL
   // RTSP: rtsp://{host}:554/live/{device_id}
   // WebRTC: webrtc://{host}:8000/live/{device_id}
-  // 提取 host
-  std::string host = config_.zlm_api_url;
-  // 移除协议前缀
-  size_t proto_end = host.find("://");
-  if (proto_end != std::string::npos)
-    host = host.substr(proto_end + 3);
-  // 移除端口和路径
-  size_t colon_pos = host.find(":");
-  if (colon_pos != std::string::npos)
-    host = host.substr(0, colon_pos);
-  size_t slash_pos = host.find("/");
-  if (slash_pos != std::string::npos)
-    host = host.substr(0, slash_pos);
+  // 提取 host（复用 ExtractZLMHost）
+  std::string host = ExtractZLMHost(config_.zlm_api_url);
 
   std::string play_url = "rtsp://" + host + ":554/live/" + device_id;
   std::cout << "[ZLM] Stream proxy added, play URL: " << play_url << std::endl;
@@ -766,11 +777,21 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   }
 
   std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
+
+  // 如果是 playback 模式且 pipeline 启动成功，叫 ZLM addStreamProxy 以提供 HLS 分发
+  if (started && enable_playback) {
+    std::string proxy_result = AddStreamProxy(device_id, play_url);
+    if (!proxy_result.empty()) {
+      std::cout << "[Control] ZLM addStreamProxy succeeded: " << proxy_result << std::endl;
+    }
+  }
+  std::string zlm_host = ExtractZLMHost(config_.zlm_api_url);
   flatbuffers::FlatBufferBuilder fbb(512);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = fbb.CreateString(started ? play_url : "");
+  auto zlm_host_str = !zlm_host.empty() ? fbb.CreateString(zlm_host) : 0;
   auto resp = aivision::control::CreateStreamStatusRspMsg(
-      fbb, device_id_str, started, 0, 0, 0, play_url_str);
+      fbb, device_id_str, started, 0, 0, 0, play_url_str, zlm_host_str, 80);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();
@@ -848,11 +869,22 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
 
   std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
 
+  // 启动成功后叫 ZLM addStreamProxy 以提供 HLS 分发
+  if (started) {
+    std::string push_url = play_url;
+    std::string proxy_result = AddStreamProxy(device_id, push_url);
+    if (!proxy_result.empty()) {
+      std::cout << "[Control] ZLM addStreamProxy succeeded: " << proxy_result << std::endl;
+    }
+  }
+
+  std::string zlm_host = ExtractZLMHost(config_.zlm_api_url);
   flatbuffers::FlatBufferBuilder fbb(256);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = started ? fbb.CreateString(play_url) : 0;
+  auto zlm_host_str = !zlm_host.empty() ? fbb.CreateString(zlm_host) : 0;
   auto resp = aivision::control::CreateStreamStatusRspMsg(
-      fbb, device_id_str, started, 0, 0, 0, play_url_str);
+      fbb, device_id_str, started, 0, 0, 0, play_url_str, zlm_host_str, 80);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();
@@ -910,12 +942,14 @@ void InferenceEngine::HandleStreamStatus(const uint8_t *payload, size_t size,
   auto *pipeline = pipeline_mgr_->GetPipeline(device_id);
   bool running = pipeline != nullptr;
   std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
+  std::string zlm_host = ExtractZLMHost(config_.zlm_api_url);
 
   flatbuffers::FlatBufferBuilder fbb(512);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = fbb.CreateString(running ? play_url : "");
+  auto zlm_host_str = !zlm_host.empty() ? fbb.CreateString(zlm_host) : 0;
   auto resp = aivision::control::CreateStreamStatusRspMsg(
-      fbb, device_id_str, running, 0, 0, 0, play_url_str);
+      fbb, device_id_str, running, 0, 0, 0, play_url_str, zlm_host_str, 80);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();

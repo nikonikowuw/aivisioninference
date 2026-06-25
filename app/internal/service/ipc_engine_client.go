@@ -18,17 +18,21 @@ type StreamStartRequest struct {
 
 // StreamInfo 流启动后的信息
 type StreamInfo struct {
-	DeviceID string `json:"device_id"`
-	Status   string `json:"status"`
-	PlayURL  string `json:"play_url"` // C++ 引擎上报的推流地址或播放地址
+	DeviceID    string `json:"device_id"`
+	Status      string `json:"status"`
+	PlayURL     string `json:"play_url"` // C++ 引擎上报的推流地址或播放地址
+	ZLMHost     string `json:"zlm_host"`       // ZLM 外部可访问地址
+	ZLMHTTPPort int    `json:"zlm_http_port"`  // ZLM HTTP 端口（HLS）
 }
 
 // StreamStatus 流状态信息
 type StreamStatus struct {
-	DeviceID   string `json:"device_id"`
-	Status     string `json:"status"`
-	PlayURL    string `json:"play_url"`
-	RetryCount int    `json:"retry_count"`
+	DeviceID    string `json:"device_id"`
+	Status      string `json:"status"`
+	PlayURL     string `json:"play_url"`
+	RetryCount  int    `json:"retry_count"`
+	ZLMHost     string `json:"zlm_host"`
+	ZLMHTTPPort int    `json:"zlm_http_port"`
 }
 
 // FaceEmbeddingResult 是 Engine 从单张人脸图库图片提取出的特征。

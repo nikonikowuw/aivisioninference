@@ -118,19 +118,16 @@ func main() {
 		// AIVisionInference: Device License (MVP+).
 		&model.DeviceLicense{},
 		&model.GB28181PlatformConfig{},
-	); err != nil {
+
+		// AIVisionInference: Edge Node.
+		&model.EdgeNode{},
+		&model.EdgeNodeAlgorithm{},
+		); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}
 
-	// Use tryExec instead of mustExec because smart_records may not be
-	// a partitioned table if it was created by GORM AutoMigrate.
-	for _, sql := range []string{
-		"CREATE TABLE IF NOT EXISTS smart_records_202606 PARTITION OF smart_records FOR VALUES FROM ('2026-06-01') TO ('2026-07-01')",
-		"CREATE TABLE IF NOT EXISTS smart_records_202607 PARTITION OF smart_records FOR VALUES FROM ('2026-07-01') TO ('2026-08-01')",
-		"CREATE TABLE IF NOT EXISTS smart_records_default PARTITION OF smart_records FOR VALUES FROM (MINVALUE) TO ('2026-06-01')",
-	} {
-		tryExec(db, sql)
-	}
+		// GORM AutoMigrate 无法创建分区表，smart_records 目前为普通表。如需分区，
+		// 需先重命名为旧表、创建分区母表、迁移数据后再删除旧表。
 
 	mustExec(db, "CREATE INDEX IF NOT EXISTS idx_person_embeddings_vector ON person_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
 

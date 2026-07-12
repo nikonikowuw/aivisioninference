@@ -2,8 +2,8 @@ package dto
 
 import "github.com/niko-admin/niko-admin/internal/pkg/scopes"
 
-// CreateEdgeScheduledTaskRequest 创建计划任务请求
-type CreateEdgeScheduledTaskRequest struct {
+// EdgeScheduledTaskRequest 计划任务公共字段
+type EdgeScheduledTaskRequest struct {
 	Name             string      `json:"name" binding:"required,max=255"`
 	Description      string      `json:"description" binding:"max=500"`
 	CronExpr         string      `json:"cron_expr" binding:"required,max=100"`
@@ -17,19 +17,14 @@ type CreateEdgeScheduledTaskRequest struct {
 	RetryIntervalSec int         `json:"retry_interval_sec"`
 }
 
+// CreateEdgeScheduledTaskRequest 创建计划任务请求
+type CreateEdgeScheduledTaskRequest struct {
+	EdgeScheduledTaskRequest
+}
+
 // UpdateEdgeScheduledTaskRequest 更新计划任务请求
 type UpdateEdgeScheduledTaskRequest struct {
-	Name             string      `json:"name" binding:"required,max=255"`
-	Description      string      `json:"description" binding:"max=500"`
-	CronExpr         string      `json:"cron_expr" binding:"required,max=100"`
-	TargetType       string      `json:"target_type" binding:"required,oneof=single_node tag"`
-	TargetID         string      `json:"target_id" binding:"required"`
-	CommandName      string      `json:"command_name" binding:"required,max=100"`
-	CommandParams    interface{} `json:"command_params"`
-	WaitResponse     bool        `json:"wait_response"`
-	WaitTimeoutSec   int         `json:"wait_timeout_sec"`
-	MaxRetries       int         `json:"max_retries"`
-	RetryIntervalSec int         `json:"retry_interval_sec"`
+	EdgeScheduledTaskRequest
 }
 
 // EdgeScheduledTaskListRequest 计划任务分页列表请求

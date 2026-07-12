@@ -94,7 +94,8 @@ var serviceSet = wire.NewSet(
 	service.NewSIPRuntimeService,
 	provideEdgeNodeService,
 	provideEdgeNodeTagService,
-	provideEdgeScheduledTaskService,	provideMqttSyncManager,
+	provideEdgeScheduledTaskService,
+	provideMqttSyncManager,
 	provideMqttMux,
 	provideHistoryBuffer,
 	provideEngineMetricsStore,
@@ -128,7 +129,8 @@ var handlerSet = wire.NewSet(
 	provideGB28181ConfigHandler,
 	provideEdgeNodeHandler,
 	provideEdgeNodeTagHandler,
-	provideEdgeScheduledTaskHandler,	provideEdgeNodeMiddleware,
+	provideEdgeScheduledTaskHandler,
+	provideEdgeNodeMiddleware,
 )
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。

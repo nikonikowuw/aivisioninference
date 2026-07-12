@@ -82,8 +82,10 @@ func (h *EdgeScheduledTaskHandler) handlePatrol(ctx context.Context, t *asynq.Ta
 			continue
 		}
 
-		// 执行任务（异步，不阻塞 patrol 循环）
-		h.svc.ExecuteTask(context.Background(), task)
+		// 执行任务（带超时的上下文，不阻塞 patrol 循环）
+		execCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		h.svc.ExecuteTask(execCtx, task)
+		cancel()
 		executedCount++
 	}
 

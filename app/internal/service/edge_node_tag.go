@@ -14,12 +14,13 @@ import (
 
 // EdgeNodeTagService 处理边缘节点标签的业务逻辑
 type EdgeNodeTagService struct {
-	tagRepo *repository.EdgeNodeTagRepository
+	tagRepo  *repository.EdgeNodeTagRepository
+	taskRepo *repository.EdgeScheduledTaskRepository
 }
 
 // NewEdgeNodeTagService 创建新的 EdgeNodeTagService
-func NewEdgeNodeTagService(tagRepo *repository.EdgeNodeTagRepository) *EdgeNodeTagService {
-	return &EdgeNodeTagService{tagRepo: tagRepo}
+func NewEdgeNodeTagService(tagRepo *repository.EdgeNodeTagRepository, taskRepo *repository.EdgeScheduledTaskRepository) *EdgeNodeTagService {
+	return &EdgeNodeTagService{tagRepo: tagRepo, taskRepo: taskRepo}
 }
 
 // Create 创建标签
@@ -66,6 +67,15 @@ func (s *EdgeNodeTagService) Delete(ctx context.Context, id string) error {
 		}
 		return err
 	}
+
+	count, err := s.taskRepo.CountByTagID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return apperrors.Newf(apperrors.ErrBadRequest, "该标签被 %d 个计划任务引用，请先解除引用后再删除", count)
+	}
+
 	return s.tagRepo.Delete(ctx, id)
 }
 

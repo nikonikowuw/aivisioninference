@@ -491,8 +491,8 @@ func provideEdgeNodeService(
 	return svc
 }
 
-func provideEdgeNodeTagService(tagRepo *repository.EdgeNodeTagRepository) *service.EdgeNodeTagService {
-	return service.NewEdgeNodeTagService(tagRepo)
+func provideEdgeNodeTagService(tagRepo *repository.EdgeNodeTagRepository, taskRepo *repository.EdgeScheduledTaskRepository) *service.EdgeNodeTagService {
+	return service.NewEdgeNodeTagService(tagRepo, taskRepo)
 }
 
 func provideEdgeNodeTagHandler(tagSvc *service.EdgeNodeTagService) *handler.EdgeNodeTagHandler {

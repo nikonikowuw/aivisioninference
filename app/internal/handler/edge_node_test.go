@@ -161,7 +161,8 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil)
 	tagRepo := repository.NewEdgeNodeTagRepository(db)
-	tagSvc := service.NewEdgeNodeTagService(tagRepo)
+	schTaskRepo := repository.NewEdgeScheduledTaskRepository(db)
+	tagSvc := service.NewEdgeNodeTagService(tagRepo, schTaskRepo)
 	h := NewEdgeNodeHandler(svc, tagSvc)
 
 	r := gin.New()

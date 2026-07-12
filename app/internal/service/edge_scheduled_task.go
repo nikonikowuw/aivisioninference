@@ -10,6 +10,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -71,35 +72,20 @@ func IsValidCommandName(name string) bool {
 	return validCommandNames[name]
 }
 
-// Create 创建计划任务
-func (s *EdgeScheduledTaskService) Create(ctx context.Context, req dto.CreateEdgeScheduledTaskRequest) (*model.EdgeScheduledTask, error) {
-	if !IsValidCommandName(req.CommandName) {
-		return nil, apperrors.New(apperrors.ErrBadRequest, "不支持的命令名称")
+// marshalCommandParams 序列化命令参数，nil 时返回空 JSON 对象
+func marshalCommandParams(params interface{}) ([]byte, error) {
+	if params == nil {
+		return []byte("{}"), nil
 	}
+	b, err := json.Marshal(params)
+	if err != nil {
+		return nil, apperrors.New(apperrors.ErrBadRequest, "命令参数格式错误")
+	}
+	return b, nil
+}
 
-	paramsJSON := "{}"
-	if req.CommandParams != nil {
-		b, err := json.Marshal(req.CommandParams)
-		if err != nil {
-			return nil, apperrors.New(apperrors.ErrBadRequest, "命令参数格式错误")
-		}
-		paramsJSON = string(b)
-	}
-
-	item := &model.EdgeScheduledTask{
-		Name:             req.Name,
-		Description:      req.Description,
-		CronExpr:         req.CronExpr,
-		TargetType:       req.TargetType,
-		TargetID:         req.TargetID,
-		CommandName:      req.CommandName,
-		CommandParams:    []byte(paramsJSON),
-		WaitResponse:     req.WaitResponse,
-		WaitTimeoutSec:   req.WaitTimeoutSec,
-		MaxRetries:       req.MaxRetries,
-		RetryIntervalSec: req.RetryIntervalSec,
-		Enabled:          true,
-	}
+// setTaskDefaults 设置计划任务的默认值（超时、重试等）
+func setTaskDefaults(item *model.EdgeScheduledTask) {
 	if item.WaitTimeoutSec <= 0 {
 		item.WaitTimeoutSec = 30
 	}
@@ -109,6 +95,37 @@ func (s *EdgeScheduledTaskService) Create(ctx context.Context, req dto.CreateEdg
 	if item.RetryIntervalSec <= 0 {
 		item.RetryIntervalSec = 60
 	}
+}
+
+// Create 创建计划任务
+func (s *EdgeScheduledTaskService) Create(ctx context.Context, req dto.CreateEdgeScheduledTaskRequest) (*model.EdgeScheduledTask, error) {
+	if !IsValidCommandName(req.CommandName) {
+		return nil, apperrors.New(apperrors.ErrBadRequest, "不支持的命令名称")
+	}
+	if _, err := cron.ParseStandard(req.CronExpr); err != nil {
+		return nil, apperrors.Newf(apperrors.ErrBadRequest, "cron 表达式无效: %v", err)
+	}
+
+	params, err := marshalCommandParams(req.CommandParams)
+	if err != nil {
+		return nil, err
+	}
+
+	item := &model.EdgeScheduledTask{
+		Name:             req.Name,
+		Description:      req.Description,
+		CronExpr:         req.CronExpr,
+		TargetType:       req.TargetType,
+		TargetID:         req.TargetID,
+		CommandName:      req.CommandName,
+		CommandParams:    params,
+		WaitResponse:     req.WaitResponse,
+		WaitTimeoutSec:   req.WaitTimeoutSec,
+		MaxRetries:       req.MaxRetries,
+		RetryIntervalSec: req.RetryIntervalSec,
+		Enabled:          true,
+	}
+	setTaskDefaults(item)
 
 	if err := s.taskRepo.Create(ctx, item); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
@@ -132,14 +149,13 @@ func (s *EdgeScheduledTaskService) Update(ctx context.Context, id string, req dt
 	if !IsValidCommandName(req.CommandName) {
 		return apperrors.New(apperrors.ErrBadRequest, "不支持的命令名称")
 	}
+	if _, err := cron.ParseStandard(req.CronExpr); err != nil {
+		return apperrors.Newf(apperrors.ErrBadRequest, "cron 表达式无效: %v", err)
+	}
 
-	paramsJSON := "{}"
-	if req.CommandParams != nil {
-		b, err := json.Marshal(req.CommandParams)
-		if err != nil {
-			return apperrors.New(apperrors.ErrBadRequest, "命令参数格式错误")
-		}
-		paramsJSON = string(b)
+	params, err := marshalCommandParams(req.CommandParams)
+	if err != nil {
+		return err
 	}
 
 	item.Name = req.Name
@@ -148,20 +164,12 @@ func (s *EdgeScheduledTaskService) Update(ctx context.Context, id string, req dt
 	item.TargetType = req.TargetType
 	item.TargetID = req.TargetID
 	item.CommandName = req.CommandName
-	item.CommandParams = []byte(paramsJSON)
+	item.CommandParams = params
 	item.WaitResponse = req.WaitResponse
 	item.WaitTimeoutSec = req.WaitTimeoutSec
 	item.MaxRetries = req.MaxRetries
 	item.RetryIntervalSec = req.RetryIntervalSec
-	if item.WaitTimeoutSec <= 0 {
-		item.WaitTimeoutSec = 30
-	}
-	if item.MaxRetries <= 0 {
-		item.MaxRetries = 3
-	}
-	if item.RetryIntervalSec <= 0 {
-		item.RetryIntervalSec = 60
-	}
+	setTaskDefaults(item)
 
 	return s.taskRepo.Update(ctx, item)
 }
@@ -351,6 +359,10 @@ func (s *EdgeScheduledTaskService) RetryRecord(ctx context.Context, recordID str
 	task, err := s.taskRepo.FindByID(ctx, record.TaskID)
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrNotFound, "计划任务不存在")
+	}
+
+	if record.RetryCount >= task.MaxRetries {
+		return nil, apperrors.Newf(apperrors.ErrBadRequest, "已达到最大重试次数 (%d)", task.MaxRetries)
 	}
 
 	// 重置状态

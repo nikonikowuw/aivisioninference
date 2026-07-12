@@ -65,3 +65,12 @@ func (r *EdgeScheduledTaskRepository) ListEnabled(ctx context.Context) ([]model.
 	err := r.db.WithContext(ctx).Where("enabled = ?", true).Find(&items).Error
 	return items, err
 }
+
+// CountByTagID 统计引用指定标签的计划任务数量
+func (r *EdgeScheduledTaskRepository) CountByTagID(ctx context.Context, tagID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.EdgeScheduledTask{}).
+		Where("target_type = ? AND target_id = ?", "tag", tagID).
+		Count(&count).Error
+	return count, err
+}

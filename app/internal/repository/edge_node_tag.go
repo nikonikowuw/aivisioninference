@@ -82,13 +82,16 @@ func (r *EdgeNodeTagRepository) ReplaceNodeTags(ctx context.Context, nodeID stri
 		if err := tx.Where("edge_node_id = ?", nodeID).Delete(&model.EdgeNodeTagRelation{}).Error; err != nil {
 			return err
 		}
-		// 新增关联
-		for _, tagID := range tagIDs {
-			rel := model.EdgeNodeTagRelation{
-				EdgeNodeID:    nodeID,
-				EdgeNodeTagID: tagID,
+		// 批量新增关联
+		if len(tagIDs) > 0 {
+			rels := make([]model.EdgeNodeTagRelation, len(tagIDs))
+			for i, tagID := range tagIDs {
+				rels[i] = model.EdgeNodeTagRelation{
+					EdgeNodeID:    nodeID,
+					EdgeNodeTagID: tagID,
+				}
 			}
-			if err := tx.Create(&rel).Error; err != nil {
+			if err := tx.Create(&rels).Error; err != nil {
 				return err
 			}
 		}

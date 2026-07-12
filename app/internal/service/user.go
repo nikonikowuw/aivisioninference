@@ -258,7 +258,7 @@ func (s *UserService) ImportCSV(ctx context.Context, reader io.Reader, lang stri
 			Password:    strings.TrimSpace(row[3]),
 			Status:      status,
 		}
-		if code := validateImportUserRequest(req); code != 0 {
+		if code := validateImportUserRequest(req); code != "" {
 			appendImportFailure(&result, item, rowNo, code, lang)
 			continue
 		}
@@ -318,7 +318,7 @@ func importUserStatus(row []string) (int, error) {
 	return status, nil
 }
 
-func validateImportUserRequest(req dto.CreateUserRequest) int {
+func validateImportUserRequest(req dto.CreateUserRequest) string {
 	if utf8.RuneCountInString(req.Username) < 2 || utf8.RuneCountInString(req.Username) > 32 {
 		return apperrors.ErrBadRequest
 	}
@@ -333,14 +333,14 @@ func validateImportUserRequest(req dto.CreateUserRequest) int {
 	if len(req.Password) < 6 || len(req.Password) > 72 {
 		return apperrors.ErrCSVWeakPassword
 	}
-	return 0
+	return ""
 }
 
-func appendImportFailure(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code int, lang string) {
+func appendImportFailure(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code string, lang string) {
 	appendImportFailureMessage(result, item, rowNo, code, apperrors.DefaultMessage(code, lang), lang)
 }
 
-func appendImportFailureMessage(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code int, message string, lang string) {
+func appendImportFailureMessage(result *dto.BatchResult, item dto.BatchItemResult, rowNo int, code string, message string, lang string) {
 	item.Code = code
 	item.Message = csvRowErrorMessage(rowNo, message, lang)
 	result.Failed++

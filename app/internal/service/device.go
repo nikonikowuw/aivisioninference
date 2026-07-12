@@ -424,7 +424,7 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string, lang stri
 }
 
 // classifyConnectionError 根据错误类型返回错误码,供 i18n 翻译。
-func classifyConnectionError(err error) int {
+func classifyConnectionError(err error) string {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "dial tcp"):
@@ -837,7 +837,7 @@ func maskRtspPassword(url string) string {
 	return "rtsp://" + userInfo[:colonIndex+1] + "****" + afterProtocol[atIndex:]
 }
 
-func batchErrorItems(ids []string, code int, message string) []dto.BatchItemResult {
+func batchErrorItems(ids []string, code string, message string) []dto.BatchItemResult {
 	items := make([]dto.BatchItemResult, len(ids))
 	for i, id := range ids {
 		items[i] = dto.BatchItemResult{ID: id, Success: false, Code: code, Message: message}

@@ -51,7 +51,7 @@ func TestInferenceNodePolicyValidate(t *testing.T) {
 	tests := []struct {
 		name    string
 		updates map[string]interface{}
-		want    int
+		want    string
 	}{
 		{"offline", map[string]interface{}{"status": model.NodeStatusOffline}, apperrors.ErrEdgeNodeOffline},
 		{"disabled", map[string]interface{}{"status": model.NodeStatusOnline, "enabled": false}, apperrors.ErrEdgeNodeDisabled},

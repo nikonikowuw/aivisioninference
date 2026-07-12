@@ -203,19 +203,25 @@ func inferAuditResponseStatus(c *gin.Context) int {
 	return http.StatusInternalServerError
 }
 
-// AuditHTTPStatusFromCode 按项目错误码区间映射 HTTP 状态码。
-// 错误码区间规则：1xxxx=参数错误, 2xxxx=认证失败, 3xxxx=权限不足, 4xxxx=资源未找到, 5xxxx=系统异常。
-func AuditHTTPStatusFromCode(code int) int {
+// AuditHTTPStatusFromCode 按项目错误码前缀映射 HTTP 状态码。
+func AuditHTTPStatusFromCode(code string) int {
 	switch {
-	case code >= 10000 && code < 20000:
+	case strings.HasPrefix(code, "REQ_"):
 		return http.StatusBadRequest
-	case code >= 20000 && code < 30000:
+	case strings.HasPrefix(code, "USER_") || strings.HasPrefix(code, "ROLE_") ||
+		strings.HasPrefix(code, "CSV_") || strings.HasPrefix(code, "PERSON_") ||
+		strings.HasPrefix(code, "PERM_") || strings.HasPrefix(code, "FILE_") ||
+		strings.HasPrefix(code, "SYS_") || strings.HasPrefix(code, "LICENSE_") ||
+		strings.HasPrefix(code, "ENGINE_") || strings.HasPrefix(code, "DEV_") ||
+		strings.HasPrefix(code, "NODE_"):
+		return http.StatusBadRequest
+	case strings.HasPrefix(code, "AUTH_"):
 		return http.StatusUnauthorized
-	case code >= 30000 && code < 40000:
+	case strings.HasPrefix(code, "FORBIDDEN"):
 		return http.StatusForbidden
-	case code >= 40000 && code < 50000:
+	case strings.HasPrefix(code, "NOT_FOUND"):
 		return http.StatusNotFound
-	case code >= 50000:
+	case strings.HasPrefix(code, "INTERNAL"):
 		return http.StatusInternalServerError
 	default:
 		return http.StatusInternalServerError

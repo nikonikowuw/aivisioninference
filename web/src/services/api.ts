@@ -14,29 +14,29 @@ function getServerErrorMessage(): string {
   return isMissingTranslation(message, key) ? SERVER_ERROR_FALLBACK : message;
 }
 
-export function getErrorMessage(code: number): string {
-  if (code === 0) return '';
+export function getErrorMessage(code: string): string {
+  if (code === 'OK') return '';
   const key = `common:message.error.${code}`;
   const message = i18n.t(key);
   return isMissingTranslation(message, key) ? getServerErrorMessage() : message;
 }
 
-function resolveApiErrorMessage(code: number, backendMessage?: string): string {
+function resolveApiErrorMessage(code: string, backendMessage?: string): string {
   const trimmedBackendMessage = backendMessage?.trim();
   if (!trimmedBackendMessage) return getErrorMessage(code);
 
   // 参数校验错误和未知错误优先展示后端具体文案，避免丢失上下文
   const key = `common:message.error.${code}`;
   const translated = i18n.t(key);
-  if (code === 10001 || isMissingTranslation(translated, key)) return trimmedBackendMessage;
+  if (code === 'REQ_BAD_REQUEST' || isMissingTranslation(translated, key)) return trimmedBackendMessage;
   return translated;
 }
 
 export class ApiError extends Error {
-  code: number;
+  code: string;
   status: number;
 
-  constructor(code: number, message: string, status: number) {
+  constructor(code: string, message: string, status: number) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
@@ -44,7 +44,12 @@ export class ApiError extends Error {
   }
 
   isUnauthenticated(): boolean {
-    return this.status === 401 || (this.code >= 20001 && this.code <= 20004);
+    return this.status === 401 || (
+      this.code === 'AUTH_UNAUTHORIZED' ||
+      this.code === 'AUTH_TOKEN_EXPIRED' ||
+      this.code === 'AUTH_TOKEN_INVALID' ||
+      this.code === 'AUTH_TOKEN_REUSED'
+    );
   }
 }
 
@@ -107,13 +112,13 @@ export function clearAccessToken(): void {
 }
 
 interface ApiResponse<T = unknown> {
-  code: number;
+  code: string;
   message: string;
   data: T;
 }
 
 function isApiResponseLike(value: unknown): value is ApiResponse<unknown> {
-  return typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>)?.code === 'number';
+  return typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>)?.code === 'string';
 }
 
 function isJsonResponse(response: Response): boolean {
@@ -143,7 +148,7 @@ async function fetchApi(path: string, options: RequestInit = {}): Promise<Respon
   try {
     return await fetch(`${API_BASE}${path}`, options);
   } catch {
-    throw new ApiError(50001, i18n.t('common:message.networkError'), 0);
+    throw new ApiError('INTERNAL_ERROR', i18n.t('common:message.networkError'), 0);
   }
 }
 
@@ -151,17 +156,17 @@ function redirectOnUnauthorized(response: Response): void {
   if (response.status !== 401 || window.location.pathname.startsWith('/auth/')) return;
   clearAccessToken();
   window.location.href = '/auth/sign-in';
-  throw new ApiError(401, getErrorMessage(401), 401);
+  throw new ApiError('AUTH_UNAUTHORIZED', getErrorMessage('AUTH_UNAUTHORIZED'), 401);
 }
 
 async function parseApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
   const text = await response.text();
   try {
-    const json = text ? JSON.parse(text) : { code: 0, message: '', data: null };
+    const json = text ? JSON.parse(text) : { code: 'OK', message: '', data: null };
     if (!isApiResponseLike(json)) throw new Error('invalid api response');
     return json as ApiResponse<T>;
   } catch {
-    throw new ApiError(50001, getErrorMessage(50001), response.status);
+    throw new ApiError('INTERNAL_ERROR', getErrorMessage('INTERNAL_ERROR'), response.status);
   }
 }
 
@@ -191,7 +196,7 @@ export async function request<T>(
   redirectOnUnauthorized(response);
 
   const json = await parseApiResponse<T>(response);
-  if (json.code !== 0) {
+  if (json.code !== 'OK') {
     throw new ApiError(
       json.code,
       resolveApiErrorMessage(json.code, json.message),
@@ -230,12 +235,12 @@ async function handleDownloadResponse(response: Response, filename: string): Pro
 
   const json = await parseOptionalApiResponse(response.clone());
   if (json) {
-    const code = json.code === 0 ? 50001 : json.code;
-    throw new ApiError(code, resolveApiErrorMessage(code, json.message), response.status);
+    const code = json.code === 'OK' ? 'INTERNAL_ERROR' : json.code as string;
+    throw new ApiError(code, resolveApiErrorMessage(code, json.message as string | undefined), response.status);
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, getServerErrorMessage(), response.status);
+    throw new ApiError('INTERNAL_ERROR', getServerErrorMessage(), response.status);
   }
 
   const blob = await response.blob();
@@ -537,7 +542,7 @@ type CrudApi<T, ListParams extends CrudListParams = CrudListParams> = {
 export interface BatchItemResult {
   id: string;
   success: boolean;
-  code?: number;
+  code?: string;
   message?: string;
 }
 
@@ -790,7 +795,7 @@ export const algorithmPackagesApi = {
     });
     redirectOnUnauthorized(response);
     const json = await parseApiResponse<AlgorithmPackage>(response);
-    if (json.code !== 0) {
+    if (json.code !== 'OK') {
       throw new ApiError(
         json.code,
         resolveApiErrorMessage(json.code, json.message),

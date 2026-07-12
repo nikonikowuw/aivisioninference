@@ -4,7 +4,7 @@ package dto
 
 // Response is the standard API response wrapper.
 type Response struct {
-	Code    int         `json:"code"`
+	Code    string      `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
@@ -26,7 +26,7 @@ type BatchIDsRequest struct {
 type BatchItemResult struct {
 	ID      string `json:"id"`
 	Success bool   `json:"success"`
-	Code    int    `json:"code,omitempty"`
+	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
 }
 

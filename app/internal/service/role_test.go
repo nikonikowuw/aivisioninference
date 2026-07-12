@@ -72,7 +72,7 @@ func TestRoleServiceRootGuardOnUpdateDeleteAssign(t *testing.T) {
 		action            string
 		isRoot            bool
 		wantErr           bool
-		wantCode          int
+		wantCode          string
 		roleName          string
 		roleLevel         int
 		seedCurrentUserID string

@@ -54,7 +54,7 @@ func runBatch(ids []string, lang string, fn func(id string) error) dto.BatchResu
 	return result
 }
 
-func batchErrorMessage(err error, lang string) (int, string) {
+func batchErrorMessage(err error, lang string) (string, string) {
 	if appErr, ok := err.(*apperrors.AppError); ok {
 		if appErr.IsLocalizedMessage() {
 			return appErr.Code, appErr.Message

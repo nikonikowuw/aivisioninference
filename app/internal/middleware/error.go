@@ -2,6 +2,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
@@ -50,10 +52,10 @@ func logAppError(c *gin.Context, err error) {
 	}
 
 	if appErr, ok := err.(*apperrors.AppError); ok {
-		fields = append(fields, zap.Int("code", appErr.Code))
+		fields = append(fields, zap.String("code", appErr.Code))
 
 		switch {
-		case appErr.Code >= 50000:
+		case strings.HasPrefix(appErr.Code, "INTERNAL"):
 			zap.L().Error("server error", fields...)
 		default:
 			zap.L().Warn("client error", fields...)

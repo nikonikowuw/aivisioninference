@@ -11,153 +11,165 @@ import (
 
 // Standard business error codes.
 const (
-	Success = 0
+	Success = "OK"
 
-	// Client errors (1xxxx).
-	ErrBadRequest            = 10001
-	ErrCannotDisableSelf     = 10002
-	ErrHierarchyLevelUser    = 10003
-	ErrHierarchyLevelRole    = 10004
-	ErrEmailTaken            = 10005
-	ErrOldPasswordWrong      = 10006
-	ErrStartTimeFormat       = 10008
-	ErrEndTimeFormat         = 10009
-	ErrTimeRangeOrder        = 10010
-	ErrFileTooLarge          = 10011
-	ErrFileInvalidType       = 10012
-	ErrMailNotEnabled        = 10013
-	ErrSMTPTestFailed        = 10014
-	ErrIMAPTestFailed        = 10015
-	ErrTokenInvalidOrExpired = 10016
-	ErrCSVInvalidContent     = 10017
-	ErrCSVRowLimitExceeded   = 10018
-	ErrCSVColumnRequired     = 10019
-	ErrCSVStatusInvalid      = 10020
-	ErrCSVHeaderInvalid      = 10021
-	ErrCSVDuplicateUsername  = 10022
-	ErrCSVWeakPassword       = 10023
-	ErrCSVInvalidEmail       = 10024
-	ErrUsernameTaken         = 10025
-	ErrCannotDeleteSelf      = 10026
-	ErrCannotResetSelf       = 10027
-	ErrRoleNameTaken         = 10028
-	ErrRoleLevelInvalid      = 10029
+	// REQ — 通用请求校验 (原 1xxxx 通用参数).
+	ErrBadRequest            = "REQ_BAD_REQUEST"
+	ErrCannotDisableSelf     = "REQ_CANNOT_DISABLE_SELF"
+	ErrStartTimeFormat       = "REQ_START_TIME_FORMAT"
+	ErrEndTimeFormat         = "REQ_END_TIME_FORMAT"
+	ErrTimeRangeOrder        = "REQ_TIME_RANGE_ORDER"
+	ErrFileTooLarge          = "REQ_FILE_TOO_LARGE"
+	ErrFileInvalidType       = "REQ_FILE_INVALID_TYPE"
+	ErrNotImplemented        = "REQ_NOT_IMPLEMENTED"
+	ErrTooManyRequests       = "REQ_TOO_MANY_REQUESTS"
 
-	// Person management errors (1006x).
-	ErrPersonImageRequired  = 10060 // 请上传人脸图片
-	ErrPersonImageDuplicate = 10061 // 图片已存在
-	ErrPersonCodeDuplicate  = 10062 // 人员编号已存在
-	ErrPersonStatusNoRetry  = 10063 // 当前状态无需重提
-	ErrArchiveRequired      = 10064 // 请上传压缩包
-	ErrArchiveUnsupported   = 10065 // 不支持的压缩包格式
+	// USER — 用户管理.
+	ErrEmailTaken            = "USER_EMAIL_TAKEN"
+	ErrOldPasswordWrong      = "USER_OLD_PASSWORD_WRONG"
+	ErrHierarchyLevelUser    = "USER_HIERARCHY_LEVEL"
+	ErrMailNotEnabled        = "USER_MAIL_NOT_ENABLED"
+	ErrSMTPTestFailed        = "USER_SMTP_TEST_FAILED"
+	ErrIMAPTestFailed        = "USER_IMAP_TEST_FAILED"
+	ErrTokenInvalidOrExpired = "USER_TOKEN_INVALID"
+	ErrUsernameTaken         = "USER_USERNAME_TAKEN"
+	ErrCannotDeleteSelf      = "USER_CANNOT_DELETE_SELF"
+	ErrCannotResetSelf       = "USER_CANNOT_RESET_SELF"
 
-	// Face search errors (1006x).
-	ErrFaceExtractFailed  = 10066 // 人脸特征提取失败
-	ErrFaceSearchNoResult = 10067 // 未找到相似人员
+	// ROLE — 角色管理.
+	ErrHierarchyLevelRole    = "ROLE_HIERARCHY_LEVEL"
+	ErrRoleNameTaken         = "ROLE_NAME_TAKEN"
+	ErrRoleLevelInvalid      = "ROLE_LEVEL_INVALID"
 
-	// Domain validation errors (1007x-101xx).
-	ErrPermissionCodeTaken          = 10070
-	ErrPermissionAssigned           = 10071
-	ErrRoleAssigned                 = 10072
-	ErrFileContentIncomplete        = 10073
-	ErrChunkCountMismatch           = 10074
-	ErrInvalidChunkIndex            = 10075
-	ErrChunkIncomplete              = 10076
-	ErrUploadCanceled               = 10077
-	ErrFileSizeMismatch             = 10078
-	ErrFileChecksumMismatch         = 10079
-	ErrDeviceNameTaken              = 10100
-	ErrRTSPURLRequired              = 10101
-	ErrGB28181CodeRequired          = 10102
-	ErrDeviceGroupNotEmpty          = 10103
-	ErrResourceConflict             = 10104
-	ErrInvalidGB28181DeviceCode     = 10105
-	ErrGB28181DeviceOffline         = 10106
-	ErrInvalidPlaybackAction        = 10107
-	ErrAlarmDeviceRequired          = 10108
-	ErrTimeWindowFormat             = 10109
-	ErrTaskStatusNotCancelable      = 10110
-	ErrDeviceExternalKeyTaken       = 10111
-	ErrDeviceDisabled               = 10112
-	ErrDeviceOffline                = 10113
-	ErrDeviceTypeInvalid            = 10114
-	CodeVersionIncompatible         = 10115
-	ErrEdgeNodeNameTaken            = 10116
-	ErrEdgeNodeNotFound             = 10117
-	ErrEdgeNodeOffline              = 10118
-	ErrEdgeNodeDisabled             = 10119
-	ErrEdgeNodeFull                 = 10120
-	ErrEdgeNodeAlgorithmUnavailable = 10121
+	// CSV — CSV 导入.
+	ErrCSVInvalidContent     = "CSV_INVALID_CONTENT"
+	ErrCSVRowLimitExceeded   = "CSV_ROW_LIMIT_EXCEEDED"
+	ErrCSVColumnRequired     = "CSV_COLUMN_REQUIRED"
+	ErrCSVStatusInvalid      = "CSV_STATUS_INVALID"
+	ErrCSVHeaderInvalid      = "CSV_HEADER_INVALID"
+	ErrCSVDuplicateUsername  = "CSV_DUPLICATE_USERNAME"
+	ErrCSVWeakPassword       = "CSV_WEAK_PASSWORD"
+	ErrCSVInvalidEmail       = "CSV_INVALID_EMAIL"
 
-	// Auth errors (2xxxx).
-	ErrUnauthorized       = 20001
-	ErrTokenExpired       = 20002
-	ErrTokenInvalid       = 20003
-	ErrRefreshTokenReuse  = 20004
-	ErrInvalidCredentials = 20005
+	// PERSON — 人员管理.
+	ErrPersonImageRequired  = "PERSON_IMAGE_REQUIRED"  // 请上传人脸图片
+	ErrPersonImageDuplicate = "PERSON_IMAGE_DUPLICATE" // 图片已存在
+	ErrPersonCodeDuplicate  = "PERSON_CODE_DUPLICATE"  // 人员编号已存在
+	ErrPersonStatusNoRetry  = "PERSON_STATUS_NO_RETRY" // 当前状态无需重提
+	ErrArchiveRequired      = "PERSON_ARCHIVE_REQUIRED" // 请上传压缩包
+	ErrArchiveUnsupported   = "PERSON_ARCHIVE_UNSUPPORTED" // 不支持的压缩包格式
 
-	// Forbidden / CORS (3xxxx).
-	ErrForbidden        = 30001
-	ErrOriginNotAllowed = 30002
-	ErrUserDisabled     = 30003
+	// Face search errors.
+	ErrFaceExtractFailed  = "PERSON_FACE_EXTRACT_FAILED"   // 人脸特征提取失败
+	ErrFaceSearchNoResult = "PERSON_FACE_SEARCH_NO_RESULT" // 未找到相似人员
 
-	// Not found (4xxxx).
-	ErrNotFound               = 40001
-	ErrFeedbackNotFound       = 40002
-	ErrUserNotFound           = 40003
-	ErrRoleNotFound           = 40004
-	ErrPermissionNotFound     = 40005
-	ErrTaskNotFound           = 40006
-	ErrDeviceNotFound         = 40007
-	ErrFileNotFound           = 40008
-	ErrUploadSessionNotFound  = 40009
-	ErrDeviceGroupNotFound    = 40010
-	ErrLicenseNotFound        = 40011
-	ErrAITimeScheduleNotFound = 40012
+	// PERM — 权限管理.
+	ErrPermissionCodeTaken = "PERM_CODE_TAKEN"
+	ErrPermissionAssigned  = "PERM_ASSIGNED"
+	ErrRoleAssigned        = "PERM_ROLE_ASSIGNED"
 
-	// System management errors (10xxx).
-	ErrCleanupRunning        = 10030
-	ErrCleanupDisabled       = 10031
-	ErrTimeSyncFailed        = 10032
-	ErrInvalidTimezone       = 10033
-	ErrTimezoneFileNotFound  = 10034
-	ErrSetTimeFailed         = 10035
-	ErrTimeOutOfRange        = 10036
-	ErrNetworkConfigFailed   = 10037
-	ErrNetworkRollbackFailed = 10038
-	ErrNetworkConfirmFailed  = 10039
-	ErrWebhookPushFailed     = 10040
-	ErrNotImplemented        = 10041
-	ErrTooManyRequests       = 10042
+	// FILE — 文件/上传.
+	ErrFileContentIncomplete = "FILE_CONTENT_INCOMPLETE"
+	ErrChunkCountMismatch    = "FILE_CHUNK_COUNT_MISMATCH"
+	ErrInvalidChunkIndex     = "FILE_INVALID_CHUNK_INDEX"
+	ErrChunkIncomplete       = "FILE_CHUNK_INCOMPLETE"
+	ErrUploadCanceled        = "FILE_UPLOAD_CANCELED"
+	ErrFileSizeMismatch      = "FILE_SIZE_MISMATCH"
+	ErrFileChecksumMismatch  = "FILE_CHECKSUM_MISMATCH"
 
-	// License 算法授权错误 (10xxx)
-	ErrLicenseInvalid        = 10050 // 授权文件无效或签名验证失败
-	ErrLicenseDeviceMismatch = 10051 // 授权文件绑定的设备指纹与当前设备不匹配
-	ErrLicenseNotAuthorized  = 10052 // 算法未在授权范围内
-	ErrLicenseExpired        = 10053 // 授权已过期
-	ErrLicenseNotYetValid    = 10054 // 授权尚未生效
-	ErrLicenseStreamLimit    = 10055 // 授权并发路数不足
-	ErrLicenseNotConfigured  = 10056 // 授权公钥未配置
+	// SYS — 系统管理.
+	ErrCleanupRunning        = "SYS_CLEANUP_RUNNING"
+	ErrCleanupDisabled       = "SYS_CLEANUP_DISABLED"
+	ErrTimeSyncFailed        = "SYS_TIME_SYNC_FAILED"
+	ErrInvalidTimezone       = "SYS_INVALID_TIMEZONE"
+	ErrTimezoneFileNotFound  = "SYS_TIMEZONE_FILE_NOT_FOUND"
+	ErrSetTimeFailed         = "SYS_SET_TIME_FAILED"
+	ErrTimeOutOfRange        = "SYS_TIME_OUT_OF_RANGE"
+	ErrNetworkConfigFailed   = "SYS_NETWORK_CONFIG_FAILED"
+	ErrNetworkRollbackFailed = "SYS_NETWORK_ROLLBACK_FAILED"
+	ErrNetworkConfirmFailed  = "SYS_NETWORK_CONFIRM_FAILED"
+	ErrWebhookPushFailed     = "SYS_WEBHOOK_PUSH_FAILED"
 
-	// 连接测试结果 (1008x).
-	ErrEngineNotReady    = 10080 // 推理引擎未就绪
-	ErrConnectionTimeout = 10081 // 连接超时
-	ErrEngineResponseBad = 10082 // 引擎响应异常
-	ErrConnectionFailed  = 10083 // 连接失败
-	ErrConnectionTestOK  = 10084 // 连接测试成功，流可达
+	// LICENSE — 授权管理.
+	ErrLicenseInvalid        = "LICENSE_INVALID"          // 授权文件无效或签名验证失败
+	ErrLicenseDeviceMismatch = "LICENSE_DEVICE_MISMATCH"  // 授权文件绑定的设备指纹与当前设备不匹配
+	ErrLicenseNotAuthorized  = "LICENSE_NOT_AUTHORIZED"   // 算法未在授权范围内
+	ErrLicenseExpired        = "LICENSE_EXPIRED"          // 授权已过期
+	ErrLicenseNotYetValid    = "LICENSE_NOT_YET_VALID"    // 授权尚未生效
+	ErrLicenseStreamLimit    = "LICENSE_STREAM_LIMIT"     // 授权并发路数不足
+	ErrLicenseNotConfigured  = "LICENSE_NOT_CONFIGURED"   // 授权公钥未配置
 
-	// Server errors (5xxxx).
-	ErrInternal            = 50001
-	ErrStreamStateNotFound = 50002
-	ErrZLMNotConfigured    = 50003
-	ErrFingerprintExtract  = 50004
+	// ENGINE — 引擎通信.
+	ErrEngineNotReady    = "ENGINE_NOT_READY"      // 推理引擎未就绪
+	ErrConnectionTimeout = "ENGINE_CONNECTION_TIMEOUT" // 连接超时
+	ErrEngineResponseBad = "ENGINE_RESPONSE_BAD"   // 引擎响应异常
+	ErrConnectionFailed  = "ENGINE_CONNECTION_FAILED"  // 连接失败
+	ErrConnectionTestOK  = "ENGINE_CONNECTION_TEST_OK" // 连接测试成功，流可达
+
+	// DEV — 设备管理.
+	ErrDeviceNameTaken              = "DEV_NAME_TAKEN"
+	ErrRTSPURLRequired              = "DEV_RTSP_URL_REQUIRED"
+	ErrGB28181CodeRequired          = "DEV_GB28181_CODE_REQUIRED"
+	ErrDeviceGroupNotEmpty          = "DEV_GROUP_NOT_EMPTY"
+	ErrResourceConflict             = "DEV_RESOURCE_CONFLICT"
+	ErrInvalidGB28181DeviceCode     = "DEV_GB28181_CODE_INVALID"
+	ErrGB28181DeviceOffline         = "DEV_GB28181_OFFLINE"
+	ErrInvalidPlaybackAction        = "DEV_INVALID_PLAYBACK_ACTION"
+	ErrAlarmDeviceRequired          = "DEV_ALARM_DEVICE_REQUIRED"
+	ErrTimeWindowFormat             = "DEV_TIME_WINDOW_FORMAT"
+	ErrTaskStatusNotCancelable      = "DEV_TASK_STATUS_NOT_CANCELABLE"
+	ErrDeviceExternalKeyTaken       = "DEV_EXTERNAL_KEY_TAKEN"
+	ErrDeviceDisabled               = "DEV_DISABLED"
+	ErrDeviceOffline                = "DEV_OFFLINE"
+	ErrDeviceTypeInvalid            = "DEV_TYPE_INVALID"
+	CodeVersionIncompatible         = "DEV_VERSION_INCOMPATIBLE"
+
+	// NODE — 边缘节点.
+	ErrEdgeNodeNameTaken            = "NODE_NAME_TAKEN"
+	ErrEdgeNodeNotFound             = "NODE_NOT_FOUND"
+	ErrEdgeNodeOffline              = "NODE_OFFLINE"
+	ErrEdgeNodeDisabled             = "NODE_DISABLED"
+	ErrEdgeNodeFull                 = "NODE_FULL"
+	ErrEdgeNodeAlgorithmUnavailable = "NODE_ALGORITHM_UNAVAILABLE"
+
+	// AUTH — 身份认证 (原 2xxxx).
+	ErrUnauthorized       = "AUTH_UNAUTHORIZED"
+	ErrTokenExpired       = "AUTH_TOKEN_EXPIRED"
+	ErrTokenInvalid       = "AUTH_TOKEN_INVALID"
+	ErrRefreshTokenReuse  = "AUTH_TOKEN_REUSED"
+	ErrInvalidCredentials = "AUTH_INVALID_CREDENTIALS"
+
+	// FORBIDDEN — 权限/ACL (原 3xxxx).
+	ErrForbidden        = "FORBIDDEN"
+	ErrOriginNotAllowed = "FORBIDDEN_ORIGIN"
+	ErrUserDisabled     = "FORBIDDEN_USER_DISABLED"
+
+	// NOT_FOUND — 资源不存在 (原 4xxxx).
+	ErrNotFound               = "NOT_FOUND"
+	ErrFeedbackNotFound       = "NOT_FOUND_FEEDBACK"
+	ErrUserNotFound           = "NOT_FOUND_USER"
+	ErrRoleNotFound           = "NOT_FOUND_ROLE"
+	ErrPermissionNotFound     = "NOT_FOUND_PERMISSION"
+	ErrTaskNotFound           = "NOT_FOUND_TASK"
+	ErrDeviceNotFound         = "NOT_FOUND_DEVICE"
+	ErrFileNotFound           = "NOT_FOUND_FILE"
+	ErrUploadSessionNotFound  = "NOT_FOUND_UPLOAD_SESSION"
+	ErrDeviceGroupNotFound    = "NOT_FOUND_DEVICE_GROUP"
+	ErrLicenseNotFound        = "NOT_FOUND_LICENSE"
+	ErrAITimeScheduleNotFound = "NOT_FOUND_TIME_SCHEDULE"
+
+	// INTERNAL — 服务器内部 (原 5xxxx).
+	ErrInternal            = "INTERNAL_ERROR"
+	ErrStreamStateNotFound = "INTERNAL_STREAM_STATE_NOT_FOUND"
+	ErrZLMNotConfigured    = "INTERNAL_ZLM_NOT_CONFIGURED"
+	ErrFingerprintExtract  = "INTERNAL_FINGERPRINT_EXTRACT_FAIL"
 )
 
 const defaultLanguage = "en"
 
 // AppError represents a business-level error with a code and message.
 type AppError struct {
-	Code    int    `json:"code"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
 
 	// localizedMessage 标记 Message 是否已经按当前请求语言翻译，可直接返回给前端。
@@ -166,10 +178,10 @@ type AppError struct {
 
 // Error implements the error interface.
 func (e *AppError) Error() string {
-	return fmt.Sprintf("code=%d, message=%s", e.Code, e.Message)
+	return fmt.Sprintf("code=%s, message=%s", e.Code, e.Message)
 }
 
-func New(code int, msg string) *AppError {
+func New(code string, msg string) *AppError {
 	if msg == "" {
 		return &AppError{Code: code, Message: DefaultMessage(code, defaultLanguage), localizedMessage: false}
 	}
@@ -182,7 +194,7 @@ func (e *AppError) IsLocalizedMessage() bool {
 }
 
 // NewLocalized creates an AppError whose explicit message is safe to return to the frontend.
-func NewLocalized(code int, msg string) *AppError {
+func NewLocalized(code string, msg string) *AppError {
 	if msg == "" {
 		return New(code, msg)
 	}
@@ -190,12 +202,12 @@ func NewLocalized(code int, msg string) *AppError {
 }
 
 // Newf creates a new AppError with a formatted explicit message.
-func Newf(code int, format string, args ...interface{}) *AppError {
+func Newf(code string, format string, args ...interface{}) *AppError {
 	return &AppError{Code: code, Message: fmt.Sprintf(format, args...), localizedMessage: true}
 }
 
 // DefaultMessage returns the default message for a business error code in the specified language.
-func DefaultMessage(code int, lang string) string {
+func DefaultMessage(code string, lang string) string {
 	msg := i18n.Translate(lang, code)
 	if strings.HasPrefix(msg, "unknown error (code=") {
 		return "Unknown error"

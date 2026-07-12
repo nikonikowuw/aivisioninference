@@ -27,7 +27,7 @@ func TestDefaultMessageFallback(t *testing.T) {
 	if got := DefaultMessage(ErrUnauthorized, "unsupported"); got != DefaultMessage(ErrUnauthorized, "en") {
 		t.Fatalf("expected unsupported language fallback to en, got %q", got)
 	}
-	if got := DefaultMessage(99999, "zh"); got != "Unknown error" {
+	if got := DefaultMessage("UNKNOWN", "zh"); got != "Unknown error" {
 		t.Fatalf("expected unknown code fallback, got %q", got)
 	}
 }

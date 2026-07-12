@@ -3,7 +3,7 @@ import { clearAccessToken, getAccessToken, getErrorMessage, setAccessToken } fro
 
 describe('api error messages', () => {
   it('should fall back to server error for unknown codes', () => {
-    expect(getErrorMessage(99999)).toBe('Server error');
+    expect(getErrorMessage('UNKNOWN')).toBe('Server error');
   });
 });
 

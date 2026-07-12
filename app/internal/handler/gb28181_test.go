@@ -117,7 +117,7 @@ func TestGB28181HandlerTriggerCatalog(t *testing.T) {
 	assert.Equal(t, "34020000001320000001", svc.lastCatalogCode)
 
 	var resp struct {
-		Code int                     `json:"code"`
+		Code string                    `json:"code"`
 		Data dto.CatalogTaskResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))

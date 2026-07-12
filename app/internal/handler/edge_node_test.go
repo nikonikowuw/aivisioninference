@@ -186,11 +186,11 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var createRes struct {
-		Code int                    `json:"code"`
+		Code string                   `json:"code"`
 		Data CreateEdgeNodeResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &createRes))
-	assert.Equal(t, 0, createRes.Code)
+	assert.Equal(t, "OK", createRes.Code)
 	nodeID := createRes.Data.Node.ID
 	assert.NotEmpty(t, nodeID)
 	assert.NotEmpty(t, createRes.Data.Token)

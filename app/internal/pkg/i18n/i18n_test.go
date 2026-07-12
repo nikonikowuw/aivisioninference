@@ -17,7 +17,7 @@ func TestTranslationsCoverDefaultLanguageCodes(t *testing.T) {
 		}
 		for code := range defaultMessages {
 			if _, ok := messages[code]; !ok {
-				t.Fatalf("language %q missing translation for code %d", lang, code)
+				t.Fatalf("language %q missing translation for code %s", lang, code)
 			}
 		}
 	}

@@ -12,6 +12,7 @@ These specs cover `app/`, the Gin/GORM/Redis control plane. The backend owns API
 | [Logging Guidelines](./logging-guidelines.md) | Adding service, task, MQTT, heartbeat, or operational logs |
 | [Edge Node Lifecycle](./edge-node-lifecycle.md) | Changing heartbeat, LWT, offline detection, task suspension/recovery, scheduler registration, or lifecycle WebSocket events |
 | [Edge Scheduled Tasks](./edge-scheduled-tasks.md) | Modifying scheduled MQTT command dispatch, EdgeNode tags, patrol worker, or task execution records |
+| [Terminal Sessions](./terminal-sessions.md) | Modifying SSH pool, terminal session lifecycle, ttyrec recording, WebSocket terminal handler, or frontend terminal components |
 | [Quality Guidelines](./quality-guidelines.md) | Before finishing backend changes or touching shared generated/Wire/Swagger flows |
 
 ## Local Anchors

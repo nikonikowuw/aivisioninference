@@ -20,8 +20,9 @@ import {
   generateSidebarRoutesFromMenus,
   getActiveRouteFromMenus,
 } from "../../router";
-import PersonDetail from "../../views/admin/persons/detail";
 import EdgeNodeDetail from "../../views/admin/devices/edge-nodes/detail";
+import PersonDetail from "../../views/admin/persons/detail";
+import NotFound from "../../views/NotFound";
 
 export default function Dashboard(props: { [x: string]: any }) {
   const { ...rest } = props;
@@ -157,6 +158,7 @@ export default function Dashboard(props: { [x: string]: any }) {
                     path="/"
                     element={<Navigate to="/admin/default" replace />}
                   />
+                  <Route path="*" element={<NotFound isInner />} />
                 </Routes>
               )}
             </Box>

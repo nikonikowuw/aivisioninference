@@ -2,12 +2,13 @@ import { AddIcon, DeleteIcon, DownloadIcon, EditIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
+  Center,
   Checkbox,
   Flex,
   HStack,
   IconButton,
   Input,
-  Stack,
+  Spinner,
   Switch,
   Table,
   Tbody,
@@ -24,7 +25,6 @@ import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import { EmptyState } from 'components/empty/EmptyState';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
-import { TableSkeleton } from 'components/skeleton/Skeleton';
 import { useAuth } from 'contexts/AuthContext';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
@@ -110,6 +110,10 @@ export default function Users() {
           await usersApi.resetPassword(editing.id, password);
         }
         toast({ title: t('message.updateSuccess'), status: 'success' });
+
+        if (editing.id === currentUser?.id) {
+          await refreshUser();
+        }
       } else {
         await usersApi.create(formData as any);
         toast({ title: t('message.createSuccess'), status: 'success' });
@@ -244,11 +248,7 @@ export default function Users() {
   };
 
   if (initialLoading) {
-    return (
-      <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-        <TableSkeleton columns={8} rows={10} />
-      </Box>
-    );
+    return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
   }
 
   return (

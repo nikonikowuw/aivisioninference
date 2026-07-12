@@ -7,6 +7,7 @@ import { BrandProvider } from './contexts/BrandContext';
 import AdminLayout from './layouts/admin';
 import AuthLayout from './layouts/auth';
 import initialTheme from './theme/theme';
+import NotFound from './views/NotFound';
 
 export default function Main() {
   const [currentTheme, setCurrentTheme] = useState(initialTheme);
@@ -23,6 +24,7 @@ export default function Main() {
               }
             />
             <Route path="/" element={<Navigate to="/auth/sign-in" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
       </BrandProvider>

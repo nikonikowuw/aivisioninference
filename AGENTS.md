@@ -17,7 +17,7 @@
 
 ## Project Structure
 
-```
+```text
 app/              # Go 控制面（cmd/internal/pkg）
 engine/           # C++ 推理引擎（include/src/cmake）
 algorithms/       # 算法包仓库（RKNN/Ascend/GPU/M）
@@ -34,7 +34,7 @@ prd/              # PRD 文档
 
 Go 控制面当前通过 **MQTT 命令/响应** 与 C++ 推理引擎通信，边缘节点心跳通过 **HTTP** 上报，推理事件 payload 使用 **FlatBuffers**。前端通过 **HTTP / WebSocket** 与 Go 后端交互。
 
-```
+```text
 React 管理端 ──HTTP/WS──▶ Go 控制面 ◀─MQTT/HTTP/FlatBuffers─▶ C++ 推理引擎
                               │                          │
                               ▼                          ▼
@@ -43,7 +43,7 @@ React 管理端 ──HTTP/WS──▶ Go 控制面 ◀─MQTT/HTTP/FlatBuffers�
 
 Go 后端分层（单向依赖）：
 
-```
+```text
 Handler → Service → Repository → Model (GORM)
    │         │           │
    ▼         ▼           ▼
@@ -52,7 +52,7 @@ Handler → Service → Repository → Model (GORM)
 
 C++ 推理引擎 Pipeline：
 
-```
+```text
 MQTT Control Plane ──→ Command Dispatcher ──→ Pipeline Pool ──→ Decoder → Preprocess → Inference (Algo .so) → Postprocess → Result Upload
 ```
 
@@ -80,14 +80,3 @@ MQTT Control Plane ──→ Command Dispatcher ──→ Pipeline Pool ──�
 | `.rules/frontend-design.md`             | 前端视觉：主题、排版、布局、图表视频、i18n 零硬编码、自检清单                                           |
 | `.rules/vercel-react-best-practices.md` | React 性能：数据请求、路由拆分、Bundle、渲染正确性、高频交互                                            |
 | `.rules/cpp-engine-algorithm.md`        | C++ Engine：架构约定、编码规范、Pipeline 性能、FlatBuffers 协议、算法包规范、C ABI 契约、构建验证、安全 |
-
-<!-- TRELLIS:START -->
-
-## Trellis Context
-
-Managed by Trellis. Knowledge base in `.trellis/`:
-
-- `workflow.md`: Development phases.
-- `spec/`: Coding guidelines.
-- `tasks/`: Active/Archived tasks.
-<!-- TRELLIS:END -->

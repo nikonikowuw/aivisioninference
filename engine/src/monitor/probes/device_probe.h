@@ -35,6 +35,11 @@ namespace aivision
 
             /// 收集昂贵动态指标 (如外部 CLI 调用，可能需要 500ms~1500ms)
             virtual void CollectExpensiveMetrics(const DeviceMonitorConfig& config, DeviceDynamicMetrics& metrics, std::vector<AcceleratorInfo>& accelerators) = 0;
+
+            /// 收集扩展快照字段（磁盘挂载点、网络 I/O 等需要修改 DeviceSnapshot 的数据）
+            /// 默认空实现；支持扩展的 probe 覆盖此方法
+            virtual void CollectExtendedSnapshot(const DeviceMonitorConfig& config, DeviceSnapshot& snapshot, uint64_t now_ms) {}
+
         };
 
         // Factory functions for concrete probes

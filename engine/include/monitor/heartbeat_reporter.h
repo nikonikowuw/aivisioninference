@@ -15,6 +15,8 @@ namespace aivision
 
     namespace monitor
     {
+        class DeviceMonitor;
+
         class HeartbeatReporter
         {
         public:
@@ -30,6 +32,9 @@ namespace aivision
             /// 是否运行中
             bool IsRunning() const { return running_.load(); }
 
+            /// 关联 DeviceMonitor 以获取完整设备快照
+            void SetDeviceMonitor(DeviceMonitor* monitor) { device_monitor_ = monitor; }
+
         private:
             /// 心跳上报循环
             void ReportLoop();
@@ -44,6 +49,7 @@ namespace aivision
             void ParseAndDeploy(const std::string& response_json);
 
             InferenceEngine* engine_;
+            DeviceMonitor* device_monitor_ = nullptr;
             std::atomic<bool> running_{false};
             std::unique_ptr<std::thread> thread_;
             std::mutex stop_mutex_;

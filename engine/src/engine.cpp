@@ -230,6 +230,11 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
           config.device_light_probe_interval_ms,
           config.device_expensive_probe_interval_ms});
 
+  // 将 DeviceMonitor 关联到 HeartbeatReporter 以获取完整设备快照
+  if (heartbeat_reporter_) {
+    heartbeat_reporter_->SetDeviceMonitor(device_monitor_.get());
+  }
+
   // 创建 MQTT & Command Dispatcher 组件并建立绑定
   command_dispatcher_ = std::make_unique<CommandDispatcher>(this);
   mqtt_control_plane_ = std::make_unique<MqttControlPlane>(this);

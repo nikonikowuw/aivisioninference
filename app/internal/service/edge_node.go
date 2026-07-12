@@ -31,6 +31,7 @@ type EdgeNodeService struct {
 	taskRepo             *repository.AIVisionTaskRepository
 	deviceRepo           *repository.DeviceRepository
 	smartRecordRepo      *repository.SmartRecordRepository
+	metricsSvc           *EdgeNodeMetricsService
 	jwtManager           *jwt.Manager
 	storage              storage.Storage
 	minCompatibleVersion string
@@ -50,6 +51,7 @@ func NewEdgeNodeService(
 	taskRepo *repository.AIVisionTaskRepository,
 	deviceRepo *repository.DeviceRepository,
 	smartRecordRepo *repository.SmartRecordRepository,
+	metricsSvc *EdgeNodeMetricsService,
 	jwtManager *jwt.Manager,
 	storage storage.Storage,
 	hub *ws.Hub,
@@ -62,6 +64,7 @@ func NewEdgeNodeService(
 		taskRepo:             taskRepo,
 		deviceRepo:           deviceRepo,
 		smartRecordRepo:      smartRecordRepo,
+		metricsSvc:           metricsSvc,
 		jwtManager:           jwtManager,
 		storage:              storage,
 		minCompatibleVersion: "",
@@ -289,6 +292,11 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 			return nil, fmt.Errorf("查询暂停任务失败: %w", err)
 		}
 		suspendedTasks = tasks
+	}
+
+	// Metrics persistence is non-critical and owns its bounded async lifecycle.
+	if s.metricsSvc != nil {
+		s.metricsSvc.WriteHeartbeatMetrics(ctx, id, req)
 	}
 
 	// Update in-memory node for downstream use (after successful transaction)

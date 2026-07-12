@@ -57,6 +57,37 @@ namespace aivision
                 j["gpu_usage"] = MetricValueToJson(metrics.gpu_usage);
                 j["npu_usage"] = MetricValueToJson(metrics.npu_usage);
                 j["temperature"] = MetricValueToJson(metrics.temperature);
+                // Extended metrics
+                j["load_average_1m"] = MetricValueToJson(metrics.load_average_1m);
+                j["load_average_5m"] = MetricValueToJson(metrics.load_average_5m);
+                j["load_average_15m"] = MetricValueToJson(metrics.load_average_15m);
+                j["process_count"] = MetricValueToJson(metrics.process_count);
+                j["thread_count"] = MetricValueToJson(metrics.thread_count);
+                return j;
+            }
+
+            json DisksToJson(const std::vector<DiskInfo>& disks)
+            {
+                json arr = json::array();
+                for (const auto& disk : disks)
+                {
+                    json d;
+                    d["path"] = disk.path;
+                    d["total_bytes"] = disk.total_bytes;
+                    d["used_bytes"] = disk.used_bytes;
+                    d["usage_percent"] = disk.usage_percent;
+                    arr.push_back(d);
+                }
+                return arr;
+            }
+
+            json NetworkStatsToJson(const NetworkStats& net)
+            {
+                json j;
+                j["rx_bytes"] = net.rx_bytes;
+                j["tx_bytes"] = net.tx_bytes;
+                j["rx_speed"] = net.rx_speed;
+                j["tx_speed"] = net.tx_speed;
                 return j;
             }
 
@@ -139,6 +170,19 @@ namespace aivision
                 j["installed_algorithms"] = json::array();
             }
 
+            // Extended flat fields for heartbeat payload
+            j["cpu_load_1m"] = snapshot.metrics.load_average_1m.available ? snapshot.metrics.load_average_1m.value : 0.0;
+            j["cpu_load_5m"] = snapshot.metrics.load_average_5m.available ? snapshot.metrics.load_average_5m.value : 0.0;
+            j["cpu_load_15m"] = snapshot.metrics.load_average_15m.available ? snapshot.metrics.load_average_15m.value : 0.0;
+            j["disks"] = DisksToJson(snapshot.disks);
+            j["net_rx_bytes"] = snapshot.network.rx_bytes;
+            j["net_tx_bytes"] = snapshot.network.tx_bytes;
+            j["net_rx_speed"] = snapshot.network.rx_speed;
+            j["net_tx_speed"] = snapshot.network.tx_speed;
+            j["process_count"] = snapshot.metrics.process_count.available ? static_cast<int64_t>(snapshot.metrics.process_count.value) : 0;
+            j["thread_count"] = snapshot.metrics.thread_count.available ? static_cast<int64_t>(snapshot.metrics.thread_count.value) : 0;
+            j["temperature"] = snapshot.metrics.temperature.available ? snapshot.metrics.temperature.value : 0.0;
+
             // New fields
             j["device_info"] = DeviceStaticInfoToJson(snapshot.info);
             j["device_metrics"] = DeviceDynamicMetricsToJson(snapshot.metrics);
@@ -187,6 +231,8 @@ namespace aivision
             device["info"] = DeviceStaticInfoToJson(snapshot.info);
             device["metrics"] = DeviceDynamicMetricsToJson(snapshot.metrics);
             device["accelerators"] = AcceleratorsToJson(snapshot.accelerators);
+            device["disks"] = DisksToJson(snapshot.disks);
+            device["network"] = NetworkStatsToJson(snapshot.network);
 
             // Diagnostics detail
             json diag_arr = json::array();

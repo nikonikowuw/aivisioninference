@@ -277,6 +277,23 @@ namespace aivision
                         changed = true;
                     }
 
+                    // 4. Extended snapshot fields (disk mountpoints, network I/O, load, process/thread)
+                    if (run_light || run_expensive)
+                    {
+                        for (auto& probe : active_probes_)
+                        {
+                            try
+                            {
+                                probe->CollectExtendedSnapshot(config_, next_snapshot, now_ms);
+                            }
+                            catch (const std::exception& e)
+                            {
+                                std::cerr << "Probe " << probe->Name() << " CollectExtendedSnapshot error: " << e.what() << std::endl;
+                            }
+                        }
+                        changed = true;
+                    }
+
                     if (changed)
                     {
                         next_snapshot.diagnostics.clear();

@@ -28,6 +28,7 @@ import { usePagination } from 'hooks/usePagination';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { formatUptime } from 'utils/convert';
 import { edgeNodeApi, type EdgeNode } from 'services/edgeNode';
 import { useWebSocket } from 'hooks/useWebSocket';
 import { AlgorithmDeployModal } from './components/AlgorithmDeployModal';
@@ -39,6 +40,10 @@ const STATUS_COLORS: Record<string, string> = {
   error: 'red',
   disabled: 'orange',
 };
+
+function formatPercent(value?: number): string {
+  return value === undefined ? '-' : `${value.toFixed(1)}%`;
+}
 
 export default function EdgeNodeList() {
   const { t } = useTranslation('modules/edge-nodes');
@@ -64,7 +69,7 @@ export default function EdgeNodeList() {
     status: filters.status,
   }), [filters]);
 
-  const { list: nodes, total, page, pageSize, initialLoading, pageLoading, load: loadNodes, changePage, changePageSize } = usePagination<EdgeNode>(fetchNodes);
+  const { list: nodes, total, page, pageSize, initialLoading, pageLoading, load: loadNodes, changePage, changePageSize, setList: setNodes } = usePagination<EdgeNode>(fetchNodes);
 
   useEffect(() => {
     loadNodes({ page: 1 }).catch(() => {
@@ -81,8 +86,23 @@ export default function EdgeNodeList() {
         setLastRefreshTime(now);
         refresh();
       }
+    } else if (msg.type === 'edge-node-metrics') {
+      // Update node metrics in-place for real-time display
+      setNodes((prev) => {
+        if (!prev || !prev.length) return prev;
+        const payload = msg.payload || msg;
+        const idx = prev.findIndex((n) => n.id === payload.node_id);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        updated[idx] = {
+          ...updated[idx],
+          cpu_usage: payload.cpu_usage,
+          memory_usage: payload.memory_usage,
+        };
+        return updated;
+      });
     }
-  }, [lastRefreshTime, refresh]);
+  }, [lastRefreshTime, refresh, setNodes]);
 
   useWebSocket({ onMessage: handleWsMessage });
 
@@ -120,6 +140,13 @@ export default function EdgeNodeList() {
             {t('title')}
           </Text>
           <HStack spacing={3}>
+            <Button
+              leftIcon={<ViewIcon />}
+              variant="outline"
+              onClick={() => navigate('/admin/devices/edge-nodes/overview')}
+            >
+              {t('overview')}
+            </Button>
             <Button
               leftIcon={<AddIcon />}
               colorScheme="brand"
@@ -159,6 +186,9 @@ export default function EdgeNodeList() {
                   <Th>{t('fields.name')}</Th>
                   <Th>{t('fields.status')}</Th>
                   <Th>{t('fields.currentLoad')}</Th>
+                  <Th>{t('fields.cpuUsage')}</Th>
+                  <Th>{t('fields.memUsage')}</Th>
+                  <Th>{t('fields.uptime')}</Th>
                   <Th>{t('fields.platform')}</Th>
                   <Th>{t('fields.engineVersion')}</Th>
                   <Th>{t('fields.lastHeartbeat')}</Th>
@@ -167,9 +197,9 @@ export default function EdgeNodeList() {
               </Thead>
               <Tbody>
                 {(pageLoading && nodes.length === 0) ? (
-                  <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                  <Tr><Td colSpan={10}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
                 ) : nodes.length === 0 ? (
-                  <Tr><Td colSpan={7}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
+                  <Tr><Td colSpan={10}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
                 ) : (
                   nodes.map((node) => (
                     <Tr key={node.id}>
@@ -186,6 +216,21 @@ export default function EdgeNodeList() {
                       <Td>
                         <Text fontSize="sm">
                           {node.current_load ?? 0}/{node.max_load ?? '-'}
+                        </Text>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm">
+                          {formatPercent(node.cpu_usage ?? node.hardware_info?.cpu_usage)}
+                        </Text>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm">
+                          {formatPercent(node.memory_usage ?? node.hardware_info?.memory_usage)}
+                        </Text>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm">
+                          {formatUptime(node.uptime)}
                         </Text>
                       </Td>
                       <Td>

@@ -132,12 +132,15 @@ func main() {
 
 		// AIVisionInference: Edge Web Terminal.
 		&model.TerminalSession{},
-		); err != nil {
+
+		// AIVisionInference: Edge Node Metrics.
+		&model.EdgeNodeMetrics{},
+	); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}
 
-		// GORM AutoMigrate 无法创建分区表，smart_records 目前为普通表。如需分区，
-		// 需先重命名为旧表、创建分区母表、迁移数据后再删除旧表。
+	// GORM AutoMigrate 无法创建分区表，smart_records 目前为普通表。如需分区，
+	// 需先重命名为旧表、创建分区母表、迁移数据后再删除旧表。
 
 	mustExec(db, "CREATE INDEX IF NOT EXISTS idx_person_embeddings_vector ON person_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
 
@@ -182,6 +185,19 @@ func main() {
 
 	// GB28181 数据模型重构：将 gb28181_devices 数据迁移到 devices + device_sip_configs。
 	migrateGB28181ToUnifiedDevices(db)
+
+	// 边缘节点指标表 BRIN 索引（时序数据天然有序，BRIN 更高效）
+	mustExec(db, `DO $$ BEGIN
+		IF EXISTS (
+			SELECT 1 FROM pg_indexes
+			WHERE indexname = 'idx_edge_node_metrics_node_created_at'
+			  AND indexdef NOT LIKE '%USING brin (node_id, created_at)%'
+		) THEN
+			DROP INDEX idx_edge_node_metrics_node_created_at;
+		END IF;
+	END $$`)
+	mustExec(db, `CREATE INDEX IF NOT EXISTS idx_edge_node_metrics_node_created_at
+		ON edge_node_metrics USING brin (node_id, created_at) WITH (pages_per_range = 32)`)
 
 	// 清理数据库中重复的智能记录菜单（旧版系统管理下的告警记录子菜单）。
 	cleanupDuplicateSmartRecordsMenu(db)
@@ -528,9 +544,9 @@ func seedData(db *gorm.DB, seedCfg config.SeedConfig, redisCfg config.RedisConfi
 			ID:               "default",
 			Enabled:          true,
 			SipID:            "34020000002000000001",
-			SipDomain:         "3402000000",
-			SipRealm:          "3402000000",
-			SipPassword:       "admin123",
+			SipDomain:        "3402000000",
+			SipRealm:         "3402000000",
+			SipPassword:      "admin123",
 			ListenIP:         "0.0.0.0",
 			ListenPort:       5060,
 			Transport:        "udp",
@@ -696,11 +712,11 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "edge-node:view", Name: "查看边缘节点", Path: "/api/v1/edge-nodes/*", Method: "GET"},
 					{Code: "edge-node:deploy-algo", Name: "下发算法包", Path: "/api/v1/edge-nodes/*/deploy-algo", Method: "POST"},
 					{Code: "edge-node:algorithms", Name: "查看节点算法", Path: "/api/v1/edge-nodes/*/algorithms", Method: "GET"},
-				{Code: "edge-node:delete-algo", Name: "卸载算法", Path: "/api/v1/edge-nodes/*/algorithms/*", Method: "DELETE"},
-						{Code: "edge-node:terminal", Name: "Web 终端访问", Path: "/api/v1/ws/terminal", Method: "GET"},
-						{Code: "edge-node:sessions", Name: "查看终端会话", Path: "/api/v1/edge-nodes/*/sessions", Method: "GET"},
-						{Code: "edge-node:close-session", Name: "关闭终端会话", Path: "/api/v1/edge-nodes/*/sessions/*", Method: "DELETE"},
-						{Code: "edge-node:terminal-audit", Name: "终端录制审计", Path: "/api/v1/edge-nodes/*/sessions/*/recording", Method: "GET"},
+					{Code: "edge-node:delete-algo", Name: "卸载算法", Path: "/api/v1/edge-nodes/*/algorithms/*", Method: "DELETE"},
+					{Code: "edge-node:terminal", Name: "Web 终端访问", Path: "/api/v1/ws/terminal", Method: "GET"},
+					{Code: "edge-node:sessions", Name: "查看终端会话", Path: "/api/v1/edge-nodes/*/sessions", Method: "GET"},
+					{Code: "edge-node:close-session", Name: "关闭终端会话", Path: "/api/v1/edge-nodes/*/sessions/*", Method: "DELETE"},
+					{Code: "edge-node:terminal-audit", Name: "终端录制审计", Path: "/api/v1/edge-nodes/*/sessions/*/recording", Method: "GET"},
 				}},
 			},
 		},

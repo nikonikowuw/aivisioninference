@@ -43,6 +43,16 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 		}
 	}
 
+	// Edge node metrics routes
+	if deps.EdgeNodeMetricsHandler != nil {
+		metrics := authorized.Group("/edge-nodes")
+		metrics.Use(r.RBAC())
+		{
+			metrics.GET("/overview", deps.EdgeNodeMetricsHandler.GetNodeOverview)
+			metrics.GET("/:node_id/metrics", deps.EdgeNodeMetricsHandler.QueryMetrics)
+		}
+	}
+
 	// Terminal session routes
 	if deps.TerminalHandler != nil {
 		// WebSocket terminal — JWT auth handled internally, like /ws

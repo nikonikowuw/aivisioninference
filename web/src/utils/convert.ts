@@ -7,6 +7,18 @@ export function parseOptionalNumber(value: string | undefined): number | undefin
   return Number.isNaN(n) ? undefined : n;
 }
 
+export function formatUptime(seconds: number): string {
+  if (!seconds && seconds !== 0) return '-';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  return parts.join(' ');
+}
+
 export function formatDateTime(date: Date | string | number | undefined, pattern?: string): string {
   if (!date) return '-';
   try {

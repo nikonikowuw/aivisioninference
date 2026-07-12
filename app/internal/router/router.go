@@ -643,6 +643,12 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 		termSessionCleanupHandler.RegisterHandlers(mux)
 		termSessionCleanupHandler.RegisterPeriodic(scheduler)
 
+	// Edge Node Metrics Data Retention Task
+	metricsCleanupRepo := repository.NewEdgeNodeMetricsRepository(db)
+	metricsCleanupHandler := task.NewEdgeNodeMetricsHandler(metricsCleanupRepo)
+	metricsCleanupHandler.RegisterHandlers(mux)
+	metricsCleanupHandler.RegisterPeriodic(scheduler)
+
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。
 	avatarStorage, err := provideAvatarStorage(cfg)

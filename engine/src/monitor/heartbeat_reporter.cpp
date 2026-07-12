@@ -2,6 +2,8 @@
 #include "engine.h"
 #include "algo/algo_manager.h"
 #include "algo/algorithm_downloader.h"
+#include "monitor/device_monitor.h"
+#include "monitor/device_snapshot_json.h"
 #include "pipeline/pipeline_manager.h"
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -229,6 +231,42 @@ namespace aivision
             auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
             size_t load = engine_->GetPipelineManager()->ListPipelines().size();
 
+            // Build installed algorithms JSON array string
+            std::string algo_json_str = "[]";
+            try {
+                json algo_arr = json::array();
+                auto deployments = engine_->GetAlgoManager()->GetDeployments();
+                for (const auto& dep : deployments)
+                {
+                    const std::string runtime_status =
+                        engine_->GetAlgoManager()->IsLoaded(dep.algo_name) ? "ready" : "installed";
+                    json a;
+                    a["algo_package_id"] = dep.algo_package_id;
+                    a["algo_name"] = dep.algo_name;
+                    a["version"] = dep.version;
+                    a["install_path"] = dep.install_path;
+                    a["status"] = dep.status;
+                    a["runtime_status"] = runtime_status;
+                    a["supports_embedding"] = true;
+                    a["supports_face_library"] = true;
+                    a["embedding_capacity"] = 1;
+                    algo_arr.push_back(a);
+                }
+                algo_json_str = algo_arr.dump();
+            } catch (...) {
+                algo_json_str = "[]";
+            }
+
+            // If DeviceMonitor is available, use ToHeartbeatJson with real snapshot data
+            if (device_monitor_) {
+                auto snapshot_ptr = device_monitor_->GetSnapshotPtr();
+                if (snapshot_ptr) {
+                    return ToHeartbeatJson(uptime, load, InferenceEngine::Version(),
+                        engine_->GetHalPlatform(), algo_json_str, *snapshot_ptr);
+                }
+            }
+
+            // Fallback: build minimal heartbeat without DeviceMonitor
             std::stringstream ss;
             ss << "{"
                << "\"uptime\":" << uptime << ","
@@ -236,50 +274,17 @@ namespace aivision
                << "\"cpu_usage\":" << 0.0 << ","
                << "\"memory_usage\":" << 0.0 << ","
                << "\"engine_version\":\"" << InferenceEngine::Version() << "\","
-               << "\"hal_platform\":\"" << (
-#ifdef __APPLE__
-                   "macos"
-#else
-                   "rkmpp"
-#endif
-               ) << "\","
-               << "\"hardware_info\":{"
+               << "\"hal_platform\":\"" << engine_->GetHalPlatform() << "\"";
+
+            // Basic hardware info
+            ss << ",\"hardware_info\":{"
                << "\"cpu_model\":\"" << GetCPUModel() << "\","
-               << "\"gpu_model\":\"" << (
-#ifdef __APPLE__
-                   "Apple M1 GPU"
-#else
-                   "Mali-G52"
-#endif
-               ) << "\","
                << "\"total_memory\":" << GetTotalMemory() << ","
                << "\"cpu_cores\":4"
                << "}";
 
             // Installed algorithms
-            ss << ",\"installed_algorithms\":[";
-            auto deployments = engine_->GetAlgoManager()->GetDeployments();
-            bool first = true;
-            for (const auto& dep : deployments)
-            {
-                if (!first) ss << ",";
-                first = false;
-                const std::string runtime_status =
-                    engine_->GetAlgoManager()->IsLoaded(dep.algo_name) ? "ready" : "installed";
-                ss << "{"
-                   << "\"algo_package_id\":\"" << dep.algo_package_id << "\","
-                   << "\"algo_name\":\"" << dep.algo_name << "\","
-                   << "\"version\":\"" << dep.version << "\","
-                   << "\"install_path\":\"" << dep.install_path << "\","
-                   << "\"status\":\"" << dep.status << "\","
-                   << "\"runtime_status\":\"" << runtime_status << "\","
-                   << "\"supports_embedding\":true,"
-                   << "\"supports_face_library\":true,"
-                   << "\"embedding_capacity\":1"
-                   << "}";
-            }
-            ss << "]";
-
+            ss << ",\"installed_algorithms\":" << algo_json_str;
             ss << "}";
             return ss.str();
         }

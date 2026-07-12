@@ -73,6 +73,14 @@ type InstalledAlgorithmInfo struct {
 	EmbeddingCapacity   int    `json:"embedding_capacity,omitempty" binding:"min=0"`
 }
 
+// DiskInfo 磁盘挂载点信息
+type DiskInfo struct {
+	Path         string  `json:"path"`
+	TotalBytes   uint64  `json:"total_bytes"`
+	UsedBytes    uint64  `json:"used_bytes"`
+	UsagePercent float64 `json:"usage_percent"`
+}
+
 // HeartbeatRequest 边缘节点心跳上报请求
 type HeartbeatRequest struct {
 	Uptime              int64                    `json:"uptime" binding:"min=0"`
@@ -86,6 +94,19 @@ type HeartbeatRequest struct {
 	ActiveStreams       []string                 `json:"active_streams"`
 	Status              string                   `json:"status" binding:"omitempty"`
 	ErrorMessage        string                   `json:"error_message" binding:"omitempty"`
+
+	// Extended metrics (from C++ Engine MetricsFlattener)
+	CPULoad1m    float64    `json:"cpu_load_1m,omitempty"`
+	CPULoad5m    float64    `json:"cpu_load_5m,omitempty"`
+	CPULoad15m   float64    `json:"cpu_load_15m,omitempty"`
+	Disks        []DiskInfo `json:"disks,omitempty"`
+	NetRXBytes   int64      `json:"net_rx_bytes,omitempty"`
+	NetTXBytes   int64      `json:"net_tx_bytes,omitempty"`
+	NetRXSpeed   float64    `json:"net_rx_speed,omitempty"`
+	NetTXSpeed   float64    `json:"net_tx_speed,omitempty"`
+	ProcessCount int32      `json:"process_count,omitempty"`
+	ThreadCount  int32      `json:"thread_count,omitempty"`
+	Temperature  float64    `json:"temperature,omitempty"`
 }
 
 // PendingDeployment 待下发算法包信息

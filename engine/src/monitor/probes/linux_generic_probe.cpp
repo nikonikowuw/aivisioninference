@@ -1,6 +1,7 @@
 #include "probes/device_probe.h"
 
 #include <unistd.h>
+#include <dirent.h>
 #include <sys/utsname.h>
 #include <sys/statvfs.h>
 #ifndef __APPLE__
@@ -10,6 +11,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 
 namespace aivision
@@ -258,7 +260,7 @@ namespace aivision
                     }
                 }
 
-                // 3. Storage Usage
+                // 3. Storage Usage (single path, kept for backward compat with EdgeNode metrics)
                 std::string path = config.storage_path;
                 if (path.empty()) path = "/";
                 struct statvfs vfs;
@@ -269,7 +271,7 @@ namespace aivision
                         metrics.storage_usage.available = true;
                         metrics.storage_usage.stale = false;
                         uint64_t total_blocks = vfs.f_blocks;
-                        uint64_t free_blocks = vfs.f_bavail; // blocks available to non-superuser
+                        uint64_t free_blocks = vfs.f_bavail;
                         uint64_t used_blocks = total_blocks - free_blocks;
                         metrics.storage_usage.value = (static_cast<double>(used_blocks) / total_blocks) * 100.0;
                         metrics.storage_usage.unit = "percent";
@@ -296,10 +298,222 @@ namespace aivision
                 // Linux generic doesn't need expensive collection
             }
 
+            void CollectExtendedSnapshot(
+                const DeviceMonitorConfig& config,
+                DeviceSnapshot& snapshot,
+                uint64_t now_ms) override
+            {
+#ifndef __APPLE__
+                // 1. Load Average from /proc/loadavg
+                {
+                    std::ifstream loadavg(config.proc_dir + "/loadavg");
+                    if (loadavg.is_open())
+                    {
+                        std::string line;
+                        if (std::getline(loadavg, line))
+                        {
+                            std::stringstream ss(line);
+                            double la1 = 0, la5 = 0, la15 = 0;
+                            ss >> la1 >> la5 >> la15;
+
+                            auto setLoad = [&](MetricValue& mv, double val, const char* field) {
+                                mv.available = true;
+                                mv.stale = false;
+                                mv.value = val;
+                                mv.unit = "load";
+                                mv.source = config.proc_dir + "/loadavg (" + field + ")";
+                                mv.collected_at_ms = now_ms;
+                            };
+                            setLoad(snapshot.metrics.load_average_1m, la1, "1m");
+                            setLoad(snapshot.metrics.load_average_5m, la5, "5m");
+                            setLoad(snapshot.metrics.load_average_15m, la15, "15m");
+                        }
+                    }
+                }
+
+                // 2. Current process and thread counts from numeric /proc entries.
+                {
+                    uint64_t process_count = 0;
+                    uint64_t thread_count = 0;
+                    DIR* proc_dir = opendir(config.proc_dir.c_str());
+                    if (proc_dir != nullptr)
+                    {
+                        while (const dirent* entry = readdir(proc_dir))
+                        {
+                            const std::string name(entry->d_name);
+                            if (name.empty() || !std::all_of(name.begin(), name.end(), [](unsigned char ch) {
+                                    return std::isdigit(ch) != 0;
+                                }))
+                            {
+                                continue;
+                            }
+
+                            ++process_count;
+                            const std::string task_path = config.proc_dir + "/" + name + "/task";
+                            DIR* task_dir = opendir(task_path.c_str());
+                            if (task_dir == nullptr)
+                            {
+                                continue;
+                            }
+                            while (const dirent* task_entry = readdir(task_dir))
+                            {
+                                const std::string task_name(task_entry->d_name);
+                                if (!task_name.empty() && std::all_of(task_name.begin(), task_name.end(), [](unsigned char ch) {
+                                        return std::isdigit(ch) != 0;
+                                    }))
+                                {
+                                    ++thread_count;
+                                }
+                            }
+                            closedir(task_dir);
+                        }
+                        closedir(proc_dir);
+
+                        auto setCount = [now_ms, &config](MetricValue& metric, uint64_t value, const char* field) {
+                            metric.available = true;
+                            metric.stale = false;
+                            metric.value = static_cast<double>(value);
+                            metric.unit = "count";
+                            metric.source = config.proc_dir + " numeric entries (" + field + ")";
+                            metric.error.clear();
+                            metric.collected_at_ms = now_ms;
+                        };
+                        setCount(snapshot.metrics.process_count, process_count, "processes");
+                        setCount(snapshot.metrics.thread_count, thread_count, "threads");
+                    }
+                }
+
+                // 3. Network I/O from /proc/net/dev
+                {
+                    std::ifstream net_file(config.proc_dir + "/net/dev");
+                    if (net_file.is_open())
+                    {
+                        std::string line;
+                        // Skip two header lines
+                        std::getline(net_file, line);
+                        std::getline(net_file, line);
+
+                        uint64_t total_rx = 0;
+                        uint64_t total_tx = 0;
+
+                        while (std::getline(net_file, line))
+                        {
+                            // Format: "interfacename: RX_bytes RX_packets ... TX_bytes TX_packets ..."
+                            size_t colon = line.find(':');
+                            if (colon == std::string::npos) continue;
+
+                            std::string iface = line.substr(0, colon);
+                            iface.erase(0, iface.find_first_not_of(" \t"));
+                            iface.erase(iface.find_last_not_of(" \t") + 1);
+                            // Exclude only loopback and IFB redirect devices.
+                            if (iface == "lo" || iface.rfind("ifb", 0) == 0) continue;
+
+                            std::string stats = line.substr(colon + 1);
+                            std::stringstream ss(stats);
+                            uint64_t rx_bytes = 0, rx_packets = 0;
+                            uint64_t tx_bytes = 0, tx_packets = 0;
+                            // Skip: RX bytes, packets, errs, drop, fifo, frame, compressed, multicast
+                            // Then TX: bytes, packets, errs, drop, fifo, colls, carrier, compressed
+                            uint64_t temp = 0;
+                            ss >> rx_bytes >> rx_packets;
+                            for (int i = 0; i < 6; ++i) ss >> temp;
+                            ss >> tx_bytes >> tx_packets;
+
+                            total_rx += rx_bytes;
+                            total_tx += tx_bytes;
+                        }
+
+                        snapshot.network.rx_bytes = total_rx;
+                        snapshot.network.tx_bytes = total_tx;
+
+                        // Compute network speed via delta tracking
+                        uint64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch()).count();
+
+                        if (last_net_sample_us_ > 0) {
+                            double elapsed_sec = (now_us - last_net_sample_us_) / 1e6;
+                            if (elapsed_sec > 0 && total_rx >= last_net_rx_bytes_ && total_tx >= last_net_tx_bytes_) {
+                                snapshot.network.rx_speed = (total_rx - last_net_rx_bytes_) / elapsed_sec;
+                                snapshot.network.tx_speed = (total_tx - last_net_tx_bytes_) / elapsed_sec;
+                            } else {
+                                // Counter resets or disappearing interfaces start a new baseline.
+                                snapshot.network.rx_speed = 0.0;
+                                snapshot.network.tx_speed = 0.0;
+                            }
+                        }
+
+                        last_net_rx_bytes_ = total_rx;
+                        last_net_tx_bytes_ = total_tx;
+                        last_net_sample_us_ = now_us;
+                    }
+                }
+
+                // 4. Per-mountpoint disk usage from /proc/mounts + statvfs
+                {
+                    snapshot.disks.clear();
+
+                    auto addDiskMetric = [&](const std::string& mnt_path) {
+                        struct statvfs dvfs;
+                        if (statvfs(mnt_path.c_str(), &dvfs) != 0) return;
+                        if (dvfs.f_blocks == 0) return;
+
+                        DiskInfo disk;
+                        disk.path = mnt_path;
+                        disk.total_bytes = static_cast<uint64_t>(dvfs.f_blocks) * dvfs.f_frsize;
+                        disk.used_bytes = (static_cast<uint64_t>(dvfs.f_blocks) - static_cast<uint64_t>(dvfs.f_bavail)) * dvfs.f_frsize;
+                        snapshot.disks.push_back(disk);
+                    };
+
+                    // Collect root first (most important)
+                    addDiskMetric("/");
+
+                    // Scan /proc/mounts for other physical mount points
+                    std::ifstream mounts(config.proc_dir + "/mounts");
+                    if (mounts.is_open())
+                    {
+                        std::string line;
+                        while (std::getline(mounts, line))
+                        {
+                            std::stringstream ss(line);
+                            std::string dev, mnt, fstype, opts;
+                            ss >> dev >> mnt >> fstype >> opts;
+
+                            // Skip non-physical filesystems
+                            if (dev.empty() || dev.rfind("/dev/", 0) != 0) continue;
+                            // Skip pseudo filesystems
+                            if (fstype == "proc" || fstype == "sysfs" || fstype == "tmpfs" ||
+                                fstype == "devtmpfs" || fstype == "devpts" || fstype == "cgroup" ||
+                                fstype == "cgroup2" || fstype == "pstore" || fstype == "securityfs" ||
+                                fstype == "selinuxfs" || fstype == "hugetlbfs" || fstype == "mqueue" ||
+                                fstype == "debugfs" || fstype == "tracefs" || fstype == "configfs" ||
+                                fstype == "efivarfs" || fstype == "bpf" || fstype == "fuse" ||
+                                fstype == "autofs" || fstype == "overlay") continue;
+
+                            // Skip root (already added) and duplicates
+                            if (mnt == "/") continue;
+
+                            bool already = false;
+                            for (const auto& d : snapshot.disks) {
+                                if (d.path == mnt) { already = true; break; }
+                            }
+                            if (already) continue;
+
+                            addDiskMetric(mnt);
+                        }
+                    }
+                }
+#endif
+            }
+
         private:
             bool has_last_cpu_ = false;
             uint64_t last_cpu_total_ = 0;
             uint64_t last_cpu_idle_ = 0;
+
+            // Network delta tracking
+            uint64_t last_net_rx_bytes_ = 0;
+            uint64_t last_net_tx_bytes_ = 0;
+            uint64_t last_net_sample_us_ = 0;
         };
 
         std::shared_ptr<IDeviceProbe> CreateLinuxGenericProbe()

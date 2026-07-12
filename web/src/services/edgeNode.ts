@@ -8,6 +8,8 @@ export interface EdgeNode {
   endpoint: string;
   max_load: number;
   current_load: number;
+  cpu_usage?: number;
+  memory_usage?: number;
   media_decode_capacity: number;
   media_encode_capacity: number;
   media_egress_capacity_bps: number;
@@ -31,6 +33,8 @@ export interface HardwareInfo {
   gpu_model: string;
   total_memory?: number; // bytes (backend heartbeat field)
   cpu_cores?: number;
+  cpu_usage?: number;
+  memory_usage?: number;
   // Legacy display fields (mapped from EdgeNode flat fields)
   memory?: string; // display string like "8GB"
   platform?: string;
@@ -138,6 +142,37 @@ export interface RecommendNodeResponse {
   load_rate: number;
 }
 
+export interface NodeOverview {
+  total: number;
+  online: number;
+  offline: number;
+  error_count: number;
+  disabled: number;
+}
+
+export interface NodeMetrics {
+  cpu_usage: number;
+  memory_usage: number;
+  cpu_load_1m: number;
+  cpu_load_5m: number;
+  cpu_load_15m: number;
+  net_rx_speed: number;
+  net_tx_speed: number;
+  process_count: number;
+  thread_count: number;
+  temperature: number;
+}
+
+export interface NodeMetricsQueryParams {
+  metric: string;
+  from: string;
+  to: string;
+  aggregation?: string;
+  interval?: string;
+  page?: number;
+  page_size?: number;
+}
+
 function buildQuery(params: Record<string, string | number | undefined>): string {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -187,6 +222,11 @@ export const edgeNodeApi = {
       },
       body: JSON.stringify(data),
     }),
+
+  // Metrics & Overview
+  getOverview: () => request<NodeOverview>('/edge-nodes/overview'),
+  getMetrics: (nodeId: string, params: NodeMetricsQueryParams) =>
+    request(`/edge-nodes/${nodeId}/metrics${buildQuery(params as unknown as Record<string, string | number | undefined>)}`),
 };
 
 // Node recommendation (part of AI Vision Tasks)

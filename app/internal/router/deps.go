@@ -29,46 +29,47 @@ import (
 
 // RouteDeps 聚合路由注册阶段需要的 Handler、Service 与缓存依赖。
 type RouteDeps struct {
-	RBACCache               cache.Cache
-	AuditService            *service.AuditService
-	AuthHandler             *handler.AuthHandler
-	WSHandler               *handler.WSHandler
-	UserHandler             *handler.UserHandler
-	RoleHandler             *handler.RoleHandler
-	PermissionHandler       *handler.PermissionHandler
-	FileHandler             *handler.FileHandler
-	AuditHandler            *handler.AuditHandler
-	TaskHandler             *handler.TaskHandler
-	BrandHandler            *handler.BrandHandler
-	MailHandler             *handler.MailHandler
-	FeedbackHandler         *handler.FeedbackHandler
-	DashboardHandler        *handler.DashboardHandler
-	DeviceHandler           *handler.DeviceHandler
-	DeviceGroupHandler      *handler.DeviceGroupHandler
-	DeviceStagingHandler    *handler.DeviceStagingHandler
-	SystemHandler           *handler.SystemHandler
-	SmartRecordHandler      *handler.SmartRecordHandler
-	StreamManager           *service.StreamManager
-	LicenseHandler          *handler.LicenseHandler
-	LicenseService          *service.LicenseService
-	AIVisionTaskHandler     *handler.AIVisionTaskHandler
-	AITimeScheduleHandler   *handler.AITimeScheduleHandler
-	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
-	PersonHandler           *handler.PersonHandler
-	GB28181Handler          *handler.GB28181Handler
-	MediaGB28181Handler     *handler.MediaGB28181Handler
-	GB28181ConfigHandler    *handler.GB28181ConfigHandler
-	SIPService              *service.SIPService
-	SIPRuntimeSvc           *service.SIPRuntimeService
-	EdgeNodeHandler         *handler.EdgeNodeHandler
-	EdgeNodeTagHandler      *handler.EdgeNodeTagHandler
+	RBACCache                cache.Cache
+	AuditService             *service.AuditService
+	AuthHandler              *handler.AuthHandler
+	WSHandler                *handler.WSHandler
+	UserHandler              *handler.UserHandler
+	RoleHandler              *handler.RoleHandler
+	PermissionHandler        *handler.PermissionHandler
+	FileHandler              *handler.FileHandler
+	AuditHandler             *handler.AuditHandler
+	TaskHandler              *handler.TaskHandler
+	BrandHandler             *handler.BrandHandler
+	MailHandler              *handler.MailHandler
+	FeedbackHandler          *handler.FeedbackHandler
+	DashboardHandler         *handler.DashboardHandler
+	DeviceHandler            *handler.DeviceHandler
+	DeviceGroupHandler       *handler.DeviceGroupHandler
+	DeviceStagingHandler     *handler.DeviceStagingHandler
+	SystemHandler            *handler.SystemHandler
+	SmartRecordHandler       *handler.SmartRecordHandler
+	StreamManager            *service.StreamManager
+	LicenseHandler           *handler.LicenseHandler
+	LicenseService           *service.LicenseService
+	AIVisionTaskHandler      *handler.AIVisionTaskHandler
+	AITimeScheduleHandler    *handler.AITimeScheduleHandler
+	AlgorithmPackageHandler  *handler.AlgorithmPackageHandler
+	PersonHandler            *handler.PersonHandler
+	GB28181Handler           *handler.GB28181Handler
+	MediaGB28181Handler      *handler.MediaGB28181Handler
+	GB28181ConfigHandler     *handler.GB28181ConfigHandler
+	SIPService               *service.SIPService
+	SIPRuntimeSvc            *service.SIPRuntimeService
+	EdgeNodeHandler          *handler.EdgeNodeHandler
+	EdgeNodeTagHandler       *handler.EdgeNodeTagHandler
 	EdgeScheduledTaskHandler *handler.EdgeScheduledTaskHandler
-	EdgeNodeMiddleware      *middleware.EdgeNodeMiddleware
-	EdgeNodeSvc             *service.EdgeNodeService
-	EdgeMqttHandler         *handler.EdgeMqttHandler
+	EdgeNodeMetricsHandler   *handler.EdgeNodeMetricsHandler
+	EdgeNodeMiddleware       *middleware.EdgeNodeMiddleware
+	EdgeNodeSvc              *service.EdgeNodeService
+	EdgeMqttHandler          *handler.EdgeMqttHandler
 	TerminalHandler          *handler.TerminalHandler
-	MqttMux                 *mqttmux.Mux
-	EngineMetricsStore      *service.EngineMetricsStore
+	MqttMux                  *mqttmux.Mux
+	EngineMetricsStore       *service.EngineMetricsStore
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -237,6 +238,7 @@ func newRouteDeps(
 	edgeNodeHandler *handler.EdgeNodeHandler,
 	edgeNodeTagHandler *handler.EdgeNodeTagHandler,
 	edgeScheduledTaskHandler *handler.EdgeScheduledTaskHandler,
+	edgeNodeMetricsHandler *handler.EdgeNodeMetricsHandler,
 	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
 	edgeMqttHandler *handler.EdgeMqttHandler,
 	mqttMux *mqttmux.Mux,
@@ -247,45 +249,46 @@ func newRouteDeps(
 		sipService.SetRuntimeService(sipRuntimeSvc)
 	}
 	return &RouteDeps{
-		RBACCache:               permCache,
-		AuditService:            auditSvc,
-		AuthHandler:             authHandler,
-		WSHandler:               wsHandler,
-		UserHandler:             userHandler,
-		RoleHandler:             roleHandler,
-		PermissionHandler:       permHandler,
-		FileHandler:             fileHandler,
-		AuditHandler:            auditHandler,
-		TaskHandler:             taskHandler,
-		BrandHandler:            brandHandler,
-		MailHandler:             mailHandler,
-		FeedbackHandler:         feedbackHandler,
-		DashboardHandler:        dashboardHandler,
-		DeviceHandler:           deviceHandler,
-		DeviceGroupHandler:      deviceGroupHandler,
-		DeviceStagingHandler:    deviceStagingHandler,
-		SystemHandler:           systemHandler,
-		SmartRecordHandler:      smartRecordHandler,
-		StreamManager:           streamManager,
-		LicenseHandler:          licenseHandler,
-		LicenseService:          licenseService,
-		AIVisionTaskHandler:     aiVisionTaskHandler,
-		AITimeScheduleHandler:   aiTimeScheduleHandler,
-		AlgorithmPackageHandler: algorithmPackageHandler,
-		PersonHandler:           personHandler,
-		GB28181Handler:          gb28181Handler,
-		MediaGB28181Handler:     mediaGB28181Handler,
-		GB28181ConfigHandler:    gb28181ConfigHandler,
-		SIPService:              sipService,
-		SIPRuntimeSvc:           sipRuntimeSvc,
-		EdgeNodeHandler:         edgeNodeHandler,
-		EdgeNodeTagHandler:      edgeNodeTagHandler,
+		RBACCache:                permCache,
+		AuditService:             auditSvc,
+		AuthHandler:              authHandler,
+		WSHandler:                wsHandler,
+		UserHandler:              userHandler,
+		RoleHandler:              roleHandler,
+		PermissionHandler:        permHandler,
+		FileHandler:              fileHandler,
+		AuditHandler:             auditHandler,
+		TaskHandler:              taskHandler,
+		BrandHandler:             brandHandler,
+		MailHandler:              mailHandler,
+		FeedbackHandler:          feedbackHandler,
+		DashboardHandler:         dashboardHandler,
+		DeviceHandler:            deviceHandler,
+		DeviceGroupHandler:       deviceGroupHandler,
+		DeviceStagingHandler:     deviceStagingHandler,
+		SystemHandler:            systemHandler,
+		SmartRecordHandler:       smartRecordHandler,
+		StreamManager:            streamManager,
+		LicenseHandler:           licenseHandler,
+		LicenseService:           licenseService,
+		AIVisionTaskHandler:      aiVisionTaskHandler,
+		AITimeScheduleHandler:    aiTimeScheduleHandler,
+		AlgorithmPackageHandler:  algorithmPackageHandler,
+		PersonHandler:            personHandler,
+		GB28181Handler:           gb28181Handler,
+		MediaGB28181Handler:      mediaGB28181Handler,
+		GB28181ConfigHandler:     gb28181ConfigHandler,
+		SIPService:               sipService,
+		SIPRuntimeSvc:            sipRuntimeSvc,
+		EdgeNodeHandler:          edgeNodeHandler,
+		EdgeNodeTagHandler:       edgeNodeTagHandler,
 		EdgeScheduledTaskHandler: edgeScheduledTaskHandler,
-		EdgeNodeMiddleware:      edgeNodeMiddleware,
-		EdgeMqttHandler:         edgeMqttHandler,
-		TerminalHandler:         terminalHandler,
-		MqttMux:                 mqttMux,
-		EngineMetricsStore:      metricsStore,
+		EdgeNodeMetricsHandler:   edgeNodeMetricsHandler,
+		EdgeNodeMiddleware:       edgeNodeMiddleware,
+		EdgeMqttHandler:          edgeMqttHandler,
+		TerminalHandler:          terminalHandler,
+		MqttMux:                  mqttMux,
+		EngineMetricsStore:       metricsStore,
 	}
 }
 
@@ -472,6 +475,7 @@ func provideEdgeNodeService(
 	taskRepo *repository.AIVisionTaskRepository,
 	deviceRepo *repository.DeviceRepository,
 	smartRecordRepo *repository.SmartRecordRepository,
+	metricsSvc *service.EdgeNodeMetricsService,
 	jwtManager *jwt.Manager,
 	fileStorage storage.Storage,
 	cfg *Config,
@@ -485,6 +489,7 @@ func provideEdgeNodeService(
 		taskRepo,
 		deviceRepo,
 		smartRecordRepo,
+		metricsSvc,
 		jwtManager,
 		fileStorage,
 		hub,
@@ -532,6 +537,13 @@ func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
 	return mqttsync.NewMqttSyncManager(rdb)
 }
 
+func provideEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository, hub *ws.Hub) *service.EdgeNodeMetricsService {
+	return service.NewEdgeNodeMetricsService(metricsRepo, hub)
+}
+
+func provideEdgeNodeMetricsHandler(svc *service.EdgeNodeMetricsService) *handler.EdgeNodeMetricsHandler {
+	return handler.NewEdgeNodeMetricsHandler(svc)
+}
 
 func provideRecorder() *service.Recorder {
 	return service.NewRecorder(zap.L().Named("terminal_recorder"))

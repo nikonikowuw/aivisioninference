@@ -16,6 +16,9 @@ import {
   Thead,
   Tr,
   IconButton,
+  Stat,
+  StatLabel,
+  StatNumber,
   useColorModeValue,
   useDisclosure,
   useToast,
@@ -31,7 +34,9 @@ import {
   edgeNodeApi,
   type EdgeNode,
   type NodeAlgorithm,
+  type NodeMetrics,
 } from "services/edgeNode";
+import { formatUptime } from "utils/convert";
 import { AlgorithmDeployModal } from "./components/AlgorithmDeployModal";
 import EdgeNodeEditModal from "./components/EdgeNodeEditModal";
 import TerminalTab from "./components/TerminalTab";
@@ -50,16 +55,12 @@ const ALGO_STATUS_COLORS: Record<string, string> = {
   failed: "red",
 };
 
-function formatUptime(seconds: number): string {
-  if (!seconds) return "-";
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  parts.push(`${m}m`);
-  return parts.join(" ");
+function formatByteRate(bytesPerSecond: number): string {
+  if (!bytesPerSecond) return "0 B/s";
+  if (bytesPerSecond >= 1_000_000_000) return `${(bytesPerSecond / 1_000_000_000).toFixed(2)} GB/s`;
+  if (bytesPerSecond >= 1_000_000) return `${(bytesPerSecond / 1_000_000).toFixed(2)} MB/s`;
+  if (bytesPerSecond >= 1_000) return `${(bytesPerSecond / 1_000).toFixed(2)} KB/s`;
+  return `${bytesPerSecond.toFixed(0)} B/s`;
 }
 
 export default function EdgeNodeDetail() {
@@ -77,6 +78,7 @@ export default function EdgeNodeDetail() {
 
   const [node, setNode] = useState<EdgeNode | null>((location.state as any)?.updatedNode || null);
   const [algorithms, setAlgorithms] = useState<NodeAlgorithm[]>([]);
+  const [liveMetrics, setLiveMetrics] = useState<NodeMetrics | null>(null);
   const [hasLoaded, setHasLoaded] = useState(!!node);
   const [hasError, setHasError] = useState(false);
   const [isAlgosLoading, setIsAlgosLoading] = useState(false);
@@ -110,6 +112,21 @@ export default function EdgeNodeDetail() {
       }
       if (statusChanged || algoChanged) {
         edgeNodeApi.getNodeAlgorithms(id).then(setAlgorithms).catch(() => {});
+      }
+      if (msg.type === "edge-node-metrics") {
+        const payload = msg.payload || msg;
+        setLiveMetrics({
+          cpu_usage: payload.cpu_usage ?? 0,
+          memory_usage: payload.memory_usage ?? 0,
+          cpu_load_1m: payload.cpu_load_1m ?? 0,
+          cpu_load_5m: payload.cpu_load_5m ?? 0,
+          cpu_load_15m: payload.cpu_load_15m ?? 0,
+          net_rx_speed: payload.net_rx_speed ?? 0,
+          net_tx_speed: payload.net_tx_speed ?? 0,
+          process_count: payload.process_count ?? 0,
+          thread_count: payload.thread_count ?? 0,
+          temperature: payload.temperature ?? 0,
+        });
       }
     }, [id]),
   });
@@ -380,6 +397,45 @@ export default function EdgeNodeDetail() {
             </SimpleGrid>
           </Card>
         )}
+
+        {/* Live Metrics Card */}
+        <Card px="24px" py="24px" mb="20px">
+          <Text color={textColor} fontSize="lg" fontWeight="bold" mb="15px">
+            {t('fields.metrics')}
+          </Text>
+          {liveMetrics ? (
+            <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} spacing="20px">
+              <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
+                <Text color={textColorSecondary} fontSize="xs">{t('fields.cpuUsage')}</Text>
+                <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
+                  {liveMetrics.cpu_usage.toFixed(1)}%
+                </Text>
+              </Box>
+              <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
+                <Text color={textColorSecondary} fontSize="xs">{t('fields.memUsage')}</Text>
+                <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
+                  {liveMetrics.memory_usage.toFixed(1)}%
+                </Text>
+              </Box>
+              <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
+                <Text color={textColorSecondary} fontSize="xs">{t('fields.cpuLoad')}</Text>
+                <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
+                  {liveMetrics.cpu_load_1m.toFixed(2)} / {liveMetrics.cpu_load_5m.toFixed(2)} / {liveMetrics.cpu_load_15m.toFixed(2)}
+                </Text>
+              </Box>
+              <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
+                <Text color={textColorSecondary} fontSize="xs">{t('fields.networkRxTx')}</Text>
+                <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
+                  {formatByteRate(liveMetrics.net_rx_speed)} / {formatByteRate(liveMetrics.net_tx_speed)}
+                </Text>
+              </Box>
+            </SimpleGrid>
+          ) : (
+            <Text color={textColorSecondary} fontSize="sm">
+              {t('message.noMetrics')}
+            </Text>
+          )}
+        </Card>
 
         {/* Deploy Algorithm Button */}
         <Flex justify="flex-end" mb="20px">

@@ -44,6 +44,28 @@ namespace aivision
             uint64_t total_storage = 0;  // 字节
         };
 
+        /// 磁盘挂载点信息
+        struct DiskInfo
+        {
+            std::string path;
+            uint64_t total_bytes = 0;
+            uint64_t used_bytes = 0;
+            double usage_percent() const {
+                return total_bytes > 0
+                    ? (static_cast<double>(used_bytes) / total_bytes) * 100.0
+                    : 0.0;
+            }
+        };
+
+        /// 网络 I/O 统计
+        struct NetworkStats
+        {
+            uint64_t rx_bytes = 0;
+            uint64_t tx_bytes = 0;
+            double rx_speed = 0.0;   // bytes/sec since last sample
+            double tx_speed = 0.0;   // bytes/sec since last sample
+        };
+
         /// 实时系统动态指标
         struct DeviceDynamicMetrics
         {
@@ -53,6 +75,13 @@ namespace aivision
             MetricValue gpu_usage;
             MetricValue npu_usage;
             MetricValue temperature;
+
+            // Extended metrics (light probe cycle)
+            MetricValue load_average_1m;
+            MetricValue load_average_5m;
+            MetricValue load_average_15m;
+            MetricValue process_count;
+            MetricValue thread_count;
         };
 
         /// 硬件加速器单核心/通道指标 (主要用于 RKNPU 等多核芯片)
@@ -91,6 +120,8 @@ namespace aivision
             DeviceDynamicMetrics metrics;
             std::vector<AcceleratorInfo> accelerators;
             std::vector<ProbeDiagnostic> diagnostics;
+            std::vector<DiskInfo> disks;
+            NetworkStats network;
         };
 
         /// DeviceMonitor 运行配置

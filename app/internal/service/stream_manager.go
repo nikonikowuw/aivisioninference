@@ -247,6 +247,45 @@ func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, re
 	return nil
 }
 
+// RestoreInferenceOnNode reissues a complete inference start request after an Engine node reconnects.
+// It preserves the existing consumer entry but never treats an active in-memory state as proof that
+// the remote pipeline survived the disconnect.
+func (m *StreamManager) RestoreInferenceOnNode(ctx context.Context, route StreamRoute, reason string, metadata map[string]string) error {
+	actual, _ := m.streams.LoadOrStore(streamRouteKey(route), &StreamState{
+		NodeID: route.NodeID, DeviceID: route.DeviceID, Status: "inactive",
+	})
+	state := actual.(*StreamState)
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	state.Consumers.Store(reason, &ConsumerInfo{
+		Reason: reason, RefAt: time.Now(), Metadata: metadata, LastAlive: time.Now(),
+	})
+	m.recalculateRefCount(state)
+
+	dev, err := m.deviceRepo.FindByID(ctx, route.DeviceID)
+	if err != nil {
+		return err
+	}
+	req := StreamStartRequest{
+		NodeID: route.NodeID, DeviceID: route.DeviceID, RtspURL: strings.TrimSpace(dev.RtspURL),
+		EnableInfer: true, TaskID: metadata["task_id"], AlgoName: metadata["algo_name"],
+		AlgoVersion: metadata["algo_version"], SoPath: metadata["so_path"],
+		AlgoParamsJSON: metadata["algo_params_json"],
+	}
+	info, err := m.engine.StartStream(ctx, req)
+	if err != nil {
+		state.Status = "error"
+		return err
+	}
+	state.StartRequest = req
+	state.Status = info.Status
+	state.PlayURLRtsp = info.PlayURL
+	state.ZLMHost = info.ZLMHost
+	state.ZLMHTTPPort = info.ZLMHTTPPort
+	return nil
+}
+
 func (m *StreamManager) recalculateRefCount(state *StreamState) {
 	count := int32(0)
 	state.Consumers.Range(func(key, value interface{}) bool {

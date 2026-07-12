@@ -14,6 +14,14 @@ const (
 	TaskStatusSuspended = "suspended"
 )
 
+// SuspendedReason 暂停原因常量
+const (
+	SuspendedReasonNodeOffline = "node_offline"
+	SuspendedReasonManual      = "manual"
+	SuspendedReasonSchedule    = "schedule"
+	SuspendedReasonError       = "error"
+)
+
 // AIVisionTask AI视觉推理任务模型
 type AIVisionTask struct {
 	BaseModel
@@ -30,7 +38,8 @@ type AIVisionTask struct {
 	ROIRegions      datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"roi_regions" swaggertype:"object"`
 	MarkRegions     datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"mark_regions" swaggertype:"object"`
 	LineRegions     datatypes.JSON `gorm:"type:jsonb;default:'[]'" json:"line_regions" swaggertype:"object"`
-	ErrorReason     string         `gorm:"type:varchar(500);comment:异常停止原因" json:"error_reason"`
+	ErrorReason      string  `gorm:"type:varchar(500);comment:异常停止原因" json:"error_reason"`
+	SuspendedReason *string `gorm:"type:varchar(50);index;comment:暂停原因(node_offline/manual/schedule/error)" json:"suspended_reason,omitempty"`
 }
 
 // TableName 指定表名

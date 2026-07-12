@@ -178,12 +178,18 @@ func (h *EdgeMqttHandler) HandleLifecycle(msg mqtt.Message) {
 
 	payloadStr := strings.TrimSpace(string(msg.Payload()))
 	if payloadStr == "offline" {
-		zap.L().Warn("MQTT: edge node lifecycle offline received, updating status to offline", zap.String("node_id", nodeID))
-		var req dto.UpdateEdgeNodeRequest
-		status := "offline"
-		req.Status = status
-		if err := h.nodeSvc.Update(context.Background(), nodeID, req); err != nil {
-			zap.L().Error("MQTT: failed to update edge node status to offline", zap.String("node_id", nodeID), zap.Error(err))
+		zap.L().Warn("MQTT: edge node lifecycle offline received, processing offline",
+			zap.String("node_id", nodeID))
+
+		if err := h.nodeSvc.HandleLWTNodeOffline(context.Background(), nodeID); err != nil {
+			zap.L().Error("MQTT: HandleLWTNodeOffline failed",
+				zap.String("node_id", nodeID),
+				zap.Error(err),
+			)
+			return
 		}
+
+		zap.L().Warn("MQTT: edge node went offline via LWT",
+			zap.String("node_id", nodeID))
 	}
 }

@@ -24,6 +24,11 @@ func NewAIVisionTaskRepository(db *gorm.DB) *AIVisionTaskRepository {
 	return &AIVisionTaskRepository{db: db}
 }
 
+// WithTx returns a repository bound to the provided transaction.
+func (r *AIVisionTaskRepository) WithTx(tx *gorm.DB) *AIVisionTaskRepository {
+	return &AIVisionTaskRepository{db: tx}
+}
+
 // FindByID finds a aivisiontask by its ID.
 func (r *AIVisionTaskRepository) FindByID(ctx context.Context, id string) (*model.AIVisionTask, error) {
 	var item model.AIVisionTask
@@ -91,34 +96,45 @@ func (r *AIVisionTaskRepository) FindRunningTasksByNode(ctx context.Context, nod
 	return tasks, err
 }
 
-// FindSuspendedTasksByNode returns tasks that are currently suspended on the specified node.
-func (r *AIVisionTaskRepository) FindSuspendedTasksByNode(ctx context.Context, nodeID string) ([]model.AIVisionTask, error) {
+// SetSuspended suspends a task with a machine-determinable reason and error message.
+func (r *AIVisionTaskRepository) SetSuspended(ctx context.Context, taskID string, suspendedReason string, errorMsg string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.AIVisionTask{}).
+		Where("id = ? AND status = ?", taskID, model.TaskStatusRunning).
+		Updates(map[string]interface{}{
+			"status":           model.TaskStatusSuspended,
+			"suspended_reason": suspendedReason,
+			"error_reason":     errorMsg,
+		}).Error
+}
+
+// ClearSuspended restores a task from suspended to running, clearing the suspended reason and error.
+func (r *AIVisionTaskRepository) ClearSuspended(ctx context.Context, taskID string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.AIVisionTask{}).
+		Where("id = ?", taskID).
+		Updates(map[string]interface{}{
+			"status":           model.TaskStatusRunning,
+			"suspended_reason": nil,
+			"error_reason":     "",
+		}).Error
+}
+
+// UpdateErrorReason updates the error_reason for a suspended task without changing status or suspended_reason.
+func (r *AIVisionTaskRepository) UpdateErrorReason(ctx context.Context, taskID string, errorMsg string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.AIVisionTask{}).
+		Where("id = ?", taskID).
+		Update("error_reason", errorMsg).Error
+}
+
+// FindNodeOfflineSuspendedTasks returns tasks suspended due to node offline on the specified node.
+func (r *AIVisionTaskRepository) FindNodeOfflineSuspendedTasks(ctx context.Context, nodeID string) ([]model.AIVisionTask, error) {
 	var tasks []model.AIVisionTask
 	err := r.db.WithContext(ctx).
 		Where("target_node_id = ?", nodeID).
 		Where("status = ?", model.TaskStatusSuspended).
+		Where("suspended_reason = ?", model.SuspendedReasonNodeOffline).
 		Find(&tasks).Error
 	return tasks, err
-}
-
-// SetErrorReason sets the error reason for a task and transitions it to suspended.
-func (r *AIVisionTaskRepository) SetErrorReason(ctx context.Context, taskID string, reason string) error {
-	return r.db.WithContext(ctx).
-		Model(&model.AIVisionTask{}).
-		Where("id = ?", taskID).
-		Updates(map[string]interface{}{
-			"status":       model.TaskStatusSuspended,
-			"error_reason": reason,
-		}).Error
-}
-
-// ClearErrorReason clears the error reason and restores a task from suspended to running.
-func (r *AIVisionTaskRepository) ClearErrorReason(ctx context.Context, taskID string) error {
-	return r.db.WithContext(ctx).
-		Model(&model.AIVisionTask{}).
-		Where("id = ?", taskID).
-		Updates(map[string]interface{}{
-			"status":       model.TaskStatusRunning,
-			"error_reason": "",
-		}).Error
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/repository"
+	"github.com/niko-admin/niko-admin/internal/service"
 )
 
 func setupTaskTestDB(t *testing.T) *gorm.DB {
@@ -51,6 +52,19 @@ func setupTaskTestDB(t *testing.T) *gorm.DB {
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
 			remark TEXT
+		);
+	`).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS ai_vision_tasks (
+			id TEXT PRIMARY KEY,
+			created_at DATETIME,
+			updated_at DATETIME,
+			deleted_at DATETIME,
+			name TEXT,
+			status TEXT,
+			target_node_id TEXT,
+			suspended_reason TEXT,
+			error_reason TEXT
 		);
 	`).Error)
 
@@ -118,4 +132,45 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 	n3, err := nodeRepo.FindByID(ctx, "node-already-offline")
 	require.NoError(t, err)
 	assert.Equal(t, model.NodeStatusOffline, n3.Status) // Node 3 should remain offline
+}
+
+func TestHandleNodeOffline_IsConditionalAndIdempotent(t *testing.T) {
+	db := setupTaskTestDB(t)
+	nodeRepo := repository.NewEdgeNodeRepository(db)
+	taskRepo := repository.NewAIVisionTaskRepository(db)
+	ctx := context.Background()
+	now := time.Now()
+	node := model.EdgeNode{
+		BaseModel: model.BaseModel{ID: "node-race"}, Name: "Race Node", Endpoint: "http://127.0.0.1",
+		Status: model.NodeStatusOnline, LastHeartbeat: &now,
+	}
+	require.NoError(t, nodeRepo.Create(ctx, &node))
+	require.NoError(t, db.Exec(`INSERT INTO ai_vision_tasks (id, name, status, target_node_id) VALUES (?, ?, ?, ?)`,
+		"task-race", "Race Task", model.TaskStatusRunning, node.ID).Error)
+
+	staleCutoff := now.Add(-time.Second)
+	transitioned, err := service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, node,
+		model.SuspendedReasonNodeOffline, "offline", &staleCutoff)
+	require.NoError(t, err)
+	assert.False(t, transitioned)
+	freshNode, err := nodeRepo.FindByID(ctx, node.ID)
+	require.NoError(t, err)
+	assert.Equal(t, model.NodeStatusOnline, freshNode.Status)
+
+	futureCutoff := now.Add(time.Second)
+	transitioned, err = service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, node,
+		model.SuspendedReasonNodeOffline, "offline", &futureCutoff)
+	require.NoError(t, err)
+	assert.True(t, transitioned)
+
+	transitioned, err = service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, node,
+		model.SuspendedReasonNodeOffline, "offline", &futureCutoff)
+	require.NoError(t, err)
+	assert.False(t, transitioned)
+
+	var task model.AIVisionTask
+	require.NoError(t, db.First(&task, "id = ?", "task-race").Error)
+	assert.Equal(t, model.TaskStatusSuspended, task.Status)
+	require.NotNil(t, task.SuspendedReason)
+	assert.Equal(t, model.SuspendedReasonNodeOffline, *task.SuspendedReason)
 }

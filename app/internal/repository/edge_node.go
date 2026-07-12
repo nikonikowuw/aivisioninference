@@ -17,6 +17,11 @@ type EdgeNodeRepository struct {
 	db *gorm.DB
 }
 
+// DB returns the underlying GORM DB instance for manual transaction management.
+func (r *EdgeNodeRepository) DB(ctx context.Context) *gorm.DB {
+	return r.db.WithContext(ctx)
+}
+
 // NewEdgeNodeRepository creates a new EdgeNodeRepository.
 func NewEdgeNodeRepository(db *gorm.DB) *EdgeNodeRepository {
 	return &EdgeNodeRepository{db: db}
@@ -28,9 +33,11 @@ func (r *EdgeNodeRepository) WithTx(tx *gorm.DB) *EdgeNodeRepository {
 }
 
 // Transaction wraps operations in a database transaction.
-func (r *EdgeNodeRepository) Transaction(ctx context.Context, fn func(context.Context) error) error {
+// The callback receives an *EdgeNodeRepository bound to the transaction,
+// so all read/write operations on it share the same transactional connection.
+func (r *EdgeNodeRepository) Transaction(ctx context.Context, fn func(txRepo *EdgeNodeRepository) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(ctx)
+		return fn(r.WithTx(tx))
 	})
 }
 
@@ -221,4 +228,23 @@ func (r *EdgeNodeRepository) UpdateStatusBatch(ctx context.Context, ids []string
 	return r.db.WithContext(ctx).Model(&model.EdgeNode{}).
 		Where("id IN ?", ids).
 		Update("status", status).Error
+}
+
+// MarkOffline transitions a non-disabled node to offline once.
+func (r *EdgeNodeRepository) MarkOffline(ctx context.Context, id string) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&model.EdgeNode{}).
+		Where("id = ?", id).
+		Where("status NOT IN ?", []string{model.NodeStatusOffline, model.NodeStatusDisabled}).
+		Update("status", model.NodeStatusOffline)
+	return result.RowsAffected > 0, result.Error
+}
+
+// MarkOfflineIfTimedOut transitions an online node only when its persisted heartbeat is stale.
+func (r *EdgeNodeRepository) MarkOfflineIfTimedOut(ctx context.Context, id string, cutoff time.Time) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&model.EdgeNode{}).
+		Where("id = ?", id).
+		Where("status = ?", model.NodeStatusOnline).
+		Where("last_heartbeat < ?", cutoff).
+		Update("status", model.NodeStatusOffline)
+	return result.RowsAffected > 0, result.Error
 }

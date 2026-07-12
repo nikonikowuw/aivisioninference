@@ -467,6 +467,7 @@ func provideEdgeNodeService(
 	fileStorage storage.Storage,
 	cfg *Config,
 	hub *ws.Hub,
+	streamManager *service.StreamManager,
 ) *service.EdgeNodeService {
 	svc := service.NewEdgeNodeService(
 		nodeRepo,
@@ -478,6 +479,7 @@ func provideEdgeNodeService(
 		jwtManager,
 		fileStorage,
 		hub,
+		streamManager,
 	)
 	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
 	return svc

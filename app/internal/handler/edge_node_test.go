@@ -138,7 +138,8 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 			roi_regions TEXT,
 			mark_regions TEXT,
 			line_regions TEXT,
-			error_reason TEXT
+			error_reason TEXT,
+			suspended_reason TEXT
 		);
 	`).Error)
 
@@ -158,7 +159,7 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil)
+	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil)
 	h := NewEdgeNodeHandler(svc)
 
 	r := gin.New()
@@ -186,7 +187,7 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var createRes struct {
-		Code string                   `json:"code"`
+		Code string                 `json:"code"`
 		Data CreateEdgeNodeResponse `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &createRes))

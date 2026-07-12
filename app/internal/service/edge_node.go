@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,6 +36,8 @@ type EdgeNodeService struct {
 	minCompatibleVersion string
 	versionCheckEnabled  bool
 	hub                  *ws.Hub
+	streamManager        *StreamManager
+	nodeMuMap            sync.Map
 	inferenceChan        chan *controlproto.InferenceResultParams
 	stopChan             chan struct{}
 }
@@ -50,6 +53,7 @@ func NewEdgeNodeService(
 	jwtManager *jwt.Manager,
 	storage storage.Storage,
 	hub *ws.Hub,
+	streamManager *StreamManager,
 ) *EdgeNodeService {
 	svc := &EdgeNodeService{
 		nodeRepo:             nodeRepo,
@@ -63,6 +67,7 @@ func NewEdgeNodeService(
 		minCompatibleVersion: "",
 		versionCheckEnabled:  false,
 		hub:                  hub,
+		streamManager:        streamManager,
 		inferenceChan:        make(chan *controlproto.InferenceResultParams, 10000),
 		stopChan:             make(chan struct{}),
 	}
@@ -74,6 +79,13 @@ func NewEdgeNodeService(
 func (s *EdgeNodeService) SetVersionConfig(minVersion string, enabled bool) {
 	s.minCompatibleVersion = minVersion
 	s.versionCheckEnabled = enabled
+}
+
+// getNodeLock returns a per-node mutex to serialize concurrent heartbeat processing
+// for the same node. Different nodes can still be processed in parallel.
+func (s *EdgeNodeService) getNodeLock(nodeID string) sync.Locker {
+	actual, _ := s.nodeMuMap.LoadOrStore(nodeID, &sync.Mutex{})
+	return actual.(sync.Locker)
 }
 
 func (s *EdgeNodeService) findNodeByID(ctx context.Context, id string) (*model.EdgeNode, error) {
@@ -202,6 +214,12 @@ func (s *EdgeNodeService) Delete(ctx context.Context, id string) error {
 }
 
 func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *dto.HeartbeatRequest) (*dto.HeartbeatResponse, error) {
+	// Serialize heartbeats per node to prevent races on task suspension/resume.
+	// Different nodes can still be processed in parallel.
+	lock := s.getNodeLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+
 	node, err := s.findNodeByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -211,12 +229,27 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		return nil, err
 	}
 
+	// Disabled nodes: accept heartbeat for liveness tracking but skip all processing
+	if node.Status == model.NodeStatusDisabled || !node.Enabled {
+		now := time.Now()
+		if err := s.nodeRepo.UpdateHeartbeatFields(ctx, id, map[string]interface{}{
+			"last_heartbeat": &now,
+		}); err != nil {
+			return nil, fmt.Errorf("更新心跳字段失败: %w", err)
+		}
+		zap.L().Warn("heartbeat from disabled node, accepted for liveness tracking only",
+			zap.String("node_id", id))
+		return &dto.HeartbeatResponse{}, nil
+	}
+
 	now := time.Now()
 	status := string(model.NodeStatusOnline)
-	remark := ""
 	if req.Status == "error" {
 		status = model.NodeStatusError
-		remark = req.ErrorMessage
+		zap.L().Info("node reported error via heartbeat",
+			zap.String("node_id", id),
+			zap.String("error_message", req.ErrorMessage),
+		)
 	} else if node.Status == model.NodeStatusDisabled {
 		status = model.NodeStatusDisabled
 	}
@@ -231,46 +264,36 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		"gpu_model":      req.HardwareInfo.GPUModel,
 		"total_memory":   req.HardwareInfo.TotalMemory,
 		"status":         status,
-		"remark":         remark,
+		"remark":         "",
 	}
 
-	// Wrap all state changes in a transaction to ensure atomicity
+	if req.Status == "error" && req.ErrorMessage != "" {
+		hbFields["remark"] = req.ErrorMessage
+	}
+
+	// Update heartbeat fields with node state.
+	// The per-node mutex above provides serialization for concurrent heartbeats
+	// on the same node, so no DB-level transaction is needed here.
+	// SyncInstalled and FindNodeOfflineSuspendedTasks use their own connections
+	// to avoid SQLite "table is locked" errors that would occur if they were
+	// inside a shared transaction with UpdateHeartbeatFields.
+	if err := s.nodeRepo.UpdateHeartbeatFields(ctx, id, hbFields); err != nil {
+		return nil, fmt.Errorf("更新心跳字段失败: %w", err)
+	}
+
+	// Sync installed algorithms
 	var suspendedTasks []model.AIVisionTask
-	err = s.nodeRepo.Transaction(ctx, func(ctx context.Context) error {
-		// 1. Update heartbeat fields
-		if err := s.nodeRepo.UpdateHeartbeatFields(ctx, id, hbFields); err != nil {
-			return fmt.Errorf("更新心跳字段失败: %w", err)
+	if err := s.nodeAlgoRepo.SyncInstalled(ctx, id, req.InstalledAlgorithms); err != nil {
+		return nil, fmt.Errorf("同步算法列表失败: %w", err)
+	}
+
+	// Query node-offline suspended tasks for post-tx recovery
+	if status == model.NodeStatusOnline {
+		tasks, err := s.taskRepo.FindNodeOfflineSuspendedTasks(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("查询暂停任务失败: %w", err)
 		}
-
-		// 2. Sync installed algorithms
-		if err := s.nodeAlgoRepo.SyncInstalled(ctx, id, req.InstalledAlgorithms); err != nil {
-			return fmt.Errorf("同步算法列表失败: %w", err)
-		}
-
-		// 3. Resume suspended tasks if node is back online
-		if status == model.NodeStatusOnline {
-			tasks, err := s.taskRepo.FindSuspendedTasksByNode(ctx, id)
-			if err != nil {
-				return fmt.Errorf("查询暂停任务失败: %w", err)
-			}
-			suspendedTasks = tasks
-
-			for _, task := range suspendedTasks {
-				if err := s.taskRepo.ClearErrorReason(ctx, task.ID); err != nil {
-					return fmt.Errorf("恢复任务 %s 失败: %w", task.ID, err)
-				}
-			}
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		zap.L().Error("heartbeat transaction failed",
-			zap.String("node_id", id),
-			zap.Error(err),
-		)
-		return nil, err
+		suspendedTasks = tasks
 	}
 
 	// Update in-memory node for downstream use (after successful transaction)
@@ -283,7 +306,11 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	node.GPUModel = req.HardwareInfo.GPUModel
 	node.TotalMemory = req.HardwareInfo.TotalMemory
 	node.Status = status
-	node.Remark = remark
+	if req.Status == "error" && req.ErrorMessage != "" {
+		node.Remark = req.ErrorMessage
+	} else if status != string(model.NodeStatusError) {
+		node.Remark = ""
+	}
 
 	// Broadcast WebSocket events after transaction commits (avoid notifying on rollback)
 	if s.hub != nil {
@@ -297,23 +324,14 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 				"last_heartbeat": node.LastHeartbeat,
 			},
 		})
+	}
 
-		// Broadcast task resume events
-		for _, task := range suspendedTasks {
-			s.hub.Broadcast(&ws.Message{
-				Type: "task-status",
-				Payload: map[string]interface{}{
-					"task_id":      task.ID,
-					"status":       model.TaskStatusRunning,
-					"error_reason": "",
-					"node_id":      id,
-				},
-			})
-			zap.L().Info("task resumed after node back online",
-				zap.String("task_id", task.ID),
-				zap.String("node_id", id),
-			)
-		}
+	// Attempt Engine pipeline restart for node-offline suspended tasks
+	// Only restore tasks that were suspended due to node offline.
+	// For each task, restart the Engine pipeline first; only mark as running
+	// if Engine confirms the pipeline is active.
+	if status == model.NodeStatusOnline && len(suspendedTasks) > 0 {
+		s.restoreSuspendedPipelines(ctx, id, suspendedTasks)
 	}
 
 	pendings, err := s.nodeAlgoRepo.ListPendingByNode(ctx, id)
@@ -534,6 +552,170 @@ func (s *EdgeNodeService) PushInferenceResult(params *controlproto.InferenceResu
 	default:
 		zap.L().Warn("EdgeNodeService: inference channel is full, dropping frame")
 	}
+}
+
+// HandleLWTNodeOffline processes an MQTT Last Will and Testament (LWT) "offline" message.
+// It delegates to the shared HandleNodeOffline for consistent offline processing.
+func (s *EdgeNodeService) HandleLWTNodeOffline(ctx context.Context, nodeID string) error {
+	lock := s.getNodeLock(nodeID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	node, err := s.findNodeByID(ctx, nodeID)
+	if err != nil {
+		return fmt.Errorf("LWT: node not found %s: %w", nodeID, err)
+	}
+
+	transitioned, err := HandleNodeOffline(ctx, s.nodeRepo, s.taskRepo, s.hub, *node,
+		model.SuspendedReasonNodeOffline,
+		"节点 %s 离线(MQTT LWT)，任务自动暂停", nil, node.Name)
+	if err != nil {
+		return fmt.Errorf("LWT: failed to process node offline %s: %w", nodeID, err)
+	}
+	if !transitioned {
+		return nil
+	}
+
+	zap.L().Warn("LWT: edge node went offline",
+		zap.String("node_id", nodeID),
+		zap.String("node_name", node.Name),
+	)
+
+	return nil
+}
+
+// restoreSuspendedPipelines restarts Engine pipelines for node-offline suspended tasks.
+// Only tasks with suspended_reason = 'node_offline' are processed.
+// StartStream calls (the expensive part — network to Engine) run concurrently
+// with a semaphore to bound concurrency. DB writes (ClearSuspended / UpdateErrorReason)
+// are serialized by post-processing the results sequentially, avoiding SQLite contention
+// in test environments and write-order hazards in production.
+type restoreResult struct {
+	task   model.AIVisionTask
+	errMsg string // empty = success
+}
+
+func (s *EdgeNodeService) restoreSuspendedPipelines(ctx context.Context, nodeID string, tasks []model.AIVisionTask) {
+	if len(tasks) == 0 {
+		return
+	}
+
+	// Phase 1: concurrent StartStream calls (network I/O bound)
+	sem := make(chan struct{}, 5)
+	results := make([]restoreResult, len(tasks))
+
+	var wg sync.WaitGroup
+	wg.Add(len(tasks))
+
+	for i, task := range tasks {
+		i, task := i, task
+
+		go func() {
+			defer wg.Done()
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			result := s.restoreTaskStream(ctx, nodeID, task)
+			results[i] = result
+		}()
+	}
+
+	wg.Wait()
+
+	// Phase 2: sequential DB writes (must be serialized for SQLite compatibility)
+	for _, r := range results {
+		if r.errMsg == "" {
+			// Engine confirmed pipeline is active — clear suspension
+			if err := s.taskRepo.ClearSuspended(ctx, r.task.ID); err != nil {
+				zap.L().Error("failed to clear task suspension after pipeline restore",
+					zap.String("task_id", r.task.ID),
+					zap.Error(err),
+				)
+				continue
+			}
+
+			zap.L().Info("task pipeline restored after node back online",
+				zap.String("task_id", r.task.ID),
+				zap.String("node_id", nodeID),
+			)
+
+			if s.hub != nil {
+				s.hub.Broadcast(&ws.Message{
+					Type: "task-status",
+					Payload: map[string]interface{}{
+						"task_id":          r.task.ID,
+						"status":           model.TaskStatusRunning,
+						"suspended_reason": nil,
+						"error_reason":     "",
+						"node_id":          nodeID,
+					},
+				})
+			}
+		} else {
+			if updateErr := s.taskRepo.UpdateErrorReason(ctx, r.task.ID, r.errMsg); updateErr != nil {
+				zap.L().Error("failed to update task error after pipeline restore failure",
+					zap.String("task_id", r.task.ID),
+					zap.Error(updateErr),
+				)
+			}
+		}
+	}
+}
+
+// restoreTaskStream restores a task through StreamManager so stream routing and consumer state remain consistent.
+func (s *EdgeNodeService) restoreTaskStream(ctx context.Context, nodeID string, task model.AIVisionTask) restoreResult {
+	if task.DeviceChannelID == "" {
+		return restoreResult{
+			task:   task,
+			errMsg: "task has no device_channel_id",
+		}
+	}
+
+	if s.streamManager == nil {
+		return restoreResult{task: task, errMsg: "stream manager is unavailable"}
+	}
+
+	algoPackage, err := s.algoPackageRepo.FindByID(ctx, task.AlgoPackageID)
+	if err != nil {
+		zap.L().Error("failed to resolve algorithm for pipeline restore",
+			zap.String("task_id", task.ID),
+			zap.String("algo_package_id", task.AlgoPackageID),
+			zap.Error(err),
+		)
+		return restoreResult{
+			task:   task,
+			errMsg: fmt.Sprintf("算法包解析失败，跳过恢复: %v", err),
+		}
+	}
+	soPath, err := resolveRuntimeSoPath(algoPackage)
+	if err != nil {
+		return restoreResult{task: task, errMsg: fmt.Sprintf("算法运行库解析失败，跳过恢复: %v", err)}
+	}
+
+	metadata := map[string]string{
+		"task_id": task.ID, "algo_package_id": task.AlgoPackageID, "target_node_id": nodeID,
+		"algo_name": algoPackage.AlgorithmName, "algo_version": algoPackage.Version,
+		"so_path": soPath, "algo_params_json": string(task.AIParams),
+	}
+	startCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	err = s.streamManager.RestoreInferenceOnNode(startCtx,
+		StreamRoute{NodeID: nodeID, DeviceID: task.DeviceChannelID}, "infer:"+task.ID, metadata)
+
+	if err != nil {
+		zap.L().Error("failed to restore task pipeline",
+			zap.String("task_id", task.ID),
+			zap.String("node_id", nodeID),
+			zap.Error(err),
+		)
+		return restoreResult{
+			task:   task,
+			errMsg: fmt.Sprintf("Engine pipeline重启失败: %v", err),
+		}
+	}
+
+	return restoreResult{task: task}
 }
 
 // Stop gracefully shuts down the batch insert worker, flushing remaining records.

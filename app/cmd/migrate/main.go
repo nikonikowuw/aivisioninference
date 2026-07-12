@@ -168,6 +168,9 @@ func main() {
 	mustExec(db, addPersonEmbeddingErrorColumnsSQL())
 	mustExec(db, addPersonImageMD5UniqueIndexSQL())
 
+	// Edge node task suspension reason tracking
+	mustExec(db, addAIVisionTaskSuspendedReasonColumnSQL())
+
 	// GB28181 数据模型重构：将 gb28181_devices 数据迁移到 devices + device_sip_configs。
 	migrateGB28181ToUnifiedDevices(db)
 
@@ -230,6 +233,13 @@ ALTER TABLE persons ADD COLUMN IF NOT EXISTS embedding_retryable BOOLEAN DEFAULT
 func addPersonImageMD5UniqueIndexSQL() string {
 	return `
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_image_md5_unique ON persons (image_md5);`
+}
+
+// addAIVisionTaskSuspendedReasonColumnSQL 为 ai_vision_tasks 添加暂停原因字段和索引。
+func addAIVisionTaskSuspendedReasonColumnSQL() string {
+	return `
+ALTER TABLE ai_vision_tasks ADD COLUMN IF NOT EXISTS suspended_reason varchar(50);
+CREATE INDEX IF NOT EXISTS idx_ai_vision_tasks_suspended_reason ON ai_vision_tasks (suspended_reason);`
 }
 
 // rootUsernameConstraintSQL 返回 root 用户名一致性的幂等约束语句。

@@ -85,9 +85,9 @@ func provideHTTPServer(r *router.Router, cfg *config.Config) *http.Server {
 	}
 }
 
-func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config, client mqtt.Client) *asynq.ServeMux {
+func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config, client mqtt.Client, scheduler *asynq.Scheduler) *asynq.ServeMux {
 	syncManager := mqttsync.NewMqttSyncManager(rdb)
-	return router.NewAsynqMux(db, rdb, cfg, client, syncManager)
+	return router.NewAsynqMux(db, rdb, cfg, client, syncManager, scheduler)
 }
 
 func provideAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {

@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
@@ -137,7 +140,8 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			roi_regions TEXT,
 			mark_regions TEXT,
 			line_regions TEXT,
-			error_reason TEXT
+			error_reason TEXT,
+			suspended_reason TEXT
 		);
 	`).Error)
 
@@ -236,7 +240,7 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil)
 	ctx := context.Background()
 
 	// 1. Create Node
@@ -459,7 +463,8 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	fileStorage2, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage2, nil)
+	streamManager := NewStreamManager(&MockEngineClient{}, deviceRepo, repository.NewMediaStreamRepository(db), zap.NewNop())
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage2, nil, streamManager)
 	ctx := context.Background()
 
 	// Create an online node
@@ -475,16 +480,42 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	node.Status = model.NodeStatusOnline
 	require.NoError(t, db.Save(node).Error)
 
-	// Create suspended tasks for this node
+	// Create algorithm packages referenced by the suspended tasks
+	algoPkgID := "algo-test-recover"
+	soPath := filepath.Join(t.TempDir(), "libtest.so")
+	require.NoError(t, os.WriteFile(soPath, []byte("test"), 0o600))
+	require.NoError(t, db.Create(&model.AlgorithmPackage{
+		BaseModel:       model.BaseModel{ID: algoPkgID},
+		AlgorithmName:   "test_algo",
+		Version:         "1.0.0",
+		Domain:          "face_detection",
+		ResultSchema:    "{}",
+		PackagePath:     "packages/test.tar.gz",
+		ExtractPath:     "packages/test",
+		SoPath:          soPath,
+		SelfCheckStatus: "passed",
+		Status:          "published",
+	}).Error)
+
+	// Create suspended tasks for this node (with node_offline reason for auto-resume)
 	for i := 0; i < 3; i++ {
+		deviceID := fmt.Sprintf("camera-%d", i)
+		require.NoError(t, db.Create(&model.Device{
+			BaseModel: model.BaseModel{ID: deviceID}, DeviceName: "Recovery Camera", AccessType: model.DeviceAccessTypeRTSP,
+			RtspURL: "rtsp://camera/live", Status: "online", Enabled: true,
+		}).Error)
+		suspendedReason := model.SuspendedReasonNodeOffline
 		task := &model.AIVisionTask{
-			BaseModel:    model.BaseModel{ID: fmt.Sprintf("suspended-task-%d", i)},
-			Name:         fmt.Sprintf("Suspended Task %d", i),
-			Status:       model.TaskStatusSuspended,
-			TargetNodeID: node.ID,
-			ErrorReason:  "节点离线导致任务暂停",
-			StartDate:    datatypes.Date(time.Now()),
-			EndDate:      datatypes.Date(time.Now().AddDate(0, 0, 7)),
+			BaseModel:       model.BaseModel{ID: fmt.Sprintf("suspended-task-%d", i)},
+			Name:            fmt.Sprintf("Suspended Task %d", i),
+			Status:          model.TaskStatusSuspended,
+			TargetNodeID:    node.ID,
+			DeviceChannelID: deviceID,
+			AlgoPackageID:   algoPkgID,
+			ErrorReason:     "节点离线导致任务暂停",
+			SuspendedReason: &suspendedReason,
+			StartDate:       datatypes.Date(time.Now()),
+			EndDate:         datatypes.Date(time.Now().AddDate(0, 0, 7)),
 		}
 		require.NoError(t, db.Create(task).Error)
 	}
@@ -537,6 +568,11 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	hbRes, err := svc.HandleHeartbeat(ctx, node.ID, hbReq)
 	require.NoError(t, err)
 	require.NotNil(t, hbRes)
+	streamState := streamManager.GetStreamOnNode(ctx, StreamRoute{NodeID: node.ID, DeviceID: "camera-0"})
+	require.NotNil(t, streamState)
+	assert.Equal(t, "rtsp://camera/live", streamState.StartRequest.RtspURL)
+	assert.Equal(t, soPath, streamState.StartRequest.SoPath)
+	assert.Equal(t, "suspended-task-0", streamState.StartRequest.TaskID)
 
 	// Verify all 3 suspended tasks for this node are now running
 	for i := 0; i < 3; i++ {
@@ -571,7 +607,7 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	fileStorage3, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage3, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage3, nil, nil)
 	ctx := context.Background()
 
 	// Create online node
@@ -654,7 +690,7 @@ func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil)
 
 	// Create a camera device
 	device := &model.Device{

@@ -34,6 +34,7 @@ import {
 } from "services/edgeNode";
 import { AlgorithmDeployModal } from "./components/AlgorithmDeployModal";
 import EdgeNodeEditModal from "./components/EdgeNodeEditModal";
+import TerminalTab from "./components/TerminalTab";
 
 const STATUS_COLORS: Record<string, string> = {
   online: "green",
@@ -516,6 +517,14 @@ export default function EdgeNodeDetail() {
           </Box>
         </Card>
       </Flex>
+
+      {/* Terminal Card */}
+      <Card px="24px" py="24px" mb="20px">
+        <Text color={textColor} fontSize="lg" fontWeight="bold" mb="15px">
+          终端
+        </Text>
+        {node ? <TerminalTab node={node} /> : <Spinner />}
+      </Card>
 
       <ConfirmDialog
         isOpen={isDeleteOpen}

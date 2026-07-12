@@ -635,6 +635,14 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	edgeScheduledTaskHandler.RegisterHandlers(mux)
 	edgeScheduledTaskHandler.RegisterPeriodic(scheduler)
 
+		// Terminal Session Cleanup Task
+		termSessionCleanupRepo := repository.NewTerminalSessionRepository(db)
+		termSessionCleanupPool := service.NewSSHPool()
+		termSessionCleanupSvc := service.NewTerminalSessionService(termSessionCleanupRepo, nodeRepo, termSessionCleanupPool, zap.L())
+		termSessionCleanupHandler := task.NewTerminalSessionHandler(termSessionCleanupRepo, termSessionCleanupSvc)
+		termSessionCleanupHandler.RegisterHandlers(mux)
+		termSessionCleanupHandler.RegisterPeriodic(scheduler)
+
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。
 	avatarStorage, err := provideAvatarStorage(cfg)

@@ -30,6 +30,17 @@ openspec/         # OpenSpec 变更提案
 prd/              # PRD 文档
 ```
 
+## 注释
+
+- **代码注释规范 (Coding Comment Conventions)**
+  算法包内的 C++ 源码**必须包含规范、清晰的注释**。要求如下：
+  - **文件头部注释 (File Headers)**: 所有的核心接口、类定义、管线文件必须包含文件级说明，注明文件职责、逻辑结构与技术路线。
+  - **函数/方法注释 (Function Comments)**: 公开 API 接口及核心业务函数，必须使用规范格式（如 Doxygen 风格）详细说明各形参 (`@param`)、返回值 (`@return`)、边界状态及行为规范。
+  - **关键算法与数学逻辑注释 (Algorithm Step Comments)**: 凡涉及非标准几何变换、自定义图像变换或后处理过滤，必须逐步写明数学公式、设计原理与逻辑步骤。
+  - **单行微注释 (Inline Comments)**: 针对空指针校验、防除零保护、前置越界校正及资源预分配等核心步骤，需在旁侧或行前追加单行逻辑注释。
+  - **保持代码整洁 (Clean Code)**: 严禁保留废弃的大段注释代码或无意义的 `TODO`。所有遗留调试逻辑应当移去。
+  - **避免多余注释 (Avoid Redundant Comments)**: 避免对标准、显而易见的代码（如 `// ++`、`// ++`、`// +1`）进行注释，也禁止重复代码行的注释（如 `x++; // increment x`）。
+
 ## Architecture
 
 Go 控制面当前通过 **MQTT 命令/响应** 与 C++ 推理引擎通信，边缘节点心跳通过 **HTTP** 上报，推理事件 payload 使用 **FlatBuffers**。前端通过 **HTTP / WebSocket** 与 Go 后端交互。

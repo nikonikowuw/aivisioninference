@@ -129,6 +129,9 @@ func main() {
 		// AIVisionInference: Edge Scheduled Tasks.
 		&model.EdgeScheduledTask{},
 		&model.EdgeScheduledTaskRecord{},
+
+		// AIVisionInference: Edge Web Terminal.
+		&model.TerminalSession{},
 		); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}
@@ -694,6 +697,10 @@ func defaultMenuList() []parentMenuDef {
 					{Code: "edge-node:deploy-algo", Name: "下发算法包", Path: "/api/v1/edge-nodes/*/deploy-algo", Method: "POST"},
 					{Code: "edge-node:algorithms", Name: "查看节点算法", Path: "/api/v1/edge-nodes/*/algorithms", Method: "GET"},
 				{Code: "edge-node:delete-algo", Name: "卸载算法", Path: "/api/v1/edge-nodes/*/algorithms/*", Method: "DELETE"},
+						{Code: "edge-node:terminal", Name: "Web 终端访问", Path: "/api/v1/ws/terminal", Method: "GET"},
+						{Code: "edge-node:sessions", Name: "查看终端会话", Path: "/api/v1/edge-nodes/*/sessions", Method: "GET"},
+						{Code: "edge-node:close-session", Name: "关闭终端会话", Path: "/api/v1/edge-nodes/*/sessions/*", Method: "DELETE"},
+						{Code: "edge-node:terminal-audit", Name: "终端录制审计", Path: "/api/v1/edge-nodes/*/sessions/*/recording", Method: "GET"},
 				}},
 			},
 		},

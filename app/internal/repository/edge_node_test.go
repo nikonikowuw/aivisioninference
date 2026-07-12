@@ -50,7 +50,9 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
-			remark TEXT
+			remark TEXT,
+			ssh_port INTEGER DEFAULT 22,
+			ssh_private_key TEXT
 		);
 	`).Error)
 

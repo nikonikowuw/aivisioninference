@@ -66,6 +66,7 @@ type RouteDeps struct {
 	EdgeNodeMiddleware      *middleware.EdgeNodeMiddleware
 	EdgeNodeSvc             *service.EdgeNodeService
 	EdgeMqttHandler         *handler.EdgeMqttHandler
+	TerminalHandler          *handler.TerminalHandler
 	MqttMux                 *mqttmux.Mux
 	EngineMetricsStore      *service.EngineMetricsStore
 }
@@ -239,6 +240,7 @@ func newRouteDeps(
 	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
 	edgeMqttHandler *handler.EdgeMqttHandler,
 	mqttMux *mqttmux.Mux,
+	terminalHandler *handler.TerminalHandler,
 	metricsStore *service.EngineMetricsStore,
 ) *RouteDeps {
 	if sipService != nil {
@@ -281,6 +283,7 @@ func newRouteDeps(
 		EdgeScheduledTaskHandler: edgeScheduledTaskHandler,
 		EdgeNodeMiddleware:      edgeNodeMiddleware,
 		EdgeMqttHandler:         edgeMqttHandler,
+		TerminalHandler:         terminalHandler,
 		MqttMux:                 mqttMux,
 		EngineMetricsStore:      metricsStore,
 	}
@@ -527,6 +530,19 @@ func provideEdgeNodeMiddleware(jwtManager *jwt.Manager) *middleware.EdgeNodeMidd
 
 func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
 	return mqttsync.NewMqttSyncManager(rdb)
+}
+
+
+func provideTerminalHandler(
+	sessionRepo *repository.TerminalSessionRepository,
+	nodeRepo *repository.EdgeNodeRepository,
+	pool *service.SSHPool,
+	jwt *jwt.Manager,
+	cfg *Config,
+) *handler.TerminalHandler {
+	logger := zap.L().Named("terminal")
+	svc := service.NewTerminalSessionService(sessionRepo, nodeRepo, pool, logger)
+	return handler.NewTerminalHandler(svc, pool, jwt, cfg.AllowOrigins, logger)
 }
 
 func provideMqttMux() *mqttmux.Mux {

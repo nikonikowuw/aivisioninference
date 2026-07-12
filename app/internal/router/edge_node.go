@@ -43,6 +43,22 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 		}
 	}
 
+	// Terminal session routes
+	if deps.TerminalHandler != nil {
+		// WebSocket terminal — JWT auth handled internally, like /ws
+		v1.GET("/ws/terminal", deps.TerminalHandler.HandleWebSocket)
+
+		// Session REST API
+		sessions := authorized.Group("/edge-nodes/:id/sessions")
+		sessions.Use(r.RBAC())
+		{
+			sessions.GET("", deps.TerminalHandler.ListSessions)
+			sessions.GET("/:session_id", deps.TerminalHandler.GetSession)
+			sessions.DELETE("/:session_id", deps.TerminalHandler.CloseSession)
+			sessions.GET("/:session_id/recording", deps.TerminalHandler.GetRecording)
+		}
+	}
+
 	// Edge scheduled task routes
 	if deps.EdgeScheduledTaskHandler != nil {
 		scheduled := authorized.Group("/edge-scheduled-tasks")

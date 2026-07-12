@@ -50,7 +50,9 @@ func setupRetryTaskTestDB(t *testing.T) *gorm.DB {
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
-			remark TEXT
+			remark TEXT,
+			ssh_port INTEGER DEFAULT 22,
+			ssh_private_key TEXT
 		);
 	`).Error)
 
@@ -106,7 +108,9 @@ func setupRetryTaskTestDB(t *testing.T) *gorm.DB {
 			status TEXT NOT NULL DEFAULT 'draft',
 			ref_count INTEGER DEFAULT 0,
 			is_current INTEGER DEFAULT 0,
-			remark TEXT
+			remark TEXT,
+			ssh_port INTEGER DEFAULT 22,
+			ssh_private_key TEXT
 		);
 	`).Error)
 

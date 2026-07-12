@@ -57,6 +57,7 @@ var repositorySet = wire.NewSet(
 	repository.NewEdgeNodeTagRepository,
 	repository.NewEdgeScheduledTaskRepository,
 	repository.NewEdgeScheduledTaskRecordRepository,
+	repository.NewTerminalSessionRepository,
 )
 
 var serviceSet = wire.NewSet(
@@ -100,6 +101,8 @@ var serviceSet = wire.NewSet(
 	provideHistoryBuffer,
 	provideEngineMetricsStore,
 	provideEdgeMqttHandler,
+	service.NewSSHPool,
+	provideTerminalHandler,
 )
 
 var handlerSet = wire.NewSet(

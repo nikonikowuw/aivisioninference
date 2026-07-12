@@ -10,6 +10,8 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 	metricsHandler := deps.EdgeNodeMetricsHandler
 	alertRuleHandler := deps.AlertRuleHandler
 	alertEventHandler := deps.AlertEventHandler
+	scheduledTaskHandler := deps.EdgeNodeScheduledTaskHandler
+	terminalHandler := deps.EdgeNodeTerminalHandler
 
 	// Heartbeat route: verified by node-specific JWT token
 	v1.POST("/edge-nodes/:id/heartbeat", nodeMiddleware.AuthNode(), nodeHandler.Heartbeat)
@@ -34,7 +36,23 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 
 		// Phase 2: Alert rules routes
 		nodes.POST("/:id/alert-rules", alertRuleHandler.List) // List rules for a node
+
+		// Phase 3: Scheduled task routes
+		nodes.GET("/:id/scheduled-tasks", scheduledTaskHandler.List)
+		nodes.POST("/:id/scheduled-tasks/create", scheduledTaskHandler.Create)
+		nodes.GET("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.GetByID)
+		nodes.PUT("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.Update)
+		nodes.DELETE("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.Delete)
+
+		// Phase 3: Task execution listing
+		nodes.GET("/:id/task-executions", scheduledTaskHandler.ListExecutions)
+
+		// Phase 3: Web Terminal (WebSocket)
+		nodes.GET("/:id/terminal", terminalHandler.HandleWebSocket)
 	}
+
+	// Phase 3: Task execution callback (no auth — called by engine via HTTP)
+	v1.POST("/edge-nodes/:id/task-executions/callback", scheduledTaskHandler.HandleCallback)
 
 	// Phase 2: Alert Rules (admin management)
 	alertRules := authorized.Group("/alert-rules")

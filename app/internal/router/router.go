@@ -615,8 +615,26 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 
-	// Edge Node Status Checker
 	hub := ws.NewHub()
+
+	// Phase 3: Edge Node Task Scheduler (periodic evaluation of cron/one-shot tasks)
+	edgeNodeScheduledTaskRepo := repository.NewEdgeNodeScheduledTaskRepository(db)
+	edgeNodeTaskExecutionRepo := repository.NewEdgeNodeTaskExecutionRepository(db)
+	edgeNodeScheduledTaskSvc := service.NewEdgeNodeScheduledTaskService(
+		edgeNodeScheduledTaskRepo,
+		edgeNodeTaskExecutionRepo,
+		nodeRepo, // reuse from above
+		mqttClient,
+		syncManager,
+	)
+	edgeNodeTerminalSvc := service.NewEdgeNodeTerminalService(mqttClient)
+	edgeNodeTaskSchedulerHandler := task.NewEdgeNodeTaskSchedulerHandler(edgeNodeScheduledTaskSvc, edgeNodeTerminalSvc)
+	edgeNodeTaskSchedulerHandler.RegisterHandlers(mux)
+	if scheduler != nil {
+		task.RegisterEdgeNodePeriodicTasks(scheduler)
+	}
+
+	// Edge Node Status Checker
 	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
 	edgeNodeStatusTask.RegisterHandlers(mux)
 	edgeNodeStatusTask.RegisterPeriodic(scheduler, cfg.Engine.HeartbeatCheckIntervalSec)

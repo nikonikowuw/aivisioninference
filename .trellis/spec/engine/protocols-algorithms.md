@@ -257,7 +257,105 @@ Wrong: Removing a legacy field or changing its JSON key.
 
 Correct: Adding extended fields with `omitempty` while keeping all legacy fields.
 
-## Algorithm Package Layout<br><br>
+## Scenario: Shell Command Execution
+
+### 1. Scope / Trigger
+
+- Trigger: changing the remote shell execution contract between Go Control Plane and C++ Engine.
+- This contract spans Go MQTT command builder, C++ CommandExecutor, HTTP callback handler, and frontend task execution display.
+
+### 2. Signatures
+
+**Go → C++ MQTT Command (shell_exec):**
+```json
+{
+    "type": "shell_exec",
+    "seq": "uuid-1234",
+    "node_id": "edge-node-1",
+    "command": "ls -la /tmp",
+    "timeout_ms": 30000,
+    "execution_id": "exec-uuid"
+}
+```
+
+**C++ → Go HTTP Callback:**
+```
+POST /api/v1/edge-nodes/{node_id}/task-executions/callback
+```
+```json
+{
+    "execution_id": "exec-uuid",
+    "stdout": "total 8\ndrwxr-xr-x ...",
+    "stderr": "",
+    "exit_code": 0,
+    "duration_ms": 1234
+}
+```
+
+**C++ → Go MQTT Response (shell_exec_result):**
+```json
+{
+    "type": "shell_exec_result",
+    "seq": "uuid-1234",
+    "node_id": "edge-node-1",
+    "execution_id": "exec-uuid",
+    "stdout": "...",
+    "stderr": "...",
+    "exit_code": 0,
+    "duration_ms": 1234
+}
+```
+
+### 3. Contracts
+
+- MQTT topic for shell commands: `aivision/edge/{node_id}/cmd/shell_exec`. Never substitute a different ID for `{node_id}`.
+- Each command must include a unique `execution_id` (UUID) for result correlation.
+- C++ `CommandExecutor` runs each command in an isolated `fork+exec` process with strict timeout via `timerfd` or `SIGKILL`.
+- stdout and stderr are captured as separate string buffers via pipes.
+- Results are delivered via BOTH MQTT response topic AND HTTP callback to the Go control plane. The HTTP callback is the primary channel; MQTT response is a fallback for real-time updates.
+- HTTP callback URL is configured on the Engine side (passed during command or configured via `NIKO_ENGINE_CALLBACK_URL` env).
+- C++ Engine must not block command dispatch on slow command execution — commands run in a separate thread/process.
+
+### 4. PTY Session Contract
+
+**Go → C++ MQTT Commands:**
+| Topic | Payload |
+|-------|---------|
+| `aivision/edge/{node_id}/cmd/pty_open` | `{"session_id":"uuid", "cols":80, "rows":24}` |
+| `aivision/edge/{node_id}/cmd/pty_write` | `{"session_id":"uuid", "data":"base64..."}` |
+| `aivision/edge/{node_id}/cmd/pty_resize` | `{"session_id":"uuid", "cols":120, "rows":40}` |
+| `aivision/edge/{node_id}/cmd/pty_close` | `{"session_id":"uuid"}` |
+
+**C++ → Go MQTT Responses:**
+| Topic | Payload |
+|-------|---------|
+| `aivision/edge/{node_id}/response/pty_output` | `{"session_id":"uuid", "data":"base64..."}` |
+| `aivision/edge/{node_id}/response/pty_error` | `{"session_id":"uuid", "error":"reason"}` |
+
+### 5. Go-side Routing Rules
+
+MQTT response topics for Phase 3 must be registered with specific patterns BEFORE the generic `aivision/edge/+/response/+` pattern to avoid being swallowed by `HandleStreamStatus`:
+
+```go
+// Register specific handlers BEFORE generic one
+mqttSvc.Subscribe("aivision/edge/+/response/shell_exec_result", handler.HandleShellExecResult)
+mqttSvc.Subscribe("aivision/edge/+/response/pty_output", handler.HandlePtyOutput)
+mqttSvc.Subscribe("aivision/edge/+/response/pty_error", handler.HandlePtyError)
+```
+
+### 6. Good/Base/Bad Cases
+
+- Good: C++ executes command within timeout, sends result via both MQTT and HTTP, Go stores execution record.
+- Base: Command times out — C++ kills process, returns exit_code=-1 and "timeout" error message.
+- Bad: Invalid command, shell not available — C++ returns exit_code non-zero with stderr message.
+
+### 7. Wrong vs Correct
+
+Wrong: Running shell commands on the MQTT dispatch thread (blocks all other commands).
+
+Correct: Each shell exec runs in its own `fork+exec` process. The MQTT dispatch handler fires it in the background and returns immediately.
+
+## Algorithm Package Layout
 
 Algorithm packages live under:
 

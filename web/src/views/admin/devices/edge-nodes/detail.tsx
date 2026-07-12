@@ -8,6 +8,11 @@ import {
   SimpleGrid,
   Spinner,
   Table,
+  Tab,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Tabs,
   Tag,
   Tbody,
   Td,
@@ -24,6 +29,8 @@ import {
 import Card from "components/card/Card";
 import MetricsTimeSeries from "components/charts/MetricsTimeSeries";
 import ConfirmDialog from "components/confirm-dialog/ConfirmDialog";
+import Terminal from "components/Terminal/Terminal";
+import ScheduledTaskList from "./scheduled-tasks/index";
 import { useDateFormat } from "hooks/useDateFormat";
 import { useWebSocket } from "hooks/useWebSocket";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -630,6 +637,25 @@ export default function EdgeNodeDetail() {
               </Tbody>
             </Table>
           </Box>
+        </Card>
+
+        {/* Phase 3: Remote Operations — Scheduled Tasks & Web Terminal */}
+        <Card px="24px" py="24px" mb="20px">
+          <Tabs colorScheme="brand" variant="enclosed">
+            <TabList>
+              <Tab>{t("scheduledTasks.title")}</Tab>
+              <Tab>{t("terminal.title")}</Tab>
+            </TabList>
+
+            <TabPanels>
+              <TabPanel px="0" pt="20px">
+                <ScheduledTaskList nodeId={node.id} />
+              </TabPanel>
+              <TabPanel px="0" pt="20px">
+                <Terminal nodeId={node.id} />
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
         </Card>
       </Flex>
 

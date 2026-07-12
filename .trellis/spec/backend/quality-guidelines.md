@@ -113,6 +113,61 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 - Silence tracking uses an in-memory `sync.Map` keyed by `(rule_id, node_id)`. On restart, silence state is reset (acceptable for edge cases).
 - Node offline/online transitions (MQTT LWT, reconnection) trigger dedicated evaluator methods (`EvaluateNodeOffline`, `EvaluateNodeBackOnline`).
 
+## WebSocket Terminal Proxy Pattern
+
+When implementing a Web Terminal that proxies between browser → Go WebSocket → C++ Engine PTY via MQTT:
+
+```go
+type TerminalSession struct {
+    SessionID  string
+    NodeID     string
+    WS         *websocket.Conn
+    LastActivity time.Time
+    mu         sync.Mutex
+}
+
+type TerminalService struct {
+    sessions sync.Map  // sessionID -> *TerminalSession
+    mqttClient MQTTClient
+    idleTimeout time.Duration // default 5min
+}
+
+func (s *TerminalService) HandleWSConnection(ws *websocket.Conn, nodeID string) {
+    sessionID := uuid.New().String()
+    session := &TerminalSession{
+        SessionID: sessionID, NodeID: nodeID,
+        WS: ws, LastActivity: time.Now(),
+    }
+    s.sessions.Store(sessionID, session)
+    defer s.cleanup(sessionID)
+
+    // Send pty_open MQTT command to engine
+    s.mqttClient.Publish(fmt.Sprintf("aivision/edge/%s/cmd/pty_open", nodeID), map[string]interface{}{
+        "session_id": sessionID,
+        "cols": 80, "rows": 24,
+    })
+
+    // Bidirectional relay: WS read → MQTT pty_write
+    go s.readWSAndPublish(session)
+    // MQTT pty_output → WS write (handled via response routing)
+}
+```
+
+**Key Rules:**
+- Each terminal session creates a unique session_id (UUID) used in all MQTT commands/responses.
+- WebSocket read/write are goroutine-safe with appropriate mutex or serial access.
+- Idle timeout: update `LastActivity` on every WS message; cleanup goroutine checks every 30s.
+- On WS disconnect: send MQTT `pty_close` to engine, delete session from sync.Map.
+- On MQTT `pty_error` response: close WS with error message, clean up session.
+- MQTT pty_output and pty_error response topics must be registered with specific patterns (not generic `response/+`) to avoid being swallowed by other handlers.
+
+The browser side (xterm.js):
+- Use `@xterm/xterm` v5+ with `@xterm/addon-fit` for auto-sizing.
+- WebSocket binary mode is not required; use JSON messages with `data` field for terminal I/O.
+- On connection open: send initial terminal size.
+- On resize: send resize message to backend.
+- On disconnect: attempt reconnect with backoff (3s, 10s, 30s max).
+
 ## Backend Anti-Patterns
 
 - Adding business rules to repositories.

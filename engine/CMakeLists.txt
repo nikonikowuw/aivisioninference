@@ -194,6 +194,8 @@ set(ENGINE_LIB_SOURCES
     src/monitor/probes/nvidia_probe.cpp
     src/monitor/probes/ascend_probe.cpp
     src/monitor/probes/macos_probe.cpp
+    src/monitor/command_executor.cpp
+    src/monitor/pty_module.cpp
 )
 
 # 引擎可执行入口
@@ -227,6 +229,8 @@ set(INSTALL_HEADERS
     include/algo/algorithm_downloader.h
     include/command_dispatcher.h
     include/mqtt_control_plane.h
+    include/monitor/command_executor.h
+    include/monitor/pty_module.h
 )
 
 # ============================================================

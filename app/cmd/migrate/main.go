@@ -128,6 +128,10 @@ func main() {
 		// Phase 2: Alert Engine.
 		&model.AlertRule{},
 		&model.AlertEvent{},
+
+		// Phase 3: Remote Operations.
+		&model.EdgeNodeScheduledTask{},
+		&model.EdgeNodeTaskExecution{},
 		); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}

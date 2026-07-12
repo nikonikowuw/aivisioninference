@@ -76,6 +76,14 @@ type RouteDeps struct {
 	AlertRuleHandler      *handler.AlertRuleHandler
 	AlertEventHandler     *handler.AlertEventHandler
 	AlertEngine           *service.AlertEngine
+
+	// Phase 3: Remote Operations.
+	EdgeNodeScheduledTaskRepo       *repository.EdgeNodeScheduledTaskRepository
+	EdgeNodeTaskExecutionRepo       *repository.EdgeNodeTaskExecutionRepository
+	EdgeNodeScheduledTaskService    *service.EdgeNodeScheduledTaskService
+	EdgeNodeTerminalService         *service.EdgeNodeTerminalService
+	EdgeNodeScheduledTaskHandler    *handler.EdgeNodeScheduledTaskHandler
+	EdgeNodeTerminalHandler         *handler.EdgeNodeTerminalHandler
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -250,6 +258,14 @@ func newRouteDeps(
 	alertRuleHandler *handler.AlertRuleHandler,
 	alertEventHandler *handler.AlertEventHandler,
 	alertEngine *service.AlertEngine,
+
+	// Phase 3: Remote Operations.
+	edgeNodeScheduledTaskRepo *repository.EdgeNodeScheduledTaskRepository,
+	edgeNodeTaskExecutionRepo *repository.EdgeNodeTaskExecutionRepository,
+	edgeNodeScheduledTaskService *service.EdgeNodeScheduledTaskService,
+	edgeNodeTerminalService *service.EdgeNodeTerminalService,
+	edgeNodeScheduledTaskHandler *handler.EdgeNodeScheduledTaskHandler,
+	edgeNodeTerminalHandler *handler.EdgeNodeTerminalHandler,
 ) *RouteDeps {
 	if sipService != nil {
 		sipService.SetRuntimeService(sipRuntimeSvc)
@@ -295,6 +311,14 @@ func newRouteDeps(
 		AlertRuleHandler:        alertRuleHandler,
 		AlertEventHandler:       alertEventHandler,
 		AlertEngine:             alertEngine,
+
+		// Phase 3: Remote Operations.
+		EdgeNodeScheduledTaskRepo:       edgeNodeScheduledTaskRepo,
+		EdgeNodeTaskExecutionRepo:       edgeNodeTaskExecutionRepo,
+		EdgeNodeScheduledTaskService:    edgeNodeScheduledTaskService,
+		EdgeNodeTerminalService:         edgeNodeTerminalService,
+		EdgeNodeScheduledTaskHandler:    edgeNodeScheduledTaskHandler,
+		EdgeNodeTerminalHandler:         edgeNodeTerminalHandler,
 	}
 }
 
@@ -572,6 +596,36 @@ func provideAlertEngine(
 	return engine
 }
 
+func provideEdgeNodeScheduledTaskRepository(db *gorm.DB) *repository.EdgeNodeScheduledTaskRepository {
+	return repository.NewEdgeNodeScheduledTaskRepository(db)
+}
+
+func provideEdgeNodeTaskExecutionRepository(db *gorm.DB) *repository.EdgeNodeTaskExecutionRepository {
+	return repository.NewEdgeNodeTaskExecutionRepository(db)
+}
+
+func provideEdgeNodeScheduledTaskService(
+	taskRepo *repository.EdgeNodeScheduledTaskRepository,
+	execRepo *repository.EdgeNodeTaskExecutionRepository,
+	nodeRepo *repository.EdgeNodeRepository,
+	mqttClient mqtt.Client,
+	syncManager *mqttsync.MqttSyncManager,
+) *service.EdgeNodeScheduledTaskService {
+	return service.NewEdgeNodeScheduledTaskService(taskRepo, execRepo, nodeRepo, mqttClient, syncManager)
+}
+
+func provideEdgeNodeTerminalService(mqttClient mqtt.Client) *service.EdgeNodeTerminalService {
+	return service.NewEdgeNodeTerminalService(mqttClient)
+}
+
+func provideEdgeNodeScheduledTaskHandler(svc *service.EdgeNodeScheduledTaskService) *handler.EdgeNodeScheduledTaskHandler {
+	return handler.NewEdgeNodeScheduledTaskHandler(svc)
+}
+
+func provideEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService) *handler.EdgeNodeTerminalHandler {
+	return handler.NewEdgeNodeTerminalHandler(terminalSvc)
+}
+
 func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
 	return mqttsync.NewMqttSyncManager(rdb)
 }
@@ -587,6 +641,8 @@ func provideEdgeMqttHandler(
 	rdb *redis.Client,
 	hub *ws.Hub,
 	metricsStore *service.EngineMetricsStore,
+	scheduledTaskSvc *service.EdgeNodeScheduledTaskService,
+	terminalSvc *service.EdgeNodeTerminalService,
 ) *handler.EdgeMqttHandler {
-	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub, metricsStore)
+	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub, metricsStore, scheduledTaskSvc, terminalSvc)
 }

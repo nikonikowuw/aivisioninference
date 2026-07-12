@@ -27,6 +27,11 @@ func NewMqttServer(client mqtt.Client, mux *mqttmux.Mux, handler *handler.EdgeMq
 // Start registers handlers and subscribes to the edge topics.
 func (s *MqttServer) Start() error {
 	// Register callbacks in the multiplexer
+	// Note: more specific patterns are registered BEFORE generic patterns
+	// since the mux dispatches to ALL matching handlers.
+	s.mux.Register("aivision/edge/+/response/shell_exec_result", s.handler.HandleShellExecResult)
+	s.mux.Register("aivision/edge/+/response/pty_output", s.handler.HandlePtyOutput)
+	s.mux.Register("aivision/edge/+/response/pty_error", s.handler.HandlePtyError)
 	s.mux.Register("aivision/edge/+/status/heartbeat", s.handler.HandleHeartbeat)
 	s.mux.Register("aivision/edge/+/status/lifecycle", s.handler.HandleLifecycle)
 	s.mux.Register("aivision/edge/+/response/+", s.handler.HandleStreamStatus)

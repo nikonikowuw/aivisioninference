@@ -361,6 +361,9 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	assert.Equal(t, "algo-1", hbRes.PendingDeployments[0].AlgoPackageID)
 	assert.Equal(t, "http://minio:9000/aivision-algorithms/yolov8.tar.gz", hbRes.PendingDeployments[0].DownloadURL)
 	assert.Equal(t, "/opt/aivision/algo/yolov8_1.0.0", hbRes.PendingDeployments[0].ExtractPath)
+	var heartbeatNode model.EdgeNode
+	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
+	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
 
 	// Next heartbeat: sync the installed algorithm
 	hbReq2 := &dto.HeartbeatRequest{
@@ -369,6 +372,8 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 		EngineVersion: "1.0.0",
 		HALPlatform:   "macos",
 		HardwareInfo:  hbReq.HardwareInfo,
+		Status:        "error",
+		ErrorMessage:  "engine overheated",
 		InstalledAlgorithms: []dto.InstalledAlgorithmInfo{
 			{
 				AlgoPackageID: "algo-1",
@@ -381,6 +386,9 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	hbRes2, err := svc.HandleHeartbeat(ctx, node.ID, hbReq2)
 	require.NoError(t, err)
 	assert.Empty(t, hbRes2.PendingDeployments) // no longer pending
+	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
+	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
+	assert.Equal(t, model.NodeStatusError, heartbeatNode.Status)
 
 	// Verify installed status in ListAlgorithms
 	algos, err := svc.ListAlgorithms(ctx, node.ID)
@@ -519,6 +527,27 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 		}
 		require.NoError(t, db.Create(task).Error)
 	}
+	manualReason := model.SuspendedReasonManual
+	require.NoError(t, db.Create(&model.AIVisionTask{
+		BaseModel:       model.BaseModel{ID: "manual-suspended-task"},
+		Name:            "Manual Suspended Task",
+		Status:          model.TaskStatusSuspended,
+		TargetNodeID:    node.ID,
+		SuspendedReason: &manualReason,
+		StartDate:       datatypes.Date(time.Now()),
+		EndDate:         datatypes.Date(time.Now().AddDate(0, 0, 7)),
+	}).Error)
+	nodeOfflineReason := model.SuspendedReasonNodeOffline
+	require.NoError(t, db.Create(&model.AIVisionTask{
+		BaseModel:       model.BaseModel{ID: "unrestorable-task"},
+		Name:            "Unrestorable Task",
+		Status:          model.TaskStatusSuspended,
+		TargetNodeID:    node.ID,
+		AlgoPackageID:   algoPkgID,
+		SuspendedReason: &nodeOfflineReason,
+		StartDate:       datatypes.Date(time.Now()),
+		EndDate:         datatypes.Date(time.Now().AddDate(0, 0, 7)),
+	}).Error)
 
 	// Create a non-suspended task (should NOT be affected by resumption)
 	runningTask := &model.AIVisionTask{
@@ -582,6 +611,18 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 		assert.Equal(t, model.TaskStatusRunning, task.Status, "suspended task %d should be resumed", i)
 		assert.Empty(t, task.ErrorReason, "error_reason should be cleared for task %d", i)
 	}
+	manualTask, err := taskRepo.FindByID(ctx, "manual-suspended-task")
+	require.NoError(t, err)
+	assert.Equal(t, model.TaskStatusSuspended, manualTask.Status)
+	require.NotNil(t, manualTask.SuspendedReason)
+	assert.Equal(t, model.SuspendedReasonManual, *manualTask.SuspendedReason)
+
+	unrestorableTask, err := taskRepo.FindByID(ctx, "unrestorable-task")
+	require.NoError(t, err)
+	assert.Equal(t, model.TaskStatusSuspended, unrestorableTask.Status)
+	require.NotNil(t, unrestorableTask.SuspendedReason)
+	assert.Equal(t, model.SuspendedReasonNodeOffline, *unrestorableTask.SuspendedReason)
+	assert.Contains(t, unrestorableTask.ErrorReason, "device_channel_id")
 
 	// Verify running task is still running (unchanged)
 	runningTask2, err := taskRepo.FindByID(ctx, "running-task")

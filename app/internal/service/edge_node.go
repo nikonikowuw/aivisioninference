@@ -264,11 +264,6 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		"gpu_model":      req.HardwareInfo.GPUModel,
 		"total_memory":   req.HardwareInfo.TotalMemory,
 		"status":         status,
-		"remark":         "",
-	}
-
-	if req.Status == "error" && req.ErrorMessage != "" {
-		hbFields["remark"] = req.ErrorMessage
 	}
 
 	// Update heartbeat fields with node state.
@@ -306,11 +301,6 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	node.GPUModel = req.HardwareInfo.GPUModel
 	node.TotalMemory = req.HardwareInfo.TotalMemory
 	node.Status = status
-	if req.Status == "error" && req.ErrorMessage != "" {
-		node.Remark = req.ErrorMessage
-	} else if status != string(model.NodeStatusError) {
-		node.Remark = ""
-	}
 
 	// Broadcast WebSocket events after transaction commits (avoid notifying on rollback)
 	if s.hub != nil {
@@ -627,11 +617,21 @@ func (s *EdgeNodeService) restoreSuspendedPipelines(ctx context.Context, nodeID 
 	for _, r := range results {
 		if r.errMsg == "" {
 			// Engine confirmed pipeline is active — clear suspension
-			if err := s.taskRepo.ClearSuspended(ctx, r.task.ID); err != nil {
+			cleared, err := s.taskRepo.ClearNodeOfflineSuspended(ctx, r.task.ID)
+			if err != nil {
 				zap.L().Error("failed to clear task suspension after pipeline restore",
 					zap.String("task_id", r.task.ID),
 					zap.Error(err),
 				)
+				s.rollbackRestoredPipeline(ctx, nodeID, r.task)
+				continue
+			}
+			if !cleared {
+				zap.L().Warn("task suspension changed while pipeline was restoring",
+					zap.String("task_id", r.task.ID),
+					zap.String("node_id", nodeID),
+				)
+				s.rollbackRestoredPipeline(ctx, nodeID, r.task)
 				continue
 			}
 
@@ -653,7 +653,7 @@ func (s *EdgeNodeService) restoreSuspendedPipelines(ctx context.Context, nodeID 
 				})
 			}
 		} else {
-			if updateErr := s.taskRepo.UpdateErrorReason(ctx, r.task.ID, r.errMsg); updateErr != nil {
+			if updateErr := s.taskRepo.UpdateNodeOfflineSuspendedError(ctx, r.task.ID, r.errMsg); updateErr != nil {
 				zap.L().Error("failed to update task error after pipeline restore failure",
 					zap.String("task_id", r.task.ID),
 					zap.Error(updateErr),
@@ -716,6 +716,23 @@ func (s *EdgeNodeService) restoreTaskStream(ctx context.Context, nodeID string, 
 	}
 
 	return restoreResult{task: task}
+}
+
+func (s *EdgeNodeService) rollbackRestoredPipeline(ctx context.Context, nodeID string, task model.AIVisionTask) {
+	if s.streamManager == nil || task.DeviceChannelID == "" {
+		return
+	}
+
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.streamManager.ReleaseOnNode(rollbackCtx,
+		StreamRoute{NodeID: nodeID, DeviceID: task.DeviceChannelID}, "infer:"+task.ID); err != nil {
+		zap.L().Error("failed to roll back restored task pipeline",
+			zap.String("task_id", task.ID),
+			zap.String("node_id", nodeID),
+			zap.Error(err),
+		)
+	}
 }
 
 // Stop gracefully shuts down the batch insert worker, flushing remaining records.

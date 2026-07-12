@@ -265,6 +265,8 @@ func (m *StreamManager) RestoreInferenceOnNode(ctx context.Context, route Stream
 
 	dev, err := m.deviceRepo.FindByID(ctx, route.DeviceID)
 	if err != nil {
+		state.Consumers.Delete(reason)
+		m.recalculateRefCount(state)
 		return err
 	}
 	req := StreamStartRequest{
@@ -275,6 +277,8 @@ func (m *StreamManager) RestoreInferenceOnNode(ctx context.Context, route Stream
 	}
 	info, err := m.engine.StartStream(ctx, req)
 	if err != nil {
+		state.Consumers.Delete(reason)
+		m.recalculateRefCount(state)
 		state.Status = "error"
 		return err
 	}

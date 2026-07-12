@@ -583,7 +583,7 @@ func NewAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
 }
 
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
-func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Client, syncManager *mqttsync.MqttSyncManager, scheduler *asynq.Scheduler) *asynq.ServeMux {
+func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Client, syncManager *mqttsync.MqttSyncManager, scheduler *asynq.Scheduler, hub *ws.Hub) *asynq.ServeMux {
 	deviceRepo := repository.NewDeviceRepository(db)
 	zlmClient := provideZLMClient(cfg)
 
@@ -616,7 +616,6 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 
 	// Edge Node Status Checker
-	hub := ws.NewHub()
 	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
 	edgeNodeStatusTask.RegisterHandlers(mux)
 	edgeNodeStatusTask.RegisterPeriodic(scheduler, cfg.Engine.HeartbeatCheckIntervalSec)

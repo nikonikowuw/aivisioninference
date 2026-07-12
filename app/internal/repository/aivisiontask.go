@@ -108,23 +108,24 @@ func (r *AIVisionTaskRepository) SetSuspended(ctx context.Context, taskID string
 		}).Error
 }
 
-// ClearSuspended restores a task from suspended to running, clearing the suspended reason and error.
-func (r *AIVisionTaskRepository) ClearSuspended(ctx context.Context, taskID string) error {
-	return r.db.WithContext(ctx).
+// ClearNodeOfflineSuspended restores a task only if it is still suspended because its node was offline.
+func (r *AIVisionTaskRepository) ClearNodeOfflineSuspended(ctx context.Context, taskID string) (bool, error) {
+	result := r.db.WithContext(ctx).
 		Model(&model.AIVisionTask{}).
-		Where("id = ?", taskID).
+		Where("id = ? AND status = ? AND suspended_reason = ?", taskID, model.TaskStatusSuspended, model.SuspendedReasonNodeOffline).
 		Updates(map[string]interface{}{
 			"status":           model.TaskStatusRunning,
 			"suspended_reason": nil,
 			"error_reason":     "",
-		}).Error
+		})
+	return result.RowsAffected > 0, result.Error
 }
 
-// UpdateErrorReason updates the error_reason for a suspended task without changing status or suspended_reason.
-func (r *AIVisionTaskRepository) UpdateErrorReason(ctx context.Context, taskID string, errorMsg string) error {
+// UpdateNodeOfflineSuspendedError updates the error only while the task remains node-offline suspended.
+func (r *AIVisionTaskRepository) UpdateNodeOfflineSuspendedError(ctx context.Context, taskID string, errorMsg string) error {
 	return r.db.WithContext(ctx).
 		Model(&model.AIVisionTask{}).
-		Where("id = ?", taskID).
+		Where("id = ? AND status = ? AND suspended_reason = ?", taskID, model.TaskStatusSuspended, model.SuspendedReasonNodeOffline).
 		Update("error_reason", errorMsg).Error
 }
 

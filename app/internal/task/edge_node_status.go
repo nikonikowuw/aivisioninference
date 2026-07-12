@@ -54,8 +54,13 @@ func (h *EdgeNodeStatusTask) RegisterPeriodic(scheduler *asynq.Scheduler, interv
 			zap.Int("interval_sec", intervalSec))
 		return
 	}
-	scheduler.Register(fmt.Sprintf("@every %ds", intervalSec),
-		asynq.NewTask(TypeEdgeNodeStatusCheck, nil))
+	if _, err := scheduler.Register(fmt.Sprintf("@every %ds", intervalSec),
+		asynq.NewTask(TypeEdgeNodeStatusCheck, nil)); err != nil {
+		zap.L().Error("failed to register periodic edge node status check",
+			zap.Int("interval_sec", intervalSec),
+			zap.Error(err))
+		return
+	}
 	zap.L().Info("registered periodic edge node status check",
 		zap.Int("interval_sec", intervalSec))
 }

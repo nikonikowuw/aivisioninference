@@ -18,6 +18,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
 	"github.com/niko-admin/niko-admin/internal/pkg/mqttsync"
+	"github.com/niko-admin/niko-admin/internal/pkg/ws"
 	"github.com/niko-admin/niko-admin/internal/router"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -85,9 +86,9 @@ func provideHTTPServer(r *router.Router, cfg *config.Config) *http.Server {
 	}
 }
 
-func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config, client mqtt.Client, scheduler *asynq.Scheduler) *asynq.ServeMux {
+func provideAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *router.Config, client mqtt.Client, scheduler *asynq.Scheduler, hub *ws.Hub) *asynq.ServeMux {
 	syncManager := mqttsync.NewMqttSyncManager(rdb)
-	return router.NewAsynqMux(db, rdb, cfg, client, syncManager, scheduler)
+	return router.NewAsynqMux(db, rdb, cfg, client, syncManager, scheduler, hub)
 }
 
 func provideAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {

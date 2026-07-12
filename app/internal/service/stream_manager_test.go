@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/dto"
@@ -131,6 +133,14 @@ func setupTestSM() *StreamManager {
 	return NewStreamManager(mockClient, mockRepo, mockStreamRepo, logger)
 }
 
+type failingStartEngineClient struct {
+	*MockEngineClient
+}
+
+func (c *failingStartEngineClient) StartStream(context.Context, StreamStartRequest) (StreamInfo, error) {
+	return StreamInfo{}, errors.New("start stream failed")
+}
+
 func TestAcquireAndReleaseRefCount(t *testing.T) {
 	sm := setupTestSM()
 	ctx := context.Background()
@@ -196,6 +206,26 @@ func TestStreamManagerSeparatesSameDeviceAcrossNodes(t *testing.T) {
 	assert.NoError(t, sm.ReleaseOnNode(ctx, routeA, "infer:task-a"))
 	assert.Equal(t, int32(0), stateA.RefCount.Load())
 	assert.Equal(t, int32(1), stateB.RefCount.Load())
+}
+
+func TestRestoreInferenceOnNodeRollsBackConsumerWhenEngineStartFails(t *testing.T) {
+	deviceRepo := newMockDeviceRepo()
+	streamRepo := newMockStreamRepo()
+	manager := NewStreamManager(&failingStartEngineClient{MockEngineClient: &MockEngineClient{}}, deviceRepo, streamRepo, zap.NewNop())
+	ctx := context.Background()
+	route := StreamRoute{NodeID: "node-a", DeviceID: "camera-a"}
+	require.NoError(t, deviceRepo.Create(ctx, &model.Device{
+		BaseModel: model.BaseModel{ID: route.DeviceID},
+		RtspURL:   "rtsp://camera/live",
+	}))
+
+	err := manager.RestoreInferenceOnNode(ctx, route, "infer:task-a", map[string]string{"task_id": "task-a"})
+	require.Error(t, err)
+	state := manager.GetStreamOnNode(ctx, route)
+	require.NotNil(t, state)
+	assert.Equal(t, int32(0), state.RefCount.Load())
+	_, exists := state.Consumers.Load("infer:task-a")
+	assert.False(t, exists)
 }
 
 func TestKeepAlive(t *testing.T) {

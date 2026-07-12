@@ -21,6 +21,10 @@ type MqttEngineClient struct {
 	logger      *zap.Logger
 }
 
+func edgeCommandTopic(nodeID, command string) string {
+	return fmt.Sprintf("aivision/edge/%s/cmd/%s", nodeID, command)
+}
+
 // NewMqttEngineClient creates a new MqttEngineClient.
 func NewMqttEngineClient(
 	mqttClient mqtt.Client,
@@ -63,11 +67,14 @@ func parseStreamStatus(respPayload string) *controlproto.StreamStatusParams {
 
 // StartStream publishes a StreamStart command via MQTT.
 func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error) {
-	c.logger.Info("MQTT: StartStream", zap.String("device_id", req.DeviceID))
+	c.logger.Info("MQTT: StartStream", zap.String("node_id", req.NodeID), zap.String("device_id", req.DeviceID))
+	if req.NodeID == "" {
+		return StreamInfo{}, fmt.Errorf("MQTT: node id is required to start stream")
+	}
 
 	traceID := uuid.New().String()
 	params := &controlproto.StartStreamParams{
-		TaskID:         req.DeviceID,
+		TaskID:         req.TaskID,
 		DeviceID:       req.DeviceID,
 		StreamURL:      req.RtspURL,
 		DecodeHWType:   0,
@@ -80,8 +87,11 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 		TraceID:        traceID,
 	}
 
+	if params.TaskID == "" {
+		params.TaskID = req.DeviceID
+	}
 	payload, _ := json.Marshal(params)
-	topic := fmt.Sprintf("aivision/edge/%s/cmd/start_stream", req.DeviceID)
+	topic := edgeCommandTopic(req.NodeID, "start_stream")
 
 	if err := c.ensureClient(); err != nil {
 		return StreamInfo{}, err
@@ -125,15 +135,18 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 }
 
 // StopStream publishes a StreamStop command via MQTT.
-func (c *MqttEngineClient) StopStream(ctx context.Context, deviceID string) error {
-	c.logger.Info("MQTT: StopStream", zap.String("device_id", deviceID))
+func (c *MqttEngineClient) StopStream(ctx context.Context, nodeID, deviceID string) error {
+	c.logger.Info("MQTT: StopStream", zap.String("node_id", nodeID), zap.String("device_id", deviceID))
+	if nodeID == "" {
+		return fmt.Errorf("MQTT: node id is required to stop stream")
+	}
 
 	traceID := uuid.New().String()
 	payload, _ := json.Marshal(map[string]string{
 		"trace_id":  traceID,
 		"device_id": deviceID,
 	})
-	topic := fmt.Sprintf("aivision/edge/%s/cmd/stop_stream", deviceID)
+	topic := edgeCommandTopic(nodeID, "stop_stream")
 
 	if c.mqttClient == nil {
 		return fmt.Errorf("MQTT client is nil")
@@ -151,11 +164,14 @@ func (c *MqttEngineClient) StopStream(ctx context.Context, deviceID string) erro
 
 // StartPlayback publishes a StreamPlaybackStart command via MQTT.
 func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartRequest) (string, error) {
-	c.logger.Info("MQTT: StartPlayback", zap.String("device_id", req.DeviceID))
+	c.logger.Info("MQTT: StartPlayback", zap.String("node_id", req.NodeID), zap.String("device_id", req.DeviceID))
+	if req.NodeID == "" {
+		return "", fmt.Errorf("MQTT: node id is required to start playback")
+	}
 
 	traceID := uuid.New().String()
 	params := &controlproto.StartStreamParams{
-		TaskID:         req.DeviceID,
+		TaskID:         req.TaskID,
 		DeviceID:       req.DeviceID,
 		StreamURL:      req.RtspURL,
 		DecodeHWType:   0,
@@ -163,8 +179,11 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 		TraceID:        traceID,
 	}
 
+	if params.TaskID == "" {
+		params.TaskID = req.DeviceID
+	}
 	payload, _ := json.Marshal(params)
-	topic := fmt.Sprintf("aivision/edge/%s/cmd/start_playback", req.DeviceID)
+	topic := edgeCommandTopic(req.NodeID, "start_playback")
 
 	if c.mqttClient == nil {
 		return "", fmt.Errorf("MQTT client is nil")
@@ -193,15 +212,18 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 }
 
 // StopPlayback publishes a StreamPlaybackStop command via MQTT.
-func (c *MqttEngineClient) StopPlayback(ctx context.Context, deviceID string) error {
-	c.logger.Info("MQTT: StopPlayback", zap.String("device_id", deviceID))
+func (c *MqttEngineClient) StopPlayback(ctx context.Context, nodeID, deviceID string) error {
+	c.logger.Info("MQTT: StopPlayback", zap.String("node_id", nodeID), zap.String("device_id", deviceID))
+	if nodeID == "" {
+		return fmt.Errorf("MQTT: node id is required to stop playback")
+	}
 
 	traceID := uuid.New().String()
 	payload, _ := json.Marshal(map[string]string{
 		"trace_id":  traceID,
 		"device_id": deviceID,
 	})
-	topic := fmt.Sprintf("aivision/edge/%s/cmd/stop_playback", deviceID)
+	topic := edgeCommandTopic(nodeID, "stop_playback")
 
 	if c.mqttClient == nil {
 		return fmt.Errorf("MQTT client is nil")
@@ -218,15 +240,18 @@ func (c *MqttEngineClient) StopPlayback(ctx context.Context, deviceID string) er
 }
 
 // GetStreamStatus publishes a StreamStatus command via MQTT.
-func (c *MqttEngineClient) GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error) {
-	c.logger.Debug("MQTT: GetStreamStatus", zap.String("device_id", deviceID))
+func (c *MqttEngineClient) GetStreamStatus(ctx context.Context, nodeID, deviceID string) (StreamStatus, error) {
+	c.logger.Debug("MQTT: GetStreamStatus", zap.String("node_id", nodeID), zap.String("device_id", deviceID))
+	if nodeID == "" {
+		return StreamStatus{}, fmt.Errorf("MQTT: node id is required to get stream status")
+	}
 
 	traceID := uuid.New().String()
 	payload, _ := json.Marshal(map[string]string{
 		"trace_id":  traceID,
 		"device_id": deviceID,
 	})
-	topic := fmt.Sprintf("aivision/edge/%s/cmd/stream_status", deviceID)
+	topic := edgeCommandTopic(nodeID, "stream_status")
 
 	if c.mqttClient == nil {
 		return StreamStatus{}, fmt.Errorf("MQTT client is nil")
@@ -272,7 +297,7 @@ func (c *MqttEngineClient) StartSelfCheck(ctx context.Context, downloadURL, toke
 		"algo_name":    algoName,
 		"version":      version,
 	})
-	topic := fmt.Sprintf("aivision/edge/self_check/cmd") // Generic topic or node specific if we want
+	topic := "aivision/edge/self_check/cmd" // Generic topic or node specific if we want
 
 	if err := c.ensureClient(); err != nil {
 		return err

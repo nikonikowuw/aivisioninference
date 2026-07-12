@@ -28,6 +28,7 @@ type AIVisionTaskService struct {
 	deviceRepo           *repository.DeviceRepository
 	sipSvc               *SIPService
 	streamManager        *StreamManager
+	nodePolicy           *InferenceNodePolicy
 }
 
 // NewAIVisionTaskService 创建新的 AIVisionTaskService
@@ -38,6 +39,7 @@ func NewAIVisionTaskService(
 	deviceRepo *repository.DeviceRepository,
 	sipSvc *SIPService,
 	streamManager *StreamManager,
+	nodePolicy *InferenceNodePolicy,
 ) *AIVisionTaskService {
 	svc := &AIVisionTaskService{
 		aivisiontaskRepo:     aivisiontaskRepo,
@@ -46,6 +48,7 @@ func NewAIVisionTaskService(
 		deviceRepo:           deviceRepo,
 		sipSvc:               sipSvc,
 		streamManager:        streamManager,
+		nodePolicy:           nodePolicy,
 	}
 	if streamManager != nil {
 		streamManager.Subscribe(svc.HandleDeviceEvent)
@@ -147,7 +150,7 @@ func (s *AIVisionTaskService) HandleDeviceEvent(ctx context.Context, event Devic
 	var items []model.AIVisionTask
 	if err := s.aivisiontaskRepo.FindAllActive(ctx, &items); err == nil {
 		for _, task := range items {
-			if task.DeviceChannelID == event.DeviceID {
+			if task.TargetNodeID == event.NodeID && task.DeviceChannelID == event.DeviceID {
 				if event.EventType == "online" {
 					if task.Status != model.TaskStatusRunning {
 						task.Status = model.TaskStatusRunning
@@ -181,6 +184,9 @@ func (s *AIVisionTaskService) List(ctx context.Context, req dto.AIVisionTaskList
 
 // Create 创建推理任务（从时间配置复制日期/时间窗）
 func (s *AIVisionTaskService) Create(ctx context.Context, req dto.CreateAIVisionTaskRequest) (*model.AIVisionTask, error) {
+	if _, err := s.nodePolicy.Validate(ctx, req.TargetNodeID, req.AlgoPackageID); err != nil {
+		return nil, err
+	}
 	startDate, endDate, timeWindows, err := s.resolveSchedule(ctx, req.ScheduleID)
 	if err != nil {
 		return nil, err
@@ -251,6 +257,9 @@ func (s *AIVisionTaskService) Update(ctx context.Context, id string, req dto.Upd
 	}
 	if req.TargetNodeID != "" {
 		item.TargetNodeID = req.TargetNodeID
+	}
+	if _, err := s.nodePolicy.Validate(ctx, item.TargetNodeID, item.AlgoPackageID); err != nil {
+		return err
 	}
 
 	// 如果更新了时间配置，重新从配置复制日期/时间窗
@@ -349,6 +358,14 @@ func (s *AIVisionTaskService) PatrolTasks(ctx context.Context) error {
 
 // StartTask 拉起推理流并更新状态
 func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisionTask) error {
+	if _, err := s.nodePolicy.Validate(ctx, task.TargetNodeID, task.AlgoPackageID); err != nil {
+		task.Status = model.TaskStatusError
+		task.ErrorReason = "errors.edgeNodeNotAvailable"
+		if updateErr := s.aivisiontaskRepo.Update(ctx, task); updateErr != nil {
+			return updateErr
+		}
+		return err
+	}
 	// 启动前再次校验设备状态，防止创建时在线但启动时已离线
 	if err := s.validateDeviceForInference(ctx, task.DeviceChannelID); err != nil {
 		task.Status = model.TaskStatusError
@@ -392,7 +409,8 @@ func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisio
 	}
 
 	if s.streamManager != nil {
-		if err := s.streamManager.Acquire(ctx, task.DeviceChannelID, "infer", metadata); err != nil {
+		reason := "infer:" + task.ID
+		if err := s.streamManager.AcquireOnNode(ctx, StreamRoute{NodeID: task.TargetNodeID, DeviceID: task.DeviceChannelID}, reason, metadata); err != nil {
 			zap.L().Warn("start ai vision stream failed",
 				zap.String("task_id", task.ID),
 				zap.String("device_channel_id", task.DeviceChannelID),
@@ -412,7 +430,7 @@ func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisio
 // StopTask 停止推理流并更新状态
 func (s *AIVisionTaskService) StopTask(ctx context.Context, task *model.AIVisionTask, errorReason string) error {
 	if s.streamManager != nil {
-		_ = s.streamManager.Release(ctx, task.DeviceChannelID, "infer")
+		_ = s.streamManager.ReleaseOnNode(ctx, StreamRoute{NodeID: task.TargetNodeID, DeviceID: task.DeviceChannelID}, "infer:"+task.ID)
 	}
 
 	if errorReason != "" {
@@ -433,7 +451,7 @@ func (s *AIVisionTaskService) RestartTask(ctx context.Context, id string) error 
 	}
 
 	if s.streamManager != nil {
-		_ = s.streamManager.Release(ctx, task.DeviceChannelID, "infer")
+		_ = s.streamManager.ReleaseOnNode(ctx, StreamRoute{NodeID: task.TargetNodeID, DeviceID: task.DeviceChannelID}, "infer:"+task.ID)
 	}
 	task.Status = model.TaskStatusReady
 	task.ErrorReason = ""

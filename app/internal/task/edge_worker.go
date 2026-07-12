@@ -83,10 +83,10 @@ func (w *EdgeStateWorker) HandleReconcileEdgeState(ctx context.Context, t *asynq
 	for _, devID := range actualDeviceIDs {
 		if !expectedDeviceIDs[devID] {
 			zap.L().Warn("Asynq: ghost stream detected, stopping", zap.String("node_id", nodeID), zap.String("device_id", devID))
-			
+
 			// Issue corrective StopStream MQTT command
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if err := w.engineClient.StopStream(stopCtx, devID); err != nil {
+			if err := w.engineClient.StopStream(stopCtx, nodeID, devID); err != nil {
 				zap.L().Error("Asynq: failed to stop ghost stream", zap.String("device_id", devID), zap.Error(err))
 			}
 			cancel()

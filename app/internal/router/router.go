@@ -595,6 +595,8 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	aiTaskRepo := repository.NewAIVisionTaskRepository(db)
 	aiScheduleRepo := repository.NewAITimeScheduleRepository(db)
 	algorithmPackageRepo := repository.NewAlgorithmPackageRepository(db)
+	nodeRepo := repository.NewEdgeNodeRepository(db)
+	nodeAlgoRepo := repository.NewEdgeNodeAlgorithmRepository(db)
 	gbDeviceRepo := repository.NewGB28181DeviceRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
 	engineClient := provideEngineClient(mqttClient, syncManager)
@@ -608,12 +610,12 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	auditRepo := repository.NewAuditRepository(db)
 	streamSessionRepo := repository.NewGB28181StreamSessionRepository(db)
 	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo, streamSessionRepo)
-	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
+	policy := service.NewInferenceNodePolicy(nodeRepo, nodeAlgoRepo)
+	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager, policy)
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 
 	// Edge Node Status Checker
-	nodeRepo := repository.NewEdgeNodeRepository(db)
 	hub := ws.NewHub()
 	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
 	edgeNodeStatusTask.RegisterHandlers(mux)

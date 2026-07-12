@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -508,17 +507,14 @@ func (s *EdgeNodeService) RemoveAlgorithm(ctx context.Context, nodeID string, al
 }
 
 func (s *EdgeNodeService) RecommendNode(ctx context.Context, algoPackageID string) (*model.EdgeNode, error) {
-	nodes, err := s.nodeRepo.FindOnlineNodesWithAlgorithm(ctx, algoPackageID)
+	policy := NewInferenceNodePolicy(s.nodeRepo, s.nodeAlgoRepo)
+	nodes, err := policy.Candidates(ctx, algoPackageID)
 	if err != nil {
 		return nil, fmt.Errorf("查询可用节点失败: %w", err)
 	}
 	if len(nodes) == 0 {
 		return nil, apperrors.New(apperrors.ErrNotFound, "无可用节点")
 	}
-
-	sort.Slice(nodes, func(i, j int) bool {
-		return loadRate(nodes[i]) < loadRate(nodes[j])
-	})
 
 	return &nodes[0], nil
 }

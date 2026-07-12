@@ -41,6 +41,81 @@ MQTT JSON is the command-control path, so schema changes alone are not enough fo
 
 Preserve traceability fields such as sequence id, timestamp, node id, task id, and stream id. They are needed to debug cross-process issues.
 
+## Scenario: Explicit AI Stream Node Routing
+
+### 1. Scope / Trigger
+
+- Trigger: changing `EngineClient`, AI task Start/Stop/Restart, `StreamManager`, MQTT stream commands, or edge-state reconciliation.
+- This contract separates command destination (`node_id`) from the Engine Pipeline resource (`device_id`) and business task (`task_id`).
+
+### 2. Signatures
+
+```go
+type StreamStartRequest struct {
+    NodeID   string
+    TaskID   string
+    DeviceID string
+    // stream URL, playback, inference, and algorithm fields omitted
+}
+
+StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error)
+StopStream(ctx context.Context, nodeID, deviceID string) error
+StartPlayback(ctx context.Context, req StreamStartRequest) (string, error)
+StopPlayback(ctx context.Context, nodeID, deviceID string) error
+GetStreamStatus(ctx context.Context, nodeID, deviceID string) (StreamStatus, error)
+```
+
+### 3. Contracts
+
+- MQTT topic is `aivision/edge/{node_id}/cmd/{command}`. Never substitute a device/channel ID for `{node_id}`.
+- MQTT JSON keeps `device_id` and `trace_id`; start commands also keep `task_id`. AI starts use the persisted task ID, while non-task streams may fall back to `device_id` for compatibility.
+- Engine subscribes with its configured node ID and continues to create, query, and destroy Pipelines by payload `device_id`.
+- `StreamManager` state is keyed by `(node_id, device_id)`. AI consumers use `infer:{task_id}` and retry from the saved route and start request.
+- AI Create, Update, and Start share one admission policy: online, enabled, `max_load > 0`, `current_load < max_load`, and algorithm deployment status `installed`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|-----------|--------|
+| Node missing | `ErrEdgeNodeNotFound` |
+| Node offline/error | `ErrEdgeNodeOffline` |
+| Node disabled or `enabled=false` | `ErrEdgeNodeDisabled` |
+| `max_load <= 0` or `current_load >= max_load` | `ErrEdgeNodeFull` |
+| Algorithm deployment missing or not `installed` | `ErrEdgeNodeAlgorithmUnavailable` |
+| MQTT stream command has empty node ID | Reject before publish |
+
+### 5. Good/Base/Bad Cases
+
+- Good: task `task-1`, device `camera-1`, node `edge-a` publishes to `aivision/edge/edge-a/cmd/start_stream` with both IDs in the payload.
+- Base: two nodes may host `camera-1`; their StreamManager states and consumers remain independent.
+- Bad: publishing to `aivision/edge/camera-1/cmd/start_stream`, using a fixed `infer` consumer, or selecting a full node.
+
+### 6. Tests Required
+
+- MQTT topic tests cover Start/Stop/Playback/Status and assert the node ID occupies the topic segment.
+- Payload tests assert `device_id`, real AI `task_id`, and non-empty `trace_id`.
+- StreamManager tests assert the same device ID is isolated across two nodes and releasing one route does not affect the other.
+- Admission tests cover every error-matrix row and stable recommendation ordering by load ratio then node ID.
+- Engine tests/build confirm node-specific subscription and device-ID Pipeline operations remain compatible.
+
+### 7. Wrong vs Correct
+
+Wrong:
+
+```go
+topic := fmt.Sprintf("aivision/edge/%s/cmd/start_stream", req.DeviceID)
+streamManager.Acquire(ctx, task.DeviceChannelID, "infer", metadata)
+```
+
+Correct:
+
+```go
+topic := edgeCommandTopic(req.NodeID, "start_stream")
+streamManager.AcquireOnNode(ctx, StreamRoute{
+    NodeID: task.TargetNodeID, DeviceID: task.DeviceChannelID,
+}, "infer:"+task.ID, metadata)
+```
+
 ## Scenario: Preview Capacity Admission
 
 ### 1. Scope / Trigger

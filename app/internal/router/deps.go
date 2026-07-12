@@ -296,8 +296,9 @@ func provideLicenseService(licenseRepo *repository.LicenseRepository, db *gorm.D
 	return service.NewLicenseService(licenseRepo, db)
 }
 
-func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, deviceRepo *repository.DeviceRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
-	svc := service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager)
+func provideAIVisionTaskHandler(repo *repository.AIVisionTaskRepository, scheduleRepo *repository.AITimeScheduleRepository, algorithmPackageRepo *repository.AlgorithmPackageRepository, deviceRepo *repository.DeviceRepository, nodeRepo *repository.EdgeNodeRepository, nodeAlgoRepo *repository.EdgeNodeAlgorithmRepository, sipSvc *service.SIPService, streamManager *service.StreamManager) *handler.AIVisionTaskHandler {
+	policy := service.NewInferenceNodePolicy(nodeRepo, nodeAlgoRepo)
+	svc := service.NewAIVisionTaskService(repo, scheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager, policy)
 	return handler.NewAIVisionTaskHandler(svc)
 }
 

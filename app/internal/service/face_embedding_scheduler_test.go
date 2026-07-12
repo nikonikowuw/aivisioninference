@@ -63,7 +63,7 @@ func (s *warmupEngineStub) StartStream(ctx context.Context, req StreamStartReque
 	return StreamInfo{}, nil
 }
 
-func (s *warmupEngineStub) StopStream(ctx context.Context, deviceID string) error {
+func (s *warmupEngineStub) StopStream(ctx context.Context, nodeID, deviceID string) error {
 	return nil
 }
 
@@ -71,11 +71,11 @@ func (s *warmupEngineStub) StartPlayback(ctx context.Context, req StreamStartReq
 	return "", nil
 }
 
-func (s *warmupEngineStub) StopPlayback(ctx context.Context, deviceID string) error {
+func (s *warmupEngineStub) StopPlayback(ctx context.Context, nodeID, deviceID string) error {
 	return nil
 }
 
-func (s *warmupEngineStub) GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error) {
+func (s *warmupEngineStub) GetStreamStatus(ctx context.Context, nodeID, deviceID string) (StreamStatus, error) {
 	return StreamStatus{}, nil
 }
 

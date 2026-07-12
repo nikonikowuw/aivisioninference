@@ -23,19 +23,21 @@ type ConsumerInfo struct {
 
 // StreamState 描述流的内存运行时状态
 type StreamState struct {
-	DeviceID   string
-	App        string
-	Stream     string
-	Vhost      string
-	Schema     string
-	RefCount   atomic.Int32
-	mu         sync.Mutex // 保护 "检查-启动" 原子性，防止并发 Acquire 重复调用 engine
-	Status     string     // inactive, pulling, active, error
-	SourceURL  string
-	RetryCount int
-	RetryAt    *time.Time
-	StartedAt  *time.Time
-	Consumers  sync.Map // map[string]*ConsumerInfo, key=reason
+	NodeID       string
+	DeviceID     string
+	App          string
+	Stream       string
+	Vhost        string
+	Schema       string
+	RefCount     atomic.Int32
+	mu           sync.Mutex // 保护 "检查-启动" 原子性，防止并发 Acquire 重复调用 engine
+	Status       string     // inactive, pulling, active, error
+	SourceURL    string
+	RetryCount   int
+	RetryAt      *time.Time
+	StartedAt    *time.Time
+	Consumers    sync.Map // map[string]*ConsumerInfo, key=reason
+	StartRequest StreamStartRequest
 
 	PlayURLRtsp   string
 	PlayURLRtmp   string
@@ -50,6 +52,7 @@ type StreamState struct {
 
 // DeviceEvent 设备状态事件
 type DeviceEvent struct {
+	NodeID    string
 	DeviceID  string
 	EventType string // online, offline, error
 	Timestamp time.Time
@@ -68,7 +71,7 @@ type streamRepo interface {
 
 // StreamManager 统一流管理器
 type StreamManager struct {
-	streams    sync.Map // map[string]*StreamState, key=deviceID
+	streams    sync.Map // map[string]*StreamState, key=(nodeID, deviceID)
 	engine     EngineClient
 	deviceRepo deviceRepo
 	streamRepo streamRepo
@@ -112,10 +115,30 @@ func (m *StreamManager) publish(ctx context.Context, event DeviceEvent) {
 
 // Acquire 申请引用一路流
 func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, metadata map[string]string) error {
-	m.logger.Info("acquire stream", zap.String("device_id", deviceID), zap.String("reason", reason))
+	nodeID := ""
+	if metadata != nil {
+		nodeID = metadata["target_node_id"]
+	}
+	return m.AcquireOnNode(ctx, StreamRoute{NodeID: nodeID, DeviceID: deviceID}, reason, metadata)
+}
 
-	actual, _ := m.streams.LoadOrStore(deviceID, &StreamState{
-		DeviceID: deviceID,
+// StreamRoute separates the target Engine node from the device/channel resource.
+type StreamRoute struct {
+	NodeID   string
+	DeviceID string
+}
+
+func streamRouteKey(route StreamRoute) string {
+	return route.NodeID + "\x00" + route.DeviceID
+}
+
+// AcquireOnNode acquires a stream on an explicitly selected Engine node.
+func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, reason string, metadata map[string]string) error {
+	m.logger.Info("acquire stream", zap.String("node_id", route.NodeID), zap.String("device_id", route.DeviceID), zap.String("reason", reason))
+
+	actual, _ := m.streams.LoadOrStore(streamRouteKey(route), &StreamState{
+		NodeID:   route.NodeID,
+		DeviceID: route.DeviceID,
 		Status:   "inactive",
 	})
 	state := actual.(*StreamState)
@@ -151,7 +174,7 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 	state.RefCount.Store(newCount)
 
 	if newCount == 1 {
-		dev, err := m.deviceRepo.FindByID(ctx, deviceID)
+		dev, err := m.deviceRepo.FindByID(ctx, route.DeviceID)
 		if err != nil {
 			state.Consumers.Delete(reason)
 			m.recalculateRefCount(state)
@@ -159,12 +182,14 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 		}
 
 		req := StreamStartRequest{
-			DeviceID:       deviceID,
+			NodeID:         route.NodeID,
+			DeviceID:       route.DeviceID,
 			RtspURL:        strings.TrimSpace(dev.RtspURL),
-			EnableInfer:    reason == "infer",
+			EnableInfer:    strings.HasPrefix(reason, "infer"),
 			EnablePlayback: reason == "play",
 		}
-		if reason == "infer" && metadata != nil {
+		if strings.HasPrefix(reason, "infer") && metadata != nil {
+			req.TaskID = metadata["task_id"]
 			req.AlgoName = metadata["algo_name"]
 			req.AlgoVersion = metadata["algo_version"]
 			req.SoPath = metadata["so_path"]
@@ -177,6 +202,7 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 			m.recalculateRefCount(state)
 			return err
 		}
+		state.StartRequest = req
 
 		state.Status = info.Status
 		state.PlayURLRtsp = info.PlayURL
@@ -186,22 +212,24 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 		go m.syncToDatabase(ctx, state, reason)
 	} else {
 		if reason == "play" {
-			dev, err := m.deviceRepo.FindByID(ctx, deviceID)
+			dev, err := m.deviceRepo.FindByID(ctx, route.DeviceID)
 			if err != nil {
-				m.logger.Warn("load playback device failed", zap.Error(err), zap.String("device_id", deviceID))
+				m.logger.Warn("load playback device failed", zap.Error(err), zap.String("device_id", route.DeviceID))
 				return err
 			}
 			_, err = m.engine.StartPlayback(ctx, StreamStartRequest{
-				DeviceID:       deviceID,
+				NodeID:         route.NodeID,
+				DeviceID:       route.DeviceID,
 				RtspURL:        dev.RtspURL,
 				EnablePlayback: true,
 			})
 			if err != nil {
-				m.logger.Warn("start playback failed", zap.Error(err), zap.String("device_id", deviceID))
+				m.logger.Warn("start playback failed", zap.Error(err), zap.String("device_id", route.DeviceID))
 				// 如果是由于之前状态残留导致 StartPlayback 失败，尝试完全重置状态并退回启动
-				m.logger.Info("attempting to recover stream by starting over", zap.String("device_id", deviceID))
+				m.logger.Info("attempting to recover stream by starting over", zap.String("device_id", route.DeviceID))
 				info, retryErr := m.engine.StartStream(ctx, StreamStartRequest{
-					DeviceID:       deviceID,
+					NodeID:         route.NodeID,
+					DeviceID:       route.DeviceID,
 					RtspURL:        strings.TrimSpace(dev.RtspURL),
 					EnableInfer:    false,
 					EnablePlayback: true,
@@ -212,6 +240,7 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 				state.Status = info.Status
 				state.PlayURLRtsp = info.PlayURL
 			}
+			state.StartRequest.EnablePlayback = true
 		}
 	}
 
@@ -243,9 +272,26 @@ func (m *StreamManager) syncToDatabase(ctx context.Context, state *StreamState, 
 
 // Release 释放引用
 func (m *StreamManager) Release(ctx context.Context, deviceID, reason string) error {
-	m.logger.Info("release stream", zap.String("device_id", deviceID), zap.String("reason", reason))
+	var matched *StreamState
+	m.streams.Range(func(_, value interface{}) bool {
+		state := value.(*StreamState)
+		if state.DeviceID == deviceID {
+			matched = state
+			return false
+		}
+		return true
+	})
+	if matched == nil {
+		return nil
+	}
+	return m.ReleaseOnNode(ctx, StreamRoute{NodeID: matched.NodeID, DeviceID: deviceID}, reason)
+}
 
-	actual, ok := m.streams.Load(deviceID)
+// ReleaseOnNode releases a consumer from one explicitly routed stream.
+func (m *StreamManager) ReleaseOnNode(ctx context.Context, route StreamRoute, reason string) error {
+	m.logger.Info("release stream", zap.String("node_id", route.NodeID), zap.String("device_id", route.DeviceID), zap.String("reason", reason))
+
+	actual, ok := m.streams.Load(streamRouteKey(route))
 	if !ok {
 		return nil
 	}
@@ -259,8 +305,8 @@ func (m *StreamManager) Release(ctx context.Context, deviceID, reason string) er
 	newCount := state.RefCount.Load()
 
 	if newCount <= 0 {
-		if err := m.engine.StopStream(ctx, deviceID); err != nil {
-			m.logger.Error("stop engine stream failed", zap.Error(err), zap.String("device_id", deviceID))
+		if err := m.engine.StopStream(ctx, route.NodeID, route.DeviceID); err != nil {
+			m.logger.Error("stop engine stream failed", zap.Error(err), zap.String("node_id", route.NodeID), zap.String("device_id", route.DeviceID))
 		}
 		state.Status = "inactive"
 
@@ -268,14 +314,14 @@ func (m *StreamManager) Release(ctx context.Context, deviceID, reason string) er
 			dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			stream, err := m.streamRepo.FindByStream(dbCtx, "live", deviceID, "__defaultVhost__")
+			stream, err := m.streamRepo.FindByStream(dbCtx, "live", route.DeviceID, "__defaultVhost__")
 			if err == nil && stream != nil {
 				_ = m.streamRepo.UpdateStatus(dbCtx, stream.ID, "inactive")
 			}
 		}()
 	} else if reason == "play" {
-		if err := m.engine.StopPlayback(ctx, deviceID); err != nil {
-			m.logger.Warn("stop playback failed", zap.Error(err), zap.String("device_id", deviceID))
+		if err := m.engine.StopPlayback(ctx, route.NodeID, route.DeviceID); err != nil {
+			m.logger.Warn("stop playback failed", zap.Error(err), zap.String("device_id", route.DeviceID))
 		}
 	}
 
@@ -284,7 +330,20 @@ func (m *StreamManager) Release(ctx context.Context, deviceID, reason string) er
 
 // KeepAlive 更新消费者活跃时间
 func (m *StreamManager) KeepAlive(ctx context.Context, deviceID, reason string) {
-	actual, ok := m.streams.Load(deviceID)
+	var route StreamRoute
+	m.streams.Range(func(_, value interface{}) bool {
+		state := value.(*StreamState)
+		if state.DeviceID == deviceID {
+			route = StreamRoute{NodeID: state.NodeID, DeviceID: deviceID}
+			return false
+		}
+		return true
+	})
+	m.KeepAliveOnNode(ctx, route, reason)
+}
+
+func (m *StreamManager) KeepAliveOnNode(ctx context.Context, route StreamRoute, reason string) {
+	actual, ok := m.streams.Load(streamRouteKey(route))
 	if !ok {
 		return
 	}
@@ -300,20 +359,16 @@ func (m *StreamManager) HandleStreamOnline(ctx context.Context, app, stream, vho
 	m.logger.Info("stream online", zap.String("app", app), zap.String("stream", stream))
 
 	deviceID := stream
-	actual, ok := m.streams.Load(deviceID)
-	if !ok {
-		return
-	}
-	state := actual.(*StreamState)
-	state.Status = "active"
-
-	_ = m.deviceRepo.UpdateStatus(ctx, deviceID, "online", "", "")
-
-	m.publish(ctx, DeviceEvent{
-		DeviceID:  deviceID,
-		EventType: "online",
-		Timestamp: time.Now(),
+	matched := m.forEachDeviceState(deviceID, func(state *StreamState) {
+		state.Status = "active"
+		m.publish(ctx, DeviceEvent{
+			NodeID: state.NodeID, DeviceID: deviceID,
+			EventType: "online", Timestamp: time.Now(),
+		})
 	})
+	if matched {
+		_ = m.deviceRepo.UpdateStatus(ctx, deviceID, "online", "", "")
+	}
 }
 
 // HandleStreamOffline 处理流下线事件
@@ -321,65 +376,67 @@ func (m *StreamManager) HandleStreamOffline(ctx context.Context, app, stream, vh
 	m.logger.Info("stream offline", zap.String("app", app), zap.String("stream", stream))
 
 	deviceID := stream
-	actual, ok := m.streams.Load(deviceID)
-	if !ok {
-		return
-	}
-	state := actual.(*StreamState)
-
-	if state.RefCount.Load() > 0 {
-		state.Status = "offline"
-		_ = m.deviceRepo.UpdateStatus(ctx, deviceID, "offline", "", "stream disconnected unexpectedly")
-
-		m.publish(ctx, DeviceEvent{
-			DeviceID:  deviceID,
-			EventType: "offline",
-			Timestamp: time.Now(),
-		})
-	}
+	m.forEachDeviceState(deviceID, func(state *StreamState) {
+		if state.RefCount.Load() > 0 {
+			state.Status = "offline"
+			_ = m.deviceRepo.UpdateStatus(ctx, deviceID, "offline", "", "stream disconnected unexpectedly")
+			m.publish(ctx, DeviceEvent{
+				NodeID: state.NodeID, DeviceID: deviceID,
+				EventType: "offline", Timestamp: time.Now(),
+			})
+		}
+	})
 }
 
 // HandleStreamNotFound 处理流找不到事件（重试逻辑）
 func (m *StreamManager) HandleStreamNotFound(ctx context.Context, app, stream, vhost string) {
 	deviceID := stream
-	actual, ok := m.streams.Load(deviceID)
-	if !ok {
-		return
-	}
-	state := actual.(*StreamState)
+	m.forEachDeviceState(deviceID, func(state *StreamState) {
+		if state.RefCount.Load() <= 0 {
+			return
+		}
+		if state.RetryCount >= 5 {
+			m.logger.Warn("stream retry limit reached", zap.String("device_id", deviceID))
+			state.Status = "error"
+			m.publish(ctx, DeviceEvent{
+				NodeID: state.NodeID, DeviceID: deviceID,
+				EventType: "error",
+				Timestamp: time.Now(),
+				Metadata:  map[string]interface{}{"error": "retry limit reached"},
+			})
+			return
+		}
 
-	if state.RefCount.Load() <= 0 {
-		return
-	}
+		state.RetryCount++
+		intervals := []time.Duration{5, 30, 120, 300, 600}
+		delay := intervals[state.RetryCount-1] * time.Second
 
-	if state.RetryCount >= 5 {
-		m.logger.Warn("stream retry limit reached", zap.String("device_id", deviceID))
-		state.Status = "error"
-		m.publish(ctx, DeviceEvent{
-			DeviceID:  deviceID,
-			EventType: "error",
-			Timestamp: time.Now(),
-			Metadata:  map[string]interface{}{"error": "retry limit reached"},
-		})
-		return
-	}
+		nextRetry := time.Now().Add(delay)
+		state.RetryAt = &nextRetry
 
-	state.RetryCount++
-	intervals := []time.Duration{5, 30, 120, 300, 600}
-	delay := intervals[state.RetryCount-1] * time.Second
+		m.logger.Info("scheduling stream retry",
+			zap.String("device_id", deviceID),
+			zap.Int("count", state.RetryCount),
+			zap.Duration("delay", delay))
 
-	nextRetry := time.Now().Add(delay)
-	state.RetryAt = &nextRetry
+		go func() {
+			time.Sleep(delay)
+			m.reacquire(context.Background(), state)
+		}()
+	})
+}
 
-	m.logger.Info("scheduling stream retry",
-		zap.String("device_id", deviceID),
-		zap.Int("count", state.RetryCount),
-		zap.Duration("delay", delay))
-
-	go func() {
-		time.Sleep(delay)
-		m.reacquire(context.Background(), state)
-	}()
+func (m *StreamManager) forEachDeviceState(deviceID string, fn func(*StreamState)) bool {
+	matched := false
+	m.streams.Range(func(_, value interface{}) bool {
+		state := value.(*StreamState)
+		if state.DeviceID == deviceID {
+			matched = true
+			fn(state)
+		}
+		return true
+	})
+	return matched
 }
 
 func (m *StreamManager) reacquire(ctx context.Context, state *StreamState) {
@@ -392,12 +449,10 @@ func (m *StreamManager) reacquire(ctx context.Context, state *StreamState) {
 		return
 	}
 
-	req := StreamStartRequest{
-		DeviceID:       state.DeviceID,
-		RtspURL:        dev.RtspURL,
-		EnableInfer:    true,
-		EnablePlayback: false,
-	}
+	req := state.StartRequest
+	req.NodeID = state.NodeID
+	req.DeviceID = state.DeviceID
+	req.RtspURL = dev.RtspURL
 
 	_, _ = m.engine.StartStream(ctx, req)
 }
@@ -409,7 +464,20 @@ func (m *StreamManager) VerifyPlaybackAuth(ctx context.Context, app, stream, par
 
 // GetStream 获取单个流状态
 func (m *StreamManager) GetStream(ctx context.Context, deviceID string) *StreamState {
-	actual, ok := m.streams.Load(deviceID)
+	var result *StreamState
+	m.streams.Range(func(_, value interface{}) bool {
+		state := value.(*StreamState)
+		if state.DeviceID == deviceID {
+			result = state
+			return false
+		}
+		return true
+	})
+	return result
+}
+
+func (m *StreamManager) GetStreamOnNode(ctx context.Context, route StreamRoute) *StreamState {
+	actual, ok := m.streams.Load(streamRouteKey(route))
 	if !ok {
 		return nil
 	}
@@ -459,7 +527,7 @@ func (m *StreamManager) checkConsumerTimeouts(ctx context.Context) {
 				m.logger.Warn("consumer timeout, releasing",
 					zap.String("device_id", state.DeviceID),
 					zap.String("reason", consumer.Reason))
-				_ = m.Release(ctx, state.DeviceID, consumer.Reason)
+				_ = m.ReleaseOnNode(ctx, StreamRoute{NodeID: state.NodeID, DeviceID: state.DeviceID}, consumer.Reason)
 			}
 			return true
 		})
@@ -471,7 +539,7 @@ func (m *StreamManager) syncWithEngine(ctx context.Context) {
 	m.streams.Range(func(key, value interface{}) bool {
 		state := value.(*StreamState)
 		if state.RefCount.Load() > 0 {
-			info, err := m.engine.GetStreamStatus(ctx, state.DeviceID)
+			info, err := m.engine.GetStreamStatus(ctx, state.NodeID, state.DeviceID)
 			if err != nil {
 				m.logger.Warn("sync with engine failed", zap.Error(err), zap.String("device_id", state.DeviceID))
 				return true

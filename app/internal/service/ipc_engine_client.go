@@ -6,6 +6,8 @@ import (
 
 // StreamStartRequest 启动流请求
 type StreamStartRequest struct {
+	NodeID         string `json:"node_id"`
+	TaskID         string `json:"task_id,omitempty"`
 	DeviceID       string `json:"device_id"`
 	RtspURL        string `json:"rtsp_url"`
 	EnableInfer    bool   `json:"enable_infer"`
@@ -20,9 +22,9 @@ type StreamStartRequest struct {
 type StreamInfo struct {
 	DeviceID    string `json:"device_id"`
 	Status      string `json:"status"`
-	PlayURL     string `json:"play_url"` // C++ 引擎上报的推流地址或播放地址
-	ZLMHost     string `json:"zlm_host"`       // ZLM 外部可访问地址
-	ZLMHTTPPort int    `json:"zlm_http_port"`  // ZLM HTTP 端口（HLS）
+	PlayURL     string `json:"play_url"`      // C++ 引擎上报的推流地址或播放地址
+	ZLMHost     string `json:"zlm_host"`      // ZLM 外部可访问地址
+	ZLMHTTPPort int    `json:"zlm_http_port"` // ZLM HTTP 端口（HLS）
 }
 
 // StreamStatus 流状态信息
@@ -51,10 +53,10 @@ type FaceEmbeddingResult struct {
 // 与 Redis Pub/Sub 配对；MockEngineClient 仅用于测试和本地降级。
 type EngineClient interface {
 	StartStream(ctx context.Context, req StreamStartRequest) (StreamInfo, error)
-	StopStream(ctx context.Context, deviceID string) error
+	StopStream(ctx context.Context, nodeID, deviceID string) error
 	StartPlayback(ctx context.Context, req StreamStartRequest) (string, error)
-	StopPlayback(ctx context.Context, deviceID string) error
-	GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error)
+	StopPlayback(ctx context.Context, nodeID, deviceID string) error
+	GetStreamStatus(ctx context.Context, nodeID, deviceID string) (StreamStatus, error)
 	StartSelfCheck(ctx context.Context, downloadURL, token, algoName, version string) error
 	WarmupAlgorithm(ctx context.Context, nodeID, algoName, algoVersion string) error
 	UpdateFaceLibrary(ctx context.Context, nodeID, algoName string, faceLibraryJSON []byte) error
@@ -72,7 +74,7 @@ func (m *MockEngineClient) StartStream(ctx context.Context, req StreamStartReque
 	}, nil
 }
 
-func (m *MockEngineClient) StopStream(ctx context.Context, deviceID string) error {
+func (m *MockEngineClient) StopStream(ctx context.Context, nodeID, deviceID string) error {
 	return nil
 }
 
@@ -80,11 +82,11 @@ func (m *MockEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 	return "rtsp://mock-engine:554/live/" + req.DeviceID, nil
 }
 
-func (m *MockEngineClient) StopPlayback(ctx context.Context, deviceID string) error {
+func (m *MockEngineClient) StopPlayback(ctx context.Context, nodeID, deviceID string) error {
 	return nil
 }
 
-func (m *MockEngineClient) GetStreamStatus(ctx context.Context, deviceID string) (StreamStatus, error) {
+func (m *MockEngineClient) GetStreamStatus(ctx context.Context, nodeID, deviceID string) (StreamStatus, error) {
 	return StreamStatus{
 		DeviceID: deviceID,
 		Status:   "active",

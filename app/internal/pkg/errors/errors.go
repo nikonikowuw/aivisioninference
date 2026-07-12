@@ -52,37 +52,42 @@ const (
 	ErrArchiveUnsupported   = 10065 // 不支持的压缩包格式
 
 	// Face search errors (1006x).
-	ErrFaceExtractFailed    = 10066 // 人脸特征提取失败
-	ErrFaceSearchNoResult   = 10067 // 未找到相似人员
+	ErrFaceExtractFailed  = 10066 // 人脸特征提取失败
+	ErrFaceSearchNoResult = 10067 // 未找到相似人员
 
 	// Domain validation errors (1007x-101xx).
-	ErrPermissionCodeTaken      = 10070
-	ErrPermissionAssigned       = 10071
-	ErrRoleAssigned             = 10072
-	ErrFileContentIncomplete    = 10073
-	ErrChunkCountMismatch       = 10074
-	ErrInvalidChunkIndex        = 10075
-	ErrChunkIncomplete          = 10076
-	ErrUploadCanceled           = 10077
-	ErrFileSizeMismatch         = 10078
-	ErrFileChecksumMismatch     = 10079
-	ErrDeviceNameTaken          = 10100
-	ErrRTSPURLRequired          = 10101
-	ErrGB28181CodeRequired      = 10102
-	ErrDeviceGroupNotEmpty      = 10103
-	ErrResourceConflict         = 10104
-	ErrInvalidGB28181DeviceCode = 10105
-	ErrGB28181DeviceOffline     = 10106
-	ErrInvalidPlaybackAction    = 10107
-	ErrAlarmDeviceRequired      = 10108
-	ErrTimeWindowFormat         = 10109
-	ErrTaskStatusNotCancelable  = 10110
-	ErrDeviceExternalKeyTaken   = 10111
-	ErrDeviceDisabled           = 10112
-	ErrDeviceOffline            = 10113
-	ErrDeviceTypeInvalid        = 10114
-	CodeVersionIncompatible     = 10115
-	ErrEdgeNodeNameTaken        = 10116
+	ErrPermissionCodeTaken          = 10070
+	ErrPermissionAssigned           = 10071
+	ErrRoleAssigned                 = 10072
+	ErrFileContentIncomplete        = 10073
+	ErrChunkCountMismatch           = 10074
+	ErrInvalidChunkIndex            = 10075
+	ErrChunkIncomplete              = 10076
+	ErrUploadCanceled               = 10077
+	ErrFileSizeMismatch             = 10078
+	ErrFileChecksumMismatch         = 10079
+	ErrDeviceNameTaken              = 10100
+	ErrRTSPURLRequired              = 10101
+	ErrGB28181CodeRequired          = 10102
+	ErrDeviceGroupNotEmpty          = 10103
+	ErrResourceConflict             = 10104
+	ErrInvalidGB28181DeviceCode     = 10105
+	ErrGB28181DeviceOffline         = 10106
+	ErrInvalidPlaybackAction        = 10107
+	ErrAlarmDeviceRequired          = 10108
+	ErrTimeWindowFormat             = 10109
+	ErrTaskStatusNotCancelable      = 10110
+	ErrDeviceExternalKeyTaken       = 10111
+	ErrDeviceDisabled               = 10112
+	ErrDeviceOffline                = 10113
+	ErrDeviceTypeInvalid            = 10114
+	CodeVersionIncompatible         = 10115
+	ErrEdgeNodeNameTaken            = 10116
+	ErrEdgeNodeNotFound             = 10117
+	ErrEdgeNodeOffline              = 10118
+	ErrEdgeNodeDisabled             = 10119
+	ErrEdgeNodeFull                 = 10120
+	ErrEdgeNodeAlgorithmUnavailable = 10121
 
 	// Auth errors (2xxxx).
 	ErrUnauthorized       = 20001
@@ -135,11 +140,11 @@ const (
 	ErrLicenseNotConfigured  = 10056 // 授权公钥未配置
 
 	// 连接测试结果 (1008x).
-	ErrEngineNotReady     = 10080 // 推理引擎未就绪
-	ErrConnectionTimeout  = 10081 // 连接超时
-	ErrEngineResponseBad  = 10082 // 引擎响应异常
-	ErrConnectionFailed   = 10083 // 连接失败
-	ErrConnectionTestOK   = 10084 // 连接测试成功，流可达
+	ErrEngineNotReady    = 10080 // 推理引擎未就绪
+	ErrConnectionTimeout = 10081 // 连接超时
+	ErrEngineResponseBad = 10082 // 引擎响应异常
+	ErrConnectionFailed  = 10083 // 连接失败
+	ErrConnectionTestOK  = 10084 // 连接测试成功，流可达
 
 	// Server errors (5xxxx).
 	ErrInternal            = 50001

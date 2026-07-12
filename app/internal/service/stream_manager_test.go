@@ -174,6 +174,30 @@ func TestAcquireAndReleaseRefCount(t *testing.T) {
 	assert.Equal(t, "inactive", state.Status)
 }
 
+func TestStreamManagerSeparatesSameDeviceAcrossNodes(t *testing.T) {
+	sm := setupTestSM()
+	ctx := context.Background()
+	deviceID := "shared-device"
+	assert.NoError(t, sm.deviceRepo.Create(ctx, &model.Device{
+		BaseModel: model.BaseModel{ID: deviceID}, RtspURL: "rtsp://example/stream",
+	}))
+
+	routeA := StreamRoute{NodeID: "node-a", DeviceID: deviceID}
+	routeB := StreamRoute{NodeID: "node-b", DeviceID: deviceID}
+	assert.NoError(t, sm.AcquireOnNode(ctx, routeA, "infer:task-a", map[string]string{"task_id": "task-a"}))
+	assert.NoError(t, sm.AcquireOnNode(ctx, routeB, "infer:task-b", map[string]string{"task_id": "task-b"}))
+
+	stateA := sm.GetStreamOnNode(ctx, routeA)
+	stateB := sm.GetStreamOnNode(ctx, routeB)
+	assert.NotNil(t, stateA)
+	assert.NotNil(t, stateB)
+	assert.NotSame(t, stateA, stateB)
+
+	assert.NoError(t, sm.ReleaseOnNode(ctx, routeA, "infer:task-a"))
+	assert.Equal(t, int32(0), stateA.RefCount.Load())
+	assert.Equal(t, int32(1), stateB.RefCount.Load())
+}
+
 func TestKeepAlive(t *testing.T) {
 	sm := setupTestSM()
 	ctx := context.Background()

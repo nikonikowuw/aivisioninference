@@ -176,7 +176,88 @@ Correct:
 admit = preview_capacity_valid && fresh && preview_in_use + pending + 1 <= preview_capacity
 ```
 
-## Algorithm Package Layout
+## Scenario: Heartbeat Metrics Contract
+
+### 1. Scope / Trigger
+
+- Trigger: changing the heartbeat payload between C++ Engine and Go Control Plane, adding or removing metrics fields, or changing field semantics.
+- This contract spans C++ `HeartbeatReporter::BuildHeartbeatPayload()`, Go `HeartbeatRequest` DTO, Go `EdgeNodeMetrics` model, and frontend service types.
+
+### 2. Signatures
+
+```go
+// Go HeartbeatRequest (extended)
+type HeartbeatRequest struct {
+    // Legacy fields (preserved for backward compatibility)
+    CPUUsage     float64 `json:"cpu_usage"`
+    MemoryUsage  float64 `json:"memory_usage"`
+    Uptime       int64   `json:"uptime"`
+    CurrentLoad  int     `json:"current_load"`
+    HardwareInfo HardwareInfo `json:"hardware_info"`
+
+    // Extended metrics fields
+    CPULoad1m     float64            `json:"cpu_load_1m,omitempty"`
+    DiskUsage     []DiskUsageEntry   `json:"disk_usage,omitempty"`
+    NetRxBytes    int64              `json:"net_rx_bytes,omitempty"`
+    NetTxBytes    int64              `json:"net_tx_bytes,omitempty"`
+    NetRxSpeed    float64            `json:"net_rx_speed,omitempty"`
+    NetTxSpeed    float64            `json:"net_tx_speed,omitempty"`
+    Temperature   float64            `json:"temperature,omitempty"`
+    ProcessCount  int                `json:"process_count,omitempty"`
+    ThreadCount   int                `json:"thread_count,omitempty"`
+    WorkerCount   int                `json:"worker_count,omitempty"`
+}
+```
+
+### 3. Contracts
+
+- Legacy fields (`cpu_usage`, `memory_usage`, `uptime`, `current_load`, `hardware_info`) must remain at their original JSON positions forever. New engines add extended fields alongside legacy fields.
+- All extended fields use `omitempty` so old engines that do not send them will not break Go parsing.
+- C++ `HeartbeatReporter` uses `nlohmann/json::parse` which tolerates extra fields from Go control commands.
+- `DiskUsage` is a JSON array: `[{"path":"/","total":64000000000,"used":32000000000,"percent":50.0}]`
+- Network speed fields are computed as deltas between snapshots, in bytes/second.
+- All numeric values are flat doubles or ints — no nested structures beyond `disk_usage` and `hardware_info`.
+
+### 4. Cross-Layer Field Mapping
+
+```text
+C++ BuildHeartbeatPayload()  →  Go HeartbeatRequest DTO  →  Go EdgeNodeMetrics model  →  Frontend API type
+cpu_usage                    →  cpu_usage                 →  CPUUsage                   →  metric "cpu_usage"
+memory_usage                 →  memory_usage              →  MemoryUsage                →  metric "memory_usage"
+cpu_load_1m                  →  cpu_load_1m               →  CPULoad1m                  →  metric "cpu_load_1m"
+disk_usage[]                 →  disk_usage                →  DiskUsage (JSONB)          →  metric "disk_usage"
+net_rx_bytes                 →  net_rx_bytes              →  NetRxBytes                 →  metric "net_rx_bytes"
+net_tx_bytes                 →  net_tx_bytes              →  NetTxBytes                 →  metric "net_tx_bytes"
+net_rx_speed                 →  net_rx_speed              →  NetRxSpeed                 →  metric "net_rx_speed"
+net_tx_speed                 →  net_tx_speed              →  NetTxSpeed                 →  metric "net_tx_speed"
+temperature                  →  temperature               →  Temperature                →  metric "temperature"
+process_count                →  process_count             →  ProcessCount               →  metric "process_count"
+thread_count                 →  thread_count              →  ThreadCount                →  metric "thread_count"
+worker_count                 →  worker_count              →  WorkerCount                →  metric "worker_count"
+```
+
+### 5. Validation & Error Matrix
+
+| Condition | Result |
+|-----------|--------|
+| Legacy field missing (e.g., old engine) | Heartbeat still accepted, field defaults to 0 |
+| Extended field missing | EdgeNodeMetrics field defaults to 0, no error |
+| `disk_usage` array with invalid entries | Invalid entries stored as-is in JSONB; consumed by frontend charts as metric "disk_usage" |
+| `temperature` from platform without thermal sensor | Reports 0; frontend should handle zero as "N/A" |
+
+### 6. Good/Base/Bad Cases
+
+- Good: New engine sends all extended fields; Go stores them and displays in frontend charts.
+- Base: Old engine sends only legacy fields; Go stores 0 for extended fields; frontend shows "no data" for missing metrics.
+- Bad: Extended field naming conflicts with legacy field names or uses reserved JSON keywords.
+
+### 7. Wrong vs Correct
+
+Wrong: Removing a legacy field or changing its JSON key.
+
+Correct: Adding extended fields with `omitempty` while keeping all legacy fields.
+
+## Algorithm Package Layout<br><br>
 
 Algorithm packages live under:
 

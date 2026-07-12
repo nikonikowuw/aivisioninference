@@ -86,6 +86,36 @@ export const edgeNodes = {
     noData: 'Tidak ada data',
     networkError: 'Kesalahan jaringan',
   },
+  alert: {
+    title: 'Manajemen Peringatan',
+    rules: 'Aturan Peringatan',
+    events: 'Kejadian Peringatan',
+    createRule: 'Buat Aturan',
+    editRule: 'Edit Aturan',
+    deleteRule: 'Hapus Aturan',
+    ruleName: 'Nama Aturan',
+    metricType: 'Tipe Metrik',
+    operator: 'Operator',
+    threshold: 'Ambang Batas',
+    duration: 'Durasi',
+    silence: 'Masa Diam',
+    channels: 'Saluran Notifikasi',
+    enabled: 'Diaktifkan',
+    description: 'Deskripsi',
+    status: {
+      firing: 'Terpicu',
+      resolved: 'Teratasi',
+      acknowledged: 'Dikonfirmasi',
+    },
+    metric: {
+      cpu_usage: 'Penggunaan CPU',
+      memory_usage: 'Penggunaan Memori',
+      disk_usage: 'Penggunaan Disk',
+      temperature: 'Suhu',
+      node_offline: 'Node Offline',
+      node_error: 'Node Error',
+    },
+  },
 } as const;
 
 export default edgeNodes;

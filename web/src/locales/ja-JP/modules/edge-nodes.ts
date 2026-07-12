@@ -86,6 +86,36 @@ export const edgeNodes = {
     noData: 'データなし',
     networkError: 'ネットワークエラー',
   },
+  alert: {
+    title: 'アラート管理',
+    rules: 'アラートルール',
+    events: 'アラートイベント',
+    createRule: 'ルール作成',
+    editRule: 'ルール編集',
+    deleteRule: 'ルール削除',
+    ruleName: 'ルール名',
+    metricType: 'メトリックタイプ',
+    operator: '演算子',
+    threshold: 'しきい値',
+    duration: '持続時間',
+    silence: 'サイレンス期間',
+    channels: '通知チャンネル',
+    enabled: '有効',
+    description: '説明',
+    status: {
+      firing: '発火中',
+      resolved: '解決済み',
+      acknowledged: '確認済み',
+    },
+    metric: {
+      cpu_usage: 'CPU 使用率',
+      memory_usage: 'メモリ使用率',
+      disk_usage: 'ディスク使用率',
+      temperature: '温度',
+      node_offline: 'ノードオフライン',
+      node_error: 'ノードエラー',
+    },
+  },
 } as const;
 
 export default edgeNodes;

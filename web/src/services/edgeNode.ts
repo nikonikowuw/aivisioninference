@@ -22,6 +22,10 @@ export interface EdgeNode {
   remark?: string;
   created_at: string;
   updated_at: string;
+
+  // Real-time system metrics (populated from heartbeat)
+  cpu_usage?: number;
+  memory_usage?: number;
 }
 
 // HardwareInfo matches the backend dto.HardwareInfo (total_memory, cpu_cores)

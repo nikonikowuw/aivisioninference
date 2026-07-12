@@ -92,6 +92,36 @@ export const edgeNodes = {
     noData: 'No data',
     networkError: 'Network error',
   },
+  alert: {
+    title: 'Alert Management',
+    rules: 'Alert Rules',
+    events: 'Alert Events',
+    createRule: 'Create Rule',
+    editRule: 'Edit Rule',
+    deleteRule: 'Delete Rule',
+    ruleName: 'Rule Name',
+    metricType: 'Metric Type',
+    operator: 'Operator',
+    threshold: 'Threshold',
+    duration: 'Duration',
+    silence: 'Silence',
+    channels: 'Notify Channels',
+    enabled: 'Enabled',
+    description: 'Description',
+    status: {
+      firing: 'Firing',
+      resolved: 'Resolved',
+      acknowledged: 'Acknowledged',
+    },
+    metric: {
+      cpu_usage: 'CPU Usage',
+      memory_usage: 'Memory Usage',
+      disk_usage: 'Disk Usage',
+      temperature: 'Temperature',
+      node_offline: 'Node Offline',
+      node_error: 'Node Error',
+    },
+  },
 } as const;
 
 export default edgeNodes;

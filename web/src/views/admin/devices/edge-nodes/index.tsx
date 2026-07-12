@@ -33,6 +33,18 @@ import { useWebSocket } from 'hooks/useWebSocket';
 import { AlgorithmDeployModal } from './components/AlgorithmDeployModal';
 import EdgeNodeCreateModal from './components/EdgeNodeCreateModal';
 
+function formatUptime(seconds: number): string {
+  if (!seconds) return '-';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  return parts.join(' ');
+}
+
 const STATUS_COLORS: Record<string, string> = {
   online: 'green',
   offline: 'gray',
@@ -159,6 +171,9 @@ export default function EdgeNodeList() {
                   <Th>{t('fields.name')}</Th>
                   <Th>{t('fields.status')}</Th>
                   <Th>{t('fields.currentLoad')}</Th>
+                  <Th>{t('fields.cpuUsage')}</Th>
+                  <Th>{t('fields.memoryUsage')}</Th>
+                  <Th>{t('fields.uptime')}</Th>
                   <Th>{t('fields.platform')}</Th>
                   <Th>{t('fields.engineVersion')}</Th>
                   <Th>{t('fields.lastHeartbeat')}</Th>
@@ -167,9 +182,9 @@ export default function EdgeNodeList() {
               </Thead>
               <Tbody>
                 {(pageLoading && nodes.length === 0) ? (
-                  <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                  <Tr><Td colSpan={9}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
                 ) : nodes.length === 0 ? (
-                  <Tr><Td colSpan={7}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
+                  <Tr><Td colSpan={9}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
                 ) : (
                   nodes.map((node) => (
                     <Tr key={node.id}>
@@ -186,6 +201,21 @@ export default function EdgeNodeList() {
                       <Td>
                         <Text fontSize="sm">
                           {node.current_load ?? 0}/{node.max_load ?? '-'}
+                        </Text>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm">
+                          {node.cpu_usage != null ? `${node.cpu_usage.toFixed(1)}%` : '-'}
+                        </Text>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm">
+                          {node.memory_usage != null ? `${node.memory_usage.toFixed(1)}%` : '-'}
+                        </Text>
+                      </Td>
+                      <Td>
+                        <Text fontSize="sm">
+                          {formatUptime(node.uptime)}
                         </Text>
                       </Td>
                       <Td>

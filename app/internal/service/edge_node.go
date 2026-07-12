@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,6 +41,8 @@ type EdgeNodeService struct {
 	nodeMuMap            sync.Map
 	inferenceChan        chan *controlproto.InferenceResultParams
 	stopChan             chan struct{}
+	metricsRepo          *repository.EdgeNodeMetricsRepository
+	alertEngine          *AlertEngine
 }
 
 // NewEdgeNodeService creates a new EdgeNodeService.
@@ -54,6 +57,8 @@ func NewEdgeNodeService(
 	storage storage.Storage,
 	hub *ws.Hub,
 	streamManager *StreamManager,
+	metricsRepo *repository.EdgeNodeMetricsRepository,
+	alertEngine *AlertEngine,
 ) *EdgeNodeService {
 	svc := &EdgeNodeService{
 		nodeRepo:             nodeRepo,
@@ -70,6 +75,8 @@ func NewEdgeNodeService(
 		streamManager:        streamManager,
 		inferenceChan:        make(chan *controlproto.InferenceResultParams, 10000),
 		stopChan:             make(chan struct{}),
+		metricsRepo:          metricsRepo,
+		alertEngine:          alertEngine,
 	}
 	go svc.batchInsertWorker()
 	return svc
@@ -265,6 +272,8 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		"total_memory":   req.HardwareInfo.TotalMemory,
 		"status":         status,
 		"remark":         "",
+		"cpu_usage":      req.CPUUsage,
+		"memory_usage":   req.MemoryUsage,
 	}
 
 	if req.Status == "error" && req.ErrorMessage != "" {
@@ -294,12 +303,47 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 			return nil, fmt.Errorf("查询暂停任务失败: %w", err)
 		}
 		suspendedTasks = tasks
+
+		// Alert engine: if node was previously offline/error, resolve those alerts
+		if s.alertEngine != nil && node.Status != model.NodeStatusOnline {
+			if err := s.alertEngine.EvaluateNodeBackOnline(ctx, id); err != nil {
+				zap.L().Error("failed to evaluate node back online alerts",
+					zap.String("node_id", id),
+					zap.Error(err),
+				)
+			}
+		}
+	}
+
+	// Persist metrics snapshot to edge_node_metrics table
+	if s.metricsRepo != nil {
+		metrics := s.buildMetricsRecord(id, req)
+		if err := s.metricsRepo.Create(ctx, metrics); err != nil {
+			zap.L().Error("failed to persist edge node metrics snapshot",
+				zap.String("node_id", id),
+				zap.Error(err),
+			)
+			// Non-fatal: continue processing heartbeat even if metrics persistence fails
+		}
+
+		// Phase 2: Evaluate alert rules after metrics persistence
+		if s.alertEngine != nil {
+			if err := s.alertEngine.EvaluateAfterHeartbeat(ctx, id, metrics); err != nil {
+				zap.L().Error("failed to evaluate alert rules",
+					zap.String("node_id", id),
+					zap.Error(err),
+				)
+				// Non-fatal: continue processing heartbeat even if alert evaluation fails
+			}
+		}
 	}
 
 	// Update in-memory node for downstream use (after successful transaction)
 	node.LastHeartbeat = &now
 	node.Uptime = req.Uptime
 	node.CurrentLoad = req.CurrentLoad
+	node.CPUUsage = req.CPUUsage
+	node.MemoryUsage = req.MemoryUsage
 	node.EngineVersion = req.EngineVersion
 	node.HALPlatform = req.HALPlatform
 	node.CPUModel = req.HardwareInfo.CPUModel
@@ -320,6 +364,8 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 				"node_id":        id,
 				"status":         node.Status,
 				"current_load":   node.CurrentLoad,
+				"cpu_usage":      node.CPUUsage,
+				"memory_usage":   node.MemoryUsage,
 				"engine_version": node.EngineVersion,
 				"last_heartbeat": node.LastHeartbeat,
 			},
@@ -390,6 +436,76 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	return &dto.HeartbeatResponse{
 		PendingDeployments: deployments,
 	}, nil
+}
+
+// GetOverviewStats returns aggregated node status counts for the dashboard overview.
+func (s *EdgeNodeService) GetOverviewStats(ctx context.Context) (*dto.OverviewStats, error) {
+	counts, err := s.nodeRepo.CountByStatus(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get overview stats: %w", err)
+	}
+	var total int64
+	for _, c := range counts {
+		total += c
+	}
+
+	alertCount := int64(0)
+	if s.alertEngine != nil {
+		alertCount, err = s.alertEngine.CountActiveAlerts(ctx)
+		if err != nil {
+			// Non-fatal: continue with alert count = 0
+			zap.L().Error("get overview stats: count active alerts failed", zap.Error(err))
+		}
+	}
+
+	return &dto.OverviewStats{
+		Total:      int(total),
+		Online:     int(counts[model.NodeStatusOnline]),
+		Offline:    int(counts[model.NodeStatusOffline]),
+		Error:      int(counts[model.NodeStatusError]),
+		AlertCount: int(alertCount),
+	}, nil
+}
+
+// buildMetricsRecord converts a HeartbeatRequest into an EdgeNodeMetrics model for persistence.
+func (s *EdgeNodeService) buildMetricsRecord(nodeID string, req *dto.HeartbeatRequest) *model.EdgeNodeMetrics {
+	diskJSON, _ := json.Marshal(req.DiskUsage)
+	if len(diskJSON) == 0 {
+		diskJSON = []byte("[]")
+	}
+
+	// Compute memory_used from the usage percentage and total memory.
+	// The engine sends memory_usage (percentage) and hardware_info.total_memory
+	// but not memory_used as a separate field.
+	memoryTotal := req.HardwareInfo.TotalMemory
+	memoryUsed := int64(float64(memoryTotal) * req.MemoryUsage / 100.0)
+
+	return &model.EdgeNodeMetrics{
+		NodeID:    nodeID,
+		CPUUsage:  req.CPUUsage,
+		CPULoad1m: req.CPULoad1m,
+		// CPULoad5m and CPULoad15m are extracted by MetricsFlattener but
+	// not yet included in the heartbeat JSON payload from the engine.
+	// When the engine adds them, map from req fields here.
+		MemoryUsage: req.MemoryUsage,
+		MemoryUsed:  memoryUsed,
+		MemoryTotal: memoryTotal,
+		DiskUsage:   diskJSON,
+		NetRxBytes:  req.NetRxBytes,
+		NetTxBytes:  req.NetTxBytes,
+		NetRxSpeed:  req.NetRxSpeed,
+		NetTxSpeed:  req.NetTxSpeed,
+		Uptime:      req.Uptime,
+		ProcessCount:      req.ProcessCount,
+		ThreadCount:       req.ThreadCount,
+		Temperature:       req.Temperature,
+		WorkerCount:       req.WorkerCount,
+		IdleWorkerCount:   req.IdleWorkerCount,
+		ActiveStreamCount: req.ActiveStreamCount,
+		DecodeSessions:    req.DecodeSessions,
+		EncodeSessions:    req.EncodeSessions,
+		CurrentLoad:       req.CurrentLoad,
+	}
 }
 
 func (s *EdgeNodeService) checkVersionCompatibility(nodeID, engineVersion string) error {
@@ -574,6 +690,16 @@ func (s *EdgeNodeService) HandleLWTNodeOffline(ctx context.Context, nodeID strin
 	}
 	if !transitioned {
 		return nil
+	}
+
+	// Alert engine: evaluate offline rules
+	if s.alertEngine != nil {
+		if err := s.alertEngine.EvaluateNodeOffline(ctx, nodeID, model.NodeStatusOffline); err != nil {
+			zap.L().Error("LWT: failed to evaluate offline alerts",
+				zap.String("node_id", nodeID),
+				zap.Error(err),
+			)
+		}
 	}
 
 	zap.L().Warn("LWT: edge node went offline",

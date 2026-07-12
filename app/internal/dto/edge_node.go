@@ -86,6 +86,22 @@ type HeartbeatRequest struct {
 	ActiveStreams       []string                 `json:"active_streams"`
 	Status              string                   `json:"status" binding:"omitempty"`
 	ErrorMessage        string                   `json:"error_message" binding:"omitempty"`
+
+	// Enhanced monitoring metrics (Phase 1 — Nezha-inspired)
+	CPULoad1m     float64 `json:"cpu_load_1m,omitempty"`
+	DiskUsage     []DiskUsageInfo `json:"disk_usage,omitempty"`
+	NetRxBytes    int64   `json:"net_rx_bytes,omitempty"`
+	NetTxBytes    int64   `json:"net_tx_bytes,omitempty"`
+	NetRxSpeed    float64 `json:"net_rx_speed,omitempty"`
+	NetTxSpeed    float64 `json:"net_tx_speed,omitempty"`
+	Temperature   float64 `json:"temperature,omitempty"`
+	ProcessCount  int     `json:"process_count,omitempty"`
+	ThreadCount   int     `json:"thread_count,omitempty"`
+	WorkerCount       int `json:"worker_count,omitempty"`
+	IdleWorkerCount   int `json:"idle_worker_count,omitempty"`
+	ActiveStreamCount int `json:"active_stream_count,omitempty"`
+	DecodeSessions    int `json:"decode_sessions,omitempty"`
+	EncodeSessions    int `json:"encode_sessions,omitempty"`
 }
 
 // PendingDeployment 待下发算法包信息

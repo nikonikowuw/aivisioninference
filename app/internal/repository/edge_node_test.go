@@ -50,7 +50,9 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -107,7 +109,9 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			status TEXT NOT NULL DEFAULT 'draft',
 			ref_count INTEGER DEFAULT 0,
 			is_current INTEGER DEFAULT 0,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 

@@ -625,6 +625,18 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	edgeStateWorker := task.NewEdgeStateWorker(aiTaskRepo, nodeRepo, rdb, engineClient)
 	mux.HandleFunc(task.TaskReconcileEdgeState, edgeStateWorker.HandleReconcileEdgeState)
 
+	// Metrics Retention Handler (daily cleanup of old edge node metrics)
+	metricsRepo := repository.NewEdgeNodeMetricsRepository(db)
+	metricsSvc := service.NewEdgeNodeMetricsService(metricsRepo)
+	metricsRetentionHandler := task.NewMetricsRetentionHandler(metricsSvc)
+	metricsRetentionHandler.RegisterHandlers(mux)
+	if scheduler != nil {
+		// Run retention cleanup once per day at 3:00 AM
+		scheduler.Register("0 3 * * *", asynq.NewTask(task.MetricsRetentionTaskType, nil))
+		zap.L().Info("registered periodic edge node metrics retention",
+			zap.String("cron", "0 3 * * *"))
+	}
+
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。
 	avatarStorage, err := provideAvatarStorage(cfg)

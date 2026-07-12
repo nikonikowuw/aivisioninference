@@ -107,7 +107,8 @@ func (r *EdgeNodeRepository) List(ctx context.Context, req dto.EdgeNodeListReque
 func (r *EdgeNodeRepository) UpdateHeartbeatFields(ctx context.Context, id string, fields map[string]interface{}) error {
 	// Build allowed column set for heartbeat updates
 	allowed := []string{"status", "last_heartbeat", "current_load", "uptime", "engine_version",
-		"hal_platform", "cpu_model", "gpu_model", "total_memory", "embedding_capacity", "remark"}
+		"hal_platform", "cpu_model", "gpu_model", "total_memory", "embedding_capacity", "remark",
+		"cpu_usage", "memory_usage"}
 	return r.db.WithContext(ctx).Model(&model.EdgeNode{}).
 		Where("id = ?", id).
 		Select(allowed).
@@ -237,6 +238,33 @@ func (r *EdgeNodeRepository) MarkOffline(ctx context.Context, id string) (bool, 
 		Where("status NOT IN ?", []string{model.NodeStatusOffline, model.NodeStatusDisabled}).
 		Update("status", model.NodeStatusOffline)
 	return result.RowsAffected > 0, result.Error
+}
+
+// CountByStatus returns the count of nodes for each status.
+// Returns a map of status -> count for the four tracked states.
+func (r *EdgeNodeRepository) CountByStatus(ctx context.Context) (map[string]int64, error) {
+	type statusCount struct {
+		Status string
+		Count  int64
+	}
+	var rows []statusCount
+	err := r.db.WithContext(ctx).Model(&model.EdgeNode{}).
+		Select("status, count(*) as count").
+		Group("status").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]int64{
+		model.NodeStatusOnline:   0,
+		model.NodeStatusOffline:  0,
+		model.NodeStatusError:    0,
+		model.NodeStatusDisabled: 0,
+	}
+	for _, r := range rows {
+		result[r.Status] = r.Count
+	}
+	return result, nil
 }
 
 // MarkOfflineIfTimedOut transitions an online node only when its persisted heartbeat is stale.

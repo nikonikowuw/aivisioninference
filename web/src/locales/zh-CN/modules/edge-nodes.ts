@@ -94,6 +94,36 @@ export const edgeNodes = {
     noData: "暂无数据",
     networkError: "网络错误",
   },
+  alert: {
+    title: "告警管理",
+    rules: "告警规则",
+    events: "告警事件",
+    createRule: "创建规则",
+    editRule: "编辑规则",
+    deleteRule: "删除规则",
+    ruleName: "规则名称",
+    metricType: "指标类型",
+    operator: "操作符",
+    threshold: "阈值",
+    duration: "持续时长",
+    silence: "静默期",
+    channels: "通知渠道",
+    enabled: "启用",
+    description: "描述",
+    status: {
+      firing: "触发中",
+      resolved: "已恢复",
+      acknowledged: "已确认",
+    },
+    metric: {
+      cpu_usage: "CPU 使用率",
+      memory_usage: "内存使用率",
+      disk_usage: "磁盘使用率",
+      temperature: "核心温度",
+      node_offline: "节点离线",
+      node_error: "节点错误",
+    },
+  },
 } as const;
 
 export default edgeNodes;

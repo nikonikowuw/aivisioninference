@@ -51,7 +51,9 @@ func setupTaskTestDB(t *testing.T) *gorm.DB {
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 	require.NoError(t, db.Exec(`

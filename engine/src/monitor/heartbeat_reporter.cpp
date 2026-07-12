@@ -1,4 +1,6 @@
 #include "monitor/heartbeat_reporter.h"
+#include "monitor/metrics_flattener.h"
+#include "monitor/device_monitor.h"
 #include "engine.h"
 #include "algo/algo_manager.h"
 #include "algo/algorithm_downloader.h"
@@ -9,6 +11,8 @@
 #include <sstream>
 #include <chrono>
 #include <fstream>
+#include <dirent.h>
+#include <unistd.h>
 
 #ifdef __APPLE__
 #include <sys/types.h>
@@ -122,10 +126,158 @@ namespace aivision
                 return "ARM Cortex-A55";
 #endif
             }
+
+            /// 从 /proc/loadavg 读取负载数据
+            double ReadLoad1m()
+            {
+#ifdef __APPLE__
+                double load[3] = {0, 0, 0};
+                size_t len = sizeof(load);
+                if (sysctlbyname("vm.loadavg", &load, &len, NULL, 0) == 0)
+                    return load[0];
+                return 0.0;
+#else
+                std::ifstream file("/proc/loadavg");
+                if (file.is_open())
+                {
+                    double l1, l5, l15;
+                    file >> l1 >> l5 >> l15;
+                    return l1;
+                }
+                return 0.0;
+#endif
+            }
+
+            /// 从 /proc/net/dev 读取网络字节计数
+            struct NetStats {
+                uint64_t rx_bytes = 0;
+                uint64_t tx_bytes = 0;
+            };
+            NetStats ReadNetDev()
+            {
+                NetStats stats;
+#ifdef __APPLE__
+                (void)stats;
+                return stats;
+#else
+                std::ifstream file("/proc/net/dev");
+                if (!file.is_open()) return stats;
+                std::string line;
+                // Skip header lines
+                std::getline(file, line); // header
+                std::getline(file, line); // header
+                while (std::getline(file, line))
+                {
+                    // Parse: inter-name: rx_bytes ... tx_bytes
+                    size_t colon = line.find(':');
+                    if (colon == std::string::npos) continue;
+                    std::string iface = line.substr(0, colon);
+                    // Skip loopback
+                    if (iface.find("lo") != std::string::npos) continue;
+                    std::stringstream ss(line.substr(colon + 1));
+                    uint64_t rx, tx;
+                    ss >> rx;
+                    // Skip 7 fields to get to tx_bytes
+                    for (int i = 0; i < 7; i++) { uint64_t skip; ss >> skip; }
+                    ss >> tx;
+                    stats.rx_bytes += rx;
+                    stats.tx_bytes += tx;
+                }
+                return stats;
+#endif
+            }
+
+            /// 从 /proc/uptime 读取运行时长（秒）
+            uint64_t ReadUptime()
+            {
+#ifdef __APPLE__
+                struct timeval boottime;
+                size_t len = sizeof(boottime);
+                int mib[2] = {CTL_KERN, KERN_BOOTTIME};
+                if (sysctl(mib, 2, &boottime, &len, NULL, 0) == 0)
+                {
+                    time_t now;
+                    time(&now);
+                    return static_cast<uint64_t>(now - boottime.tv_sec);
+                }
+                return 0;
+#else
+                std::ifstream file("/proc/uptime");
+                if (file.is_open())
+                {
+                    double up_secs;
+                    file >> up_secs;
+                    return static_cast<uint64_t>(up_secs);
+                }
+                return 0;
+#endif
+            }
+
+            /// 从 /sys/class/thermal/ 读取核心温度（摄氏度）
+            double ReadTemperature()
+            {
+#ifdef __APPLE__
+                return 0.0;
+#else
+                std::ifstream file("/sys/class/thermal/thermal_zone0/temp");
+                if (file.is_open())
+                {
+                    int milli_celsius = 0;
+                    file >> milli_celsius;
+                    return static_cast<double>(milli_celsius) / 1000.0;
+                }
+                return 0.0;
+#endif
+            }
+
+            /// 统计系统进程和线程数
+            struct ProcCounts {
+                int processes = 0;
+                int threads = 0;
+            };
+            ProcCounts CountProcesses()
+            {
+                ProcCounts counts;
+#ifdef __APPLE__
+                return counts;
+#else
+                DIR* dir = opendir("/proc");
+                if (!dir) return counts;
+                struct dirent* entry;
+                while ((entry = readdir(dir)) != nullptr)
+                {
+                    // Process directories are numeric
+                    char* end;
+                    long pid = strtol(entry->d_name, &end, 10);
+                    if (*end != '\0' || pid <= 0) continue;
+                    counts.processes++;
+                    // Count threads from /proc/[pid]/status
+                    std::string status_path = "/proc/" + std::string(entry->d_name) + "/status";
+                    std::ifstream sf(status_path);
+                    std::string line;
+                    while (std::getline(sf, line))
+                    {
+                        if (line.rfind("Threads:", 0) == 0)
+                        {
+                            std::stringstream ss(line);
+                            std::string label;
+                            int threads = 0;
+                            ss >> label >> threads;
+                            counts.threads += threads;
+                            break;
+                        }
+                    }
+                }
+                closedir(dir);
+                return counts;
+#endif
+            }
         }
 
         HeartbeatReporter::HeartbeatReporter(InferenceEngine* engine)
             : engine_(engine)
+            , metrics_flattener_(std::make_unique<MetricsFlattener>())
+            , last_flatten_timestamp_ms_(0)
         {
         }
 
@@ -229,12 +381,76 @@ namespace aivision
             auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - start_time_).count();
             size_t load = engine_->GetPipelineManager()->ListPipelines().size();
 
+            // Read enhanced metrics from DeviceMonitor via MetricsFlattener
+            FlattenedMetrics flat_metrics;
+            uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            uint64_t interval_ms = (last_flatten_timestamp_ms_ > 0)
+                ? (now_ms - last_flatten_timestamp_ms_)
+                : 5000;
+
+            auto* device_monitor = engine_->GetDeviceMonitor();
+            if (device_monitor)
+            {
+                auto snapshot_ptr = device_monitor->GetSnapshotPtr();
+                if (snapshot_ptr)
+                {
+                    flat_metrics = metrics_flattener_->Flatten(*snapshot_ptr, interval_ms);
+                }
+            }
+
+            // Read process counts directly
+            auto proc_counts = CountProcesses();
+            // Read network stats
+            auto net_stats = ReadNetDev();
+            // Read temperature
+            double temperature = ReadTemperature();
+            // Read uptime from /proc for accuracy
+            uint64_t system_uptime = ReadUptime();
+
+            last_flatten_timestamp_ms_ = now_ms;
+
+            // Use flat_metrics values, falling back to direct reads
+            double cpu_usage = flat_metrics.cpu_usage;
+            double memory_usage = flat_metrics.memory_usage;
+            double load_1m = flat_metrics.cpu_load_1m > 0 ? flat_metrics.cpu_load_1m : ReadLoad1m();
+
+            // For network, use direct reads since they are most reliable
+            uint64_t net_rx_bytes = net_stats.rx_bytes;
+            uint64_t net_tx_bytes = net_stats.tx_bytes;
+
             std::stringstream ss;
             ss << "{"
-               << "\"uptime\":" << uptime << ","
+               << "\"uptime\":" << (system_uptime > 0 ? system_uptime : uptime) << ","
                << "\"current_load\":" << load << ","
-               << "\"cpu_usage\":" << 0.0 << ","
-               << "\"memory_usage\":" << 0.0 << ","
+               << "\"cpu_usage\":" << cpu_usage << ","
+               << "\"memory_usage\":" << memory_usage << ","
+               << "\"cpu_load_1m\":" << load_1m << ",";
+
+            // Disk usage array
+            ss << "\"disk_usage\":[";
+            bool disk_first = true;
+            for (const auto& disk : flat_metrics.disk_usage)
+            {
+                if (!disk_first) ss << ",";
+                disk_first = false;
+                ss << "{"
+                   << "\"path\":\"" << disk.path << "\","
+                   << "\"total\":" << disk.total << ","
+                   << "\"used\":" << disk.used << ","
+                   << "\"percent\":" << disk.percent
+                   << "}";
+            }
+            ss << "],";
+
+            // Network fields
+            ss << "\"net_rx_bytes\":" << net_rx_bytes << ","
+               << "\"net_tx_bytes\":" << net_tx_bytes << ","
+               << "\"net_rx_speed\":" << (interval_ms > 0 ? flat_metrics.net_rx_speed : 0.0) << ","
+               << "\"net_tx_speed\":" << (interval_ms > 0 ? flat_metrics.net_tx_speed : 0.0) << ","
+               << "\"temperature\":" << temperature << ","
+               << "\"process_count\":" << proc_counts.processes << ","
+               << "\"thread_count\":" << proc_counts.threads << ","
                << "\"engine_version\":\"" << InferenceEngine::Version() << "\","
                << "\"hal_platform\":\"" << (
 #ifdef __APPLE__
@@ -279,6 +495,18 @@ namespace aivision
                    << "}";
             }
             ss << "]";
+
+            // Engine-specific metrics
+            auto* metrics_reporter = engine_->GetMetricsReporter();
+            if (metrics_reporter)
+            {
+                auto engine_metrics = metrics_reporter->CollectNow();
+                ss << ",\"worker_count\":" << engine_metrics.worker_count
+                   << ",\"idle_worker_count\":" << engine_metrics.idle_worker_count
+                   << ",\"active_stream_count\":" << engine_metrics.active_stream_count
+                   << ",\"decode_sessions\":" << engine_metrics.decode_sessions
+                   << ",\"encode_sessions\":" << engine_metrics.encode_sessions;
+            }
 
             ss << "}";
             return ss.str();

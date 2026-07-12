@@ -19,8 +19,10 @@ import {
   useColorModeValue,
   useDisclosure,
   useToast,
+  Select as ChakraSelect,
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
+import MetricsTimeSeries from "components/charts/MetricsTimeSeries";
 import ConfirmDialog from "components/confirm-dialog/ConfirmDialog";
 import { useDateFormat } from "hooks/useDateFormat";
 import { useWebSocket } from "hooks/useWebSocket";
@@ -32,6 +34,10 @@ import {
   type EdgeNode,
   type NodeAlgorithm,
 } from "services/edgeNode";
+import {
+  edgeNodeMetricsApi,
+  type MetricDataPoint,
+} from "services/edgeNodeMetrics";
 import { AlgorithmDeployModal } from "./components/AlgorithmDeployModal";
 import EdgeNodeEditModal from "./components/EdgeNodeEditModal";
 
@@ -97,6 +103,54 @@ export default function EdgeNodeDetail() {
     onOpen: onEditOpen,
     onClose: onEditClose,
   } = useDisclosure();
+
+  // Metrics state
+  const [timeRange, setTimeRange] = useState<string>("1h");
+  const [cpuData, setCpuData] = useState<MetricDataPoint[]>([]);
+  const [memData, setMemData] = useState<MetricDataPoint[]>([]);
+  const [netRxData, setNetRxData] = useState<MetricDataPoint[]>([]);
+  const [netTxData, setNetTxData] = useState<MetricDataPoint[]>([]);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+
+  // Compute time range params
+  const getTimeParams = useCallback(() => {
+    const now = new Date();
+    let from: Date;
+    switch (timeRange) {
+      case "6h": from = new Date(now.getTime() - 6 * 60 * 60 * 1000); break;
+      case "24h": from = new Date(now.getTime() - 24 * 60 * 60 * 1000); break;
+      case "7d": from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+      default: from = new Date(now.getTime() - 60 * 60 * 1000); break; // 1h
+    }
+    return {
+      from: from.toISOString(),
+      to: now.toISOString(),
+      page_size: 500,
+    };
+  }, [timeRange]);
+
+  // Fetch metrics when time range or node loads
+  useEffect(() => {
+    if (!id || !hasLoaded) return;
+    const timeParams = getTimeParams();
+    setMetricsLoading(true);
+    Promise.all([
+      edgeNodeMetricsApi.queryMetrics(id, { metric: "cpu_usage", ...timeParams }),
+      edgeNodeMetricsApi.queryMetrics(id, { metric: "memory_usage", ...timeParams }),
+      edgeNodeMetricsApi.queryMetrics(id, { metric: "net_rx_bytes", ...timeParams }),
+      edgeNodeMetricsApi.queryMetrics(id, { metric: "net_tx_bytes", ...timeParams }),
+    ])
+      .then(([cpu, mem, netRx, netTx]) => {
+        setCpuData(cpu.list || []);
+        setMemData(mem.list || []);
+        setNetRxData(netRx.list || []);
+        setNetTxData(netTx.list || []);
+      })
+      .catch((err) => {
+        console.error("Failed to load metrics:", err);
+      })
+      .finally(() => setMetricsLoading(false));
+  }, [id, hasLoaded, timeRange, getTimeParams]);
 
   // WebSocket: auto-refresh node & algorithms when heartbeat/deployment status updates come in
   useWebSocket({
@@ -379,6 +433,68 @@ export default function EdgeNodeDetail() {
             </SimpleGrid>
           </Card>
         )}
+
+        {/* Metrics Charts */}
+        <Card px="24px" py="24px" mb="20px">
+          <Flex justify="space-between" align="center" mb="15px">
+            <Text color={textColor} fontSize="lg" fontWeight="bold">
+              {t("metrics.title")}
+            </Text>
+            <ChakraSelect
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              width="120px"
+              size="sm"
+            >
+              <option value="1h">{t("metrics.last1h")}</option>
+              <option value="6h">{t("metrics.last6h")}</option>
+              <option value="24h">{t("metrics.last24h")}</option>
+              <option value="7d">{t("metrics.last7d")}</option>
+            </ChakraSelect>
+          </Flex>
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing="20px">
+            <Box>
+              <MetricsTimeSeries
+                title={t("metrics.cpuUsage")}
+                data={cpuData}
+                loading={metricsLoading}
+                unit="%"
+                colorScheme="blue"
+                height={200}
+              />
+            </Box>
+            <Box>
+              <MetricsTimeSeries
+                title={t("metrics.memoryUsage")}
+                data={memData}
+                loading={metricsLoading}
+                unit="%"
+                colorScheme="green"
+                height={200}
+              />
+            </Box>
+            <Box>
+              <MetricsTimeSeries
+                title={t("metrics.netRx")}
+                data={netRxData}
+                loading={metricsLoading}
+                unit="B"
+                colorScheme="purple"
+                height={200}
+              />
+            </Box>
+            <Box>
+              <MetricsTimeSeries
+                title={t("metrics.netTx")}
+                data={netTxData}
+                loading={metricsLoading}
+                unit="B"
+                colorScheme="orange"
+                height={200}
+              />
+            </Box>
+          </SimpleGrid>
+        </Card>
 
         {/* Deploy Algorithm Button */}
         <Flex justify="flex-end" mb="20px">

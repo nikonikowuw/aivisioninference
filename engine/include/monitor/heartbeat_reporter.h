@@ -15,6 +15,8 @@ namespace aivision
 
     namespace monitor
     {
+        class MetricsFlattener;
+
         class HeartbeatReporter
         {
         public:
@@ -44,6 +46,8 @@ namespace aivision
             void ParseAndDeploy(const std::string& response_json);
 
             InferenceEngine* engine_;
+            std::unique_ptr<MetricsFlattener> metrics_flattener_;
+            uint64_t last_flatten_timestamp_ms_ = 0;
             std::atomic<bool> running_{false};
             std::unique_ptr<std::thread> thread_;
             std::mutex stop_mutex_;

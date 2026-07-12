@@ -57,7 +57,9 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -113,7 +115,9 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 			status TEXT NOT NULL DEFAULT 'draft',
 			ref_count INTEGER DEFAULT 0,
 			is_current INTEGER DEFAULT 0,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -159,7 +163,7 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil)
+	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
 	h := NewEdgeNodeHandler(svc)
 
 	r := gin.New()

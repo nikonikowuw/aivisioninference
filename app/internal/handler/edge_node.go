@@ -17,12 +17,13 @@ type CreateEdgeNodeResponse struct {
 
 // EdgeNodeHandler handles HTTP requests for EdgeNode and EdgeNodeAlgorithm operations.
 type EdgeNodeHandler struct {
-	svc *service.EdgeNodeService
+	svc     *service.EdgeNodeService
+	tagSvc  *service.EdgeNodeTagService
 }
 
 // NewEdgeNodeHandler creates a new EdgeNodeHandler.
-func NewEdgeNodeHandler(svc *service.EdgeNodeService) *EdgeNodeHandler {
-	return &EdgeNodeHandler{svc: svc}
+func NewEdgeNodeHandler(svc *service.EdgeNodeService, tagSvc *service.EdgeNodeTagService) *EdgeNodeHandler {
+	return &EdgeNodeHandler{svc: svc, tagSvc: tagSvc}
 }
 
 // Create creates a new edge node.
@@ -294,4 +295,33 @@ func (h *EdgeNodeHandler) RecommendNode(c *gin.Context) {
 		"max_load":            node.MaxLoad,
 		"load_rate":           float64(node.CurrentLoad) / float64(node.MaxLoad),
 	})
+}
+
+// UpdateTags updates the tags attached to an edge node.
+//
+// @Summary      更新节点标签
+// @Description  替换边缘节点的标签绑定（全量替换）
+// @Tags         边缘节点
+// @Accept       json
+// @Produce      json
+// @Param        id    path   string                          true  "节点 ID"
+// @Param        body  body   dto.UpdateEdgeNodeTagsRequest  true  "标签 ID 列表"
+// @Success      200   {object}  dto.Response
+// @Router       /edge-nodes/{id}/tags [put]
+// @Security     BearerAuth
+func (h *EdgeNodeHandler) UpdateTags(c *gin.Context) {
+	id := c.Param("id")
+
+	var req dto.UpdateEdgeNodeTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Err(c, badRequestError(c, err))
+		return
+	}
+
+	if err := h.tagSvc.ReplaceNodeTags(c.Request.Context(), id, req.TagIDs); err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	response.OK(c, nil)
 }

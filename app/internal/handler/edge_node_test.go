@@ -160,7 +160,9 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil)
-	h := NewEdgeNodeHandler(svc)
+	tagRepo := repository.NewEdgeNodeTagRepository(db)
+	tagSvc := service.NewEdgeNodeTagService(tagRepo)
+	h := NewEdgeNodeHandler(svc, tagSvc)
 
 	r := gin.New()
 	// Middleware for i18n or other elements if needed, but simple router works:

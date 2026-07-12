@@ -123,6 +123,12 @@ func main() {
 		// AIVisionInference: Edge Node.
 		&model.EdgeNode{},
 		&model.EdgeNodeAlgorithm{},
+		&model.EdgeNodeTag{},
+		&model.EdgeNodeTagRelation{},
+
+		// AIVisionInference: Edge Scheduled Tasks.
+		&model.EdgeScheduledTask{},
+		&model.EdgeScheduledTaskRecord{},
 		); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}

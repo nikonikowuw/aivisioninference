@@ -61,6 +61,8 @@ type RouteDeps struct {
 	SIPService              *service.SIPService
 	SIPRuntimeSvc           *service.SIPRuntimeService
 	EdgeNodeHandler         *handler.EdgeNodeHandler
+	EdgeNodeTagHandler      *handler.EdgeNodeTagHandler
+	EdgeScheduledTaskHandler *handler.EdgeScheduledTaskHandler
 	EdgeNodeMiddleware      *middleware.EdgeNodeMiddleware
 	EdgeNodeSvc             *service.EdgeNodeService
 	EdgeMqttHandler         *handler.EdgeMqttHandler
@@ -232,6 +234,8 @@ func newRouteDeps(
 	sipService *service.SIPService,
 	sipRuntimeSvc *service.SIPRuntimeService,
 	edgeNodeHandler *handler.EdgeNodeHandler,
+	edgeNodeTagHandler *handler.EdgeNodeTagHandler,
+	edgeScheduledTaskHandler *handler.EdgeScheduledTaskHandler,
 	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
 	edgeMqttHandler *handler.EdgeMqttHandler,
 	mqttMux *mqttmux.Mux,
@@ -273,6 +277,8 @@ func newRouteDeps(
 		SIPService:              sipService,
 		SIPRuntimeSvc:           sipRuntimeSvc,
 		EdgeNodeHandler:         edgeNodeHandler,
+		EdgeNodeTagHandler:      edgeNodeTagHandler,
+		EdgeScheduledTaskHandler: edgeScheduledTaskHandler,
 		EdgeNodeMiddleware:      edgeNodeMiddleware,
 		EdgeMqttHandler:         edgeMqttHandler,
 		MqttMux:                 mqttMux,
@@ -485,8 +491,34 @@ func provideEdgeNodeService(
 	return svc
 }
 
-func provideEdgeNodeHandler(svc *service.EdgeNodeService) *handler.EdgeNodeHandler {
-	return handler.NewEdgeNodeHandler(svc)
+func provideEdgeNodeTagService(tagRepo *repository.EdgeNodeTagRepository) *service.EdgeNodeTagService {
+	return service.NewEdgeNodeTagService(tagRepo)
+}
+
+func provideEdgeNodeTagHandler(tagSvc *service.EdgeNodeTagService) *handler.EdgeNodeTagHandler {
+	return handler.NewEdgeNodeTagHandler(tagSvc)
+}
+
+func provideEdgeScheduledTaskService(
+	taskRepo *repository.EdgeScheduledTaskRepository,
+	recordRepo *repository.EdgeScheduledTaskRecordRepository,
+	tagRepo *repository.EdgeNodeTagRepository,
+	nodeRepo *repository.EdgeNodeRepository,
+	mqttClient mqtt.Client,
+	syncManager *mqttsync.MqttSyncManager,
+	hub *ws.Hub,
+) *service.EdgeScheduledTaskService {
+	return service.NewEdgeScheduledTaskService(
+		taskRepo, recordRepo, tagRepo, nodeRepo, mqttClient, syncManager, hub,
+	)
+}
+
+func provideEdgeScheduledTaskHandler(svc *service.EdgeScheduledTaskService) *handler.EdgeScheduledTaskHandler {
+	return handler.NewEdgeScheduledTaskHandler(svc)
+}
+
+func provideEdgeNodeHandler(svc *service.EdgeNodeService, tagSvc *service.EdgeNodeTagService) *handler.EdgeNodeHandler {
+	return handler.NewEdgeNodeHandler(svc, tagSvc)
 }
 
 func provideEdgeNodeMiddleware(jwtManager *jwt.Manager) *middleware.EdgeNodeMiddleware {

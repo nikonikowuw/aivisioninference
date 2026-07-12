@@ -624,6 +624,17 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	edgeStateWorker := task.NewEdgeStateWorker(aiTaskRepo, nodeRepo, rdb, engineClient)
 	mux.HandleFunc(task.TaskReconcileEdgeState, edgeStateWorker.HandleReconcileEdgeState)
 
+	// Edge Scheduled Task Patrol
+	schTaskRepo := repository.NewEdgeScheduledTaskRepository(db)
+	schRecordRepo := repository.NewEdgeScheduledTaskRecordRepository(db)
+	schTagRepo := repository.NewEdgeNodeTagRepository(db)
+	edgeScheduledTaskSvc := service.NewEdgeScheduledTaskService(
+		schTaskRepo, schRecordRepo, schTagRepo, nodeRepo, mqttClient, syncManager, hub,
+	)
+	edgeScheduledTaskHandler := task.NewEdgeScheduledTaskHandler(edgeScheduledTaskSvc)
+	edgeScheduledTaskHandler.RegisterHandlers(mux)
+	edgeScheduledTaskHandler.RegisterPeriodic(scheduler)
+
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。
 	avatarStorage, err := provideAvatarStorage(cfg)

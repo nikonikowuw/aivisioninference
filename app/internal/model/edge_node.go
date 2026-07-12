@@ -38,8 +38,9 @@ type EdgeNode struct {
 	MediaMetricsTTLSeconds int        `gorm:"not null;default:0;comment:媒体指标有效期(秒)，0表示未配置" json:"media_metrics_ttl_seconds"`
 	EngineVersion          string     `gorm:"type:varchar(100);comment:引擎版本" json:"engine_version"`
 	Uptime                 int64      `gorm:"comment:运行时长(秒)" json:"uptime"`
-	Enabled                bool       `gorm:"default:true;comment:是否启用" json:"enabled"`
-	Remark                 string     `gorm:"type:varchar(1000);comment:备注" json:"remark"`
+	Enabled                bool         `gorm:"default:true;comment:是否启用" json:"enabled"`
+	Remark                 string       `gorm:"type:varchar(1000);comment:备注" json:"remark"`
+	Tags                   []EdgeNodeTag `gorm:"many2many:edge_node_tag_relations;" json:"tags,omitempty"`
 }
 
 // TableName 指定表名

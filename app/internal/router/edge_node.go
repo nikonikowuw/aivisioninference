@@ -24,5 +24,38 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 		nodes.GET("/:id/algorithms", nodeHandler.ListAlgorithms)
 		nodes.DELETE("/:id/algorithms/:algo_id", nodeHandler.RemoveAlgorithm)
 		nodes.GET("/recommend-node", nodeHandler.RecommendNode)
+
+		// Node tag management
+		nodes.PUT("/:id/tags", nodeHandler.UpdateTags)
+	}
+
+	// Edge node tag routes
+	if deps.EdgeNodeTagHandler != nil {
+		tags := authorized.Group("/edge-node-tags")
+		tags.Use(r.RBAC())
+		{
+			tags.GET("", deps.EdgeNodeTagHandler.List)
+			tags.GET("/all", deps.EdgeNodeTagHandler.ListAll)
+			tags.POST("", deps.EdgeNodeTagHandler.Create)
+			tags.GET("/:id", deps.EdgeNodeTagHandler.GetByID)
+			tags.PUT("/:id", deps.EdgeNodeTagHandler.Update)
+			tags.DELETE("/:id", deps.EdgeNodeTagHandler.Delete)
+		}
+	}
+
+	// Edge scheduled task routes
+	if deps.EdgeScheduledTaskHandler != nil {
+		scheduled := authorized.Group("/edge-scheduled-tasks")
+		scheduled.Use(r.RBAC())
+		{
+			scheduled.GET("", deps.EdgeScheduledTaskHandler.List)
+			scheduled.POST("", deps.EdgeScheduledTaskHandler.Create)
+			scheduled.GET("/records", deps.EdgeScheduledTaskHandler.ListRecords)
+			scheduled.GET("/:id", deps.EdgeScheduledTaskHandler.GetByID)
+			scheduled.PUT("/:id", deps.EdgeScheduledTaskHandler.Update)
+			scheduled.DELETE("/:id", deps.EdgeScheduledTaskHandler.Delete)
+			scheduled.PUT("/:id/toggle", deps.EdgeScheduledTaskHandler.ToggleEnabled)
+			scheduled.POST("/:id/records/:record_id/retry", deps.EdgeScheduledTaskHandler.RetryRecord)
+		}
 	}
 }

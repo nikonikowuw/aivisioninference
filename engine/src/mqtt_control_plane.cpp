@@ -202,7 +202,7 @@ namespace aivision
             auto payload_offset = env_fbb.CreateVector(fbb.GetBufferPointer(), fbb.GetSize());
 
             aivision::control::ControlEnvelopeBuilder env_builder(env_fbb);
-            env_builder.add_schema_version(100);
+            env_builder.add_schema_version(102);
             env_builder.add_signal_type(static_cast<aivision::control::SignalType>(signal_type));
             env_builder.add_timestamp_ns(std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count());
@@ -215,6 +215,10 @@ namespace aivision
             if (signal_type == 0x0200) // InferenceResult
             {
                 topic = "aivision/edge/" + impl_->node_id_ + "/event/inference";
+            }
+            else if (signal_type == 0x0203) // EngineMetrics
+            {
+                topic = "aivision/edge/" + impl_->node_id_ + "/event/metrics";
             }
             else
             {

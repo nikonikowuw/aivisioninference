@@ -377,7 +377,9 @@ bool RtspPushStage::SendInterleavedRtp(const uint8_t* payload, size_t payload_si
     rtp[11] = static_cast<uint8_t>(rtp_ssrc_ & 0xFF);
     std::memcpy(rtp + 12, payload, payload_size);
 
-    return SendAll(socket_fd_, packet.data(), packet.size());
+    if (!SendAll(socket_fd_, packet.data(), packet.size())) return false;
+    total_bytes_sent_.fetch_add(packet.size());
+    return true;
 }
 
 }  // namespace pipeline

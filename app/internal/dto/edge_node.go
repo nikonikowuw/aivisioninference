@@ -25,19 +25,27 @@ func (r *EdgeNodeListRequest) FilterScopes() []scopes.Scope {
 
 // CreateEdgeNodeRequest 创建边缘节点请求
 type CreateEdgeNodeRequest struct {
-	Name        string `json:"name" binding:"required,min=1,max=128"`
-	Description string `json:"description" binding:"max=500"`
-	Endpoint    string `json:"endpoint" binding:"required,url,max=255"`
-	MaxLoad     int    `json:"max_load" binding:"required,min=1"`
-	Remark      string `json:"remark" binding:"max=1000"`
+	Name                   string `json:"name" binding:"required,min=1,max=128"`
+	Description            string `json:"description" binding:"max=500"`
+	Endpoint               string `json:"endpoint" binding:"required,url,max=255"`
+	MaxLoad                int    `json:"max_load" binding:"required,min=1"`
+	MediaDecodeCapacity    int    `json:"media_decode_capacity" binding:"min=0"`
+	MediaEncodeCapacity    int    `json:"media_encode_capacity" binding:"min=0"`
+	MediaEgressCapacityBPS int64  `json:"media_egress_capacity_bps" binding:"min=0"`
+	MediaMetricsTTLSeconds int    `json:"media_metrics_ttl_seconds" binding:"min=0"`
+	Remark                 string `json:"remark" binding:"max=1000"`
 }
 
 // UpdateEdgeNodeRequest 更新边缘节点请求
 type UpdateEdgeNodeRequest struct {
-	Name        string `json:"name" binding:"omitempty,min=1,max=128"`
-	Description string `json:"description" binding:"max=500"`
-	Endpoint    string `json:"endpoint" binding:"omitempty,url,max=255"`
-	MaxLoad     int    `json:"max_load" binding:"omitempty,min=1"`
+	Name                   string `json:"name" binding:"omitempty,min=1,max=128"`
+	Description            string `json:"description" binding:"max=500"`
+	Endpoint               string `json:"endpoint" binding:"omitempty,url,max=255"`
+	MaxLoad                int    `json:"max_load" binding:"omitempty,min=1"`
+	MediaDecodeCapacity    *int   `json:"media_decode_capacity" binding:"omitempty,min=0"`
+	MediaEncodeCapacity    *int   `json:"media_encode_capacity" binding:"omitempty,min=0"`
+	MediaEgressCapacityBPS *int64 `json:"media_egress_capacity_bps" binding:"omitempty,min=0"`
+	MediaMetricsTTLSeconds *int   `json:"media_metrics_ttl_seconds" binding:"omitempty,min=0"`
 
 	Enabled *bool  `json:"enabled"`
 	Remark  string `json:"remark" binding:"max=1000"`

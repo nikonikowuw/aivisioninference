@@ -26,6 +26,7 @@ public:
     
     std::string GetName() const override { return "RtspPushStage"; }
     bool IsRunning() const override { return running_.load(); }
+    uint64_t TotalBytesSent() const { return total_bytes_sent_.load(); }
 
 private:
     void Loop();
@@ -52,6 +53,7 @@ private:
     uint16_t rtp_seq_ = 0;
     uint32_t rtp_ssrc_ = 0;
     uint64_t first_timestamp_ns_ = 0;
+    std::atomic<uint64_t> total_bytes_sent_{0};
 };
 
 }  // namespace pipeline

@@ -95,6 +95,7 @@ func main() {
 
 		// AIVisionInference: Media Stream Mapping.
 		&model.MediaStream{},
+		&model.MediaCapacityReservation{},
 
 		// AIVisionInference: Storage Spaces.
 		&model.StorageSpace{},

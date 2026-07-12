@@ -92,6 +92,8 @@ var serviceSet = wire.NewSet(
 	provideEdgeNodeService,
 	provideMqttSyncManager,
 	provideMqttMux,
+	provideHistoryBuffer,
+	provideEngineMetricsStore,
 	provideEdgeMqttHandler,
 )
 

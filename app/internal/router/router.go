@@ -32,20 +32,21 @@ import (
 
 // Router holds all dependencies for route registration.
 type Router struct {
-	engine          *gin.Engine
-	db              *gorm.DB
-	rdb             *redis.Client
-	jwtManager      *jwt.Manager
-	hub             *ws.Hub
-	config          *Config
-	accessLogger    *zap.Logger
-	scheduler       *asynq.Scheduler
-	rbacCache       cache.Cache
-	SIPRuntimeSvc   *service.SIPRuntimeService
-	mqttClient      mqtt.Client
-	MqttMux         *mqttmux.Mux
-	EdgeMqttHandler *handler.EdgeMqttHandler
-	EdgeNodeSvc     *service.EdgeNodeService
+	engine             *gin.Engine
+	db                 *gorm.DB
+	rdb                *redis.Client
+	jwtManager         *jwt.Manager
+	hub                *ws.Hub
+	config             *Config
+	accessLogger       *zap.Logger
+	scheduler          *asynq.Scheduler
+	rbacCache          cache.Cache
+	SIPRuntimeSvc      *service.SIPRuntimeService
+	mqttClient         mqtt.Client
+	MqttMux            *mqttmux.Mux
+	EdgeMqttHandler    *handler.EdgeMqttHandler
+	EdgeNodeSvc        *service.EdgeNodeService
+	EngineMetricsStore *service.EngineMetricsStore
 }
 
 // RBAC returns the RBAC middleware, bound to the Router's cached dependencies.
@@ -152,6 +153,7 @@ func (r *Router) setupRoutes() {
 	r.SIPRuntimeSvc = deps.SIPRuntimeSvc
 	r.rbacCache = deps.RBACCache
 	r.EdgeNodeSvc = deps.EdgeNodeSvc
+	r.EngineMetricsStore = deps.EngineMetricsStore
 	r.EdgeMqttHandler = deps.EdgeMqttHandler
 	r.MqttMux = deps.MqttMux
 

@@ -13,8 +13,8 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
-	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
+	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
 	ver "github.com/niko-admin/niko-admin/internal/pkg/version"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
@@ -102,15 +102,19 @@ func (s *EdgeNodeService) Create(ctx context.Context, req dto.CreateEdgeNodeRequ
 	}
 
 	node := &model.EdgeNode{
-		BaseModel:   model.BaseModel{ID: nodeID},
-		Name:        req.Name,
-		Description: req.Description,
-		Endpoint:    req.Endpoint,
-		AuthToken:   token,
-		Status:      model.NodeStatusOffline,
-		MaxLoad:     req.MaxLoad,
-		Enabled:     true,
-		Remark:      req.Remark,
+		BaseModel:              model.BaseModel{ID: nodeID},
+		Name:                   req.Name,
+		Description:            req.Description,
+		Endpoint:               req.Endpoint,
+		AuthToken:              token,
+		Status:                 model.NodeStatusOffline,
+		MaxLoad:                req.MaxLoad,
+		MediaDecodeCapacity:    req.MediaDecodeCapacity,
+		MediaEncodeCapacity:    req.MediaEncodeCapacity,
+		MediaEgressCapacityBPS: req.MediaEgressCapacityBPS,
+		MediaMetricsTTLSeconds: req.MediaMetricsTTLSeconds,
+		Enabled:                true,
+		Remark:                 req.Remark,
 	}
 
 	if err := s.nodeRepo.Create(ctx, node); err != nil {
@@ -155,6 +159,18 @@ func (s *EdgeNodeService) Update(ctx context.Context, id string, req dto.UpdateE
 	}
 	if req.MaxLoad > 0 {
 		node.MaxLoad = req.MaxLoad
+	}
+	if req.MediaDecodeCapacity != nil {
+		node.MediaDecodeCapacity = *req.MediaDecodeCapacity
+	}
+	if req.MediaEncodeCapacity != nil {
+		node.MediaEncodeCapacity = *req.MediaEncodeCapacity
+	}
+	if req.MediaEgressCapacityBPS != nil {
+		node.MediaEgressCapacityBPS = *req.MediaEgressCapacityBPS
+	}
+	if req.MediaMetricsTTLSeconds != nil {
+		node.MediaMetricsTTLSeconds = *req.MediaMetricsTTLSeconds
 	}
 	if req.Remark != "" {
 		node.Remark = req.Remark

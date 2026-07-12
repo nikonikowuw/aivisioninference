@@ -22,6 +22,11 @@ func NewEdgeNodeRepository(db *gorm.DB) *EdgeNodeRepository {
 	return &EdgeNodeRepository{db: db}
 }
 
+// WithTx returns a repository bound to the provided transaction.
+func (r *EdgeNodeRepository) WithTx(tx *gorm.DB) *EdgeNodeRepository {
+	return &EdgeNodeRepository{db: tx}
+}
+
 // Transaction wraps operations in a database transaction.
 func (r *EdgeNodeRepository) Transaction(ctx context.Context, fn func(context.Context) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -115,9 +120,20 @@ func (r *EdgeNodeRepository) FindByIDForUpdate(ctx context.Context, id string) (
 	return &item, nil
 }
 
+// ListMediaSchedulableForUpdate locks online and enabled media nodes in a stable order.
+func (r *EdgeNodeRepository) ListMediaSchedulableForUpdate(ctx context.Context) ([]model.EdgeNode, error) {
+	var items []model.EdgeNode
+	err := r.db.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("status = ? AND enabled = ?", model.NodeStatusOnline, true).
+		Order("id ASC").
+		Find(&items).Error
+	return items, err
+}
+
 // edgeNodeAlgoQueryOptions controls optional filters for the shared edge-node + edge-node-algorithm join query.
 type edgeNodeAlgoQueryOptions struct {
-	runtimeStatus      []string // empty = no filter; single = equality; multiple = IN
+	runtimeStatus       []string // empty = no filter; single = equality; multiple = IN
 	supportsEmbedding   *bool
 	supportsFaceLibrary *bool
 	order               string

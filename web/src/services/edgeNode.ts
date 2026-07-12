@@ -8,6 +8,10 @@ export interface EdgeNode {
   endpoint: string;
   max_load: number;
   current_load: number;
+  media_decode_capacity: number;
+  media_encode_capacity: number;
+  media_egress_capacity_bps: number;
+  media_metrics_ttl_seconds: number;
   status: string; // online, offline, error, disabled
   platform: string;
   engine_version: string;
@@ -37,6 +41,10 @@ export interface CreateEdgeNodeRequest {
   description?: string;
   endpoint: string;
   max_load: number;
+  media_decode_capacity?: number;
+  media_encode_capacity?: number;
+  media_egress_capacity_bps?: number;
+  media_metrics_ttl_seconds?: number;
   remark?: string;
 }
 
@@ -45,6 +53,10 @@ export interface UpdateEdgeNodeRequest {
   description?: string;
   endpoint?: string;
   max_load?: number;
+  media_decode_capacity?: number;
+  media_encode_capacity?: number;
+  media_egress_capacity_bps?: number;
+  media_metrics_ttl_seconds?: number;
   enabled?: boolean;
   remark?: string;
 }

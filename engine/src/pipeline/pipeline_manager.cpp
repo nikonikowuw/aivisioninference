@@ -89,6 +89,8 @@ namespace aivision
                         return false;
                     }
                     pipelines_[device_id] = std::move(pipeline);
+                    media_runtime_[device_id] = MediaRuntimeState{
+                        true, false, true, false, true, nullptr};
                     std::cout << "FFmpeg software inference fallback pipeline created for device: "
                               << device_id << std::endl;
                     return true;
@@ -98,6 +100,8 @@ namespace aivision
                     return false;
 
                 pipelines_[device_id] = std::move(pipeline);
+                media_runtime_[device_id] = MediaRuntimeState{
+                    false, true, false, false, false, nullptr};
                 std::cout << "FFmpeg relay fallback pipeline created for device: " << device_id << std::endl;
                 return true;
             };
@@ -203,6 +207,8 @@ namespace aivision
                         queue_mgr_->RemoveStream(device_id);
                     return false;
                 }
+
+                media_runtime_[device_id].pusher = pusher;
             }
 
             // 4. 启动 Pipeline
@@ -216,6 +222,12 @@ namespace aivision
 
             pipelines_[device_id] = std::move(pipeline);
             hal_managers_[device_id] = std::move(hal);
+            auto &runtime = media_runtime_[device_id];
+            runtime.inference_enabled = enable_infer;
+            runtime.playback_enabled = enable_playback;
+            runtime.uses_decoder = true;
+            runtime.uses_encoder = enable_playback;
+            runtime.egress_observable = true;
 
             std::cout << "Pipeline created for device: " << device_id << std::endl;
             return true;
@@ -240,6 +252,7 @@ namespace aivision
             }
             pipelines_.erase(it);
             hal_managers_.erase(device_id);
+            media_runtime_.erase(device_id);
             if (queue_mgr_)
                 queue_mgr_->RemoveStream(device_id);
 
@@ -265,7 +278,14 @@ namespace aivision
             auto encoder = std::make_shared<EncoderStage>(it_hal->second->GetPipeline());
             auto pusher = std::make_shared<RtspPushStage>(push_url, encoder);
 
-            return p->AddStage(encoder) && p->AddStage(pusher);
+            if (!p->AddStage(encoder) || !p->AddStage(pusher))
+                return false;
+            auto &runtime = media_runtime_[device_id];
+            runtime.playback_enabled = true;
+            runtime.uses_encoder = true;
+            runtime.egress_observable = true;
+            runtime.pusher = pusher;
+            return true;
         }
 
         bool PipelineManager::DisablePlayback(const std::string &device_id)
@@ -278,6 +298,13 @@ namespace aivision
 
             it->second->RemoveStage("RtspPushStage");
             it->second->RemoveStage("EncoderStage");
+            auto runtime_it = media_runtime_.find(device_id);
+            if (runtime_it != media_runtime_.end())
+            {
+                runtime_it->second.playback_enabled = false;
+                runtime_it->second.uses_encoder = false;
+                runtime_it->second.pusher.reset();
+            }
             return true;
         }
 
@@ -317,6 +344,18 @@ namespace aivision
                 s.active_stages = p->GetStageNames();
                 s.queue_size = p->GetQueue()->Size();
                 s.queue_capacity = p->GetQueue()->Capacity();
+                auto runtime_it = media_runtime_.find(id);
+                if (runtime_it != media_runtime_.end())
+                {
+                    const auto &runtime = runtime_it->second;
+                    s.inference_enabled = runtime.inference_enabled;
+                    s.playback_enabled = runtime.playback_enabled;
+                    s.uses_decoder = runtime.uses_decoder;
+                    s.uses_encoder = runtime.uses_encoder;
+                    s.egress_observable = runtime.egress_observable;
+                    if (runtime.pusher)
+                        s.total_egress_bytes = runtime.pusher->TotalBytesSent();
+                }
                 statuses.push_back(s);
             }
 
@@ -361,6 +400,7 @@ namespace aivision
             hal_managers_.clear();
             ffmpeg_fallbacks_.clear();
             ffmpeg_infer_fallbacks_.clear();
+            media_runtime_.clear();
         }
 
         std::string PipelineManager::BuildPushURL(const std::string &device_id) const

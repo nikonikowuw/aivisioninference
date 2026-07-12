@@ -13,6 +13,7 @@
 #include "hal.h"
 #include "ring_queue.h"
 #include "ffmpeg_fallback_decoder.h"
+#include "rtsp_push_stage.h"
 
 namespace aivision
 {
@@ -27,6 +28,12 @@ namespace aivision
             std::vector<std::string> active_stages;
             size_t queue_size;
             size_t queue_capacity;
+            bool inference_enabled = false;
+            bool playback_enabled = false;
+            bool uses_decoder = false;
+            bool uses_encoder = false;
+            bool egress_observable = true;
+            uint64_t total_egress_bytes = 0;
         };
 
         /// Pipeline 管理器配置
@@ -80,6 +87,16 @@ namespace aivision
             void StopAll();
 
         private:
+            struct MediaRuntimeState
+            {
+                bool inference_enabled = false;
+                bool playback_enabled = false;
+                bool uses_decoder = false;
+                bool uses_encoder = false;
+                bool egress_observable = true;
+                std::shared_ptr<RtspPushStage> pusher;
+            };
+
             /// 创建并配置 Stage 的辅助方法 (占位，后续任务实现具体 Stage)
             std::unique_ptr<Stage> CreateInferenceStage(const std::string &device_id);
             std::unique_ptr<Stage> CreatePlaybackStage(const std::string &device_id);
@@ -99,6 +116,7 @@ namespace aivision
             std::map<std::string, std::unique_ptr<HALManager>> hal_managers_;
             std::map<std::string, pid_t> ffmpeg_fallbacks_;
             std::map<std::string, std::unique_ptr<FFmpegFallbackDecoder>> ffmpeg_infer_fallbacks_;
+            std::map<std::string, MediaRuntimeState> media_runtime_;
         };
 
     } // namespace pipeline

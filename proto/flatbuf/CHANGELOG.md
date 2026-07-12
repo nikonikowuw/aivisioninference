@@ -4,6 +4,21 @@
 
 ---
 
+## v1.2 (schema_version = 102) — 媒体容量指标
+
+**发布日期**: 2026-07-12
+
+### 新增字段
+
+`EngineMetricsMsg` 追加解码/编码会话、槽位使用量、出口带宽、preview/inference/mixed Pipeline 数及 `media_metrics_valid`。所有字段均有零值默认值；新控制面通过有效位区分旧 Engine 缺失指标与新版 Engine 的真实零使用量。
+
+### 兼容性
+
+- 旧读取方自动忽略新增字段。
+- 新读取方读取旧 Engine 消息时得到零值且 `media_metrics_valid=false`，媒体自动调度安全降级为不可用。
+
+---
+
 ## v1.0 (schema_version = 100) — 初始版本
 
 **发布日期**: TBD

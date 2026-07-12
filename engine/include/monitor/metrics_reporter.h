@@ -16,12 +16,14 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_map>
 
 #include "response_router.h"
 #include "pipeline/worker_pool.h"
 #include "pipeline/hw_buffer.h"
 #include "pipeline/ring_queue.h"
 #include "algo/algo_manager.h"
+#include "pipeline/pipeline_manager.h"
 
 namespace aivision
 {
@@ -53,6 +55,15 @@ namespace aivision
             uint32_t worker_count = 0;
             uint32_t idle_worker_count = 0;
             uint64_t timestamp_ns = 0;
+            uint32_t decode_sessions = 0;
+            uint32_t encode_sessions = 0;
+            uint32_t decode_slots_used = 0;
+            uint32_t encode_slots_used = 0;
+            uint64_t egress_bps = 0;
+            uint32_t preview_pipeline_count = 0;
+            uint32_t inference_pipeline_count = 0;
+            uint32_t mixed_pipeline_count = 0;
+            bool media_metrics_valid = false;
         };
 
         /// 指标回调 (由 MetricsReporter 构造后传递)
@@ -77,6 +88,7 @@ namespace aivision
                             pipeline::HwBufferPool *buffer_pool,
                             pipeline::StreamQueueManager *queue_mgr,
                             algo::AlgoManager *algo_mgr,
+                            pipeline::PipelineManager *pipeline_mgr,
                             const MetricsReporterConfig &config = MetricsReporterConfig{});
 
             ~MetricsReporter();
@@ -108,6 +120,7 @@ namespace aivision
             pipeline::HwBufferPool *buffer_pool_;
             pipeline::StreamQueueManager *queue_mgr_;
             algo::AlgoManager *algo_mgr_;
+            pipeline::PipelineManager *pipeline_mgr_;
 
             MetricsReporterConfig config_;
             std::atomic<bool> running_{false};
@@ -117,6 +130,9 @@ namespace aivision
 
             /// 外部指标回调
             MetricsCallback metrics_cb_;
+            std::mutex media_state_mutex_;
+            std::unordered_map<std::string, uint64_t> previous_egress_bytes_;
+            uint64_t previous_media_timestamp_ns_ = 0;
         };
 
     } // namespace monitor

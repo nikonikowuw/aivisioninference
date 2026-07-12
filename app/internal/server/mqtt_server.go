@@ -31,6 +31,7 @@ func (s *MqttServer) Start() error {
 	s.mux.Register("aivision/edge/+/status/lifecycle", s.handler.HandleLifecycle)
 	s.mux.Register("aivision/edge/+/response/+", s.handler.HandleStreamStatus)
 	s.mux.Register("aivision/edge/+/event/inference", s.handler.HandleInferenceResult)
+	s.mux.Register("aivision/edge/+/event/metrics", s.handler.HandleEngineMetrics)
 
 	// Subscribe to aivision/edge/# (QoS 1)
 	token := s.client.Subscribe("aivision/edge/#", 1, func(c mqtt.Client, msg mqtt.Message) {

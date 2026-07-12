@@ -65,6 +65,7 @@ type RouteDeps struct {
 	EdgeNodeSvc             *service.EdgeNodeService
 	EdgeMqttHandler         *handler.EdgeMqttHandler
 	MqttMux                 *mqttmux.Mux
+	EngineMetricsStore      *service.EngineMetricsStore
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -170,8 +171,9 @@ func provideDeviceDiscoveryService(stagingSvc *service.DeviceStagingService) *se
 	return service.NewDeviceDiscoveryService(stagingSvc, onvifScanner, nil)
 }
 
-func provideSystemHandler(db *gorm.DB, rdb *redis.Client, cfg *Config, scheduler *asynq.Scheduler) *handler.SystemHandler {
+func provideSystemHandler(db *gorm.DB, rdb *redis.Client, cfg *Config, scheduler *asynq.Scheduler, metricsStore *service.EngineMetricsStore) *handler.SystemHandler {
 	systemSvc := service.NewSystemService(db, rdb, buildinfo.Version, cfg.ZLMAPIURL, "")
+	systemSvc.SetEngineMetricsStore(metricsStore)
 	systemInfoSvc := service.NewSystemInfoService(db)
 	networkSvc := service.NewNetworkService(db)
 	timeConfigSvc := service.NewTimeConfigService(db)
@@ -187,6 +189,14 @@ func provideSystemHandler(db *gorm.DB, rdb *redis.Client, cfg *Config, scheduler
 	}
 
 	return handler.NewSystemHandler(systemSvc, systemInfoSvc, networkSvc, timeConfigSvc, webhookSvc, storageSvc, storageScheduler)
+}
+
+func provideHistoryBuffer() *service.HistoryBuffer {
+	return service.NewHistoryBuffer(60)
+}
+
+func provideEngineMetricsStore(history *service.HistoryBuffer) *service.EngineMetricsStore {
+	return service.NewEngineMetricsStore(history)
 }
 
 func newRouteDeps(
@@ -225,6 +235,7 @@ func newRouteDeps(
 	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
 	edgeMqttHandler *handler.EdgeMqttHandler,
 	mqttMux *mqttmux.Mux,
+	metricsStore *service.EngineMetricsStore,
 ) *RouteDeps {
 	if sipService != nil {
 		sipService.SetRuntimeService(sipRuntimeSvc)
@@ -265,6 +276,7 @@ func newRouteDeps(
 		EdgeNodeMiddleware:      edgeNodeMiddleware,
 		EdgeMqttHandler:         edgeMqttHandler,
 		MqttMux:                 mqttMux,
+		EngineMetricsStore:      metricsStore,
 	}
 }
 
@@ -492,6 +504,7 @@ func provideEdgeMqttHandler(
 	taskClient *task.Client,
 	rdb *redis.Client,
 	hub *ws.Hub,
+	metricsStore *service.EngineMetricsStore,
 ) *handler.EdgeMqttHandler {
-	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub)
+	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub, metricsStore)
 }

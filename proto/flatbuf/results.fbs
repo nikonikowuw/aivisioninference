@@ -97,6 +97,24 @@ table EngineMetricsMsg {
     idle_worker_count: uint;
     /// 时间戳 (Unix 纳秒)
     timestamp_ns: uint64;
+    /// 当前解码会话数
+    decode_sessions: uint;
+    /// 当前编码会话数
+    encode_sessions: uint;
+    /// 已占用解码槽
+    decode_slots_used: uint;
+    /// 已占用编码槽
+    encode_slots_used: uint;
+    /// 当前媒体出口带宽 (bit/s)
+    egress_bps: uint64;
+    /// 仅预览 Pipeline 数
+    preview_pipeline_count: uint;
+    /// 仅推理 Pipeline 数
+    inference_pipeline_count: uint;
+    /// 同时预览和推理的 Pipeline 数
+    mixed_pipeline_count: uint;
+    /// 新版 Engine 已采集媒体指标；用于区分旧版缺字段与真实零使用量
+    media_metrics_valid: bool = false;
 }
 
 /// 心跳回复 (SignalType.HeartbeatAck)

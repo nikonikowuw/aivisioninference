@@ -464,25 +464,84 @@ type StreamMetricsSnapshot struct {
 
 // EngineMetricsSnapshot 表示引擎全局指标快照。
 type EngineMetricsSnapshot struct {
-	Streams           []StreamMetricsSnapshot
-	ActiveStreamCount uint32
-	DMAUsedBytes      uint64
-	DMATotalBytes     uint64
-	NPUUsedBytes      uint64
-	NPUTotalBytes     uint64
-	WorkerCount       uint32
-	IdleWorkerCount   uint32
-	TimestampNS       uint64
+	Streams                []StreamMetricsSnapshot
+	ActiveStreamCount      uint32
+	DMAUsedBytes           uint64
+	DMATotalBytes          uint64
+	NPUUsedBytes           uint64
+	NPUTotalBytes          uint64
+	WorkerCount            uint32
+	IdleWorkerCount        uint32
+	TimestampNS            uint64
+	DecodeSessions         uint32
+	EncodeSessions         uint32
+	DecodeSlotsUsed        uint32
+	EncodeSlotsUsed        uint32
+	EgressBPS              uint64
+	PreviewPipelineCount   uint32
+	InferencePipelineCount uint32
+	MixedPipelineCount     uint32
+	MediaMetricsValid      bool
 }
 
-// FlatBuffersToEngineMetrics TODO: flatc 生成代码后实现。
+// FlatBuffersToEngineMetrics parses an EngineMetricsMsg payload, with or without a ControlEnvelope.
 func FlatBuffersToEngineMetrics(fbData []byte) *EngineMetricsSnapshot {
 	if len(fbData) == 0 {
 		return nil
 	}
 
-	zap.L().Debug("IPC: FlatBuffersToEngineMetrics 待 flatc 生成代码后实现")
-	return nil
+	payload := fbData
+	envelope := fbs.GetRootAsControlEnvelope(fbData, 0)
+	if envelope != nil && envelope.SignalType() == fbs.SignalTypeEngineMetrics {
+		payload = envelope.PayloadBytes()
+		if len(payload) == 0 {
+			return nil
+		}
+	}
+	msg := fbs.GetRootAsEngineMetricsMsg(payload, 0)
+	if msg == nil {
+		return nil
+	}
+
+	streamCount := msg.StreamsLength()
+	streams := make([]StreamMetricsSnapshot, 0, streamCount)
+	for i := 0; i < streamCount; i++ {
+		var stream fbs.StreamMetrics
+		if !msg.Streams(&stream, i) {
+			continue
+		}
+		streams = append(streams, StreamMetricsSnapshot{
+			TaskID:             string(stream.TaskId()),
+			QueueDepth:         stream.QueueDepth(),
+			EvictCount:         stream.EvictCount(),
+			LastInferLatencyUS: stream.LastInferLatencyUs(),
+			AvgInferLatencyUS:  stream.AvgInferLatencyUs(),
+			P95InferLatencyUS:  stream.P95InferLatencyUs(),
+			FrameCount:         stream.FrameCount(),
+			LastFrameTS:        stream.LastFrameTsNs(),
+		})
+	}
+
+	return &EngineMetricsSnapshot{
+		Streams:                streams,
+		ActiveStreamCount:      msg.ActiveStreamCount(),
+		DMAUsedBytes:           msg.DmaUsedBytes(),
+		DMATotalBytes:          msg.DmaTotalBytes(),
+		NPUUsedBytes:           msg.NpuUsedBytes(),
+		NPUTotalBytes:          msg.NpuTotalBytes(),
+		WorkerCount:            msg.WorkerCount(),
+		IdleWorkerCount:        msg.IdleWorkerCount(),
+		TimestampNS:            msg.TimestampNs(),
+		DecodeSessions:         msg.DecodeSessions(),
+		EncodeSessions:         msg.EncodeSessions(),
+		DecodeSlotsUsed:        msg.DecodeSlotsUsed(),
+		EncodeSlotsUsed:        msg.EncodeSlotsUsed(),
+		EgressBPS:              msg.EgressBps(),
+		PreviewPipelineCount:   msg.PreviewPipelineCount(),
+		InferencePipelineCount: msg.InferencePipelineCount(),
+		MixedPipelineCount:     msg.MixedPipelineCount(),
+		MediaMetricsValid:      msg.MediaMetricsValid(),
+	}
 }
 
 // ============================================================

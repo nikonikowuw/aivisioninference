@@ -48,6 +48,10 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			current_load INTEGER DEFAULT 0,
 			max_load INTEGER DEFAULT 1,
 			embedding_capacity INTEGER DEFAULT 1,
+			media_decode_capacity INTEGER NOT NULL DEFAULT 0,
+			media_encode_capacity INTEGER NOT NULL DEFAULT 0,
+			media_egress_capacity_bps INTEGER NOT NULL DEFAULT 0,
+			media_metrics_ttl_seconds INTEGER NOT NULL DEFAULT 0,
 			engine_version TEXT,
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
@@ -237,16 +241,22 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 
 	// 1. Create Node
 	createReq := dto.CreateEdgeNodeRequest{
-		Name:     "Edge Node 1",
-		Endpoint: "http://192.168.1.10:8080",
-		MaxLoad:  5,
-		Remark:   "Init",
+		Name:                   "Edge Node 1",
+		Endpoint:               "http://192.168.1.10:8080",
+		MaxLoad:                5,
+		MediaDecodeCapacity:    8,
+		MediaEncodeCapacity:    4,
+		MediaEgressCapacityBPS: 100_000_000,
+		MediaMetricsTTLSeconds: 15,
+		Remark:                 "Init",
 	}
 	node, token, err := svc.Create(ctx, createReq)
 	require.NoError(t, err)
 	assert.NotEmpty(t, node.ID)
 	assert.NotEmpty(t, token)
 	assert.Equal(t, model.NodeStatusOffline, node.Status)
+	assert.Equal(t, 8, node.MediaDecodeCapacity)
+	assert.Equal(t, int64(100_000_000), node.MediaEgressCapacityBPS)
 
 	// Create duplicate
 	_, _, err = svc.Create(ctx, createReq)
@@ -273,10 +283,16 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 
 	// 4. Update
 	enabledVal := true
+	zero := 0
+	zeroBPS := int64(0)
 	updateReq := dto.UpdateEdgeNodeRequest{
-		Name:    "Edge Node 1 Updated",
-		Enabled: &enabledVal,
-		Remark:  "Updated remark",
+		Name:                   "Edge Node 1 Updated",
+		Enabled:                &enabledVal,
+		MediaDecodeCapacity:    &zero,
+		MediaEncodeCapacity:    &zero,
+		MediaEgressCapacityBPS: &zeroBPS,
+		MediaMetricsTTLSeconds: &zero,
+		Remark:                 "Updated remark",
 	}
 	err = svc.Update(ctx, node.ID, updateReq)
 	require.NoError(t, err)
@@ -284,6 +300,8 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	found2, _ := svc.GetByID(ctx, node.ID)
 	assert.Equal(t, "Edge Node 1 Updated", found2.Name)
 	assert.Equal(t, "Updated remark", found2.Remark)
+	assert.Zero(t, found2.MediaDecodeCapacity)
+	assert.Zero(t, found2.MediaEgressCapacityBPS)
 
 	// 5. DeployAlgorithm: offline node (should fail)
 	deployReq := dto.DeployAlgorithmRequest{

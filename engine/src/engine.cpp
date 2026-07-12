@@ -189,8 +189,31 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
 
   metrics_reporter_ = std::make_unique<monitor::MetricsReporter>(
       response_router_.get(), worker_pool_.get(), buffer_pool_.get(),
-      queue_mgr_.get(), algo_mgr_.get(),
+      queue_mgr_.get(), algo_mgr_.get(), pipeline_mgr_.get(),
       monitor::MetricsReporterConfig{config.metrics_interval_ms});
+  metrics_reporter_->SetMetricsCallback([this](const monitor::EngineMetrics &metrics) {
+    flatbuffers::FlatBufferBuilder builder(2048);
+    aivision::control::EngineMetricsMsgBuilder msg(builder);
+    msg.add_active_stream_count(metrics.active_stream_count);
+    msg.add_dma_used_bytes(metrics.dma_used_bytes);
+    msg.add_dma_total_bytes(metrics.dma_total_bytes);
+    msg.add_npu_used_bytes(metrics.npu_used_bytes);
+    msg.add_npu_total_bytes(metrics.npu_total_bytes);
+    msg.add_worker_count(metrics.worker_count);
+    msg.add_idle_worker_count(metrics.idle_worker_count);
+    msg.add_timestamp_ns(metrics.timestamp_ns);
+    msg.add_decode_sessions(metrics.decode_sessions);
+    msg.add_encode_sessions(metrics.encode_sessions);
+    msg.add_decode_slots_used(metrics.decode_slots_used);
+    msg.add_encode_slots_used(metrics.encode_slots_used);
+    msg.add_egress_bps(metrics.egress_bps);
+    msg.add_preview_pipeline_count(metrics.preview_pipeline_count);
+    msg.add_inference_pipeline_count(metrics.inference_pipeline_count);
+    msg.add_mixed_pipeline_count(metrics.mixed_pipeline_count);
+    msg.add_media_metrics_valid(metrics.media_metrics_valid);
+    builder.Finish(msg.Finish());
+    PublishEvent(0x0203, builder);
+  });
 
   // 创建 HeartbeatReporter
   heartbeat_reporter_ = std::make_unique<monitor::HeartbeatReporter>(this);

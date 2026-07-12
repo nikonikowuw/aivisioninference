@@ -24,11 +24,12 @@ import (
 
 // EdgeMqttHandler processes MQTT messages received from the edge nodes.
 type EdgeMqttHandler struct {
-	nodeSvc     *service.EdgeNodeService
-	syncManager *mqttsync.MqttSyncManager
-	taskClient  *task.Client
-	rdb         *redis.Client
-	hub         *ws.Hub
+	nodeSvc      *service.EdgeNodeService
+	syncManager  *mqttsync.MqttSyncManager
+	taskClient   *task.Client
+	rdb          *redis.Client
+	hub          *ws.Hub
+	metricsStore *service.EngineMetricsStore
 }
 
 // NewEdgeMqttHandler creates a new EdgeMqttHandler.
@@ -38,14 +39,31 @@ func NewEdgeMqttHandler(
 	taskClient *task.Client,
 	rdb *redis.Client,
 	hub *ws.Hub,
+	metricsStore *service.EngineMetricsStore,
 ) *EdgeMqttHandler {
 	return &EdgeMqttHandler{
-		nodeSvc:     nodeSvc,
-		syncManager: syncManager,
-		taskClient:  taskClient,
-		rdb:         rdb,
-		hub:         hub,
+		nodeSvc:      nodeSvc,
+		syncManager:  syncManager,
+		taskClient:   taskClient,
+		rdb:          rdb,
+		hub:          hub,
+		metricsStore: metricsStore,
 	}
+}
+
+// HandleEngineMetrics stores the latest media and inference metrics for one node.
+func (h *EdgeMqttHandler) HandleEngineMetrics(msg mqtt.Message) {
+	topicParts := strings.Split(msg.Topic(), "/")
+	if len(topicParts) < 3 || h.metricsStore == nil {
+		return
+	}
+	nodeID := topicParts[2]
+	snapshot := controlproto.FlatBuffersToEngineMetrics(msg.Payload())
+	if snapshot == nil {
+		zap.L().Warn("MQTT: invalid engine metrics payload", zap.String("node_id", nodeID))
+		return
+	}
+	h.metricsStore.UpdateNode(nodeID, snapshot)
 }
 
 // HandleHeartbeat processes a heartbeat message from an edge node.

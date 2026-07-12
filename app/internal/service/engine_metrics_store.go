@@ -32,6 +32,13 @@ type EngineMetricsStore struct {
 	updateCount atomic.Uint64
 
 	logger *zap.Logger
+	nodes  map[string]*NodeEngineMetrics
+}
+
+// NodeEngineMetrics is the latest metrics snapshot and receive time for one edge node.
+type NodeEngineMetrics struct {
+	Snapshot   *controlproto.EngineMetricsSnapshot
+	ReceivedAt time.Time
 }
 
 // NewEngineMetricsStore 创建引擎指标存储
@@ -40,9 +47,61 @@ func NewEngineMetricsStore(historyBuffer *HistoryBuffer) *EngineMetricsStore {
 		streamMetrics: make(map[string]*controlproto.StreamMetricsSnapshot),
 		historyBuffer: historyBuffer,
 		logger:        zap.L().With(zap.String("component", "engine_metrics_store")),
+		nodes:         make(map[string]*NodeEngineMetrics),
 	}
 	store.lastUpdateTime.Store(time.Time{})
 	return store
+}
+
+// UpdateNode updates a node-scoped snapshot without mixing metrics from other nodes.
+func (s *EngineMetricsStore) UpdateNode(nodeID string, snapshot *controlproto.EngineMetricsSnapshot) {
+	if nodeID == "" || snapshot == nil {
+		return
+	}
+	now := time.Now()
+	s.mu.Lock()
+	s.nodes[nodeID] = &NodeEngineMetrics{Snapshot: cloneEngineMetrics(snapshot), ReceivedAt: now}
+	s.mu.Unlock()
+	s.Update(cloneEngineMetrics(snapshot))
+}
+
+// GetNodeLatest returns a copy of one node's latest snapshot and its control-plane receive time.
+func (s *EngineMetricsStore) GetNodeLatest(nodeID string) (*controlproto.EngineMetricsSnapshot, time.Time) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry := s.nodes[nodeID]
+	if entry == nil || entry.Snapshot == nil {
+		return nil, time.Time{}
+	}
+	return cloneEngineMetrics(entry.Snapshot), entry.ReceivedAt
+}
+
+// GetFreshNodeMediaMetrics returns a schedulable snapshot only when both the
+// engine collection timestamp and control-plane receive time are within TTL.
+func (s *EngineMetricsStore) GetFreshNodeMediaMetrics(nodeID string, now time.Time, ttl time.Duration) (*controlproto.EngineMetricsSnapshot, bool) {
+	snapshot, receivedAt := s.GetNodeLatest(nodeID)
+	if snapshot == nil || !snapshot.MediaMetricsValid || ttl <= 0 || receivedAt.IsZero() {
+		return nil, false
+	}
+	collectedAt := time.Unix(0, int64(snapshot.TimestampNS))
+	if snapshot.TimestampNS == 0 || collectedAt.After(now) || receivedAt.After(now) {
+		return nil, false
+	}
+	if now.Sub(collectedAt) > ttl || now.Sub(receivedAt) > ttl {
+		return nil, false
+	}
+	return snapshot, true
+}
+
+func cloneEngineMetrics(snapshot *controlproto.EngineMetricsSnapshot) *controlproto.EngineMetricsSnapshot {
+	if snapshot == nil {
+		return nil
+	}
+	cp := *snapshot
+	if len(snapshot.Streams) > 0 {
+		cp.Streams = append([]controlproto.StreamMetricsSnapshot(nil), snapshot.Streams...)
+	}
+	return &cp
 }
 
 // Update 更新指标 (由 MetricsReceiver 调用)
@@ -88,13 +147,7 @@ func (s *EngineMetricsStore) GetLatest() *controlproto.EngineMetricsSnapshot {
 	}
 
 	// 返回深度拷贝
-	cp := *s.lastMetrics
-	if len(s.lastMetrics.Streams) > 0 {
-		cp.Streams = make([]controlproto.StreamMetricsSnapshot,
-			len(s.lastMetrics.Streams))
-		copy(cp.Streams, s.lastMetrics.Streams)
-	}
-	return &cp
+	return cloneEngineMetrics(s.lastMetrics)
 }
 
 // GetStreamMetrics 获取指定流的指标
@@ -140,16 +193,16 @@ func (s *EngineMetricsStore) GetUpdateCount() uint64 {
 
 // EngineMetricsSummary 引擎指标摘要（用于 API 响应）
 type EngineMetricsSummary struct {
-	ActiveStreams  uint32  `json:"active_streams"`
-	DMAUsedMB      float64 `json:"dma_used_mb"`
-	DMATotalMB     float64 `json:"dma_total_mb"`
-	NPUUsedMB      float64 `json:"npu_used_mb"`
-	NPUTotalMB     float64 `json:"npu_total_mb"`
-	WorkerCount    uint32  `json:"worker_count"`
-	IdleWorkers    uint32  `json:"idle_workers"`
-	LastUpdate     string  `json:"last_update"`
-	UpdateCount    uint64  `json:"update_count"`
-	IsStale        bool    `json:"is_stale"`
+	ActiveStreams uint32  `json:"active_streams"`
+	DMAUsedMB     float64 `json:"dma_used_mb"`
+	DMATotalMB    float64 `json:"dma_total_mb"`
+	NPUUsedMB     float64 `json:"npu_used_mb"`
+	NPUTotalMB    float64 `json:"npu_total_mb"`
+	WorkerCount   uint32  `json:"worker_count"`
+	IdleWorkers   uint32  `json:"idle_workers"`
+	LastUpdate    string  `json:"last_update"`
+	UpdateCount   uint64  `json:"update_count"`
+	IsStale       bool    `json:"is_stale"`
 }
 
 // GetSummary 获取摘要

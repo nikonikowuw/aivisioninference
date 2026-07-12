@@ -64,6 +64,9 @@ namespace aivision
             uint32_t inference_pipeline_count = 0;
             uint32_t mixed_pipeline_count = 0;
             bool media_metrics_valid = false;
+			uint32_t preview_capacity = 0;
+			uint32_t preview_in_use = 0;
+			bool preview_capacity_valid = false;
         };
 
         /// 指标回调 (由 MetricsReporter 构造后传递)
@@ -77,6 +80,7 @@ namespace aivision
 
             /// 指标采集超时 (毫秒)
             uint32_t collect_timeout_ms = 1000;
+			uint32_t preview_capacity = 0;
         };
 
         /// MetricsReporter — 引擎指标上报器

@@ -14,13 +14,6 @@ import (
 	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
-// MediaResourceVector is a media pipeline's capacity usage or requested delta.
-type MediaResourceVector struct {
-	DecodeSlots uint32
-	EncodeSlots uint32
-	EgressBPS   uint64
-}
-
 // MediaNodeCandidate contains the static capacity and latest observed usage of a node.
 type MediaNodeCandidate struct {
 	NodeID       string
@@ -29,9 +22,9 @@ type MediaNodeCandidate struct {
 	MetricsValid bool
 	MetricsAt    time.Time
 	MetricsTTL   time.Duration
-	Capacity     MediaResourceVector
-	Usage        MediaResourceVector
-	Pending      MediaResourceVector
+	Capacity     uint32
+	Usage        uint32
+	Pending      uint32
 }
 
 // MediaScheduleDecision describes either the selected node or why no node is eligible.
@@ -78,7 +71,7 @@ func (s *MediaCapacityScheduler) Release(ctx context.Context, reservationID stri
 }
 
 // Reserve selects a node and persists a lease in the same database transaction.
-func (s *MediaCapacityScheduler) Reserve(ctx context.Context, streamKey string, demand MediaResourceVector, lease time.Duration) (*model.MediaCapacityReservation, MediaScheduleDecision, error) {
+func (s *MediaCapacityScheduler) Reserve(ctx context.Context, streamKey string, lease time.Duration) (*model.MediaCapacityReservation, MediaScheduleDecision, error) {
 	if streamKey == "" || lease <= 0 {
 		return nil, MediaScheduleDecision{}, fmt.Errorf("invalid media capacity reservation request")
 	}
@@ -87,7 +80,7 @@ func (s *MediaCapacityScheduler) Reserve(ctx context.Context, streamKey string, 
 	var decision MediaScheduleDecision
 	var err error
 	for attempt := 0; attempt < 5; attempt++ {
-		reservation, decision, err = s.reserveOnce(ctx, streamKey, demand, lease)
+		reservation, decision, err = s.reserveOnce(ctx, streamKey, lease)
 		if err == nil || !isRetryableMediaReservationError(err) {
 			return reservation, decision, err
 		}
@@ -100,7 +93,7 @@ func (s *MediaCapacityScheduler) Reserve(ctx context.Context, streamKey string, 
 	return nil, decision, err
 }
 
-func (s *MediaCapacityScheduler) reserveOnce(ctx context.Context, streamKey string, demand MediaResourceVector, lease time.Duration) (*model.MediaCapacityReservation, MediaScheduleDecision, error) {
+func (s *MediaCapacityScheduler) reserveOnce(ctx context.Context, streamKey string, lease time.Duration) (*model.MediaCapacityReservation, MediaScheduleDecision, error) {
 	now := s.now()
 	var result *model.MediaCapacityReservation
 	var decision MediaScheduleDecision
@@ -128,13 +121,9 @@ func (s *MediaCapacityScheduler) reserveOnce(ctx context.Context, streamKey stri
 		if err != nil {
 			return fmt.Errorf("list media reservations: %w", err)
 		}
-		pending := make(map[string]MediaResourceVector)
+		pending := make(map[string]uint32)
 		for _, item := range reservations {
-			usage := pending[item.NodeID]
-			usage.DecodeSlots += item.DecodeSlots
-			usage.EncodeSlots += item.EncodeSlots
-			usage.EgressBPS += item.EgressBPS
-			pending[item.NodeID] = usage
+			pending[item.NodeID] += item.PreviewSlots
 		}
 
 		candidates := make([]MediaNodeCandidate, 0, len(nodes))
@@ -144,27 +133,24 @@ func (s *MediaCapacityScheduler) reserveOnce(ctx context.Context, streamKey stri
 			candidate := MediaNodeCandidate{
 				NodeID: node.ID, Online: node.Status == model.NodeStatusOnline, Enabled: node.Enabled,
 				MetricsValid: valid, MetricsAt: now, MetricsTTL: ttl,
-				Capacity: MediaResourceVector{
-					DecodeSlots: nonNegativeUint32(node.MediaDecodeCapacity),
-					EncodeSlots: nonNegativeUint32(node.MediaEncodeCapacity),
-					EgressBPS:   nonNegativeUint64(node.MediaEgressCapacityBPS),
-				},
 				Pending: pending[node.ID],
 			}
 			if valid {
-				candidate.Usage = MediaResourceVector{DecodeSlots: snapshot.DecodeSlotsUsed, EncodeSlots: snapshot.EncodeSlotsUsed, EgressBPS: snapshot.EgressBPS}
+				candidate.Capacity = snapshot.PreviewCapacity
+				candidate.Usage = snapshot.PreviewInUse
+				candidate.MetricsAt = time.Unix(0, int64(snapshot.TimestampNS))
 			}
 			candidates = append(candidates, candidate)
 		}
-		decision = SelectMediaNode(now, candidates, demand)
+		decision = SelectMediaNode(now, candidates)
 		if decision.NodeID == "" {
 			return nil
 		}
 		expires := now.Add(lease)
 		result = &model.MediaCapacityReservation{
 			StreamKey: streamKey, NodeID: decision.NodeID,
-			DecodeSlots: demand.DecodeSlots, EncodeSlots: demand.EncodeSlots, EgressBPS: demand.EgressBPS,
-			Status: model.MediaReservationPending, LeaseExpires: &expires,
+			PreviewSlots: 1,
+			Status:       model.MediaReservationPending, LeaseExpires: &expires,
 		}
 		if err := reserveRepo.Create(ctx, result); err != nil {
 			return fmt.Errorf("create media reservation: %w", err)
@@ -179,23 +165,8 @@ func isRetryableMediaReservationError(err error) bool {
 	return strings.Contains(message, "database is locked") || strings.Contains(message, "deadlock detected") || strings.Contains(message, "serialization failure")
 }
 
-func nonNegativeUint32(value int) uint32 {
-	if value <= 0 {
-		return 0
-	}
-	return uint32(value)
-}
-
-func nonNegativeUint64(value int64) uint64 {
-	if value <= 0 {
-		return 0
-	}
-	return uint64(value)
-}
-
-// SelectMediaNode applies hard capacity constraints and minimizes the maximum
-// post-admission utilization. Node ID is the deterministic tie-breaker.
-func SelectMediaNode(now time.Time, candidates []MediaNodeCandidate, demand MediaResourceVector) MediaScheduleDecision {
+// SelectMediaNode admits one preview slot and minimizes post-admission utilization.
+func SelectMediaNode(now time.Time, candidates []MediaNodeCandidate) MediaScheduleDecision {
 	type rankedCandidate struct {
 		nodeID string
 		score  float64
@@ -204,20 +175,13 @@ func SelectMediaNode(now time.Time, candidates []MediaNodeCandidate, demand Medi
 	decision := MediaScheduleDecision{Rejections: make(map[string][]string)}
 	ranked := make([]rankedCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		reasons := mediaCandidateRejections(now, candidate, demand)
+		reasons := mediaCandidateRejections(now, candidate)
 		if len(reasons) > 0 {
 			decision.Rejections[candidate.NodeID] = reasons
 			continue
 		}
 
-		decodeUsed := candidate.Usage.DecodeSlots + candidate.Pending.DecodeSlots + demand.DecodeSlots
-		encodeUsed := candidate.Usage.EncodeSlots + candidate.Pending.EncodeSlots + demand.EncodeSlots
-		egressUsed := candidate.Usage.EgressBPS + candidate.Pending.EgressBPS + demand.EgressBPS
-		score := maxFloat(
-			float64(decodeUsed)/float64(candidate.Capacity.DecodeSlots),
-			float64(encodeUsed)/float64(candidate.Capacity.EncodeSlots),
-			float64(egressUsed)/float64(candidate.Capacity.EgressBPS),
-		)
+		score := float64(candidate.Usage+candidate.Pending+1) / float64(candidate.Capacity)
 		ranked = append(ranked, rankedCandidate{nodeID: candidate.NodeID, score: score})
 	}
 
@@ -235,7 +199,7 @@ func SelectMediaNode(now time.Time, candidates []MediaNodeCandidate, demand Medi
 	return decision
 }
 
-func mediaCandidateRejections(now time.Time, candidate MediaNodeCandidate, demand MediaResourceVector) []string {
+func mediaCandidateRejections(now time.Time, candidate MediaNodeCandidate) []string {
 	reasons := make([]string, 0, 4)
 	if !candidate.Online {
 		reasons = append(reasons, "offline")
@@ -243,31 +207,15 @@ func mediaCandidateRejections(now time.Time, candidate MediaNodeCandidate, deman
 	if !candidate.Enabled {
 		reasons = append(reasons, "disabled")
 	}
-	if candidate.Capacity.DecodeSlots == 0 || candidate.Capacity.EncodeSlots == 0 || candidate.Capacity.EgressBPS == 0 {
+	if candidate.Capacity == 0 {
 		reasons = append(reasons, "unconfigured")
 		return reasons
 	}
 	if !candidate.MetricsValid || candidate.MetricsTTL <= 0 || candidate.MetricsAt.IsZero() || now.Sub(candidate.MetricsAt) > candidate.MetricsTTL || candidate.MetricsAt.After(now) {
 		reasons = append(reasons, "stale_metrics")
 	}
-	if candidate.Usage.DecodeSlots+candidate.Pending.DecodeSlots+demand.DecodeSlots > candidate.Capacity.DecodeSlots {
-		reasons = append(reasons, "decode")
-	}
-	if candidate.Usage.EncodeSlots+candidate.Pending.EncodeSlots+demand.EncodeSlots > candidate.Capacity.EncodeSlots {
-		reasons = append(reasons, "encode")
-	}
-	if candidate.Usage.EgressBPS+candidate.Pending.EgressBPS+demand.EgressBPS > candidate.Capacity.EgressBPS {
-		reasons = append(reasons, "bandwidth")
+	if candidate.Usage+candidate.Pending+1 > candidate.Capacity {
+		reasons = append(reasons, "preview_full")
 	}
 	return reasons
-}
-
-func maxFloat(values ...float64) float64 {
-	var result float64
-	for _, value := range values {
-		if value > result {
-			result = value
-		}
-	}
-	return result
 }

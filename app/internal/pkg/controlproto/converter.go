@@ -482,6 +482,9 @@ type EngineMetricsSnapshot struct {
 	InferencePipelineCount uint32
 	MixedPipelineCount     uint32
 	MediaMetricsValid      bool
+	PreviewCapacity        uint32
+	PreviewInUse           uint32
+	PreviewCapacityValid   bool
 }
 
 // FlatBuffersToEngineMetrics parses an EngineMetricsMsg payload, with or without a ControlEnvelope.
@@ -541,6 +544,9 @@ func FlatBuffersToEngineMetrics(fbData []byte) *EngineMetricsSnapshot {
 		InferencePipelineCount: msg.InferencePipelineCount(),
 		MixedPipelineCount:     msg.MixedPipelineCount(),
 		MediaMetricsValid:      msg.MediaMetricsValid(),
+		PreviewCapacity:        msg.PreviewCapacity(),
+		PreviewInUse:           msg.PreviewInUse(),
+		PreviewCapacityValid:   msg.PreviewCapacityValid(),
 	}
 }
 

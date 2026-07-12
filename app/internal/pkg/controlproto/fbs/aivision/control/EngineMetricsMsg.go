@@ -6,8 +6,8 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
-// / 引擎全局指标 (SignalType.EngineMetrics)
-// / C++ MetricsReporter 每 5 秒主动推送
+/// 引擎全局指标 (SignalType.EngineMetrics)
+/// C++ MetricsReporter 每 5 秒主动推送
 type EngineMetricsMsg struct {
 	_tab flatbuffers.Table
 }
@@ -43,7 +43,7 @@ func (rcv *EngineMetricsMsg) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-// / 各流指标快照
+/// 各流指标快照
 func (rcv *EngineMetricsMsg) Streams(obj *StreamMetrics, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
@@ -64,8 +64,8 @@ func (rcv *EngineMetricsMsg) StreamsLength() int {
 	return 0
 }
 
-// / 各流指标快照
-// / 活跃流数
+/// 各流指标快照
+/// 活跃流数
 func (rcv *EngineMetricsMsg) ActiveStreamCount() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
@@ -74,12 +74,12 @@ func (rcv *EngineMetricsMsg) ActiveStreamCount() uint32 {
 	return 0
 }
 
-// / 活跃流数
+/// 活跃流数
 func (rcv *EngineMetricsMsg) MutateActiveStreamCount(n uint32) bool {
 	return rcv._tab.MutateUint32Slot(6, n)
 }
 
-// / DMA 已用字节
+/// DMA 已用字节
 func (rcv *EngineMetricsMsg) DmaUsedBytes() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
@@ -88,12 +88,12 @@ func (rcv *EngineMetricsMsg) DmaUsedBytes() uint64 {
 	return 0
 }
 
-// / DMA 已用字节
+/// DMA 已用字节
 func (rcv *EngineMetricsMsg) MutateDmaUsedBytes(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(8, n)
 }
 
-// / DMA 总容量
+/// DMA 总容量
 func (rcv *EngineMetricsMsg) DmaTotalBytes() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
@@ -102,12 +102,12 @@ func (rcv *EngineMetricsMsg) DmaTotalBytes() uint64 {
 	return 0
 }
 
-// / DMA 总容量
+/// DMA 总容量
 func (rcv *EngineMetricsMsg) MutateDmaTotalBytes(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(10, n)
 }
 
-// / NPU 已用字节
+/// NPU 已用字节
 func (rcv *EngineMetricsMsg) NpuUsedBytes() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
@@ -116,12 +116,12 @@ func (rcv *EngineMetricsMsg) NpuUsedBytes() uint64 {
 	return 0
 }
 
-// / NPU 已用字节
+/// NPU 已用字节
 func (rcv *EngineMetricsMsg) MutateNpuUsedBytes(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(12, n)
 }
 
-// / NPU 总容量
+/// NPU 总容量
 func (rcv *EngineMetricsMsg) NpuTotalBytes() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
@@ -130,12 +130,12 @@ func (rcv *EngineMetricsMsg) NpuTotalBytes() uint64 {
 	return 0
 }
 
-// / NPU 总容量
+/// NPU 总容量
 func (rcv *EngineMetricsMsg) MutateNpuTotalBytes(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(14, n)
 }
 
-// / Worker 总数
+/// Worker 总数
 func (rcv *EngineMetricsMsg) WorkerCount() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
@@ -144,12 +144,12 @@ func (rcv *EngineMetricsMsg) WorkerCount() uint32 {
 	return 0
 }
 
-// / Worker 总数
+/// Worker 总数
 func (rcv *EngineMetricsMsg) MutateWorkerCount(n uint32) bool {
 	return rcv._tab.MutateUint32Slot(16, n)
 }
 
-// / 空闲 Worker 数
+/// 空闲 Worker 数
 func (rcv *EngineMetricsMsg) IdleWorkerCount() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
@@ -158,12 +158,12 @@ func (rcv *EngineMetricsMsg) IdleWorkerCount() uint32 {
 	return 0
 }
 
-// / 空闲 Worker 数
+/// 空闲 Worker 数
 func (rcv *EngineMetricsMsg) MutateIdleWorkerCount(n uint32) bool {
 	return rcv._tab.MutateUint32Slot(18, n)
 }
 
-// / 时间戳 (Unix 纳秒)
+/// 时间戳 (Unix 纳秒)
 func (rcv *EngineMetricsMsg) TimestampNs() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
 	if o != 0 {
@@ -172,11 +172,12 @@ func (rcv *EngineMetricsMsg) TimestampNs() uint64 {
 	return 0
 }
 
-// / 时间戳 (Unix 纳秒)
+/// 时间戳 (Unix 纳秒)
 func (rcv *EngineMetricsMsg) MutateTimestampNs(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(20, n)
 }
 
+/// 当前解码会话数
 func (rcv *EngineMetricsMsg) DecodeSessions() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
 	if o != 0 {
@@ -185,6 +186,12 @@ func (rcv *EngineMetricsMsg) DecodeSessions() uint32 {
 	return 0
 }
 
+/// 当前解码会话数
+func (rcv *EngineMetricsMsg) MutateDecodeSessions(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(22, n)
+}
+
+/// 当前编码会话数
 func (rcv *EngineMetricsMsg) EncodeSessions() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(24))
 	if o != 0 {
@@ -193,6 +200,12 @@ func (rcv *EngineMetricsMsg) EncodeSessions() uint32 {
 	return 0
 }
 
+/// 当前编码会话数
+func (rcv *EngineMetricsMsg) MutateEncodeSessions(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(24, n)
+}
+
+/// 已占用解码槽
 func (rcv *EngineMetricsMsg) DecodeSlotsUsed() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
 	if o != 0 {
@@ -201,6 +214,12 @@ func (rcv *EngineMetricsMsg) DecodeSlotsUsed() uint32 {
 	return 0
 }
 
+/// 已占用解码槽
+func (rcv *EngineMetricsMsg) MutateDecodeSlotsUsed(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(26, n)
+}
+
+/// 已占用编码槽
 func (rcv *EngineMetricsMsg) EncodeSlotsUsed() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
 	if o != 0 {
@@ -209,6 +228,12 @@ func (rcv *EngineMetricsMsg) EncodeSlotsUsed() uint32 {
 	return 0
 }
 
+/// 已占用编码槽
+func (rcv *EngineMetricsMsg) MutateEncodeSlotsUsed(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(28, n)
+}
+
+/// 当前媒体出口带宽 (bit/s)
 func (rcv *EngineMetricsMsg) EgressBps() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
 	if o != 0 {
@@ -217,6 +242,12 @@ func (rcv *EngineMetricsMsg) EgressBps() uint64 {
 	return 0
 }
 
+/// 当前媒体出口带宽 (bit/s)
+func (rcv *EngineMetricsMsg) MutateEgressBps(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(30, n)
+}
+
+/// 仅预览 Pipeline 数
 func (rcv *EngineMetricsMsg) PreviewPipelineCount() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
 	if o != 0 {
@@ -225,6 +256,12 @@ func (rcv *EngineMetricsMsg) PreviewPipelineCount() uint32 {
 	return 0
 }
 
+/// 仅预览 Pipeline 数
+func (rcv *EngineMetricsMsg) MutatePreviewPipelineCount(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(32, n)
+}
+
+/// 仅推理 Pipeline 数
 func (rcv *EngineMetricsMsg) InferencePipelineCount() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
 	if o != 0 {
@@ -233,6 +270,12 @@ func (rcv *EngineMetricsMsg) InferencePipelineCount() uint32 {
 	return 0
 }
 
+/// 仅推理 Pipeline 数
+func (rcv *EngineMetricsMsg) MutateInferencePipelineCount(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(34, n)
+}
+
+/// 同时预览和推理的 Pipeline 数
 func (rcv *EngineMetricsMsg) MixedPipelineCount() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(36))
 	if o != 0 {
@@ -241,6 +284,12 @@ func (rcv *EngineMetricsMsg) MixedPipelineCount() uint32 {
 	return 0
 }
 
+/// 同时预览和推理的 Pipeline 数
+func (rcv *EngineMetricsMsg) MutateMixedPipelineCount(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(36, n)
+}
+
+/// 新版 Engine 已采集媒体指标；用于区分旧版缺字段与真实零使用量
 func (rcv *EngineMetricsMsg) MediaMetricsValid() bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(38))
 	if o != 0 {
@@ -249,8 +298,55 @@ func (rcv *EngineMetricsMsg) MediaMetricsValid() bool {
 	return false
 }
 
+/// 新版 Engine 已采集媒体指标；用于区分旧版缺字段与真实零使用量
+func (rcv *EngineMetricsMsg) MutateMediaMetricsValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(38, n)
+}
+
+/// 设备出厂确定的最大并发预览数
+func (rcv *EngineMetricsMsg) PreviewCapacity() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(40))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+/// 设备出厂确定的最大并发预览数
+func (rcv *EngineMetricsMsg) MutatePreviewCapacity(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(40, n)
+}
+
+/// 当前已启用预览输出的唯一 Pipeline 数
+func (rcv *EngineMetricsMsg) PreviewInUse() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(42))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+/// 当前已启用预览输出的唯一 Pipeline 数
+func (rcv *EngineMetricsMsg) MutatePreviewInUse(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(42, n)
+}
+
+/// 预览容量配置有效；旧 Engine 和非法配置均为 false
+func (rcv *EngineMetricsMsg) PreviewCapacityValid() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(44))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+/// 预览容量配置有效；旧 Engine 和非法配置均为 false
+func (rcv *EngineMetricsMsg) MutatePreviewCapacityValid(n bool) bool {
+	return rcv._tab.MutateBoolSlot(44, n)
+}
+
 func EngineMetricsMsgStart(builder *flatbuffers.Builder) {
-	builder.StartObject(18)
+	builder.StartObject(21)
 }
 func EngineMetricsMsgAddStreams(builder *flatbuffers.Builder, streams flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(streams), 0)
@@ -282,32 +378,41 @@ func EngineMetricsMsgAddIdleWorkerCount(builder *flatbuffers.Builder, idleWorker
 func EngineMetricsMsgAddTimestampNs(builder *flatbuffers.Builder, timestampNs uint64) {
 	builder.PrependUint64Slot(8, timestampNs, 0)
 }
-func EngineMetricsMsgAddDecodeSessions(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(9, value, 0)
+func EngineMetricsMsgAddDecodeSessions(builder *flatbuffers.Builder, decodeSessions uint32) {
+	builder.PrependUint32Slot(9, decodeSessions, 0)
 }
-func EngineMetricsMsgAddEncodeSessions(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(10, value, 0)
+func EngineMetricsMsgAddEncodeSessions(builder *flatbuffers.Builder, encodeSessions uint32) {
+	builder.PrependUint32Slot(10, encodeSessions, 0)
 }
-func EngineMetricsMsgAddDecodeSlotsUsed(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(11, value, 0)
+func EngineMetricsMsgAddDecodeSlotsUsed(builder *flatbuffers.Builder, decodeSlotsUsed uint32) {
+	builder.PrependUint32Slot(11, decodeSlotsUsed, 0)
 }
-func EngineMetricsMsgAddEncodeSlotsUsed(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(12, value, 0)
+func EngineMetricsMsgAddEncodeSlotsUsed(builder *flatbuffers.Builder, encodeSlotsUsed uint32) {
+	builder.PrependUint32Slot(12, encodeSlotsUsed, 0)
 }
-func EngineMetricsMsgAddEgressBps(builder *flatbuffers.Builder, value uint64) {
-	builder.PrependUint64Slot(13, value, 0)
+func EngineMetricsMsgAddEgressBps(builder *flatbuffers.Builder, egressBps uint64) {
+	builder.PrependUint64Slot(13, egressBps, 0)
 }
-func EngineMetricsMsgAddPreviewPipelineCount(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(14, value, 0)
+func EngineMetricsMsgAddPreviewPipelineCount(builder *flatbuffers.Builder, previewPipelineCount uint32) {
+	builder.PrependUint32Slot(14, previewPipelineCount, 0)
 }
-func EngineMetricsMsgAddInferencePipelineCount(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(15, value, 0)
+func EngineMetricsMsgAddInferencePipelineCount(builder *flatbuffers.Builder, inferencePipelineCount uint32) {
+	builder.PrependUint32Slot(15, inferencePipelineCount, 0)
 }
-func EngineMetricsMsgAddMixedPipelineCount(builder *flatbuffers.Builder, value uint32) {
-	builder.PrependUint32Slot(16, value, 0)
+func EngineMetricsMsgAddMixedPipelineCount(builder *flatbuffers.Builder, mixedPipelineCount uint32) {
+	builder.PrependUint32Slot(16, mixedPipelineCount, 0)
 }
-func EngineMetricsMsgAddMediaMetricsValid(builder *flatbuffers.Builder, value bool) {
-	builder.PrependBoolSlot(17, value, false)
+func EngineMetricsMsgAddMediaMetricsValid(builder *flatbuffers.Builder, mediaMetricsValid bool) {
+	builder.PrependBoolSlot(17, mediaMetricsValid, false)
+}
+func EngineMetricsMsgAddPreviewCapacity(builder *flatbuffers.Builder, previewCapacity uint32) {
+	builder.PrependUint32Slot(18, previewCapacity, 0)
+}
+func EngineMetricsMsgAddPreviewInUse(builder *flatbuffers.Builder, previewInUse uint32) {
+	builder.PrependUint32Slot(19, previewInUse, 0)
+}
+func EngineMetricsMsgAddPreviewCapacityValid(builder *flatbuffers.Builder, previewCapacityValid bool) {
+	builder.PrependBoolSlot(20, previewCapacityValid, false)
 }
 func EngineMetricsMsgEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

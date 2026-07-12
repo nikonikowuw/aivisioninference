@@ -10,12 +10,12 @@
 
 ### 新增字段
 
-`EngineMetricsMsg` 追加解码/编码会话、槽位使用量、出口带宽、preview/inference/mixed Pipeline 数及 `media_metrics_valid`。所有字段均有零值默认值；新控制面通过有效位区分旧 Engine 缺失指标与新版 Engine 的真实零使用量。
+`EngineMetricsMsg` 追加解码/编码会话、槽位使用量、出口带宽、preview/inference/mixed Pipeline 数、`media_metrics_valid`，以及预览准入字段 `preview_capacity`、`preview_in_use`、`preview_capacity_valid`。预览容量来自 Engine 的 `NIKO_ENGINE_MAX_PREVIEW_STREAMS`，使用量按已启用 playback 的唯一 Pipeline 统计。
 
 ### 兼容性
 
 - 旧读取方自动忽略新增字段。
-- 新读取方读取旧 Engine 消息时得到零值且 `media_metrics_valid=false`，媒体自动调度安全降级为不可用。
+- 新读取方读取旧 Engine 消息时得到零值且 `preview_capacity_valid=false`，预览自动调度安全降级为不可用。
 
 ---
 

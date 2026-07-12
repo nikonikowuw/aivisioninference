@@ -22,7 +22,7 @@ type fixedMediaMetrics struct {
 }
 
 func (m fixedMediaMetrics) GetFreshNodeMediaMetrics(string, time.Time, time.Duration) (*controlproto.EngineMetricsSnapshot, bool) {
-	return &controlproto.EngineMetricsSnapshot{MediaMetricsValid: true, TimestampNS: uint64(m.now.UnixNano())}, true
+	return &controlproto.EngineMetricsSnapshot{PreviewCapacity: 1, PreviewCapacityValid: true, TimestampNS: uint64(m.now.UnixNano())}, true
 }
 
 func TestMediaCapacitySchedulerDoesNotOversubscribeLastSlot(t *testing.T) {
@@ -44,7 +44,7 @@ func TestMediaCapacitySchedulerDoesNotOversubscribeLastSlot(t *testing.T) {
 	require.NoError(t, db.Exec(`CREATE TABLE media_capacity_reservations (
 		id TEXT PRIMARY KEY, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME,
 		created_by TEXT, updated_by TEXT, stream_key TEXT NOT NULL UNIQUE, node_id TEXT NOT NULL,
-		decode_slots INTEGER NOT NULL, encode_slots INTEGER NOT NULL, egress_bps INTEGER NOT NULL,
+		decode_slots INTEGER NOT NULL, encode_slots INTEGER NOT NULL, egress_bps INTEGER NOT NULL, preview_slots INTEGER NOT NULL DEFAULT 1,
 		status TEXT NOT NULL, lease_expires DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`INSERT INTO edge_nodes
@@ -63,7 +63,7 @@ func TestMediaCapacitySchedulerDoesNotOversubscribeLastSlot(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			reservation, _, err := newScheduler().Reserve(context.Background(), fmt.Sprintf("stream-%d", index), MediaResourceVector{DecodeSlots: 1}, time.Minute)
+			reservation, _, err := newScheduler().Reserve(context.Background(), fmt.Sprintf("stream-%d", index), time.Minute)
 			results <- reservation
 			errs <- err
 		}(i)
@@ -94,12 +94,12 @@ func TestMediaCapacitySchedulerReclaimsExpiredLease(t *testing.T) {
 	scheduler := NewMediaCapacityScheduler(db, repository.NewEdgeNodeRepository(db), repository.NewMediaCapacityReservationRepository(db), fixedMediaMetrics{now: now})
 	scheduler.now = func() time.Time { return now }
 
-	first, _, err := scheduler.Reserve(context.Background(), "stream-reused", MediaResourceVector{DecodeSlots: 1}, time.Second)
+	first, _, err := scheduler.Reserve(context.Background(), "stream-reused", time.Second)
 	require.NoError(t, err)
 	require.NotNil(t, first)
 
 	now = now.Add(2 * time.Second)
-	second, _, err := scheduler.Reserve(context.Background(), "stream-reused", MediaResourceVector{DecodeSlots: 1}, time.Second)
+	second, _, err := scheduler.Reserve(context.Background(), "stream-reused", time.Second)
 	require.NoError(t, err)
 	require.NotNil(t, second)
 
@@ -123,7 +123,7 @@ func setupMediaCapacitySchedulerDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`CREATE TABLE media_capacity_reservations (
 		id TEXT PRIMARY KEY, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME,
 		created_by TEXT, updated_by TEXT, stream_key TEXT NOT NULL UNIQUE, node_id TEXT NOT NULL,
-		decode_slots INTEGER NOT NULL, encode_slots INTEGER NOT NULL, egress_bps INTEGER NOT NULL,
+		decode_slots INTEGER NOT NULL, encode_slots INTEGER NOT NULL, egress_bps INTEGER NOT NULL, preview_slots INTEGER NOT NULL DEFAULT 1,
 		status TEXT NOT NULL, lease_expires DATETIME
 	)`).Error)
 	require.NoError(t, db.Exec(`INSERT INTO edge_nodes

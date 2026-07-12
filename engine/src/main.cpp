@@ -102,6 +102,25 @@ static uint32_t GetEnvUInt32(const char *name, uint32_t default_value)
     }
 }
 
+static uint32_t GetPositiveEnvUInt32(const char *name)
+{
+    std::string value = GetEnvString(name);
+    if (value.empty()) {
+        std::cerr << "[Config] " << name << " is missing; preview scheduling disabled" << std::endl;
+        return 0;
+    }
+    try {
+        size_t parsed = 0;
+        unsigned long result = std::stoul(value, &parsed);
+        if (parsed != value.size() || result == 0 || result > UINT32_MAX)
+            throw std::out_of_range("not a positive uint32");
+        return static_cast<uint32_t>(result);
+    } catch (...) {
+        std::cerr << "[Config] " << name << " must be a positive integer; preview scheduling disabled" << std::endl;
+        return 0;
+    }
+}
+
 static std::string JoinPath(const std::string &dir, const std::string &file)
 {
     if (dir.empty())
@@ -151,6 +170,7 @@ static EngineConfig LoadConfigFromEnv()
     config.hal_config_json = GetEnvString("NIKO_ENGINE_HAL_CONFIG", config.hal_config_json);
     config.enable_ffmpeg_fallback = GetEnvBool("NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK", config.enable_ffmpeg_fallback);
     config.metrics_interval_ms = GetEnvUInt32("NIKO_ENGINE_METRICS_MS", config.metrics_interval_ms);
+	config.max_preview_streams = GetPositiveEnvUInt32("NIKO_ENGINE_MAX_PREVIEW_STREAMS");
     config.rtsp_push_server = GetEnvString("NIKO_ENGINE_RTSP_PUSH", config.rtsp_push_server);
     config.zlm_api_url = GetEnvString("NIKO_ENGINE_ZLM_URL", config.zlm_api_url);
     config.zlm_secret = GetEnvString("NIKO_ENGINE_ZLM_SECRET", config.zlm_secret);
@@ -210,7 +230,8 @@ static void PrintRuntimeConfig(const EngineConfig &config,
     }
     std::cout << "[Config] env_file=" << env_display << std::endl;
     std::cout << "[Config] workers=" << config.worker_count
-              << " metrics_ms=" << config.metrics_interval_ms << std::endl;
+              << " metrics_ms=" << config.metrics_interval_ms
+			  << " max_preview_streams=" << config.max_preview_streams << std::endl;
     std::cout << "[Config] hal_platform=" << DisplayVal(hal_platform)
               << " hal_so=" << DisplayVal(config.hal_so_path) << std::endl;
     std::cout << "[Config] fallback_hal_platform=" << DisplayVal(fallback_hal_platform)

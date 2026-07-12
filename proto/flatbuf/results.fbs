@@ -115,6 +115,12 @@ table EngineMetricsMsg {
     mixed_pipeline_count: uint;
     /// 新版 Engine 已采集媒体指标；用于区分旧版缺字段与真实零使用量
     media_metrics_valid: bool = false;
+    /// 设备出厂确定的最大并发预览数
+    preview_capacity: uint;
+    /// 当前已启用预览输出的唯一 Pipeline 数
+    preview_in_use: uint;
+    /// 预览容量配置有效；旧 Engine 和非法配置均为 false
+    preview_capacity_valid: bool = false;
 }
 
 /// 心跳回复 (SignalType.HeartbeatAck)

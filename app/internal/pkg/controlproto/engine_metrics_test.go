@@ -40,6 +40,9 @@ func buildEngineMetricsPayload(t *testing.T) []byte {
 	fbs.EngineMetricsMsgAddInferencePipelineCount(builder, 2)
 	fbs.EngineMetricsMsgAddMixedPipelineCount(builder, 1)
 	fbs.EngineMetricsMsgAddMediaMetricsValid(builder, true)
+	fbs.EngineMetricsMsgAddPreviewCapacity(builder, 8)
+	fbs.EngineMetricsMsgAddPreviewInUse(builder, 2)
+	fbs.EngineMetricsMsgAddPreviewCapacityValid(builder, true)
 	offset := fbs.EngineMetricsMsgEnd(builder)
 	builder.Finish(offset)
 	return builder.FinishedBytes()
@@ -55,7 +58,8 @@ func assertEngineMetricsSnapshot(t *testing.T, got *EngineMetricsSnapshot) {
 		got.DecodeSlotsUsed != 3 || got.EncodeSlotsUsed != 1 ||
 		got.EgressBPS != 8_000_000 || got.PreviewPipelineCount != 1 ||
 		got.InferencePipelineCount != 2 || got.MixedPipelineCount != 1 ||
-		!got.MediaMetricsValid {
+		!got.MediaMetricsValid || got.PreviewCapacity != 8 || got.PreviewInUse != 2 ||
+		!got.PreviewCapacityValid {
 		t.Fatalf("unexpected snapshot: %#v", got)
 	}
 }

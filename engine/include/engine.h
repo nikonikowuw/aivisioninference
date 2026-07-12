@@ -53,6 +53,9 @@ namespace aivision
         /// Metrics 上报间隔 (毫秒)
         uint32_t metrics_interval_ms = 5000;
 
+		/// Device-qualified concurrent preview capacity; zero means invalid/unconfigured.
+		uint32_t max_preview_streams = 0;
+
         /// 编码器配置 (JSON)
         std::string encoder_config_json =
             R"({"codec":"h264", "bitrate":4000000, "fps":25, "gop":50})";

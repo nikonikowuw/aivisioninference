@@ -190,7 +190,7 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
   metrics_reporter_ = std::make_unique<monitor::MetricsReporter>(
       response_router_.get(), worker_pool_.get(), buffer_pool_.get(),
       queue_mgr_.get(), algo_mgr_.get(), pipeline_mgr_.get(),
-      monitor::MetricsReporterConfig{config.metrics_interval_ms});
+      monitor::MetricsReporterConfig{config.metrics_interval_ms, 1000, config.max_preview_streams});
   metrics_reporter_->SetMetricsCallback([this](const monitor::EngineMetrics &metrics) {
     flatbuffers::FlatBufferBuilder builder(2048);
     aivision::control::EngineMetricsMsgBuilder msg(builder);
@@ -211,6 +211,9 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
     msg.add_inference_pipeline_count(metrics.inference_pipeline_count);
     msg.add_mixed_pipeline_count(metrics.mixed_pipeline_count);
     msg.add_media_metrics_valid(metrics.media_metrics_valid);
+	msg.add_preview_capacity(metrics.preview_capacity);
+	msg.add_preview_in_use(metrics.preview_in_use);
+	msg.add_preview_capacity_valid(metrics.preview_capacity_valid);
     builder.Finish(msg.Finish());
     PublishEvent(0x0203, builder);
   });

@@ -71,6 +71,8 @@ namespace aivision
         EngineMetrics MetricsReporter::CollectMetrics()
         {
             EngineMetrics metrics;
+			metrics.preview_capacity = config_.preview_capacity;
+			metrics.preview_capacity_valid = config_.preview_capacity > 0;
             metrics.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                        std::chrono::system_clock::now().time_since_epoch())
                                        .count();
@@ -140,6 +142,8 @@ namespace aivision
                         ++metrics.inference_pipeline_count;
                     else if (pipeline.playback_enabled)
                         ++metrics.preview_pipeline_count;
+					if (pipeline.playback_enabled)
+						++metrics.preview_in_use;
 
                     if (!pipeline.playback_enabled)
                         continue;

@@ -80,7 +80,8 @@ func (s *EngineMetricsStore) GetNodeLatest(nodeID string) (*controlproto.EngineM
 // engine collection timestamp and control-plane receive time are within TTL.
 func (s *EngineMetricsStore) GetFreshNodeMediaMetrics(nodeID string, now time.Time, ttl time.Duration) (*controlproto.EngineMetricsSnapshot, bool) {
 	snapshot, receivedAt := s.GetNodeLatest(nodeID)
-	if snapshot == nil || !snapshot.MediaMetricsValid || ttl <= 0 || receivedAt.IsZero() {
+	if snapshot == nil || !snapshot.PreviewCapacityValid || snapshot.PreviewCapacity == 0 ||
+		snapshot.PreviewInUse > snapshot.PreviewCapacity || ttl <= 0 || receivedAt.IsZero() {
 		return nil, false
 	}
 	collectedAt := time.Unix(0, int64(snapshot.TimestampNS))

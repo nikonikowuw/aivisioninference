@@ -268,6 +268,9 @@ namespace aivision
             if (it_pipe == pipelines_.end())
                 return false;
             auto *p = it_pipe->second.get();
+			auto runtime_it = media_runtime_.find(device_id);
+			if (runtime_it != media_runtime_.end() && runtime_it->second.playback_enabled)
+				return true;
 
             // 获取 HAL
             auto it_hal = hal_managers_.find(device_id);
@@ -295,10 +298,12 @@ namespace aivision
             auto it = pipelines_.find(device_id);
             if (it == pipelines_.end())
                 return false;
+			auto runtime_it = media_runtime_.find(device_id);
+			if (runtime_it == media_runtime_.end() || !runtime_it->second.playback_enabled)
+				return true;
 
-            it->second->RemoveStage("RtspPushStage");
-            it->second->RemoveStage("EncoderStage");
-            auto runtime_it = media_runtime_.find(device_id);
+			it->second->RemoveStage("RtspPushStage");
+			it->second->RemoveStage("EncoderStage");
             if (runtime_it != media_runtime_.end())
             {
                 runtime_it->second.playback_enabled = false;

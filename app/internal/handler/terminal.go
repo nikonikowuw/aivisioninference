@@ -34,6 +34,7 @@ type terminalMessage struct {
 type TerminalHandler struct {
 	svc      *service.TerminalSessionService
 	pool     *service.SSHPool
+	recorder *service.Recorder
 	jwt      *jwt.Manager
 	logger   *zap.Logger
 	upgrader websocket.Upgrader
@@ -43,15 +44,17 @@ type TerminalHandler struct {
 func NewTerminalHandler(
 	svc *service.TerminalSessionService,
 	pool *service.SSHPool,
+	recorder *service.Recorder,
 	jwt *jwt.Manager,
 	allowedOrigins []string,
 	logger *zap.Logger,
 ) *TerminalHandler {
 	return &TerminalHandler{
-		svc:    svc,
-		pool:   pool,
-		jwt:    jwt,
-		logger: logger.Named("terminal"),
+		svc:      svc,
+		pool:     pool,
+		recorder: recorder,
+		jwt:      jwt,
+		logger:   logger.Named("terminal"),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -94,7 +97,6 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 		rows = 24
 	}
 
-	var sshClient *service.SSHClientEntry
 	var sshSess *gossh.Session
 	isNew := false
 
@@ -111,7 +113,7 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 		isNew = true
 
 		// 建立 SSH 连接和 Session
-		sshClient, err = h.pool.AcquireClient(c.Request.Context(), nodeID, nodeEp, sshPort, []byte(sshKey))
+		_, err = h.pool.AcquireClient(c.Request.Context(), nodeID, nodeEp, sshPort, []byte(sshKey))
 		if err != nil {
 			h.svc.CloseSession(c.Request.Context(), sessionID, "error")
 			h.logger.Error("ssh connect failed", zap.Error(err))
@@ -136,7 +138,7 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 			c.Abort()
 			return
 		}
-		sshClient, err = h.pool.AcquireClient(c.Request.Context(), nodeID, nodeEp, sshPort, []byte(sshKey))
+		_, err = h.pool.AcquireClient(c.Request.Context(), nodeID, nodeEp, sshPort, []byte(sshKey))
 		if err != nil {
 			h.svc.CloseSession(c.Request.Context(), sessionID, "error")
 			h.logger.Error("ssh reconnect failed", zap.Error(err))
@@ -153,8 +155,6 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 			return
 		}
 	}
-	_ = sshClient
-
 	// ——— 升级 WebSocket ———
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -165,6 +165,13 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 		}
 		return
 	}
+
+	// ——— 配置 WebSocket 保活 ———
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
 
 	// ——— 启动 Shell ———
 	stdin, _ := sshSess.StdinPipe()
@@ -180,6 +187,9 @@ func (h *TerminalHandler) HandleWebSocket(c *gin.Context) {
 		}
 		return
 	}
+
+	// ——— 开始录制 ———
+	h.recorder.StartRecording(sessionID)
 
 	// ——— I/O 桥接 ———
 	h.bridgeIO(conn, stdin, stdout, stderr, sshSess, sessionID, claims.UserID, nodeID, cols, rows)
@@ -201,7 +211,7 @@ func (h *TerminalHandler) bridgeIO(conn *websocket.Conn, stdin io.WriteCloser, s
 		mu.Lock()
 		defer mu.Unlock()
 		if closed {
-			return nil
+			return io.ErrClosedPipe
 		}
 		return conn.WriteJSON(msg)
 	}
@@ -210,8 +220,17 @@ func (h *TerminalHandler) bridgeIO(conn *websocket.Conn, stdin io.WriteCloser, s
 		mu.Lock()
 		closed = true
 		mu.Unlock()
+
+		// ——— 停止录制并持久化 ———
+		if data, ok := h.recorder.StopRecording(sessionID); ok {
+			_ = h.svc.AppendRecording(context.Background(), sessionID, data)
+		}
+
+		// ——— 资源释放 ———
 		conn.Close()
 		sshSess.Close()
+
+		// ——— 暂停会话（可恢复） ———
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = h.svc.PauseSession(ctx, sessionID, userID)
@@ -229,10 +248,15 @@ func (h *TerminalHandler) bridgeIO(conn *websocket.Conn, stdin io.WriteCloser, s
 		for {
 			n, err := stdout.Read(buf)
 			if err != nil {
+				conn.Close()
 				return
 			}
 			if n > 0 {
-				_ = writeJSON(terminalMessage{Type: "output", Data: string(buf[:n])})
+				h.recorder.Record(sessionID, buf[:n])
+				if err := writeJSON(terminalMessage{Type: "output", Data: string(buf[:n])}); err != nil {
+					conn.Close()
+					return
+				}
 			}
 		}
 	}()
@@ -244,10 +268,15 @@ func (h *TerminalHandler) bridgeIO(conn *websocket.Conn, stdin io.WriteCloser, s
 		for {
 			n, err := stderr.Read(buf)
 			if err != nil {
+				conn.Close()
 				return
 			}
 			if n > 0 {
-				_ = writeJSON(terminalMessage{Type: "output", Data: string(buf[:n])})
+				h.recorder.Record(sessionID, buf[:n])
+				if err := writeJSON(terminalMessage{Type: "output", Data: string(buf[:n])}); err != nil {
+					conn.Close()
+					return
+				}
 			}
 		}
 	}()
@@ -255,7 +284,9 @@ func (h *TerminalHandler) bridgeIO(conn *websocket.Conn, stdin io.WriteCloser, s
 	// WebSocket → 终端输入（stdin + resize + ping）
 	go func() {
 		defer wg.Done()
+		defer sshSess.Close()
 		for {
+			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				return
@@ -269,7 +300,6 @@ func (h *TerminalHandler) bridgeIO(conn *websocket.Conn, stdin io.WriteCloser, s
 				_, _ = stdin.Write([]byte(msg.Data))
 			case "resize":
 				if msg.Cols > 0 && msg.Rows > 0 {
-					cols, rows = msg.Cols, msg.Rows
 					_ = sshSess.WindowChange(msg.Rows, msg.Cols)
 				}
 			case "ping":

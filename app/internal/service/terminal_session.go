@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -238,13 +239,44 @@ func (s *TerminalSessionService) ForceCloseSession(ctx context.Context, sessionI
 	return s.CloseSession(ctx, sessionID, "closed")
 }
 
-// GetSessionRecording 获取会话录制数据（TODO: 接入 Recorder）
+// GetSessionRecording 获取会话录制数据
 func (s *TerminalSessionService) GetSessionRecording(ctx context.Context, sessionID string) ([]byte, error) {
 	session, err := s.sessionRepo.FindByID(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("会话不存在: %w", err)
 	}
 	return session.RecordingData, nil
+}
+
+// AppendRecording 追加 ttyrec 录制数据到会话记录
+func (s *TerminalSessionService) AppendRecording(ctx context.Context, sessionID string, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	session, err := s.sessionRepo.FindByID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("recording append: 会话不存在: %w", err)
+	}
+
+	// 合并新旧 ttyrec 条目（两者均为 JSON 数组）
+	var merged []ttyrecEntry
+	if len(session.RecordingData) > 0 {
+		if err := json.Unmarshal(session.RecordingData, &merged); err != nil {
+			merged = nil
+		}
+	}
+	var incoming []ttyrecEntry
+	if err := json.Unmarshal(data, &incoming); err != nil {
+		return fmt.Errorf("recording append: 无效录制数据: %w", err)
+	}
+	merged = append(merged, incoming...)
+	raw, err := json.Marshal(merged)
+	if err != nil {
+		return fmt.Errorf("recording append: 序列化失败: %w", err)
+	}
+	return s.sessionRepo.UpdateFields(ctx, sessionID, map[string]interface{}{
+		"recording_data": raw,
+	})
 }
 
 // GetPool 返回 SSH 连接池（供 Handler 使用）

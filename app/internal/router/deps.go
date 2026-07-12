@@ -533,16 +533,21 @@ func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
 }
 
 
+func provideRecorder() *service.Recorder {
+	return service.NewRecorder(zap.L().Named("terminal_recorder"))
+}
+
 func provideTerminalHandler(
 	sessionRepo *repository.TerminalSessionRepository,
 	nodeRepo *repository.EdgeNodeRepository,
 	pool *service.SSHPool,
+	recorder *service.Recorder,
 	jwt *jwt.Manager,
 	cfg *Config,
 ) *handler.TerminalHandler {
 	logger := zap.L().Named("terminal")
 	svc := service.NewTerminalSessionService(sessionRepo, nodeRepo, pool, logger)
-	return handler.NewTerminalHandler(svc, pool, jwt, cfg.AllowOrigins, logger)
+	return handler.NewTerminalHandler(svc, pool, recorder, jwt, cfg.AllowOrigins, logger)
 }
 
 func provideMqttMux() *mqttmux.Mux {

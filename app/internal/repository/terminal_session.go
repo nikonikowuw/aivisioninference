@@ -42,7 +42,7 @@ func (r *TerminalSessionRepository) UpdateFields(ctx context.Context, id string,
 	return r.db.WithContext(ctx).Model(&model.TerminalSession{}).Where("id = ?", id).Updates(fields).Error
 }
 
-// ListByNodeID 按节点 ID 分页查询会话
+// ListByNodeID 按节点 ID 分页查询会话（不返回录制数据）
 func (r *TerminalSessionRepository) ListByNodeID(ctx context.Context, nodeID string, status string, page, pageSize int, sort, order string) ([]model.TerminalSession, int64, error) {
 	var items []model.TerminalSession
 	var total int64
@@ -55,7 +55,7 @@ func (r *TerminalSessionRepository) ListByNodeID(ctx context.Context, nodeID str
 		return nil, 0, err
 	}
 
-	err := query.Scopes(
+	err := query.Omit("recording_data").Scopes(
 		scopes.Paginate(page, pageSize),
 		scopes.OrderBy(sort, order, model.TerminalSession{}.SortableFields()...),
 	).Find(&items).Error

@@ -117,9 +117,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			status TEXT NOT NULL DEFAULT 'draft',
 			ref_count INTEGER DEFAULT 0,
 			is_current INTEGER DEFAULT 0,
-			remark TEXT,
-			ssh_port INTEGER DEFAULT 22,
-			ssh_private_key TEXT
+			remark TEXT
 		);
 	`).Error)
 

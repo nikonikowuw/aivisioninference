@@ -102,6 +102,7 @@ var serviceSet = wire.NewSet(
 	provideEngineMetricsStore,
 	provideEdgeMqttHandler,
 	service.NewSSHPool,
+	provideRecorder,
 	provideTerminalHandler,
 )
 

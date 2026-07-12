@@ -68,6 +68,9 @@ zlm/data/
 zlm/bin/
 zlm/build/
 
+# Git worktrees (agent isolation)
+.worktree/
+
 # Docker
 .docker/
 *.log

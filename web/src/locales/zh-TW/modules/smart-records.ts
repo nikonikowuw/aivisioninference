@@ -61,6 +61,7 @@ export const smartRecords = {
     export: "導出 CSV",
     markHandled: "標記已處理",
     viewDetail: "查看詳情",
+    unknownPerson: "未知人員",
   },
   message: {
     batchDeleteConfirm: "確定要刪除選取的 {{count}} 筆記錄嗎？",
@@ -83,6 +84,14 @@ export const smartRecords = {
     confidence: "置信度",
     createdAt: "創建時間",
     rawResult: "原始數據",
+  },
+  details: {
+    title: "智能記錄詳情",
+    images: "圖像預覽",
+    basicInfo: "基本信息",
+    detailInfo: "詳情屬性",
+    algorithm: "識別算法",
+    noSnapshot: "無快照圖像",
   },
   type: {
     alarm: "告警",

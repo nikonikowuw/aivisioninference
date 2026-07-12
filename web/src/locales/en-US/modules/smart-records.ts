@@ -61,6 +61,7 @@ export const smartRecords = {
     export: "Export CSV",
     markHandled: "Mark Handled",
     viewDetail: "View Detail",
+    unknownPerson: "Unknown Person",
   },
   message: {
     batchDeleteConfirm: "Are you sure you want to delete {{count}} selected records?",
@@ -83,6 +84,14 @@ export const smartRecords = {
     confidence: "Confidence",
     createdAt: "Created At",
     rawResult: "Raw Data",
+  },
+  details: {
+    title: "Record Detail",
+    images: "Image Preview",
+    basicInfo: "Basic Info",
+    detailInfo: "Detail Info",
+    algorithm: "Algorithm",
+    noSnapshot: "No Snapshot Image",
   },
   type: {
     alarm: "Alarm",

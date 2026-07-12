@@ -102,8 +102,9 @@ export function SearchBar({
       border="1px solid"
       borderColor={borderColor}
       mb={4}
+      minH={{ base: 'auto', md: '172px' }}
     >
-      <Flex justify="space-between" align="flex-end" wrap="wrap" gap={4}>
+      <Flex justify="space-between" align="flex-start" wrap="wrap" gap={4}>
         <Box width={{ base: '100%', md: '30%' }}>
           {keyword && (
             <FormControl>

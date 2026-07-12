@@ -61,6 +61,7 @@ export const smartRecords = {
     export: "Ekspor CSV",
     markHandled: "Tandai Ditangani",
     viewDetail: "Lihat Detail",
+    unknownPerson: "Orang Tidak Diketahui",
   },
   message: {
     batchDeleteConfirm: "Yakin ingin menghapus {{count}} rekaman yang dipilih?",
@@ -83,6 +84,14 @@ export const smartRecords = {
     confidence: "Kepercayaan",
     createdAt: "Waktu Dibuat",
     rawResult: "Data Mentah",
+  },
+  details: {
+    title: "Detail Rekaman",
+    images: "Pratinjau Gambar",
+    basicInfo: "Informasi Dasar",
+    detailInfo: "Detail Informasi",
+    algorithm: "Algoritma",
+    noSnapshot: "Tidak Ada Gambar Snapshot",
   },
   type: {
     alarm: "Alarm",

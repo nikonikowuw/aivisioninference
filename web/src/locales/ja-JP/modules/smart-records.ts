@@ -61,6 +61,7 @@ export const smartRecords = {
     export: "CSVエクスポート",
     markHandled: "処理済みにする",
     viewDetail: "詳細表示",
+    unknownPerson: "未知の人物",
   },
   message: {
     batchDeleteConfirm: "選択した {{count}} 件のレコードを削除してもよろしいですか？",
@@ -83,6 +84,14 @@ export const smartRecords = {
     confidence: "信頼度",
     createdAt: "作成日時",
     rawResult: "生データ",
+  },
+  details: {
+    title: "レコード詳細",
+    images: "画像プレビュー",
+    basicInfo: "基本情報",
+    detailInfo: "詳細情報",
+    algorithm: "アルゴリズム",
+    noSnapshot: "スナップショット画像なし",
   },
   type: {
     alarm: "アラーム",

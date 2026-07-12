@@ -1,6 +1,7 @@
-import { Box, Text, Button, VStack, useToast } from '@chakra-ui/react';
+import { Box, Text, Button, Flex, HStack, VStack, Spinner, useToast } from '@chakra-ui/react';
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import TerminalView from 'components/terminal/TerminalView';
 import { terminalApi } from 'services/terminal';
 import type { EdgeNode } from 'services/edgeNode';
@@ -12,6 +13,7 @@ interface TerminalTabProps {
 export default function TerminalTab({ node }: TerminalTabProps) {
   const { t } = useTranslation('modules/edge-nodes');
   const toast = useToast();
+  const navigate = useNavigate();
   const [showTerminal, setShowTerminal] = useState(false);
   const [sessions, setSessions] = useState<{ id: string; started_at: string }[]>([]);
   const [showSessions, setShowSessions] = useState(false);
@@ -92,16 +94,38 @@ export default function TerminalTab({ node }: TerminalTabProps) {
             ) : (
               <VStack spacing={2} align="stretch">
                 {sessions.map((s) => (
-                  <Button
+                  <Flex
                     key={s.id}
-                    variant="ghost"
-                    justifyContent="flex-start"
-                    size="sm"
+                    align="center"
+                    justify="space-between"
+                    px={3}
+                    py={2}
+                    borderRadius="md"
+                    cursor="pointer"
+                    _hover={{ bg: 'whiteAlpha.200' }}
                     onClick={() => handleResume(s.id)}
-                    isLoading={resumingSession === s.id}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleResume(s.id); }}
                   >
-                    会话 {s.id.slice(0, 8)} — {new Date(s.started_at).toLocaleString()}
-                  </Button>
+                    <HStack spacing={2}>
+                      {resumingSession === s.id && <Spinner size="sm" />}
+                      <Text fontSize="sm">
+                        会话 {s.id.slice(0, 8)} — {new Date(s.started_at).toLocaleString()}
+                      </Text>
+                    </HStack>
+                    <Button
+                      size="xs"
+                      variant="link"
+                      colorScheme="blue"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/admin/devices/edge-nodes/${node.id}/playback/${s.id}`);
+                      }}
+                    >
+                      查看回放
+                    </Button>
+                  </Flex>
                 ))}
               </VStack>
             )}

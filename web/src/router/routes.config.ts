@@ -139,6 +139,15 @@ export const adminRoutes: RouteConfig[] = [
             component: () => import('../views/admin/devices/edge-nodes/detail'),
             layout: '/admin',
           },
+          {
+            id: 'edge-nodes-playback',
+            path: '/devices/edge-nodes/:id/playback/:sessionId',
+            i18nKey: 'menu:edge-nodes',
+            icon: 'MdRemoveRedEye',
+            hidden: true,
+            component: () => import('../views/admin/devices/edge-nodes/playback'),
+            layout: '/admin',
+          },
         ],
       },
       {

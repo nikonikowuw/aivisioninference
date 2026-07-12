@@ -10,6 +10,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -288,14 +289,31 @@ func (s *EdgeNodeScheduledTaskService) TriggerCronTasks(ctx context.Context) {
 
 	now := time.Now()
 	for _, task := range tasks {
-		// Simple cron matching: if last_run_at is more than 1 minute ago and
-		// cron expression is present, execute.
-		// In production, use a proper cron library like robfig/cron.
 		if task.CronExpr == "" {
 			continue
 		}
 
-		if task.LastRunAt == nil || now.Sub(*task.LastRunAt) >= time.Minute {
+		// Parse and check the cron expression using robfig/cron.
+		// This correctly respects the interval: a "0 * * * *" task fires
+		// only once per hour, regardless of how often the poll loop runs.
+		schedule, err := cron.ParseStandard(task.CronExpr)
+		if err != nil {
+			zap.L().Error("invalid cron expression",
+				zap.String("task_id", task.ID),
+				zap.String("cron_expr", task.CronExpr),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		// If never run, use the task creation time as the baseline.
+		checkFrom := task.LastRunAt
+		if checkFrom == nil {
+			checkFrom = &task.CreatedAt
+		}
+
+		next := schedule.Next(*checkFrom)
+		if !next.After(now) {
 			zap.L().Info("triggering cron task execution",
 				zap.String("task_id", task.ID),
 				zap.String("name", task.Name),

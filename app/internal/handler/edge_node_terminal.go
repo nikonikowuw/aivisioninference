@@ -17,20 +17,21 @@ import (
 
 // EdgeNodeTerminalHandler handles WebSocket terminal connections.
 type EdgeNodeTerminalHandler struct {
-	terminalSvc *service.EdgeNodeTerminalService
+	terminalSvc    *service.EdgeNodeTerminalService
+	allowedOrigins []string
 }
 
 // NewEdgeNodeTerminalHandler creates a new terminal handler.
-func NewEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService) *EdgeNodeTerminalHandler {
-	return &EdgeNodeTerminalHandler{terminalSvc: terminalSvc}
+func NewEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService, allowedOrigins []string) *EdgeNodeTerminalHandler {
+	return &EdgeNodeTerminalHandler{
+		terminalSvc:    terminalSvc,
+		allowedOrigins: allowedOrigins,
+	}
 }
 
-var upgrader = websocket.Upgrader{
+var terminalUpgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for WebSocket
-	},
 }
 
 // HandleWebSocket handles WebSocket upgrade and terminal session lifecycle.
@@ -49,8 +50,13 @@ func (h *EdgeNodeTerminalHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
+	// Per-request CheckOrigin using the configured CORS whitelist.
+	terminalUpgrader.CheckOrigin = func(r *http.Request) bool {
+		return isWebSocketOriginAllowed(r, h.allowedOrigins)
+	}
+
 	// Upgrade HTTP to WebSocket
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := terminalUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		zap.L().Error("WebSocket upgrade failed",
 			zap.String("node_id", nodeID),
@@ -59,10 +65,8 @@ func (h *EdgeNodeTerminalHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Create a writeLock to serialize writes to the WebSocket connection
+	// Serialize writes to the WebSocket connection.
 	var writeMu sync.Mutex
-
-	// Write helper
 	writeJSON := func(msg interface{}) error {
 		writeMu.Lock()
 		defer writeMu.Unlock()
@@ -96,12 +100,12 @@ func (h *EdgeNodeTerminalHandler) HandleWebSocket(c *gin.Context) {
 		zap.String("node_id", nodeID),
 	)
 
-	// Read loop: receive messages from WS and forward to MQTT
+	// Read loop: receive messages from WS, forward to MQTT.
+	// Each iteration creates a fresh context with timeout so a hung MQTT
+	// publish on one message doesn't block subsequent messages indefinitely.
 	done := make(chan struct{})
 	go func() {
-		defer func() {
-			close(done)
-		}()
+		defer close(done)
 
 		for {
 			_, message, err := conn.ReadMessage()
@@ -124,7 +128,8 @@ func (h *EdgeNodeTerminalHandler) HandleWebSocket(c *gin.Context) {
 				continue
 			}
 
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
 			switch msg.Type {
 			case "input":
 				// Send terminal input to engine PTY
@@ -149,6 +154,7 @@ func (h *EdgeNodeTerminalHandler) HandleWebSocket(c *gin.Context) {
 				}
 
 			case "close":
+				cancel()
 				_ = h.terminalSvc.CloseSession(ctx, sessionID)
 				return
 
@@ -162,20 +168,19 @@ func (h *EdgeNodeTerminalHandler) HandleWebSocket(c *gin.Context) {
 					zap.String("type", msg.Type),
 				)
 			}
+
+			cancel()
 		}
 	}()
 
-	// Wait for session/connection to close, then cleanup
-	select {
-	case <-done:
-		// Connection closed by client
-	case <-time.After(10 * time.Minute):
-		// Safety timeout
-	}
+	// Wait for the read goroutine to exit (client disconnect or error).
+	// Idle timeout is enforced by EdgeNodeTerminalService.cleanupLoop
+	// (default 5 min), not here, so active sessions are never force-killed.
+	<-done
 
-	// Close session
-	closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// Close session with a short deadline for MQTT publish.
+	closeCtx, closeCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer closeCancel()
 	_ = h.terminalSvc.CloseSession(closeCtx, sessionID)
 	_ = conn.Close()
 

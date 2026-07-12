@@ -87,7 +87,9 @@ func (h *EdgeMqttHandler) HandleHeartbeat(msg mqtt.Message) {
 	}
 
 	// Process heartbeat in the EdgeNodeService (db status, uptime updates, etc.)
-	_, err := h.nodeSvc.HandleHeartbeat(context.Background(), nodeID, &req)
+	hbCtx, hbCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer hbCancel()
+	_, err := h.nodeSvc.HandleHeartbeat(hbCtx, nodeID, &req)
 	if err != nil {
 		zap.L().Error("MQTT: HandleHeartbeat in service failed", zap.String("node_id", nodeID), zap.Error(err))
 		return

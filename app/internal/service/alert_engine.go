@@ -79,6 +79,10 @@ func (e *AlertEngine) markNotified(ruleID, nodeID string) {
 // RestoreSilenceState pre-populates the silence tracker from the database
 // so that silence periods survive process restarts. Must be called once after
 // NewAlertEngine, before any Evaluate* calls.
+//
+// Only restores entries whose NotifySentAt is still within the rule's
+// SilenceMinutes window — entries that expired while the process was down
+// are discarded so the next evaluate cycle fires notifications promptly.
 func (e *AlertEngine) RestoreSilenceState(ctx context.Context) {
 	records, err := e.eventRepo.FindFiringNotifySent(ctx)
 	if err != nil {
@@ -87,15 +91,26 @@ func (e *AlertEngine) RestoreSilenceState(ctx context.Context) {
 		)
 		return
 	}
+	var restored int
 	for _, r := range records {
-		if r.NotifySentAt != nil {
+		if r.NotifySentAt == nil {
+			continue
+		}
+		// Fetch the rule to get SilenceMinutes; if not found, skip.
+		rule, err := e.ruleRepo.FindByID(ctx, r.RuleID)
+		if err != nil || rule == nil {
+			continue
+		}
+		// Only restore if the silence period hasn't expired yet.
+		if time.Since(*r.NotifySentAt) < time.Duration(rule.SilenceMinutes)*time.Minute {
 			key := e.silenceKey(r.RuleID, r.NodeID)
 			e.silenceTracker.Store(key, *r.NotifySentAt)
+			restored++
 		}
 	}
-	if len(records) > 0 {
+	if restored > 0 {
 		zap.L().Info("alert engine: restored silence state",
-			zap.Int("event_count", len(records)),
+			zap.Int("event_count", restored),
 		)
 	}
 }

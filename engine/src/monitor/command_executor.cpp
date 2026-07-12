@@ -117,20 +117,49 @@ namespace aivision
             std::thread reader([&]() {
                 char buffer[4096];
                 ssize_t bytes;
-                while ((bytes = read(stdout_pipe[0], buffer, sizeof(buffer) - 1)) > 0)
+                while (true)
                 {
-                    buffer[bytes] = '\0';
-                    stdout_data += buffer;
+                    bytes = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
+                    if (bytes > 0)
+                    {
+                        buffer[bytes] = '\0';
+                        stdout_data += buffer;
+                    }
+                    else if (bytes < 0 && errno == EAGAIN)
+                    {
+                        // Non-blocking pipe has no data yet — sleep briefly
+                        // and retry so we don't exit the loop prematurely.
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                        continue;
+                    }
+                    else
+                    {
+                        // EOF (child closed pipe) or unrecoverable error
+                        break;
+                    }
                 }
             });
 
             std::thread stderr_reader([&]() {
                 char buffer[4096];
                 ssize_t bytes;
-                while ((bytes = read(stderr_pipe[0], buffer, sizeof(buffer) - 1)) > 0)
+                while (true)
                 {
-                    buffer[bytes] = '\0';
-                    stderr_data += buffer;
+                    bytes = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
+                    if (bytes > 0)
+                    {
+                        buffer[bytes] = '\0';
+                        stderr_data += buffer;
+                    }
+                    else if (bytes < 0 && errno == EAGAIN)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                        continue;
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
             });
 

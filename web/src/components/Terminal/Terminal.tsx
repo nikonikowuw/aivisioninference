@@ -15,6 +15,7 @@ export default function Terminal({ nodeId }: TerminalProps) {
   const fitAddonRef = useRef<any>(null);
   const [connected, setConnected] = useState(false);
   const [statusText, setStatusText] = useState(t('terminal.connecting'));
+  const [reconnectKey, setReconnectKey] = useState(0);
 
   const writeToTerminal = useCallback((data: string) => {
     if (xtermRef.current) {
@@ -163,7 +164,7 @@ export default function Terminal({ nodeId }: TerminalProps) {
         fitAddonRef.current = null;
       });
     };
-  }, [nodeId, t]);
+  }, [nodeId, t, reconnectKey]);
 
   const handleReconnect = useCallback(() => {
     if (clientRef.current) {
@@ -173,9 +174,8 @@ export default function Terminal({ nodeId }: TerminalProps) {
       xtermRef.current.clear();
     }
     setStatusText(t('terminal.reconnecting'));
-    // Re-initialization happens via the useEffect which will re-run
-    // because we set a new key via the nodeId dependency
-    window.location.reload();
+    // Reconnect by re-running the useEffect via a key counter.
+    setReconnectKey((k) => k + 1);
   }, [t]);
 
   return (

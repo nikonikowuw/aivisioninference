@@ -75,7 +75,6 @@ namespace aivision
 
             mutable std::mutex mutex_;
             std::map<std::string, std::shared_ptr<PTYSession>> sessions_;
-            std::map<std::string, std::shared_ptr<std::thread>> reader_threads_;
             std::atomic<bool> running_{true};
 
             PtyOutputCallback output_callback_;

@@ -31,7 +31,6 @@ namespace aivision
                 CleanupSession(session_id);
             }
             sessions_.clear();
-            reader_threads_.clear();
         }
 
         void PTYModule::SetOutputCallback(PtyOutputCallback callback)
@@ -142,12 +141,11 @@ namespace aivision
                 sessions_[session_id] = session;
             }
 
-            // Start reader thread for this session
-            auto reader = std::make_shared<std::thread>(&PTYModule::ReadLoop, this, session_id, master_fd);
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                reader_threads_[session_id] = reader;
-            }
+            // Start reader thread for this session and detach it.
+            // The thread reads PTY output and invokes output_callback_. It exits
+            // naturally when the master fd is closed (during session cleanup).
+            std::thread reader(&PTYModule::ReadLoop, this, session_id, master_fd);
+            reader.detach();
 
             std::cout << "[PTYModule] Session opened: " << session_id
                       << " (slave=" << slave_name << ", pid=" << pid << ")" << std::endl;
@@ -262,16 +260,21 @@ namespace aivision
                     }
                     else
                     {
-                        // EOF or error
+                        // EOF or error — child exited or master_fd closed externally.
+                        // Do NOT call CloseSession/CleanupSession here: this thread
+                        // IS the reader thread, and CleanupSession is called by the
+                        // external MQTT pty_close handler or the destructor, which
+                        // closes the master fd (causing this loop to break).
                         break;
                     }
                 }
             }
 
-            // Clean up on read loop exit
-            if (running_.load())
+            // Notify that the reader has exited (fire-and-forget from this thread).
+            // The session struct will be cleaned up by the external close path.
+            if (close_callback_)
             {
-                CloseSession(session_id);
+                close_callback_(session_id, "pty reader exited");
             }
         }
 
@@ -284,7 +287,8 @@ namespace aivision
             auto session = it->second;
             session->active = false;
 
-            // Close master fd
+            // Close master fd — the detached reader thread's select() will
+            // return and the thread will exit naturally. No join is needed.
             if (session->master_fd >= 0)
             {
                 close(session->master_fd);
@@ -295,24 +299,13 @@ namespace aivision
             if (session->child_pid > 0)
             {
                 kill(session->child_pid, SIGKILL);
-                // Reap child
+                // Reap child (WNOHANG: child may already be reaped)
                 int status;
                 waitpid(session->child_pid, &status, WNOHANG);
                 session->child_pid = -1;
             }
 
             sessions_.erase(session_id);
-
-            // Join reader thread
-            auto thread_it = reader_threads_.find(session_id);
-            if (thread_it != reader_threads_.end())
-            {
-                if (thread_it->second->joinable())
-                {
-                    thread_it->second->join();
-                }
-                reader_threads_.erase(thread_it);
-            }
 
             std::cout << "[PTYModule] Session cleaned up: " << session_id << std::endl;
         }

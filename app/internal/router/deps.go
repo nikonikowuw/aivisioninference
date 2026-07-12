@@ -622,8 +622,8 @@ func provideEdgeNodeScheduledTaskHandler(svc *service.EdgeNodeScheduledTaskServi
 	return handler.NewEdgeNodeScheduledTaskHandler(svc)
 }
 
-func provideEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService) *handler.EdgeNodeTerminalHandler {
-	return handler.NewEdgeNodeTerminalHandler(terminalSvc)
+func provideEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService, cfg *Config) *handler.EdgeNodeTerminalHandler {
+	return handler.NewEdgeNodeTerminalHandler(terminalSvc, cfg.AllowOrigins)
 }
 
 func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {

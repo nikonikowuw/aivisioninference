@@ -75,7 +75,7 @@ namespace aivision
                     d["path"] = disk.path;
                     d["total_bytes"] = disk.total_bytes;
                     d["used_bytes"] = disk.used_bytes;
-                    d["usage_percent"] = disk.usage_percent;
+                    d["usage_percent"] = disk.usage_percent();
                     arr.push_back(d);
                 }
                 return arr;

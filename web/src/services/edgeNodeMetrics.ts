@@ -50,8 +50,6 @@ export interface NodeMetrics {
 
 
 export const edgeNodeMetricsApi = {
-
-export const edgeNodeMetricsApi = {
   /** Query time-series metrics for a specific edge node */
   queryMetrics: (nodeId: string, params: MetricQueryParams) => {
     const query = buildQuery({ ...params });

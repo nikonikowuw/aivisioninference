@@ -129,6 +129,7 @@ func main() {
 		// AIVisionInference: Edge Scheduled Tasks.
 		&model.EdgeScheduledTask{},
 		&model.EdgeScheduledTaskRecord{},
+		&model.EdgeNodeScheduledTask{},
 
 		// AIVisionInference: Edge Web Terminal.
 		&model.TerminalSession{},

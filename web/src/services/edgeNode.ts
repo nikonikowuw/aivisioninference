@@ -147,8 +147,6 @@ export interface RecommendNodeResponse {
 
 
 export const edgeNodeApi = {
-
-export const edgeNodeApi = {
   // CRUD
   list: (params?: EdgeNodeListParams) => {
     const query = buildQuery(params || {});

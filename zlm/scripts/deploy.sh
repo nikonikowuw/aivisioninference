@@ -21,11 +21,17 @@ detect_os() {
 }
 
 install_deps_macos() {
-  echo "Installing dependencies via Homebrew..."
-  brew update
-  brew install cmake git openssl sdl2 x264 x265 faac lame opus
-  # FFmpeg is optional but recommended for stream proxy
-  brew install ffmpeg || true
+  if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+    echo "Running as root, dropping privileges for Homebrew..."
+    sudo -u "$SUDO_USER" brew update 2>/dev/null || echo "brew update skipped (network issue)"
+    sudo -u "$SUDO_USER" brew install cmake git openssl sdl2 x264 x265 faac lame opus
+    sudo -u "$SUDO_USER" brew install ffmpeg || true
+  else
+    echo "Installing dependencies via Homebrew..."
+    brew update 2>/dev/null || echo "brew update skipped (network issue)"
+    brew install cmake git openssl sdl2 x264 x265 faac lame opus
+    brew install ffmpeg || true
+  fi
 }
 
 install_deps_debian() {
@@ -46,36 +52,42 @@ install_deps_rhel() {
 # ── Build ZLM ─────────────────────────────────────────────────
 build_zlm() {
   SRC_DIR="$ZLM_DIR/src"
+
+  RUN=""
+  if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ] && [ "$(uname -s)" = "Darwin" ]; then
+    RUN="sudo -u $SUDO_USER"
+  fi
+
   if [ ! -d "$SRC_DIR" ]; then
     echo "Cloning ZLMediaKit source into $SRC_DIR..."
-    git clone --depth 1 $ZLM_REPO "$SRC_DIR"
+    $RUN git clone --depth 1 $ZLM_REPO "$SRC_DIR"
+  elif [ ! -d "$SRC_DIR/.git" ]; then
+    echo "Source directory $SRC_DIR exists but has no .git, re-cloning..."
+    rm -rf "$SRC_DIR"
+    $RUN git clone --depth 1 $ZLM_REPO "$SRC_DIR"
   else
     echo "Source directory $SRC_DIR already exists, skipping clone."
   fi
 
-  cd "$SRC_DIR"
-  git submodule update --init --recursive
+  $RUN bash -c "cd '$SRC_DIR' && git submodule update --init --recursive"
 
   echo "Building ZLMediaKit..."
-  mkdir -p "$ZLM_BUILD_DIR"
-  cd "$ZLM_BUILD_DIR"
+  $RUN mkdir -p "$ZLM_BUILD_DIR"
 
   CMAKE_FLAGS="-DCMAKE_INSTALL_PREFIX=$ZLM_RELEASE_DIR"
   if [ "$(uname -s)" = "Darwin" ]; then
     SDK=$(xcrun --show-sdk-path)
     CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_OSX_SYSROOT=$SDK"
     CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_OSX_ARCHITECTURES=arm64"
-    CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_CXX_FLAGS=\"-stdlib=libc++ -I$SDK/usr/include/c++/v1\""
   fi
   CMAKE_FLAGS="$CMAKE_FLAGS -DENABLE_WEBRTC=OFF -DENABLE_SRT=OFF"
 
-  eval cmake "$SRC_DIR" $CMAKE_FLAGS
+  $RUN bash -c "cd '$ZLM_BUILD_DIR' && cmake '$SRC_DIR' $CMAKE_FLAGS"
   CORES=$(sysctl -n hw.logicalcpu 2>/dev/null || nproc)
-  make -j$CORES
+  $RUN bash -c "cd '$ZLM_BUILD_DIR' && make -j$CORES"
 
   # Copy binary to release directory
   mkdir -p "$ZLM_RELEASE_DIR"
-  # Binary is in src/release/ (cmake RUNTIME_OUTPUT_DIRECTORY)
   ZLM_BINARY=$(find "$ZLM_DIR" -path "*/release/*/MediaServer" -type f 2>/dev/null | head -1)
   if [ -n "$ZLM_BINARY" ]; then
     cp "$ZLM_BINARY" "$ZLM_RELEASE_DIR/"
@@ -88,7 +100,12 @@ build_zlm() {
 
 # ── Service setup ─────────────────────────────────────────────
 setup_service_macos() {
-  PLIST_PATH="$HOME/Library/LaunchAgents/local.zlmediakit.plist"
+  if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(eval echo ~"$SUDO_USER")
+  else
+    USER_HOME="$HOME"
+  fi
+  PLIST_PATH="$USER_HOME/Library/LaunchAgents/local.zlmediakit.plist"
   mkdir -p "$(dirname "$PLIST_PATH")"
   cat <<EOF > "$PLIST_PATH"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -109,9 +126,9 @@ setup_service_macos() {
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>$HOME/Library/Logs/zlmediakit.log</string>
+  <string>$USER_HOME/Library/Logs/zlmediakit.log</string>
   <key>StandardErrorPath</key>
-  <string>$HOME/Library/Logs/zlmediakit.log</string>
+  <string>$USER_HOME/Library/Logs/zlmediakit.log</string>
 </dict>
 </plist>
 EOF
@@ -151,11 +168,16 @@ case "$OS" in
     install_deps_macos
     build_zlm
     setup_service_macos
+    if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
+      USER_HOME=$(eval echo ~"$SUDO_USER")
+    else
+      USER_HOME="$HOME"
+    fi
     echo ""
     echo "Deployment complete!"
     echo "Start: launchctl start local.zlmediakit"
     echo "Stop:  launchctl stop local.zlmediakit"
-    echo "Logs:  $HOME/Library/Logs/zlmediakit.log"
+    echo "Logs:  $USER_HOME/Library/Logs/zlmediakit.log"
     ;;
   linux)
     # Distro detection

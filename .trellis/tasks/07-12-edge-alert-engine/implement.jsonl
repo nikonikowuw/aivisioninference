@@ -1,1 +1,11 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "GORM model definitions for alert_rules and alert_events, migration registration, JSONB column patterns for notify_channels"}
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "Heartbeat handling contract — alert engine integrates via EvaluateAfterHeartbeat after metrics persist"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend layout for new model/repo/service/handler under alert engine module"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for alert engine rule evaluation and notification dispatch"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "API error patterns for alert rules CRUD and alert event query/acknowledge endpoints"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality gates for alert engine backend code"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Chakra UI patterns for alert rules CRUD forms, tables, and alert history list"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Data fetching and state management for alert rules/events pages"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "DTO type definitions for alert rule/event API responses matching Go model"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality gates for alert management pages"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Alert engine integration spans: Heartbeat metrics → AlertEngine evaluation → Event persistence → Notification → Frontend display"}

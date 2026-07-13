@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Spec index — verify compliance with Go backend conventions"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Spec index — verify compliance with React/Chakra UI conventions"}
+{"file": ".trellis/tasks/07-12-edge-web-terminal/prd.md", "reason": "Acceptance criteria checklist for verification"}
+{"file": ".trellis/tasks/07-12-edge-web-terminal/design.md", "reason": "Technical design for cross-layer consistency check"}
+{"file": ".trellis/rules/golang-pro.md", "reason": "Go backend rules: Context propagation, error handling, i18n, Wire, security"}
+{"file": ".trellis/rules/ui-ux-pro-max.md", "reason": "UI/UX rules: accessibility, dark mode, Chakra forms, responsive"}

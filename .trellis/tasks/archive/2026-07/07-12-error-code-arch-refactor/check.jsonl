@@ -1,0 +1,5 @@
+{"file": "app/internal/pkg/errors/errors_test.go", "reason": "Test for error constants — needs type update"}
+{"file": "app/internal/pkg/response/response_test.go", "reason": "Test for response — needs code type update"}
+{"file": "web/src/services/api.test.ts", "reason": "Test for frontend API layer — needs code type update"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality gate checklist reference"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Frontend type safety guidelines to follow during refactor"}

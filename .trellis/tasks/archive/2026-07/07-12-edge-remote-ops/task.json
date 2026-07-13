@@ -1,0 +1,29 @@
+{
+  "id": "edge-remote-ops",
+  "name": "edge-remote-ops",
+  "title": "Remote Ops: Scheduled Tasks & Web Terminal",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P3",
+  "creator": "niko",
+  "assignee": "niko",
+  "createdAt": "2026-07-12",
+  "completedAt": "2026-07-12",
+  "branch": null,
+  "base_branch": "develop",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-12-edge-scheduled-tasks",
+    "07-12-edge-web-terminal"
+  ],
+  "parent": "07-12-edge-node-monitoring",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

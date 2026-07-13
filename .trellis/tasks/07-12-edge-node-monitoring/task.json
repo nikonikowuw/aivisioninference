@@ -1,0 +1,30 @@
+{
+  "id": "edge-node-monitoring",
+  "name": "edge-node-monitoring",
+  "title": "Edge Node Monitoring (Nezha-inspired)",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "niko",
+  "assignee": "niko",
+  "createdAt": "2026-07-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "develop",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-12-edge-metrics-collection",
+    "07-12-edge-alert-engine",
+    "07-12-edge-remote-ops"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

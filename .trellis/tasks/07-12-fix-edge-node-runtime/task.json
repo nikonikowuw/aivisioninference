@@ -1,0 +1,33 @@
+{
+  "id": "fix-edge-node-runtime",
+  "name": "fix-edge-node-runtime",
+  "title": "修复边缘节点运行闭环",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "niko",
+  "assignee": "niko",
+  "createdAt": "2026-07-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "develop",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-12-edge-node-task-routing",
+    "07-12-edge-node-liveness-recovery",
+    "07-12-edge-node-heartbeat-consistency",
+    "07-12-edge-node-algorithm-lifecycle",
+    "07-12-edge-node-contract-security",
+    "07-12-edge-node-media-scheduler"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

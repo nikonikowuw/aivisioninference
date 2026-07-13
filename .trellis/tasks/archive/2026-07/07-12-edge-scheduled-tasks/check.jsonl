@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "检查任务挂起/恢复合约、MQTT 通信约定是否正确实现"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "检查新增模型的 DB 规范符合性"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Wire/swagger/build 合规检查"}
+{"file": ".trellis/tasks/07-12-edge-scheduled-tasks/design.md", "reason": "逐条验证设计实现完整性"}
+{"file": ".trellis/tasks/07-12-edge-scheduled-tasks/prd.md", "reason": "逐条验证验收标准是否满足"}

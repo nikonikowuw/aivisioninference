@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "后端目录结构、Wire DI、数据库规范、错误处理等全局规范"}
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "边缘节点生命周期、MQTT 通信模式、任务挂起/恢复合约"}
+{"file": ".trellis/tasks/07-12-edge-scheduled-tasks/design.md", "reason": "本任务技术设计方案，包括数据模型、分层组件、MQTT 下发流程"}
+{"file": ".trellis/tasks/07-12-edge-scheduled-tasks/prd.md", "reason": "本任务需求文档，包括确认的决策和验收标准"}

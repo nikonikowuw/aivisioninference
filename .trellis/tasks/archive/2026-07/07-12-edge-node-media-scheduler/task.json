@@ -1,0 +1,28 @@
+{
+  "id": "edge-node-media-scheduler",
+  "name": "edge-node-media-scheduler",
+  "title": "实现媒体节点容量调度器",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "niko",
+  "assignee": "niko",
+  "createdAt": "2026-07-12",
+  "completedAt": "2026-07-12",
+  "branch": null,
+  "base_branch": "develop",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-12-media-capacity-auto-detection"
+  ],
+  "parent": "07-12-fix-edge-node-runtime",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

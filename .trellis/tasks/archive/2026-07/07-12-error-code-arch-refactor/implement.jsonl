@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Current error handling spec — will be updated after refactor"}
+{"file": "app/internal/pkg/errors/errors.go", "reason": "All error code constants and AppError type — primary file to modify"}
+{"file": "app/internal/pkg/i18n/i18n.go", "reason": "Current i18n translation storage — type from map[int]string to map[string]string"}
+{"file": "app/internal/pkg/response/response.go", "reason": "Response.Code type and codeToHTTPStatus — from int to string"}
+{"file": "app/internal/middleware/error.go", "reason": "Middleware error logging with code — from int to string"}
+{"file": "web/src/services/api.ts", "reason": "Frontend API layer — ApiResponse.code / ApiError.code from number to string"}
+{"file": "web/src/locales/en-US/common.ts", "reason": "Frontend i18n error messages — key from digits to string codes"}
+{"file": ".trellis/tasks/07-12-error-code-arch-refactor/design.md", "reason": "Full error code mapping table and module prefix allocation"}

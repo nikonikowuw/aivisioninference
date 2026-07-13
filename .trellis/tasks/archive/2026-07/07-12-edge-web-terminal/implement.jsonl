@@ -1,0 +1,17 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Spec index — Go backend conventions, DI, routing, error handling, i18n"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Spec index — React/Chakra UI conventions, i18n, hooks"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Spec index — project-wide conventions, AGENTS.md"}
+{"file": ".trellis/rules/golang-pro.md", "reason": "Go backend rules: Context propagation, error handling, i18n, Wire, security"}
+{"file": ".trellis/rules/ui-ux-pro-max.md", "reason": "UI/UX rules: accessibility, dark mode, Chakra forms, responsive"}
+{"file": ".trellis/tasks/07-12-edge-web-terminal/prd.md", "reason": "Task PRD — requirements and acceptance criteria"}
+{"file": ".trellis/tasks/07-12-edge-web-terminal/design.md", "reason": "Technical design — architecture, models, components, protocol"}
+{"file": "app/internal/service/ipc_engine_client.go", "reason": "Reference: existing MQTT EngineClient interface pattern"}
+{"file": "app/internal/service/mqtt_engine_client.go", "reason": "Reference: MQTT command dispatch pattern (topic format, trace_id, payload)"}
+{"file": "app/internal/pkg/ws/hub.go", "reason": "Reference: existing WebSocket Hub implementation"}
+{"file": "app/internal/pkg/ws/client.go", "reason": "Reference: WebSocket Client readPump/writePump pattern"}
+{"file": "app/internal/model/edge_node.go", "reason": "Reference: EdgeNode model to extend with ssh_port/ssh_private_key"}
+{"file": "app/internal/model/ai_time_schedule.go", "reason": "Reference: existing model with JSONB field pattern"}
+{"file": "app/internal/pkg/mqttsync/manager.go", "reason": "Reference: Redis Pub/Sub sync-async coordination pattern"}
+{"file": "web/src/services/edgeNode.ts", "reason": "Reference: existing edge node frontend service pattern"}
+{"file": "web/src/hooks/useWebSocket.ts", "reason": "Reference: existing WebSocket hook for real-time messages"}
+{"file": "web/src/views/admin/devices/edge-nodes/detail.tsx", "reason": "Reference: edge node detail page to extend with Terminal tab"}

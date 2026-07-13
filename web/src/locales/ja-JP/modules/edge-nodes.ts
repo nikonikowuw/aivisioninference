@@ -69,7 +69,7 @@ export const edgeNodes = {
     deployConfirm: '配布確認',
     deployAlgoDesc: 'このノードに配布するアルゴリズムパッケージを選択してください',
     retryAlgo: 'リトライ',
-    deleteAlgo: 'アンインストール',
+    deleteAlgo: '管理解除',
   },
   algorithmStatus: {
     pending: '配布待ち',
@@ -101,8 +101,8 @@ export const edgeNodes = {
     noMetrics: 'メトリクスデータを待機中...',
     retrySuccess: 'アルゴリズムのリトライに成功しました',
     retryFailed: 'アルゴリズムのリトライに失敗しました',
-    deleteAlgoSuccess: 'アルゴリズムをアンインストールしました',
-    deleteAlgoFailed: 'アルゴリズムのアンインストールに失敗しました',
+    deleteAlgoSuccess: 'アルゴリズムを管理解除しました（エンジン再起動後は読み込まれません）',
+    deleteAlgoFailed: 'アルゴリズムの管理解除に失敗しました',
     submitFailed: '送信に失敗しました',
   },
   alert: {

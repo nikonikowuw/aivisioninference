@@ -69,7 +69,7 @@ export const edgeNodes = {
     deployConfirm: '確認下載',
     deployAlgoDesc: '選擇要下載到該節點的演算法包',
     retryAlgo: '重試',
-    deleteAlgo: '卸載',
+    deleteAlgo: '移除管理',
   },
   algorithmStatus: {
     pending: '待下載',
@@ -101,8 +101,8 @@ export const edgeNodes = {
     noMetrics: '等待指標資料...',
     retrySuccess: '演算法包重試成功',
     retryFailed: '演算法包重試失敗',
-    deleteAlgoSuccess: '演算法包卸載成功',
-    deleteAlgoFailed: '演算法包卸載失敗',
+    deleteAlgoSuccess: '演算法包已移除管理（引擎重啟後不再載入）',
+    deleteAlgoFailed: '演算法包移除失敗',
     submitFailed: '提交失敗',
   },
   alert: {

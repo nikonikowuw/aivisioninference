@@ -599,10 +599,11 @@ func (s *EdgeNodeService) RemoveAlgorithm(ctx context.Context, nodeID string, al
 		return err
 	}
 
-	// 1. 删除数据库记录
+	// 删除数据库记录（设计选择："取消管理/重启后卸载"语义，见 R6）。
+	// 热卸载需要 Engine MQTT 卸载命令，当前引擎尚未实现该机制。
+	// 引擎重启后将不再加载该算法对应的 SO。
+	// 管理端文案已同步为"移除管理"而非"卸载"以避免误导。
 	return s.nodeAlgoRepo.Delete(ctx, nodeID, algoPackageID)
-	// TODO: 可以通过 IPC 发送卸载命令给引擎,当前引擎尚未实现热卸载机制,
-	// 我们暂时只删除数据库关联关系,引擎重启后将不再加载该算法。
 }
 
 func (s *EdgeNodeService) RecommendNode(ctx context.Context, algoPackageID string) (*model.EdgeNode, error) {

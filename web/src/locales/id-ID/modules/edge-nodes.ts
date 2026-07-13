@@ -69,7 +69,7 @@ export const edgeNodes = {
     deployConfirm: 'Konfirmasi Pengiriman',
     deployAlgoDesc: 'Pilih paket algoritma yang ingin dikirim ke node ini',
     retryAlgo: 'Coba Lagi',
-    deleteAlgo: 'Copot',
+    deleteAlgo: 'Hapus Manajemen',
   },
   algorithmStatus: {
     pending: 'Menunggu',
@@ -101,8 +101,8 @@ export const edgeNodes = {
     noMetrics: 'Menunggu data metrik...',
     retrySuccess: 'Percobaan ulang algoritma berhasil',
     retryFailed: 'Percobaan ulang algoritma gagal',
-    deleteAlgoSuccess: 'Algoritma berhasil dicopot',
-    deleteAlgoFailed: 'Gagal mencopot algoritma',
+    deleteAlgoSuccess: 'Algoritma dihapus dari manajemen (tidak dimuat setelah restart engine)',
+    deleteAlgoFailed: 'Gagal menghapus algoritma dari manajemen',
     submitFailed: 'Pengiriman gagal',
   },
   alert: {

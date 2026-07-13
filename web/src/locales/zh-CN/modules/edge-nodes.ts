@@ -69,7 +69,7 @@ export const edgeNodes = {
     deployConfirm: "确认下发",
     deployAlgoDesc: "选择要下发到该节点的算法包",
     retryAlgo: "重试",
-    deleteAlgo: "卸载",
+    deleteAlgo: "移除管理",
   },
   algorithmStatus: {
     pending: "待下发",
@@ -97,8 +97,8 @@ export const edgeNodes = {
     loadHardwareFailed: "加载硬件信息失败",
     retrySuccess: "算法包重试成功",
     retryFailed: "算法包重试失败",
-    deleteAlgoSuccess: "算法包卸载成功",
-    deleteAlgoFailed: "算法包卸载失败",
+    deleteAlgoSuccess: "算法包已移除管理（引擎重启后不再加载）",
+    deleteAlgoFailed: "算法包移除失败",
     versionIncompatible: "引擎版本不兼容",
     versionIncompatibleDesc:
       "当前版本 {{version}}，最低要求 {{minVersion}}，请升级引擎",

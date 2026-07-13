@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "GORM model patterns for EdgeNodeAlgorithm with status enums, unique composite indexes, retry tracking fields"}
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "Heartbeat contract — SyncInstalled called from HandleHeartbeat for algorithm deployment lifecycle"}
+{"file": ".trellis/spec/backend/edge-scheduled-tasks.md", "reason": "Asynq task pattern for periodic algorithm retry scheduling with exponential backoff"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend layout for algorithm lifecycle model/repo/service/task modules"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for deployment, retry, and removal operations"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality gates for algorithm lifecycle backend code"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Algorithm lifecycle spans: MQTT deploy command → Engine download/install → heartbeat response → Go status sync → Frontend display"}

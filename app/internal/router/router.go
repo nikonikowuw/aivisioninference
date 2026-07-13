@@ -633,7 +633,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	}
 
 	// Edge Node Status Checker
-	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
+	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec, service.NewHeartbeatStore(rdb))
 	edgeNodeStatusTask.RegisterHandlers(mux)
 	edgeNodeStatusTask.RegisterPeriodic(scheduler, cfg.Engine.HeartbeatCheckIntervalSec)
 

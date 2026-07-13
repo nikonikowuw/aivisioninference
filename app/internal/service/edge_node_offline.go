@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"go.uber.org/zap"
 
 	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/ws"
@@ -26,6 +27,7 @@ func HandleNodeOffline(
 	nodeRepo *repository.EdgeNodeRepository,
 	taskRepo *repository.AIVisionTaskRepository,
 	hub *ws.Hub,
+	store HeartbeatStore,
 	node model.EdgeNode,
 	suspendedReason string,
 	reasonFmt string,
@@ -69,6 +71,12 @@ func HandleNodeOffline(
 	}
 	if !transitioned {
 		return false, nil
+	}
+
+	// Remove from heartbeat store — node is now offline
+	if err := store.Remove(ctx, node.ID); err != nil {
+		zap.L().Warn("failed to remove node from heartbeat store",
+			zap.String("node_id", node.ID), zap.Error(err))
 	}
 
 	if hub != nil {

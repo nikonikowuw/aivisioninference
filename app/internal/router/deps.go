@@ -517,6 +517,7 @@ func provideEdgeNodeService(
 	metricsSvc *service.EdgeNodeMetricsService,
 	jwtManager *jwt.Manager,
 	fileStorage storage.Storage,
+	rdb *redis.Client,
 	cfg *Config,
 	hub *ws.Hub,
 	streamManager *service.StreamManager,
@@ -537,6 +538,7 @@ func provideEdgeNodeService(
 		streamManager,
 		metricsRepo,
 		alertEngine,
+		service.NewHeartbeatStore(rdb),
 	)
 	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
 	return svc

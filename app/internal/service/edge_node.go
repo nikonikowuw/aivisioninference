@@ -23,6 +23,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// recordHeartbeat records a node heartbeat timestamp in the store.
+// Logs a warning on failure but does not return the error — the caller
+// should not fail the heartbeat request due to store unavailability.
+func (s *EdgeNodeService) recordHeartbeat(ctx context.Context, nodeID string, now time.Time) {
+	if err := s.heartbeats.Record(ctx, nodeID, now); err != nil {
+		zap.L().Warn("failed to record heartbeat",
+			zap.String("node_id", nodeID), zap.Error(err))
+	}
+}
+
 // EdgeNodeService handles business logic for EdgeNode and EdgeNodeAlgorithm operations.
 type EdgeNodeService struct {
 	nodeRepo             *repository.EdgeNodeRepository
@@ -43,6 +53,7 @@ type EdgeNodeService struct {
 	stopChan             chan struct{}
 	metricsRepo          *repository.EdgeNodeMetricsRepository
 	alertEngine          *AlertEngine
+	heartbeats           HeartbeatStore
 }
 
 // NewEdgeNodeService creates a new EdgeNodeService.
@@ -60,6 +71,7 @@ func NewEdgeNodeService(
 	streamManager *StreamManager,
 	metricsRepo *repository.EdgeNodeMetricsRepository,
 	alertEngine *AlertEngine,
+	heartbeats HeartbeatStore,
 ) *EdgeNodeService {
 	svc := &EdgeNodeService{
 		nodeRepo:             nodeRepo,
@@ -72,6 +84,7 @@ func NewEdgeNodeService(
 		jwtManager:           jwtManager,
 		storage:              storage,
 		minCompatibleVersion: "",
+		heartbeats:           heartbeats,
 		versionCheckEnabled:  false,
 		hub:                  hub,
 		streamManager:        streamManager,
@@ -246,14 +259,16 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		}); err != nil {
 			return nil, fmt.Errorf("更新心跳字段失败: %w", err)
 		}
+		// Record heartbeat for liveness tracking
+		s.recordHeartbeat(ctx, id, now)
 		zap.L().Warn("heartbeat from disabled node, accepted for liveness tracking only",
 			zap.String("node_id", id))
 		return &dto.HeartbeatResponse{}, nil
 	}
 
 	now := time.Now()
-	status := string(model.NodeStatusOnline)
-	if req.Status == "error" {
+	status := model.NodeStatusOnline
+	if req.Status == model.NodeStatusError {
 		status = model.NodeStatusError
 		zap.L().Info("node reported error via heartbeat",
 			zap.String("node_id", id),
@@ -292,6 +307,9 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	if err := s.nodeRepo.UpdateHeartbeatFields(ctx, id, hbFields); err != nil {
 		return nil, fmt.Errorf("更新心跳字段失败: %w", err)
 	}
+
+	// Record heartbeat for liveness tracking
+	s.recordHeartbeat(ctx, id, now)
 
 	// Sync installed algorithms
 	var suspendedTasks []model.AIVisionTask
@@ -648,7 +666,7 @@ func (s *EdgeNodeService) HandleLWTNodeOffline(ctx context.Context, nodeID strin
 		return fmt.Errorf("LWT: node not found %s: %w", nodeID, err)
 	}
 
-	transitioned, err := HandleNodeOffline(ctx, s.nodeRepo, s.taskRepo, s.hub, *node,
+	transitioned, err := HandleNodeOffline(ctx, s.nodeRepo, s.taskRepo, s.hub, s.heartbeats, *node,
 		model.SuspendedReasonNodeOffline,
 		"节点 %s 离线(MQTT LWT)，任务自动暂停", nil, node.Name)
 	if err != nil {

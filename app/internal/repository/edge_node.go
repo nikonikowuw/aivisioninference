@@ -56,6 +56,16 @@ func (r *EdgeNodeRepository) FindByID(ctx context.Context, id string) (*model.Ed
 	return &item, nil
 }
 
+// FindByIDs finds edge nodes by multiple IDs.
+func (r *EdgeNodeRepository) FindByIDs(ctx context.Context, ids []string) ([]model.EdgeNode, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var items []model.EdgeNode
+	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&items).Error
+	return items, err
+}
+
 // Update saves changes to an edge node record.
 func (r *EdgeNodeRepository) Update(ctx context.Context, item *model.EdgeNode) error {
 	return r.db.WithContext(ctx).Save(item).Error
@@ -209,16 +219,6 @@ func (r *EdgeNodeRepository) FindReadyFaceLibraryNodesByAlgorithm(ctx context.Co
 		supportsFaceLibrary: &supportsFaceLibrary,
 		order:               "edge_nodes.updated_at DESC",
 	})
-}
-
-// FindTimedOutNodes finds all online edge nodes whose last heartbeat is older than the cutoff time.
-func (r *EdgeNodeRepository) FindTimedOutNodes(ctx context.Context, cutoff time.Time) ([]model.EdgeNode, error) {
-	var items []model.EdgeNode
-	err := r.db.WithContext(ctx).
-		Where("status = ?", model.NodeStatusOnline).
-		Where("last_heartbeat < ?", cutoff).
-		Find(&items).Error
-	return items, err
 }
 
 // UpdateStatusBatch updates status of multiple node IDs.

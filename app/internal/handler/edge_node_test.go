@@ -168,7 +168,7 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil)
+	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil, service.NewMemoryHeartbeatStore())
 	tagSvc := service.NewEdgeNodeTagService(repository.NewEdgeNodeTagRepository(db), nil)
 	h := NewEdgeNodeHandler(svc, tagSvc)
 

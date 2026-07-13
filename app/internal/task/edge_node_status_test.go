@@ -80,52 +80,52 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 	db := setupTaskTestDB(t)
 	nodeRepo := repository.NewEdgeNodeRepository(db)
 	taskRepo := repository.NewAIVisionTaskRepository(db)
-	taskHandler := NewEdgeNodeStatusTask(nodeRepo, taskRepo, nil, 15)
+	store := service.NewMemoryHeartbeatStore()
+	taskHandler := NewEdgeNodeStatusTask(nodeRepo, taskRepo, nil, 15, store)
 
 	ctx := context.Background()
-
-	// 1. Seed Nodes
 	now := time.Now()
-	oldHeartbeat := now.Add(-30 * time.Second)
-	recentHeartbeat := now.Add(-5 * time.Second)
 
-	// Node 1: Online but timed out (30s ago last heartbeat)
+	// Node 1: Online — record heartbeat 30s ago (should be expired)
+	oldHB := now.Add(-30 * time.Second)
 	node1 := &model.EdgeNode{
 		BaseModel:     model.BaseModel{ID: "node-timed-out"},
 		Name:          "Timed Out Node",
 		Endpoint:      "http://127.0.0.1:8080",
 		Status:        model.NodeStatusOnline,
-		LastHeartbeat: &oldHeartbeat,
+		LastHeartbeat: &oldHB,
 	}
+	require.NoError(t, store.Record(ctx, node1.ID, oldHB))
 
-	// Node 2: Online and healthy (5s ago last heartbeat)
+	// Node 2: Online — record heartbeat 5s ago (still fresh)
+	freshHB := now.Add(-5 * time.Second)
 	node2 := &model.EdgeNode{
 		BaseModel:     model.BaseModel{ID: "node-healthy"},
 		Name:          "Healthy Node",
 		Endpoint:      "http://127.0.0.1:8081",
 		Status:        model.NodeStatusOnline,
-		LastHeartbeat: &recentHeartbeat,
+		LastHeartbeat: &freshHB,
 	}
+	require.NoError(t, store.Record(ctx, node2.ID, freshHB))
 
-	// Node 3: Already offline (30s ago last heartbeat, shouldn't change)
+	// Node 3: Already offline, no heartbeat record
 	node3 := &model.EdgeNode{
-		BaseModel:     model.BaseModel{ID: "node-already-offline"},
-		Name:          "Already Offline Node",
-		Endpoint:      "http://127.0.0.1:8082",
-		Status:        model.NodeStatusOffline,
-		LastHeartbeat: &oldHeartbeat,
+		BaseModel: model.BaseModel{ID: "node-already-offline"},
+		Name:      "Already Offline Node",
+		Endpoint:  "http://127.0.0.1:8082",
+		Status:    model.NodeStatusOffline,
 	}
 
 	require.NoError(t, nodeRepo.Create(ctx, node1))
 	require.NoError(t, nodeRepo.Create(ctx, node2))
 	require.NoError(t, nodeRepo.Create(ctx, node3))
 
-	// 2. Execute Task
+	// Execute Task
 	asynqTask := asynq.NewTask(TypeEdgeNodeStatusCheck, nil)
 	err := taskHandler.handleEdgeNodeStatusCheck(ctx, asynqTask)
 	require.NoError(t, err)
 
-	// 3. Verify node states
+	// Verify node states
 	n1, err := nodeRepo.FindByID(ctx, "node-timed-out")
 	require.NoError(t, err)
 	assert.Equal(t, model.NodeStatusOffline, n1.Status) // Node 1 should be offline now
@@ -137,6 +137,14 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 	n3, err := nodeRepo.FindByID(ctx, "node-already-offline")
 	require.NoError(t, err)
 	assert.Equal(t, model.NodeStatusOffline, n3.Status) // Node 3 should remain offline
+
+	// Verify stale heartbeat entry for node3 was cleaned up
+	remaining, err := store.GetExpired(ctx, now)
+	require.NoError(t, err)
+	assert.NotContains(t, remaining, "node-already-offline")
+
+	// Verify node-timed-out was removed from store after offline processing
+	assert.NotContains(t, remaining, "node-timed-out")
 }
 
 func TestHandleNodeOffline_IsConditionalAndIdempotent(t *testing.T) {
@@ -154,7 +162,7 @@ func TestHandleNodeOffline_IsConditionalAndIdempotent(t *testing.T) {
 		"task-race", "Race Task", model.TaskStatusRunning, node.ID).Error)
 
 	staleCutoff := now.Add(-time.Second)
-	transitioned, err := service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, node,
+	transitioned, err := service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, service.NewMemoryHeartbeatStore(), node,
 		model.SuspendedReasonNodeOffline, "offline", &staleCutoff)
 	require.NoError(t, err)
 	assert.False(t, transitioned)
@@ -163,12 +171,12 @@ func TestHandleNodeOffline_IsConditionalAndIdempotent(t *testing.T) {
 	assert.Equal(t, model.NodeStatusOnline, freshNode.Status)
 
 	futureCutoff := now.Add(time.Second)
-	transitioned, err = service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, node,
+	transitioned, err = service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, service.NewMemoryHeartbeatStore(), node,
 		model.SuspendedReasonNodeOffline, "offline", &futureCutoff)
 	require.NoError(t, err)
 	assert.True(t, transitioned)
 
-	transitioned, err = service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, node,
+	transitioned, err = service.HandleNodeOffline(ctx, nodeRepo, taskRepo, nil, service.NewMemoryHeartbeatStore(), node,
 		model.SuspendedReasonNodeOffline, "offline", &futureCutoff)
 	require.NoError(t, err)
 	assert.False(t, transitioned)

@@ -25,6 +25,7 @@ type EdgeNodeStatusTask struct {
 	taskRepo       *repository.AIVisionTaskRepository
 	hub            *ws.Hub
 	timeoutSeconds int
+	store          service.HeartbeatStore
 }
 
 // NewEdgeNodeStatusTask creates a new EdgeNodeStatusTask.
@@ -33,12 +34,14 @@ func NewEdgeNodeStatusTask(
 	taskRepo *repository.AIVisionTaskRepository,
 	hub *ws.Hub,
 	timeoutSeconds int,
+	store service.HeartbeatStore,
 ) *EdgeNodeStatusTask {
 	return &EdgeNodeStatusTask{
 		nodeRepo:       nodeRepo,
 		taskRepo:       taskRepo,
 		hub:            hub,
 		timeoutSeconds: timeoutSeconds,
+		store:          store,
 	}
 }
 
@@ -70,23 +73,46 @@ func (h *EdgeNodeStatusTask) handleEdgeNodeStatusCheck(ctx context.Context, t *a
 
 	cutoff := time.Now().Add(-time.Duration(h.timeoutSeconds) * time.Second)
 
-	nodes, err := h.nodeRepo.FindTimedOutNodes(ctx, cutoff)
+	// Query HeartbeatStore for expired nodes (Redis ZSET or in-memory).
+	expiredIDs, err := h.store.GetExpired(ctx, cutoff)
 	if err != nil {
-		zap.L().Error("failed to find timed out edge nodes", zap.Error(err))
+		zap.L().Error("failed to query heartbeat store for expired nodes", zap.Error(err))
 		return err
 	}
 
-	if len(nodes) == 0 {
+	if len(expiredIDs) == 0 {
 		return nil
 	}
 
+	// Batch load nodes from DB to verify they still exist and are online.
+	nodes, err := h.nodeRepo.FindByIDs(ctx, expiredIDs)
+	if err != nil {
+		zap.L().Error("failed to load nodes by IDs", zap.Error(err))
+		return err
+	}
+
+	nodeMap := make(map[string]model.EdgeNode, len(nodes))
+	for _, n := range nodes {
+		nodeMap[n.ID] = n
+	}
+
 	var firstErr error
-	for _, node := range nodes {
+	for _, nodeID := range expiredIDs {
+		node, ok := nodeMap[nodeID]
+		if !ok || node.Status != model.NodeStatusOnline {
+			// Node doesn't exist or is already offline — clean up stale store entry.
+			if err := h.store.Remove(ctx, nodeID); err != nil {
+				zap.L().Warn("failed to remove stale heartbeat entry from store",
+					zap.String("node_id", nodeID), zap.Error(err))
+			}
+			continue
+		}
+
 		zap.L().Warn("edge node heartbeat timed out, marking offline",
 			zap.String("id", node.ID),
 			zap.String("name", node.Name))
 
-		if _, err := service.HandleNodeOffline(ctx, h.nodeRepo, h.taskRepo, h.hub, node,
+		if _, err := service.HandleNodeOffline(ctx, h.nodeRepo, h.taskRepo, h.hub, h.store, node,
 			model.SuspendedReasonNodeOffline,
 			"节点 %s 心跳超时，任务自动暂停", &cutoff, node.Name); err != nil {
 			zap.L().Error("failed to process node offline",
@@ -96,7 +122,11 @@ func (h *EdgeNodeStatusTask) handleEdgeNodeStatusCheck(ctx context.Context, t *a
 			if firstErr == nil {
 				firstErr = err
 			}
+			continue
 		}
+		// HandleNodeOffline removes from store on successful transition.
+		// For non-transitioned (concurrent heartbeat refreshed DB), the store
+		// entry was also refreshed by the concurrent Record call — leave it.
 	}
 
 	return firstErr

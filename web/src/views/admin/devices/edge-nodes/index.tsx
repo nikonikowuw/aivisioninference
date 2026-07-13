@@ -28,7 +28,6 @@ import { usePagination } from 'hooks/usePagination';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { formatUptime } from 'utils/convert';
 import { edgeNodeApi, type EdgeNode } from 'services/edgeNode';
 import { useWebSocket } from 'hooks/useWebSocket';
 import { AlgorithmDeployModal } from './components/AlgorithmDeployModal';
@@ -200,7 +199,6 @@ export default function EdgeNodeList() {
                   <Th>{t('fields.currentLoad')}</Th>
                   <Th>{t('fields.cpuUsage')}</Th>
                   <Th>{t('fields.memUsage')}</Th>
-                  <Th>{t('fields.memoryUsage')}</Th>
                   <Th>{t('fields.uptime')}</Th>
                   <Th>{t('fields.platform')}</Th>
                   <Th>{t('fields.engineVersion')}</Th>
@@ -213,9 +211,6 @@ export default function EdgeNodeList() {
                   <Tr><Td colSpan={10}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
                 ) : nodes.length === 0 ? (
                   <Tr><Td colSpan={10}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
-                  <Tr><Td colSpan={9}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
-                ) : nodes.length === 0 ? (
-                  <Tr><Td colSpan={9}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
                 ) : (
                   nodes.map((node) => (
                     <Tr key={node.id}>
@@ -237,13 +232,11 @@ export default function EdgeNodeList() {
                       <Td>
                         <Text fontSize="sm">
                           {formatPercent(node.cpu_usage ?? node.hardware_info?.cpu_usage)}
-                          {node.cpu_usage != null ? `${node.cpu_usage.toFixed(1)}%` : '-'}
                         </Text>
                       </Td>
                       <Td>
                         <Text fontSize="sm">
                           {formatPercent(node.memory_usage ?? node.hardware_info?.memory_usage)}
-                          {node.memory_usage != null ? `${node.memory_usage.toFixed(1)}%` : '-'}
                         </Text>
                       </Td>
                       <Td>

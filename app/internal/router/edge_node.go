@@ -13,6 +13,24 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 	scheduledTaskHandler := deps.EdgeNodeScheduledTaskHandler
 	terminalHandler := deps.EdgeNodeTerminalHandler
 
+	// Ensure mandatory handlers are non-nil — a nil value here is a startup bug,
+	// not a runtime condition, so panic is the correct response.
+	if nodeHandler == nil {
+		panic("nodeHandler is nil — check Wire provider for EdgeNodeHandler")
+	}
+	if metricsHandler == nil {
+		panic("metricsHandler is nil — check Wire provider for EdgeNodeMetricsHandler")
+	}
+	if alertRuleHandler == nil {
+		panic("alertRuleHandler is nil — check Wire provider for AlertRuleHandler")
+	}
+	if scheduledTaskHandler == nil {
+		panic("scheduledTaskHandler is nil — check Wire provider for EdgeNodeScheduledTaskHandler")
+	}
+	if terminalHandler == nil {
+		panic("terminalHandler is nil — check Wire provider for EdgeNodeTerminalHandler")
+	}
+
 	// Heartbeat route: verified by node-specific JWT token
 	v1.POST("/edge-nodes/:id/heartbeat", nodeMiddleware.AuthNode(), nodeHandler.Heartbeat)
 
@@ -48,22 +66,33 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 		}
 	}
 
-	// Edge node metrics routes
-	if deps.EdgeNodeMetricsHandler != nil {
-		metrics := authorized.Group("/edge-nodes")
-		metrics.Use(r.RBAC())
-		{
-			metrics.GET("/overview", deps.EdgeNodeMetricsHandler.GetNodeOverview)
-			metrics.GET("/:node_id/metrics", deps.EdgeNodeMetricsHandler.QueryMetrics)
-		}
-	}
+	// Phase 1: Monitoring metrics routes
+	nodes.GET("/overview", metricsHandler.Overview)
+	nodes.GET("/:id/metrics", metricsHandler.QueryMetrics)
 
-	// Terminal session routes
+	// Phase 2: Alert rules routes
+	nodes.POST("/:id/alert-rules", alertRuleHandler.List)
+
+	// Phase 3: Scheduled task routes
+	nodes.GET("/:id/scheduled-tasks", scheduledTaskHandler.List)
+	nodes.POST("/:id/scheduled-tasks/create", scheduledTaskHandler.Create)
+	nodes.GET("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.GetByID)
+	nodes.PUT("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.Update)
+	nodes.DELETE("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.Delete)
+
+	// Phase 3: Task execution listing
+	nodes.GET("/:id/task-executions", scheduledTaskHandler.ListExecutions)
+
+	// Phase 3: Web Terminal (WebSocket)
+	nodes.GET("/:id/terminal", terminalHandler.HandleWebSocket)
+
+	// Phase 3: Task execution callback (no auth — called by engine via HTTP)
+	v1.POST("/edge-nodes/:id/task-executions/callback", scheduledTaskHandler.HandleCallback)
+
+	// Terminal session routes (HEAD original — kept for backward compatibility)
 	if deps.TerminalHandler != nil {
-		// WebSocket terminal — JWT auth handled internally, like /ws
 		v1.GET("/ws/terminal", deps.TerminalHandler.HandleWebSocket)
 
-		// Session REST API
 		sessions := authorized.Group("/edge-nodes/:id/sessions")
 		sessions.Use(r.RBAC())
 		{
@@ -74,7 +103,7 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 		}
 	}
 
-	// Edge scheduled task routes
+	// Edge scheduled task routes (HEAD original — kept for backward compatibility)
 	if deps.EdgeScheduledTaskHandler != nil {
 		scheduled := authorized.Group("/edge-scheduled-tasks")
 		scheduled.Use(r.RBAC())
@@ -88,29 +117,7 @@ func (r *Router) registerEdgeNodeRoutes(authorized *gin.RouterGroup, v1 *gin.Rou
 			scheduled.PUT("/:id/toggle", deps.EdgeScheduledTaskHandler.ToggleEnabled)
 			scheduled.POST("/:id/records/:record_id/retry", deps.EdgeScheduledTaskHandler.RetryRecord)
 		}
-		// Phase 1: Monitoring metrics routes
-		nodes.GET("/overview", metricsHandler.Overview)
-		nodes.GET("/:id/metrics", metricsHandler.QueryMetrics)
-
-		// Phase 2: Alert rules routes
-		nodes.POST("/:id/alert-rules", alertRuleHandler.List) // List rules for a node
-
-		// Phase 3: Scheduled task routes
-		nodes.GET("/:id/scheduled-tasks", scheduledTaskHandler.List)
-		nodes.POST("/:id/scheduled-tasks/create", scheduledTaskHandler.Create)
-		nodes.GET("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.GetByID)
-		nodes.PUT("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.Update)
-		nodes.DELETE("/:id/scheduled-tasks/:task_id", scheduledTaskHandler.Delete)
-
-		// Phase 3: Task execution listing
-		nodes.GET("/:id/task-executions", scheduledTaskHandler.ListExecutions)
-
-		// Phase 3: Web Terminal (WebSocket)
-		nodes.GET("/:id/terminal", terminalHandler.HandleWebSocket)
 	}
-
-	// Phase 3: Task execution callback (no auth — called by engine via HTTP)
-	v1.POST("/edge-nodes/:id/task-executions/callback", scheduledTaskHandler.HandleCallback)
 
 	// Phase 2: Alert Rules (admin management)
 	alertRules := authorized.Group("/alert-rules")

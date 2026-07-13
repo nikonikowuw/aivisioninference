@@ -167,8 +167,9 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
-	h := NewEdgeNodeHandler(svc)
+	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil)
+	tagSvc := service.NewEdgeNodeTagService(repository.NewEdgeNodeTagRepository(db), nil)
+	h := NewEdgeNodeHandler(svc, tagSvc)
 
 	r := gin.New()
 	// Middleware for i18n or other elements if needed, but simple router works:

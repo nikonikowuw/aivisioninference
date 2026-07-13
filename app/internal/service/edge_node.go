@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -329,6 +328,9 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 			// Non-fatal: continue processing heartbeat even if metrics persistence fails
 		}
 
+		// Broadcast metrics event to WebSocket admin clients
+		BroadcastMetricsEvent(s.hub, id, metrics)
+
 		// Phase 2: Evaluate alert rules after metrics persistence
 		if s.alertEngine != nil {
 			if err := s.alertEngine.EvaluateAfterHeartbeat(ctx, id, metrics); err != nil {
@@ -339,11 +341,6 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 				// Non-fatal: continue processing heartbeat even if alert evaluation fails
 			}
 		}
-	}
-
-	// Metrics persistence is non-critical and owns its bounded async lifecycle.
-	if s.metricsSvc != nil {
-		s.metricsSvc.WriteHeartbeatMetrics(ctx, id, req)
 	}
 
 	// Update in-memory node for downstream use (after successful transaction)
@@ -472,43 +469,7 @@ func (s *EdgeNodeService) GetOverviewStats(ctx context.Context) (*dto.OverviewSt
 
 // buildMetricsRecord converts a HeartbeatRequest into an EdgeNodeMetrics model for persistence.
 func (s *EdgeNodeService) buildMetricsRecord(nodeID string, req *dto.HeartbeatRequest) *model.EdgeNodeMetrics {
-	diskJSON, _ := json.Marshal(req.DiskUsage)
-	if len(diskJSON) == 0 {
-		diskJSON = []byte("[]")
-	}
-
-	// Compute memory_used from the usage percentage and total memory.
-	// The engine sends memory_usage (percentage) and hardware_info.total_memory
-	// but not memory_used as a separate field.
-	memoryTotal := req.HardwareInfo.TotalMemory
-	memoryUsed := int64(float64(memoryTotal) * req.MemoryUsage / 100.0)
-
-	return &model.EdgeNodeMetrics{
-		NodeID:    nodeID,
-		CPUUsage:  req.CPUUsage,
-		CPULoad1m: req.CPULoad1m,
-		// CPULoad5m and CPULoad15m are extracted by MetricsFlattener but
-	// not yet included in the heartbeat JSON payload from the engine.
-	// When the engine adds them, map from req fields here.
-		MemoryUsage: req.MemoryUsage,
-		MemoryUsed:  memoryUsed,
-		MemoryTotal: memoryTotal,
-		DiskUsage:   diskJSON,
-		NetRxBytes:  req.NetRxBytes,
-		NetTxBytes:  req.NetTxBytes,
-		NetRxSpeed:  req.NetRxSpeed,
-		NetTxSpeed:  req.NetTxSpeed,
-		Uptime:      req.Uptime,
-		ProcessCount:      req.ProcessCount,
-		ThreadCount:       req.ThreadCount,
-		Temperature:       req.Temperature,
-		WorkerCount:       req.WorkerCount,
-		IdleWorkerCount:   req.IdleWorkerCount,
-		ActiveStreamCount: req.ActiveStreamCount,
-		DecodeSessions:    req.DecodeSessions,
-		EncodeSessions:    req.EncodeSessions,
-		CurrentLoad:       req.CurrentLoad,
-	}
+	return BuildEdgeNodeMetrics(nodeID, req)
 }
 
 func (s *EdgeNodeService) checkVersionCompatibility(nodeID, engineVersion string) error {

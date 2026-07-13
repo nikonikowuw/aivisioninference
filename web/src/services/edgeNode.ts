@@ -1,4 +1,5 @@
 import { request, type AlgorithmPackage } from './api';
+import { buildQuery } from '../utils/query';
 
 // Edge Node types
 export interface EdgeNode {
@@ -25,9 +26,6 @@ export interface EdgeNode {
   created_at: string;
   updated_at: string;
 
-  // Real-time system metrics (populated from heartbeat)
-  cpu_usage?: number;
-  memory_usage?: number;
 }
 
 // HardwareInfo matches the backend dto.HardwareInfo (total_memory, cpu_cores)
@@ -146,44 +144,8 @@ export interface RecommendNodeResponse {
   load_rate: number;
 }
 
-export interface NodeOverview {
-  total: number;
-  online: number;
-  offline: number;
-  error_count: number;
-  disabled: number;
-}
 
-export interface NodeMetrics {
-  cpu_usage: number;
-  memory_usage: number;
-  cpu_load_1m: number;
-  cpu_load_5m: number;
-  cpu_load_15m: number;
-  net_rx_speed: number;
-  net_tx_speed: number;
-  process_count: number;
-  thread_count: number;
-  temperature: number;
-}
-
-export interface NodeMetricsQueryParams {
-  metric: string;
-  from: string;
-  to: string;
-  aggregation?: string;
-  interval?: string;
-  page?: number;
-  page_size?: number;
-}
-
-function buildQuery(params: Record<string, string | number | undefined>): string {
-  const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== '') sp.set(k, String(v));
-  }
-  return sp.toString() ? `?${sp}` : '';
-}
+export const edgeNodeApi = {
 
 export const edgeNodeApi = {
   // CRUD
@@ -227,13 +189,9 @@ export const edgeNodeApi = {
       body: JSON.stringify(data),
     }),
 
-  // Metrics & Overview
-  getOverview: () => request<NodeOverview>('/edge-nodes/overview'),
-  getMetrics: (nodeId: string, params: NodeMetricsQueryParams) =>
-    request(`/edge-nodes/${nodeId}/metrics${buildQuery(params as unknown as Record<string, string | number | undefined>)}`),
+  // Node recommendation (part of AI Vision Tasks)
 };
 
-// Node recommendation (part of AI Vision Tasks)
 export const recommendNodeApi = {
   recommend: (algoPackageId: string) => {
     const query = buildQuery({ algo_package_id: algoPackageId });

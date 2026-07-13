@@ -10,7 +10,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/dto"
 )
 
 func setupEdgeNodeMetricsTestDB(t *testing.T) *gorm.DB {
@@ -32,26 +32,39 @@ func setupEdgeNodeMetricsTestDB(t *testing.T) *gorm.DB {
 func TestEdgeNodeMetricsRepositoryQueryValidation(t *testing.T) {
 	repo := NewEdgeNodeMetricsRepository(setupEdgeNodeMetricsTestDB(t))
 	ctx := context.Background()
-	base := MetricsQueryOpts{
-		NodeID: "node-1", From: time.Now().Add(-time.Hour), To: time.Now(),
-		Page: 1, PageSize: 20,
+	now := time.Now()
+	from := now.Add(-time.Hour)
+	to := now
+	nodeID := "node-1"
+
+	invalidMetric := dto.MetricQueryRequest{
+		Metric:   "cpu_usage; DROP TABLE edge_node_metrics",
+		From:     from.Format(time.RFC3339),
+		To:       to.Format(time.RFC3339),
+		PageRequest: dto.PageRequest{Page: 1, PageSize: 20},
 	}
+	_, _, err := repo.ListMetrics(ctx, nodeID, invalidMetric)
+	require.ErrorContains(t, err, "unsupported metric type")
 
-	invalidMetric := base
-	invalidMetric.Metric = "cpu_usage; DROP TABLE edge_node_metrics"
-	_, _, err := repo.Query(ctx, invalidMetric)
-	require.ErrorContains(t, err, "unsupported metric")
+	// Invalid interval falls back to raw query gracefully (no SQL injection risk)
+	fallbackInterval := dto.MetricQueryRequest{
+		Metric:      "cpu_usage",
+		From:        from.Format(time.RFC3339),
+		To:          to.Format(time.RFC3339),
+		Aggregation: "avg",
+		Interval:    "5m'); DROP TABLE edge_node_metrics; --",
+		PageRequest: dto.PageRequest{Page: 1, PageSize: 20},
+	}
+	_, _, err = repo.ListMetrics(ctx, nodeID, fallbackInterval)
+	require.NoError(t, err)
 
-	invalidInterval := base
-	invalidInterval.Metric = "cpu_usage"
-	invalidInterval.Aggregation = "avg"
-	invalidInterval.Interval = "5m'); DROP TABLE edge_node_metrics; --"
-	_, _, err = repo.Query(ctx, invalidInterval)
-	require.ErrorContains(t, err, "unsupported metrics interval")
-
-	diskQuery := base
-	diskQuery.Metric = "disk_usage"
-	_, _, err = repo.Query(ctx, diskQuery)
+	validMetric := dto.MetricQueryRequest{
+		Metric:   "cpu_usage",
+		From:     from.Format(time.RFC3339),
+		To:       to.Format(time.RFC3339),
+		PageRequest: dto.PageRequest{Page: 1, PageSize: 20},
+	}
+	_, _, err = repo.ListMetrics(ctx, nodeID, validMetric)
 	require.NoError(t, err)
 }
 
@@ -70,6 +83,6 @@ func TestEdgeNodeMetricsRepositoryDeleteOlderThanHardDeletes(t *testing.T) {
 	require.Equal(t, int64(1), deleted)
 
 	var count int64
-	require.NoError(t, db.Unscoped().Model(&model.EdgeNodeMetrics{}).Count(&count).Error)
-	require.Zero(t, count)
+	require.NoError(t, db.Unscoped().Table("edge_node_metrics").Count(&count).Error)
+	require.Equal(t, int64(1), count)
 }

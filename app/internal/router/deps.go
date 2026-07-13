@@ -70,44 +70,6 @@ type RouteDeps struct {
 	TerminalHandler          *handler.TerminalHandler
 	MqttMux                  *mqttmux.Mux
 	EngineMetricsStore       *service.EngineMetricsStore
-	RBACCache               cache.Cache
-	AuditService            *service.AuditService
-	AuthHandler             *handler.AuthHandler
-	WSHandler               *handler.WSHandler
-	UserHandler             *handler.UserHandler
-	RoleHandler             *handler.RoleHandler
-	PermissionHandler       *handler.PermissionHandler
-	FileHandler             *handler.FileHandler
-	AuditHandler            *handler.AuditHandler
-	TaskHandler             *handler.TaskHandler
-	BrandHandler            *handler.BrandHandler
-	MailHandler             *handler.MailHandler
-	FeedbackHandler         *handler.FeedbackHandler
-	DashboardHandler        *handler.DashboardHandler
-	DeviceHandler           *handler.DeviceHandler
-	DeviceGroupHandler      *handler.DeviceGroupHandler
-	DeviceStagingHandler    *handler.DeviceStagingHandler
-	SystemHandler           *handler.SystemHandler
-	SmartRecordHandler      *handler.SmartRecordHandler
-	StreamManager           *service.StreamManager
-	LicenseHandler          *handler.LicenseHandler
-	LicenseService          *service.LicenseService
-	AIVisionTaskHandler     *handler.AIVisionTaskHandler
-	AITimeScheduleHandler   *handler.AITimeScheduleHandler
-	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
-	PersonHandler           *handler.PersonHandler
-	GB28181Handler          *handler.GB28181Handler
-	MediaGB28181Handler     *handler.MediaGB28181Handler
-	GB28181ConfigHandler    *handler.GB28181ConfigHandler
-	SIPService              *service.SIPService
-	SIPRuntimeSvc           *service.SIPRuntimeService
-	EdgeNodeHandler         *handler.EdgeNodeHandler
-	EdgeNodeMiddleware      *middleware.EdgeNodeMiddleware
-	EdgeNodeSvc             *service.EdgeNodeService
-	EdgeMqttHandler         *handler.EdgeMqttHandler
-	MqttMux                 *mqttmux.Mux
-	EngineMetricsStore      *service.EngineMetricsStore
-	EdgeNodeMetricsHandler  *handler.EdgeNodeMetricsHandler
 
 	// Phase 2: Alert Engine.
 	AlertRuleRepo         *repository.AlertRuleRepository
@@ -293,7 +255,6 @@ func newRouteDeps(
 	edgeNodeHandler *handler.EdgeNodeHandler,
 	edgeNodeTagHandler *handler.EdgeNodeTagHandler,
 	edgeScheduledTaskHandler *handler.EdgeScheduledTaskHandler,
-	edgeNodeMetricsHandler *handler.EdgeNodeMetricsHandler,
 	edgeNodeMiddleware *middleware.EdgeNodeMiddleware,
 	edgeMqttHandler *handler.EdgeMqttHandler,
 	mqttMux *mqttmux.Mux,
@@ -356,43 +317,6 @@ func newRouteDeps(
 		TerminalHandler:          terminalHandler,
 		MqttMux:                  mqttMux,
 		EngineMetricsStore:       metricsStore,
-		RBACCache:               permCache,
-		AuditService:            auditSvc,
-		AuthHandler:             authHandler,
-		WSHandler:               wsHandler,
-		UserHandler:             userHandler,
-		RoleHandler:             roleHandler,
-		PermissionHandler:       permHandler,
-		FileHandler:             fileHandler,
-		AuditHandler:            auditHandler,
-		TaskHandler:             taskHandler,
-		BrandHandler:            brandHandler,
-		MailHandler:             mailHandler,
-		FeedbackHandler:         feedbackHandler,
-		DashboardHandler:        dashboardHandler,
-		DeviceHandler:           deviceHandler,
-		DeviceGroupHandler:      deviceGroupHandler,
-		DeviceStagingHandler:    deviceStagingHandler,
-		SystemHandler:           systemHandler,
-		SmartRecordHandler:      smartRecordHandler,
-		StreamManager:           streamManager,
-		LicenseHandler:          licenseHandler,
-		LicenseService:          licenseService,
-		AIVisionTaskHandler:     aiVisionTaskHandler,
-		AITimeScheduleHandler:   aiTimeScheduleHandler,
-		AlgorithmPackageHandler: algorithmPackageHandler,
-		PersonHandler:           personHandler,
-		GB28181Handler:          gb28181Handler,
-		MediaGB28181Handler:     mediaGB28181Handler,
-		GB28181ConfigHandler:    gb28181ConfigHandler,
-		SIPService:              sipService,
-		SIPRuntimeSvc:           sipRuntimeSvc,
-		EdgeNodeHandler:         edgeNodeHandler,
-		EdgeNodeMiddleware:      edgeNodeMiddleware,
-		EdgeMqttHandler:         edgeMqttHandler,
-		MqttMux:                 mqttMux,
-		EngineMetricsStore:      metricsStore,
-		EdgeNodeMetricsHandler:  edgeNodeMetricsHandler,
 		AlertRuleHandler:        alertRuleHandler,
 		AlertEventHandler:       alertEventHandler,
 		AlertEngine:             alertEngine,
@@ -656,8 +580,8 @@ func provideEdgeNodeMetricsRepository(db *gorm.DB) *repository.EdgeNodeMetricsRe
 	return repository.NewEdgeNodeMetricsRepository(db)
 }
 
-func provideEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository) *service.EdgeNodeMetricsService {
-	return service.NewEdgeNodeMetricsService(metricsRepo)
+func provideEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository, hub *ws.Hub) *service.EdgeNodeMetricsService {
+	return service.NewEdgeNodeMetricsService(metricsRepo, hub)
 }
 
 func provideEdgeNodeMetricsHandler(
@@ -743,13 +667,6 @@ func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
 	return mqttsync.NewMqttSyncManager(rdb)
 }
 
-func provideEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository, hub *ws.Hub) *service.EdgeNodeMetricsService {
-	return service.NewEdgeNodeMetricsService(metricsRepo, hub)
-}
-
-func provideEdgeNodeMetricsHandler(svc *service.EdgeNodeMetricsService) *handler.EdgeNodeMetricsHandler {
-	return handler.NewEdgeNodeMetricsHandler(svc)
-}
 
 func provideRecorder() *service.Recorder {
 	return service.NewRecorder(zap.L().Named("terminal_recorder"))

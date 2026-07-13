@@ -1,4 +1,5 @@
 import { request } from './api';
+import { buildQuery } from '../utils/query';
 import type { EdgeNode } from './edgeNode';
 
 // --- Types ---
@@ -33,13 +34,22 @@ export interface OverviewStats {
   alert_count: number;
 }
 
-function buildQuery(params: Record<string, string | number | undefined>): string {
-  const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== '') sp.set(k, String(v));
-  }
-  return sp.toString() ? `?${sp}` : '';
+/** Live metrics snapshot from WebSocket heartbeat events */
+export interface NodeMetrics {
+  cpu_usage: number;
+  memory_usage: number;
+  cpu_load_1m: number;
+  cpu_load_5m: number;
+  cpu_load_15m: number;
+  net_rx_speed: number;
+  net_tx_speed: number;
+  process_count: number;
+  thread_count: number;
+  temperature: number;
 }
+
+
+export const edgeNodeMetricsApi = {
 
 export const edgeNodeMetricsApi = {
   /** Query time-series metrics for a specific edge node */

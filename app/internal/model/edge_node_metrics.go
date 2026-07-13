@@ -49,6 +49,8 @@ type EdgeNodeMetrics struct {
 	DecodeSessions    int `gorm:"not null;default:0;comment:解码会话数" json:"decode_sessions"`
 	EncodeSessions    int `gorm:"not null;default:0;comment:编码会话数" json:"encode_sessions"`
 	CurrentLoad       int `gorm:"not null;default:0;comment:当前负载(任务数)" json:"current_load"`
+	EngineVersion     string `gorm:"type:varchar(100);comment:引擎版本" json:"engine_version"`
+	HALPlatform       string `gorm:"type:varchar(100);comment:HAL平台" json:"hal_platform"`
 }
 
 // TableName 指定表名

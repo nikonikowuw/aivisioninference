@@ -615,8 +615,6 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 
-	hub := ws.NewHub()
-
 	// Phase 3: Edge Node Task Scheduler (periodic evaluation of cron/one-shot tasks)
 	edgeNodeScheduledTaskRepo := repository.NewEdgeNodeScheduledTaskRepository(db)
 	edgeNodeTaskExecutionRepo := repository.NewEdgeNodeTaskExecutionRepository(db)
@@ -662,14 +660,9 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 		termSessionCleanupHandler.RegisterHandlers(mux)
 		termSessionCleanupHandler.RegisterPeriodic(scheduler)
 
-	// Edge Node Metrics Data Retention Task
-	metricsCleanupRepo := repository.NewEdgeNodeMetricsRepository(db)
-	metricsCleanupHandler := task.NewEdgeNodeMetricsHandler(metricsCleanupRepo)
-	metricsCleanupHandler.RegisterHandlers(mux)
-	metricsCleanupHandler.RegisterPeriodic(scheduler)
 	// Metrics Retention Handler (daily cleanup of old edge node metrics)
 	metricsRepo := repository.NewEdgeNodeMetricsRepository(db)
-	metricsSvc := service.NewEdgeNodeMetricsService(metricsRepo)
+	metricsSvc := service.NewEdgeNodeMetricsService(metricsRepo, hub)
 	metricsRetentionHandler := task.NewMetricsRetentionHandler(metricsSvc)
 	metricsRetentionHandler.RegisterHandlers(mux)
 	if scheduler != nil {

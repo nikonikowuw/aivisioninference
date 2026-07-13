@@ -248,8 +248,7 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// 1. Create Node
@@ -372,7 +371,9 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	assert.Equal(t, "/opt/aivision/algo/yolov8_1.0.0", hbRes.PendingDeployments[0].ExtractPath)
 	var heartbeatNode model.EdgeNode
 	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
-	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
+	// Note: HandleHeartbeat resets remark to empty for normal heartbeats;
+	// the update-remarks-first approach is replaced by heartbeat-driven remark management.
+	assert.Empty(t, heartbeatNode.Remark)
 
 	// Next heartbeat: sync the installed algorithm
 	hbReq2 := &dto.HeartbeatRequest{
@@ -396,7 +397,7 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, hbRes2.PendingDeployments) // no longer pending
 	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
-	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
+	assert.Equal(t, "engine overheated", heartbeatNode.Remark)
 	assert.Equal(t, model.NodeStatusError, heartbeatNode.Status)
 
 	// Verify installed status in ListAlgorithms
@@ -481,7 +482,7 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	streamManager := NewStreamManager(&MockEngineClient{}, deviceRepo, repository.NewMediaStreamRepository(db), zap.NewNop())
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage2, nil, streamManager, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage2, nil, streamManager, nil, nil)
 	ctx := context.Background()
 
 	// Create an online node
@@ -657,8 +658,7 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	fileStorage3, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage3, nil, nil)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage3, nil, nil, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage3, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// Create online node
@@ -741,8 +741,7 @@ func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil)
 
 	// Create a camera device
 	device := &model.Device{

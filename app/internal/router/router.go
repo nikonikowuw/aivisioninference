@@ -637,6 +637,15 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	edgeNodeStatusTask.RegisterHandlers(mux)
 	edgeNodeStatusTask.RegisterPeriodic(scheduler, cfg.Engine.HeartbeatCheckIntervalSec)
 
+	// Edge Node Algorithm Retry Handler (R5: auto-retry with exponential backoff)
+	edgeNodeAlgoRetryTask := task.NewEdgeNodeAlgorithmRetryTask(nodeAlgoRepo, nodeRepo)
+	edgeNodeAlgoRetryTask.RegisterHandlers(mux)
+	if scheduler != nil {
+		// Run retry check every 5 minutes (faster than heartbeat interval to catch transient failures)
+		scheduler.Register("@every 5m", asynq.NewTask(task.TypeEdgeNodeAlgorithmRetry, nil))
+		zap.L().Info("registered periodic edge node algorithm retry check", zap.String("cron", "@every 5m"))
+	}
+
 	// Edge Node State Reconciliation Worker
 	edgeStateWorker := task.NewEdgeStateWorker(aiTaskRepo, nodeRepo, rdb, engineClient)
 	mux.HandleFunc(task.TaskReconcileEdgeState, edgeStateWorker.HandleReconcileEdgeState)

@@ -108,7 +108,7 @@ func (r *EdgeNodeRepository) UpdateHeartbeatFields(ctx context.Context, id strin
 	// Build allowed column set for heartbeat updates
 	allowed := []string{"status", "last_heartbeat", "current_load", "uptime", "engine_version",
 		"hal_platform", "cpu_model", "gpu_model", "total_memory", "embedding_capacity", "remark",
-		"cpu_usage", "memory_usage"}
+		"cpu_usage", "memory_usage", "runtime_error"}
 	return r.db.WithContext(ctx).Model(&model.EdgeNode{}).
 		Where("id = ?", id).
 		Select(allowed).

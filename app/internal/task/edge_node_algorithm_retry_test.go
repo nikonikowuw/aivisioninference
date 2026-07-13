@@ -51,6 +51,7 @@ func setupRetryTaskTestDB(t *testing.T) *gorm.DB {
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
 			remark TEXT,
+			runtime_error TEXT,
 			ssh_port INTEGER DEFAULT 22,
 			ssh_private_key TEXT,
 			cpu_usage REAL DEFAULT 0,

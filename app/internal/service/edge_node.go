@@ -273,13 +273,14 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		"gpu_model":      req.HardwareInfo.GPUModel,
 		"total_memory":   req.HardwareInfo.TotalMemory,
 		"status":         status,
-		"remark":         "",
 		"cpu_usage":      req.CPUUsage,
 		"memory_usage":   req.MemoryUsage,
 	}
 
+	// Do NOT include "remark" in hbFields to preserve admin remark (R4).
+	// Only set runtime error message to a separate field for display.
 	if req.Status == "error" && req.ErrorMessage != "" {
-		hbFields["remark"] = req.ErrorMessage
+		hbFields["runtime_error"] = req.ErrorMessage
 	}
 
 	// Update heartbeat fields with node state.

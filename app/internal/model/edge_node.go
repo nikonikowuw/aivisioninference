@@ -44,6 +44,8 @@ type EdgeNode struct {
 	SSHPrivateKey          string     `gorm:"type:text;comment:SSH 私钥(AES-256-GCM 加密)" json:"-"`
 	Tags                   []EdgeNodeTag `gorm:"many2many:edge_node_tag_relations;" json:"tags,omitempty"`
 
+	RuntimeError string     `gorm:"type:varchar(1000);comment:运行时错误(心跳上报，不覆盖备注)" json:"runtime_error,omitempty"`
+
 	// 实时系统指标（每次心跳更新，用于列表页展示）
 	CPUUsage    float64 `gorm:"not null;default:0;comment:CPU使用率(0-100)" json:"cpu_usage"`
 	MemoryUsage float64 `gorm:"not null;default:0;comment:内存使用率(0-100)" json:"memory_usage"`

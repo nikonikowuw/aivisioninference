@@ -59,6 +59,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			uptime INTEGER,
 			enabled INTEGER DEFAULT 1,
 			remark TEXT,
+			runtime_error TEXT,
 			ssh_port INTEGER DEFAULT 22,
 			ssh_private_key TEXT,
 			cpu_usage REAL DEFAULT 0,
@@ -180,6 +181,7 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			last_error_message TEXT,
 			external_key TEXT,
 			remark TEXT,
+			runtime_error TEXT,
 			ssh_port INTEGER DEFAULT 22,
 			ssh_private_key TEXT,
 			version INTEGER,
@@ -371,9 +373,8 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	assert.Equal(t, "/opt/aivision/algo/yolov8_1.0.0", hbRes.PendingDeployments[0].ExtractPath)
 	var heartbeatNode model.EdgeNode
 	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
-	// Note: HandleHeartbeat resets remark to empty for normal heartbeats;
-	// the update-remarks-first approach is replaced by heartbeat-driven remark management.
-	assert.Empty(t, heartbeatNode.Remark)
+	// Remark must be preserved across heartbeats (R4: admin remark not overwritten)
+	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
 
 	// Next heartbeat: sync the installed algorithm
 	hbReq2 := &dto.HeartbeatRequest{
@@ -397,7 +398,9 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, hbRes2.PendingDeployments) // no longer pending
 	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
-	assert.Equal(t, "engine overheated", heartbeatNode.Remark)
+	// Error message stored in runtime_error, remark preserved (R4)
+	assert.Equal(t, "engine overheated", heartbeatNode.RuntimeError)
+	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
 	assert.Equal(t, model.NodeStatusError, heartbeatNode.Status)
 
 	// Verify installed status in ListAlgorithms

@@ -24,12 +24,14 @@ import (
 
 // EdgeMqttHandler processes MQTT messages received from the edge nodes.
 type EdgeMqttHandler struct {
-	nodeSvc      *service.EdgeNodeService
-	syncManager  *mqttsync.MqttSyncManager
-	taskClient   *task.Client
-	rdb          *redis.Client
-	hub          *ws.Hub
-	metricsStore *service.EngineMetricsStore
+	nodeSvc              *service.EdgeNodeService
+	syncManager           *mqttsync.MqttSyncManager
+	taskClient            *task.Client
+	rdb                   *redis.Client
+	hub                   *ws.Hub
+	metricsStore          *service.EngineMetricsStore
+	scheduledTaskSvc      *service.EdgeNodeScheduledTaskService
+	terminalSvc           *service.EdgeNodeTerminalService
 }
 
 // NewEdgeMqttHandler creates a new EdgeMqttHandler.
@@ -40,14 +42,18 @@ func NewEdgeMqttHandler(
 	rdb *redis.Client,
 	hub *ws.Hub,
 	metricsStore *service.EngineMetricsStore,
+	scheduledTaskSvc *service.EdgeNodeScheduledTaskService,
+	terminalSvc *service.EdgeNodeTerminalService,
 ) *EdgeMqttHandler {
 	return &EdgeMqttHandler{
-		nodeSvc:      nodeSvc,
-		syncManager:  syncManager,
-		taskClient:   taskClient,
-		rdb:          rdb,
-		hub:          hub,
-		metricsStore: metricsStore,
+		nodeSvc:         nodeSvc,
+		syncManager:     syncManager,
+		taskClient:      taskClient,
+		rdb:             rdb,
+		hub:             hub,
+		metricsStore:    metricsStore,
+		scheduledTaskSvc: scheduledTaskSvc,
+		terminalSvc:     terminalSvc,
 	}
 }
 
@@ -81,7 +87,9 @@ func (h *EdgeMqttHandler) HandleHeartbeat(msg mqtt.Message) {
 	}
 
 	// Process heartbeat in the EdgeNodeService (db status, uptime updates, etc.)
-	_, err := h.nodeSvc.HandleHeartbeat(context.Background(), nodeID, &req)
+	hbCtx, hbCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer hbCancel()
+	_, err := h.nodeSvc.HandleHeartbeat(hbCtx, nodeID, &req)
 	if err != nil {
 		zap.L().Error("MQTT: HandleHeartbeat in service failed", zap.String("node_id", nodeID), zap.Error(err))
 		return
@@ -191,5 +199,71 @@ func (h *EdgeMqttHandler) HandleLifecycle(msg mqtt.Message) {
 
 		zap.L().Warn("MQTT: edge node went offline via LWT",
 			zap.String("node_id", nodeID))
+	}
+}
+
+// HandleShellExecResult processes shell_exec_result responses from the edge node.
+func (h *EdgeMqttHandler) HandleShellExecResult(msg mqtt.Message) {
+	topicParts := strings.Split(msg.Topic(), "/")
+	if len(topicParts) < 3 {
+		return
+	}
+	nodeID := topicParts[2]
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		zap.L().Error("MQTT: failed to parse shell_exec_result payload",
+			zap.String("node_id", nodeID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	if h.scheduledTaskSvc != nil {
+		h.scheduledTaskSvc.HandleShellExecResult(context.Background(), nodeID, payload)
+	}
+}
+
+// HandlePtyOutput processes pty_output responses from the edge node.
+func (h *EdgeMqttHandler) HandlePtyOutput(msg mqtt.Message) {
+	topicParts := strings.Split(msg.Topic(), "/")
+	if len(topicParts) < 3 {
+		return
+	}
+	nodeID := topicParts[2]
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		zap.L().Error("MQTT: failed to parse pty_output payload",
+			zap.String("node_id", nodeID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	if h.terminalSvc != nil {
+		h.terminalSvc.HandlePtyOutput(nodeID, payload)
+	}
+}
+
+// HandlePtyError processes pty_error responses from the edge node.
+func (h *EdgeMqttHandler) HandlePtyError(msg mqtt.Message) {
+	topicParts := strings.Split(msg.Topic(), "/")
+	if len(topicParts) < 3 {
+		return
+	}
+	nodeID := topicParts[2]
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		zap.L().Error("MQTT: failed to parse pty_error payload",
+			zap.String("node_id", nodeID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	if h.terminalSvc != nil {
+		h.terminalSvc.HandlePtyError(nodeID, payload)
 	}
 }

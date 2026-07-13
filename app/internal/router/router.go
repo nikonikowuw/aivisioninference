@@ -615,6 +615,25 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 
+	hub := ws.NewHub()
+
+	// Phase 3: Edge Node Task Scheduler (periodic evaluation of cron/one-shot tasks)
+	edgeNodeScheduledTaskRepo := repository.NewEdgeNodeScheduledTaskRepository(db)
+	edgeNodeTaskExecutionRepo := repository.NewEdgeNodeTaskExecutionRepository(db)
+	edgeNodeScheduledTaskSvc := service.NewEdgeNodeScheduledTaskService(
+		edgeNodeScheduledTaskRepo,
+		edgeNodeTaskExecutionRepo,
+		nodeRepo, // reuse from above
+		mqttClient,
+		syncManager,
+	)
+	edgeNodeTerminalSvc := service.NewEdgeNodeTerminalService(mqttClient)
+	edgeNodeTaskSchedulerHandler := task.NewEdgeNodeTaskSchedulerHandler(edgeNodeScheduledTaskSvc, edgeNodeTerminalSvc)
+	edgeNodeTaskSchedulerHandler.RegisterHandlers(mux)
+	if scheduler != nil {
+		task.RegisterEdgeNodePeriodicTasks(scheduler)
+	}
+
 	// Edge Node Status Checker
 	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec)
 	edgeNodeStatusTask.RegisterHandlers(mux)
@@ -648,6 +667,17 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	metricsCleanupHandler := task.NewEdgeNodeMetricsHandler(metricsCleanupRepo)
 	metricsCleanupHandler.RegisterHandlers(mux)
 	metricsCleanupHandler.RegisterPeriodic(scheduler)
+	// Metrics Retention Handler (daily cleanup of old edge node metrics)
+	metricsRepo := repository.NewEdgeNodeMetricsRepository(db)
+	metricsSvc := service.NewEdgeNodeMetricsService(metricsRepo)
+	metricsRetentionHandler := task.NewMetricsRetentionHandler(metricsSvc)
+	metricsRetentionHandler.RegisterHandlers(mux)
+	if scheduler != nil {
+		// Run retention cleanup once per day at 3:00 AM
+		scheduler.Register("0 3 * * *", asynq.NewTask(task.MetricsRetentionTaskType, nil))
+		zap.L().Info("registered periodic edge node metrics retention",
+			zap.String("cron", "0 3 * * *"))
+	}
 
 	// 人员相关任务处理器依赖本地存储作为人脸图片载体。存储初始化失败时记录告警
 	// 并跳过注册，避免后续任务运行时再崩溃。

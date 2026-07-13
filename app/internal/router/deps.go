@@ -70,6 +70,61 @@ type RouteDeps struct {
 	TerminalHandler          *handler.TerminalHandler
 	MqttMux                  *mqttmux.Mux
 	EngineMetricsStore       *service.EngineMetricsStore
+	RBACCache               cache.Cache
+	AuditService            *service.AuditService
+	AuthHandler             *handler.AuthHandler
+	WSHandler               *handler.WSHandler
+	UserHandler             *handler.UserHandler
+	RoleHandler             *handler.RoleHandler
+	PermissionHandler       *handler.PermissionHandler
+	FileHandler             *handler.FileHandler
+	AuditHandler            *handler.AuditHandler
+	TaskHandler             *handler.TaskHandler
+	BrandHandler            *handler.BrandHandler
+	MailHandler             *handler.MailHandler
+	FeedbackHandler         *handler.FeedbackHandler
+	DashboardHandler        *handler.DashboardHandler
+	DeviceHandler           *handler.DeviceHandler
+	DeviceGroupHandler      *handler.DeviceGroupHandler
+	DeviceStagingHandler    *handler.DeviceStagingHandler
+	SystemHandler           *handler.SystemHandler
+	SmartRecordHandler      *handler.SmartRecordHandler
+	StreamManager           *service.StreamManager
+	LicenseHandler          *handler.LicenseHandler
+	LicenseService          *service.LicenseService
+	AIVisionTaskHandler     *handler.AIVisionTaskHandler
+	AITimeScheduleHandler   *handler.AITimeScheduleHandler
+	AlgorithmPackageHandler *handler.AlgorithmPackageHandler
+	PersonHandler           *handler.PersonHandler
+	GB28181Handler          *handler.GB28181Handler
+	MediaGB28181Handler     *handler.MediaGB28181Handler
+	GB28181ConfigHandler    *handler.GB28181ConfigHandler
+	SIPService              *service.SIPService
+	SIPRuntimeSvc           *service.SIPRuntimeService
+	EdgeNodeHandler         *handler.EdgeNodeHandler
+	EdgeNodeMiddleware      *middleware.EdgeNodeMiddleware
+	EdgeNodeSvc             *service.EdgeNodeService
+	EdgeMqttHandler         *handler.EdgeMqttHandler
+	MqttMux                 *mqttmux.Mux
+	EngineMetricsStore      *service.EngineMetricsStore
+	EdgeNodeMetricsHandler  *handler.EdgeNodeMetricsHandler
+
+	// Phase 2: Alert Engine.
+	AlertRuleRepo         *repository.AlertRuleRepository
+	AlertEventRepo        *repository.AlertEventRepository
+	AlertRuleService      *service.AlertRuleService
+	AlertEventService     *service.AlertEventService
+	AlertRuleHandler      *handler.AlertRuleHandler
+	AlertEventHandler     *handler.AlertEventHandler
+	AlertEngine           *service.AlertEngine
+
+	// Phase 3: Remote Operations.
+	EdgeNodeScheduledTaskRepo       *repository.EdgeNodeScheduledTaskRepository
+	EdgeNodeTaskExecutionRepo       *repository.EdgeNodeTaskExecutionRepository
+	EdgeNodeScheduledTaskService    *service.EdgeNodeScheduledTaskService
+	EdgeNodeTerminalService         *service.EdgeNodeTerminalService
+	EdgeNodeScheduledTaskHandler    *handler.EdgeNodeScheduledTaskHandler
+	EdgeNodeTerminalHandler         *handler.EdgeNodeTerminalHandler
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -244,6 +299,18 @@ func newRouteDeps(
 	mqttMux *mqttmux.Mux,
 	terminalHandler *handler.TerminalHandler,
 	metricsStore *service.EngineMetricsStore,
+	edgeNodeMetricsHandler *handler.EdgeNodeMetricsHandler,
+	alertRuleHandler *handler.AlertRuleHandler,
+	alertEventHandler *handler.AlertEventHandler,
+	alertEngine *service.AlertEngine,
+
+	// Phase 3: Remote Operations.
+	edgeNodeScheduledTaskRepo *repository.EdgeNodeScheduledTaskRepository,
+	edgeNodeTaskExecutionRepo *repository.EdgeNodeTaskExecutionRepository,
+	edgeNodeScheduledTaskService *service.EdgeNodeScheduledTaskService,
+	edgeNodeTerminalService *service.EdgeNodeTerminalService,
+	edgeNodeScheduledTaskHandler *handler.EdgeNodeScheduledTaskHandler,
+	edgeNodeTerminalHandler *handler.EdgeNodeTerminalHandler,
 ) *RouteDeps {
 	if sipService != nil {
 		sipService.SetRuntimeService(sipRuntimeSvc)
@@ -289,6 +356,54 @@ func newRouteDeps(
 		TerminalHandler:          terminalHandler,
 		MqttMux:                  mqttMux,
 		EngineMetricsStore:       metricsStore,
+		RBACCache:               permCache,
+		AuditService:            auditSvc,
+		AuthHandler:             authHandler,
+		WSHandler:               wsHandler,
+		UserHandler:             userHandler,
+		RoleHandler:             roleHandler,
+		PermissionHandler:       permHandler,
+		FileHandler:             fileHandler,
+		AuditHandler:            auditHandler,
+		TaskHandler:             taskHandler,
+		BrandHandler:            brandHandler,
+		MailHandler:             mailHandler,
+		FeedbackHandler:         feedbackHandler,
+		DashboardHandler:        dashboardHandler,
+		DeviceHandler:           deviceHandler,
+		DeviceGroupHandler:      deviceGroupHandler,
+		DeviceStagingHandler:    deviceStagingHandler,
+		SystemHandler:           systemHandler,
+		SmartRecordHandler:      smartRecordHandler,
+		StreamManager:           streamManager,
+		LicenseHandler:          licenseHandler,
+		LicenseService:          licenseService,
+		AIVisionTaskHandler:     aiVisionTaskHandler,
+		AITimeScheduleHandler:   aiTimeScheduleHandler,
+		AlgorithmPackageHandler: algorithmPackageHandler,
+		PersonHandler:           personHandler,
+		GB28181Handler:          gb28181Handler,
+		MediaGB28181Handler:     mediaGB28181Handler,
+		GB28181ConfigHandler:    gb28181ConfigHandler,
+		SIPService:              sipService,
+		SIPRuntimeSvc:           sipRuntimeSvc,
+		EdgeNodeHandler:         edgeNodeHandler,
+		EdgeNodeMiddleware:      edgeNodeMiddleware,
+		EdgeMqttHandler:         edgeMqttHandler,
+		MqttMux:                 mqttMux,
+		EngineMetricsStore:      metricsStore,
+		EdgeNodeMetricsHandler:  edgeNodeMetricsHandler,
+		AlertRuleHandler:        alertRuleHandler,
+		AlertEventHandler:       alertEventHandler,
+		AlertEngine:             alertEngine,
+
+		// Phase 3: Remote Operations.
+		EdgeNodeScheduledTaskRepo:       edgeNodeScheduledTaskRepo,
+		EdgeNodeTaskExecutionRepo:       edgeNodeTaskExecutionRepo,
+		EdgeNodeScheduledTaskService:    edgeNodeScheduledTaskService,
+		EdgeNodeTerminalService:         edgeNodeTerminalService,
+		EdgeNodeScheduledTaskHandler:    edgeNodeScheduledTaskHandler,
+		EdgeNodeTerminalHandler:         edgeNodeTerminalHandler,
 	}
 }
 
@@ -481,6 +596,8 @@ func provideEdgeNodeService(
 	cfg *Config,
 	hub *ws.Hub,
 	streamManager *service.StreamManager,
+	metricsRepo *repository.EdgeNodeMetricsRepository,
+	alertEngine *service.AlertEngine,
 ) *service.EdgeNodeService {
 	svc := service.NewEdgeNodeService(
 		nodeRepo,
@@ -494,6 +611,8 @@ func provideEdgeNodeService(
 		fileStorage,
 		hub,
 		streamManager,
+		metricsRepo,
+		alertEngine,
 	)
 	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
 	return svc
@@ -531,6 +650,93 @@ func provideEdgeNodeHandler(svc *service.EdgeNodeService, tagSvc *service.EdgeNo
 
 func provideEdgeNodeMiddleware(jwtManager *jwt.Manager) *middleware.EdgeNodeMiddleware {
 	return middleware.NewEdgeNodeMiddleware(jwtManager)
+}
+
+func provideEdgeNodeMetricsRepository(db *gorm.DB) *repository.EdgeNodeMetricsRepository {
+	return repository.NewEdgeNodeMetricsRepository(db)
+}
+
+func provideEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository) *service.EdgeNodeMetricsService {
+	return service.NewEdgeNodeMetricsService(metricsRepo)
+}
+
+func provideEdgeNodeMetricsHandler(
+	svc *service.EdgeNodeMetricsService,
+	edgeNodeSvc *service.EdgeNodeService,
+) *handler.EdgeNodeMetricsHandler {
+	return handler.NewEdgeNodeMetricsHandler(svc, edgeNodeSvc)
+}
+
+func provideAlertRuleRepository(db *gorm.DB) *repository.AlertRuleRepository {
+	return repository.NewAlertRuleRepository(db)
+}
+
+func provideAlertEventRepository(db *gorm.DB) *repository.AlertEventRepository {
+	return repository.NewAlertEventRepository(db)
+}
+
+func provideAlertRuleService(ruleRepo *repository.AlertRuleRepository) *service.AlertRuleService {
+	return service.NewAlertRuleService(ruleRepo)
+}
+
+func provideAlertEventService(eventRepo *repository.AlertEventRepository) *service.AlertEventService {
+	return service.NewAlertEventService(eventRepo)
+}
+
+func provideAlertRuleHandler(svc *service.AlertRuleService) *handler.AlertRuleHandler {
+	return handler.NewAlertRuleHandler(svc)
+}
+
+func provideAlertEventHandler(svc *service.AlertEventService) *handler.AlertEventHandler {
+	return handler.NewAlertEventHandler(svc)
+}
+
+func provideNotifierRegistry() *service.NotifierRegistry {
+	// Create empty registry; providers can be configured via config at startup
+	return service.NewNotifierRegistry()
+}
+
+func provideAlertEngine(
+	ruleRepo *repository.AlertRuleRepository,
+	eventRepo *repository.AlertEventRepository,
+	metricsRepo *repository.EdgeNodeMetricsRepository,
+	nodeRepo *repository.EdgeNodeRepository,
+	notifier *service.NotifierRegistry,
+) *service.AlertEngine {
+	engine := service.NewAlertEngine(ruleRepo, eventRepo, metricsRepo, nodeRepo, notifier)
+	// Restore silence tracker from database so silence periods survive restarts.
+	engine.RestoreSilenceState(context.Background())
+	return engine
+}
+
+func provideEdgeNodeScheduledTaskRepository(db *gorm.DB) *repository.EdgeNodeScheduledTaskRepository {
+	return repository.NewEdgeNodeScheduledTaskRepository(db)
+}
+
+func provideEdgeNodeTaskExecutionRepository(db *gorm.DB) *repository.EdgeNodeTaskExecutionRepository {
+	return repository.NewEdgeNodeTaskExecutionRepository(db)
+}
+
+func provideEdgeNodeScheduledTaskService(
+	taskRepo *repository.EdgeNodeScheduledTaskRepository,
+	execRepo *repository.EdgeNodeTaskExecutionRepository,
+	nodeRepo *repository.EdgeNodeRepository,
+	mqttClient mqtt.Client,
+	syncManager *mqttsync.MqttSyncManager,
+) *service.EdgeNodeScheduledTaskService {
+	return service.NewEdgeNodeScheduledTaskService(taskRepo, execRepo, nodeRepo, mqttClient, syncManager)
+}
+
+func provideEdgeNodeTerminalService(mqttClient mqtt.Client) *service.EdgeNodeTerminalService {
+	return service.NewEdgeNodeTerminalService(mqttClient)
+}
+
+func provideEdgeNodeScheduledTaskHandler(svc *service.EdgeNodeScheduledTaskService) *handler.EdgeNodeScheduledTaskHandler {
+	return handler.NewEdgeNodeScheduledTaskHandler(svc)
+}
+
+func provideEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService, cfg *Config) *handler.EdgeNodeTerminalHandler {
+	return handler.NewEdgeNodeTerminalHandler(terminalSvc, cfg.AllowOrigins)
 }
 
 func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
@@ -573,6 +779,8 @@ func provideEdgeMqttHandler(
 	rdb *redis.Client,
 	hub *ws.Hub,
 	metricsStore *service.EngineMetricsStore,
+	scheduledTaskSvc *service.EdgeNodeScheduledTaskService,
+	terminalSvc *service.EdgeNodeTerminalService,
 ) *handler.EdgeMqttHandler {
-	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub, metricsStore)
+	return handler.NewEdgeMqttHandler(nodeSvc, syncManager, taskClient, rdb, hub, metricsStore, scheduledTaskSvc, terminalSvc)
 }

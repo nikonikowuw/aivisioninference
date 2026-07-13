@@ -59,6 +59,11 @@ var repositorySet = wire.NewSet(
 	repository.NewEdgeScheduledTaskRecordRepository,
 	repository.NewTerminalSessionRepository,
 	repository.NewEdgeNodeMetricsRepository,
+	repository.NewEdgeNodeMetricsRepository,
+	repository.NewAlertRuleRepository,
+	repository.NewAlertEventRepository,
+	repository.NewEdgeNodeScheduledTaskRepository,
+	repository.NewEdgeNodeTaskExecutionRepository,
 )
 
 var serviceSet = wire.NewSet(
@@ -106,6 +111,13 @@ var serviceSet = wire.NewSet(
 	provideRecorder,
 	provideTerminalHandler,
 	provideEdgeNodeMetricsService,
+	provideEdgeNodeMetricsService,
+	provideAlertRuleService,
+	provideAlertEventService,
+	provideNotifierRegistry,
+	provideAlertEngine,
+	provideEdgeNodeScheduledTaskService,
+	provideEdgeNodeTerminalService,
 )
 
 var handlerSet = wire.NewSet(
@@ -138,6 +150,10 @@ var handlerSet = wire.NewSet(
 	provideEdgeScheduledTaskHandler,
 	provideEdgeNodeMiddleware,
 	provideEdgeNodeMetricsHandler,
+	provideAlertRuleHandler,
+	provideAlertEventHandler,
+	provideEdgeNodeScheduledTaskHandler,
+	provideEdgeNodeTerminalHandler,
 )
 
 // InitializeRouteDeps 使用 Wire 构造路由注册所需依赖。

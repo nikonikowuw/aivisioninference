@@ -38,11 +38,17 @@ type EdgeNode struct {
 	MediaMetricsTTLSeconds int        `gorm:"not null;default:0;comment:媒体指标有效期(秒)，0表示未配置" json:"media_metrics_ttl_seconds"`
 	EngineVersion          string     `gorm:"type:varchar(100);comment:引擎版本" json:"engine_version"`
 	Uptime                 int64      `gorm:"comment:运行时长(秒)" json:"uptime"`
-	Enabled                bool         `gorm:"default:true;comment:是否启用" json:"enabled"`
-	Remark                 string       `gorm:"type:varchar(1000);comment:备注" json:"remark"`
-	SSHPort                int          `gorm:"default:22;comment:SSH 端口" json:"ssh_port"`
-	SSHPrivateKey          string       `gorm:"type:text;comment:SSH 私钥(AES-256-GCM 加密)" json:"-"`
+	EngineVersion          string     `gorm:"type:varchar(100);comment:引擎版本" json:"engine_version"`
+	Uptime                 int64      `gorm:"comment:运行时长(秒)" json:"uptime"`
+	Enabled                bool       `gorm:"default:true;comment:是否启用" json:"enabled"`
+	Remark                 string     `gorm:"type:varchar(1000);comment:备注" json:"remark"`
+	SSHPort                int        `gorm:"default:22;comment:SSH 端口" json:"ssh_port"`
+	SSHPrivateKey          string     `gorm:"type:text;comment:SSH 私钥(AES-256-GCM 加密)" json:"-"`
 	Tags                   []EdgeNodeTag `gorm:"many2many:edge_node_tag_relations;" json:"tags,omitempty"`
+
+	// 实时系统指标（每次心跳更新，用于列表页展示）
+	CPUUsage    float64 `gorm:"not null;default:0;comment:CPU使用率(0-100)" json:"cpu_usage"`
+	MemoryUsage float64 `gorm:"not null;default:0;comment:内存使用率(0-100)" json:"memory_usage"`
 }
 
 // TableName 指定表名

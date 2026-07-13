@@ -98,6 +98,26 @@ namespace aivision
                 engine_->HandleFaceEmbeddingExtract(payload_ptr, payload_size, 0);
             }
         }
+        else if (cmd_name == "shell_exec")
+        {
+            engine_->HandleShellExec(payload_ptr, payload_size, 0);
+        }
+        else if (cmd_name == "pty_open")
+        {
+            engine_->HandlePtyOpen(payload_ptr, payload_size, 0);
+        }
+        else if (cmd_name == "pty_write")
+        {
+            engine_->HandlePtyWrite(payload_ptr, payload_size, 0);
+        }
+        else if (cmd_name == "pty_resize")
+        {
+            engine_->HandlePtyResize(payload_ptr, payload_size, 0);
+        }
+        else if (cmd_name == "pty_close")
+        {
+            engine_->HandlePtyClose(payload_ptr, payload_size, 0);
+        }
         else
         {
             std::cerr << "[CommandDispatcher] Unknown MQTT command: " << cmd_name << std::endl;

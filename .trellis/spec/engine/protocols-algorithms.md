@@ -176,6 +176,185 @@ Correct:
 admit = preview_capacity_valid && fresh && preview_in_use + pending + 1 <= preview_capacity
 ```
 
+## Scenario: Heartbeat Metrics Contract
+
+### 1. Scope / Trigger
+
+- Trigger: changing the heartbeat payload between C++ Engine and Go Control Plane, adding or removing metrics fields, or changing field semantics.
+- This contract spans C++ `HeartbeatReporter::BuildHeartbeatPayload()`, Go `HeartbeatRequest` DTO, Go `EdgeNodeMetrics` model, and frontend service types.
+
+### 2. Signatures
+
+```go
+// Go HeartbeatRequest (extended)
+type HeartbeatRequest struct {
+    // Legacy fields (preserved for backward compatibility)
+    CPUUsage     float64 `json:"cpu_usage"`
+    MemoryUsage  float64 `json:"memory_usage"`
+    Uptime       int64   `json:"uptime"`
+    CurrentLoad  int     `json:"current_load"`
+    HardwareInfo HardwareInfo `json:"hardware_info"`
+
+    // Extended metrics fields
+    CPULoad1m     float64            `json:"cpu_load_1m,omitempty"`
+    DiskUsage     []DiskUsageEntry   `json:"disk_usage,omitempty"`
+    NetRxBytes    int64              `json:"net_rx_bytes,omitempty"`
+    NetTxBytes    int64              `json:"net_tx_bytes,omitempty"`
+    NetRxSpeed    float64            `json:"net_rx_speed,omitempty"`
+    NetTxSpeed    float64            `json:"net_tx_speed,omitempty"`
+    Temperature   float64            `json:"temperature,omitempty"`
+    ProcessCount  int                `json:"process_count,omitempty"`
+    ThreadCount   int                `json:"thread_count,omitempty"`
+    WorkerCount   int                `json:"worker_count,omitempty"`
+}
+```
+
+### 3. Contracts
+
+- Legacy fields (`cpu_usage`, `memory_usage`, `uptime`, `current_load`, `hardware_info`) must remain at their original JSON positions forever. New engines add extended fields alongside legacy fields.
+- All extended fields use `omitempty` so old engines that do not send them will not break Go parsing.
+- C++ `HeartbeatReporter` uses `nlohmann/json::parse` which tolerates extra fields from Go control commands.
+- `DiskUsage` is a JSON array: `[{"path":"/","total":64000000000,"used":32000000000,"percent":50.0}]`
+- Network speed fields are computed as deltas between snapshots, in bytes/second.
+- All numeric values are flat doubles or ints — no nested structures beyond `disk_usage` and `hardware_info`.
+
+### 4. Cross-Layer Field Mapping
+
+```text
+C++ BuildHeartbeatPayload()  →  Go HeartbeatRequest DTO  →  Go EdgeNodeMetrics model  →  Frontend API type
+cpu_usage                    →  cpu_usage                 →  CPUUsage                   →  metric "cpu_usage"
+memory_usage                 →  memory_usage              →  MemoryUsage                →  metric "memory_usage"
+cpu_load_1m                  →  cpu_load_1m               →  CPULoad1m                  →  metric "cpu_load_1m"
+disk_usage[]                 →  disk_usage                →  DiskUsage (JSONB)          →  metric "disk_usage"
+net_rx_bytes                 →  net_rx_bytes              →  NetRxBytes                 →  metric "net_rx_bytes"
+net_tx_bytes                 →  net_tx_bytes              →  NetTxBytes                 →  metric "net_tx_bytes"
+net_rx_speed                 →  net_rx_speed              →  NetRxSpeed                 →  metric "net_rx_speed"
+net_tx_speed                 →  net_tx_speed              →  NetTxSpeed                 →  metric "net_tx_speed"
+temperature                  →  temperature               →  Temperature                →  metric "temperature"
+process_count                →  process_count             →  ProcessCount               →  metric "process_count"
+thread_count                 →  thread_count              →  ThreadCount                →  metric "thread_count"
+worker_count                 →  worker_count              →  WorkerCount                →  metric "worker_count"
+```
+
+### 5. Validation & Error Matrix
+
+| Condition | Result |
+|-----------|--------|
+| Legacy field missing (e.g., old engine) | Heartbeat still accepted, field defaults to 0 |
+| Extended field missing | EdgeNodeMetrics field defaults to 0, no error |
+| `disk_usage` array with invalid entries | Invalid entries stored as-is in JSONB; consumed by frontend charts as metric "disk_usage" |
+| `temperature` from platform without thermal sensor | Reports 0; frontend should handle zero as "N/A" |
+
+### 6. Good/Base/Bad Cases
+
+- Good: New engine sends all extended fields; Go stores them and displays in frontend charts.
+- Base: Old engine sends only legacy fields; Go stores 0 for extended fields; frontend shows "no data" for missing metrics.
+- Bad: Extended field naming conflicts with legacy field names or uses reserved JSON keywords.
+
+### 7. Wrong vs Correct
+
+Wrong: Removing a legacy field or changing its JSON key.
+
+Correct: Adding extended fields with `omitempty` while keeping all legacy fields.
+
+## Scenario: Shell Command Execution
+
+### 1. Scope / Trigger
+
+- Trigger: changing the remote shell execution contract between Go Control Plane and C++ Engine.
+- This contract spans Go MQTT command builder, C++ CommandExecutor, HTTP callback handler, and frontend task execution display.
+
+### 2. Signatures
+
+**Go → C++ MQTT Command (shell_exec):**
+```json
+{
+    "type": "shell_exec",
+    "seq": "uuid-1234",
+    "node_id": "edge-node-1",
+    "command": "ls -la /tmp",
+    "timeout_ms": 30000,
+    "execution_id": "exec-uuid"
+}
+```
+
+**C++ → Go HTTP Callback:**
+```
+POST /api/v1/edge-nodes/{node_id}/task-executions/callback
+```
+```json
+{
+    "execution_id": "exec-uuid",
+    "stdout": "total 8\ndrwxr-xr-x ...",
+    "stderr": "",
+    "exit_code": 0,
+    "duration_ms": 1234
+}
+```
+
+**C++ → Go MQTT Response (shell_exec_result):**
+```json
+{
+    "type": "shell_exec_result",
+    "seq": "uuid-1234",
+    "node_id": "edge-node-1",
+    "execution_id": "exec-uuid",
+    "stdout": "...",
+    "stderr": "...",
+    "exit_code": 0,
+    "duration_ms": 1234
+}
+```
+
+### 3. Contracts
+
+- MQTT topic for shell commands: `aivision/edge/{node_id}/cmd/shell_exec`. Never substitute a different ID for `{node_id}`.
+- Each command must include a unique `execution_id` (UUID) for result correlation.
+- C++ `CommandExecutor` runs each command in an isolated `fork+exec` process with strict timeout via `timerfd` or `SIGKILL`.
+- stdout and stderr are captured as separate string buffers via pipes.
+- Results are delivered via BOTH MQTT response topic AND HTTP callback to the Go control plane. The HTTP callback is the primary channel; MQTT response is a fallback for real-time updates.
+- HTTP callback URL is configured on the Engine side (passed during command or configured via `NIKO_ENGINE_CALLBACK_URL` env).
+- C++ Engine must not block command dispatch on slow command execution — commands run in a separate thread/process.
+
+### 4. PTY Session Contract
+
+**Go → C++ MQTT Commands:**
+| Topic | Payload |
+|-------|---------|
+| `aivision/edge/{node_id}/cmd/pty_open` | `{"session_id":"uuid", "cols":80, "rows":24}` |
+| `aivision/edge/{node_id}/cmd/pty_write` | `{"session_id":"uuid", "data":"base64..."}` |
+| `aivision/edge/{node_id}/cmd/pty_resize` | `{"session_id":"uuid", "cols":120, "rows":40}` |
+| `aivision/edge/{node_id}/cmd/pty_close` | `{"session_id":"uuid"}` |
+
+**C++ → Go MQTT Responses:**
+| Topic | Payload |
+|-------|---------|
+| `aivision/edge/{node_id}/response/pty_output` | `{"session_id":"uuid", "data":"base64..."}` |
+| `aivision/edge/{node_id}/response/pty_error` | `{"session_id":"uuid", "error":"reason"}` |
+
+### 5. Go-side Routing Rules
+
+MQTT response topics for Phase 3 must be registered with specific patterns BEFORE the generic `aivision/edge/+/response/+` pattern to avoid being swallowed by `HandleStreamStatus`:
+
+```go
+// Register specific handlers BEFORE generic one
+mqttSvc.Subscribe("aivision/edge/+/response/shell_exec_result", handler.HandleShellExecResult)
+mqttSvc.Subscribe("aivision/edge/+/response/pty_output", handler.HandlePtyOutput)
+mqttSvc.Subscribe("aivision/edge/+/response/pty_error", handler.HandlePtyError)
+```
+
+### 6. Good/Base/Bad Cases
+
+- Good: C++ executes command within timeout, sends result via both MQTT and HTTP, Go stores execution record.
+- Base: Command times out — C++ kills process, returns exit_code=-1 and "timeout" error message.
+- Bad: Invalid command, shell not available — C++ returns exit_code non-zero with stderr message.
+
+### 7. Wrong vs Correct
+
+Wrong: Running shell commands on the MQTT dispatch thread (blocks all other commands).
+
+Correct: Each shell exec runs in its own `fork+exec` process. The MQTT dispatch handler fires it in the background and returns immediately.
+
 ## Algorithm Package Layout
 
 Algorithm packages live under:

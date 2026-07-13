@@ -96,17 +96,22 @@ type HeartbeatRequest struct {
 	ErrorMessage        string                   `json:"error_message" binding:"omitempty"`
 
 	// Extended metrics (from C++ Engine MetricsFlattener)
-	CPULoad1m    float64    `json:"cpu_load_1m,omitempty"`
-	CPULoad5m    float64    `json:"cpu_load_5m,omitempty"`
-	CPULoad15m   float64    `json:"cpu_load_15m,omitempty"`
-	Disks        []DiskInfo `json:"disks,omitempty"`
-	NetRXBytes   int64      `json:"net_rx_bytes,omitempty"`
-	NetTXBytes   int64      `json:"net_tx_bytes,omitempty"`
-	NetRXSpeed   float64    `json:"net_rx_speed,omitempty"`
-	NetTXSpeed   float64    `json:"net_tx_speed,omitempty"`
-	ProcessCount int32      `json:"process_count,omitempty"`
-	ThreadCount  int32      `json:"thread_count,omitempty"`
-	Temperature  float64    `json:"temperature,omitempty"`
+	CPULoad1m    float64        `json:"cpu_load_1m,omitempty"`
+	CPULoad5m    float64        `json:"cpu_load_5m,omitempty"`
+	CPULoad15m   float64        `json:"cpu_load_15m,omitempty"`
+	DiskUsage    []DiskUsageInfo `json:"disk_usage,omitempty"`
+	NetRXBytes   int64          `json:"net_rx_bytes,omitempty"`
+	NetTXBytes   int64          `json:"net_tx_bytes,omitempty"`
+	NetRXSpeed   float64        `json:"net_rx_speed,omitempty"`
+	NetTXSpeed   float64        `json:"net_tx_speed,omitempty"`
+	ProcessCount int            `json:"process_count,omitempty"`
+	ThreadCount  int            `json:"thread_count,omitempty"`
+	Temperature  float64        `json:"temperature,omitempty"`
+	WorkerCount       int       `json:"worker_count,omitempty"`
+	IdleWorkerCount   int       `json:"idle_worker_count,omitempty"`
+	ActiveStreamCount int       `json:"active_stream_count,omitempty"`
+	DecodeSessions    int       `json:"decode_sessions,omitempty"`
+	EncodeSessions    int       `json:"encode_sessions,omitempty"`
 }
 
 // PendingDeployment 待下发算法包信息

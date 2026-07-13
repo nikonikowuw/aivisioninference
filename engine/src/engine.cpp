@@ -235,6 +235,32 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
     heartbeat_reporter_->SetDeviceMonitor(device_monitor_.get());
   }
 
+  // 创建 Command Executor（Phase 3 — 远程运维）
+  command_executor_ = std::make_unique<monitor::CommandExecutor>();
+
+  // 创建 PTY Module（Phase 3 — Web 终端）
+  pty_module_ = std::make_unique<monitor::PTYModule>();
+  pty_module_->SetOutputCallback([this](const std::string& session_id, const std::string& data) {
+    if (mqtt_control_plane_) {
+      json msg = {
+        {"type", "pty_output"},
+        {"session_id", session_id},
+        {"data", data}
+      };
+      mqtt_control_plane_->PublishResponse("pty_output", msg.dump());
+    }
+  });
+  pty_module_->SetCloseCallback([this](const std::string& session_id, const std::string& error) {
+    if (mqtt_control_plane_) {
+      json msg = {
+        {"type", "pty_error"},
+        {"session_id", session_id},
+        {"error", error}
+      };
+      mqtt_control_plane_->PublishResponse("pty_error", msg.dump());
+    }
+  });
+
   // 创建 MQTT & Command Dispatcher 组件并建立绑定
   command_dispatcher_ = std::make_unique<CommandDispatcher>(this);
   mqtt_control_plane_ = std::make_unique<MqttControlPlane>(this);
@@ -1393,6 +1419,191 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
   } else {
     std::cerr << "Failed to send response: no active client connection"
               << std::endl;
+  }
+}
+
+// ============================================================
+// Phase 3: Remote Operations — Shell Command Execution
+// ============================================================
+
+void InferenceEngine::HandleShellExec(const uint8_t *payload,
+                                       size_t size, uint64_t seq)
+{
+  (void)seq;
+  const std::string payload_str = PayloadToString(payload, size);
+
+  std::string trace_id = ExtractJsonField(payload_str, "trace_id");
+  std::string execution_id = ExtractJsonField(payload_str, "execution_id");
+  std::string command = ExtractJsonField(payload_str, "command");
+  std::string timeout_str = ExtractJsonField(payload_str, "timeout_seconds");
+  std::string callback_url = ExtractJsonField(payload_str, "callback_url");
+
+  int timeout_seconds = 30;
+  if (!timeout_str.empty()) {
+    try { timeout_seconds = std::stoi(timeout_str); } catch (...) {}
+  }
+
+  std::cout << "[Engine] HandleShellExec: trace_id=" << trace_id
+            << " execution_id=" << execution_id << std::endl;
+
+  if (command.empty()) {
+    json error_json = {
+        {"type", "shell_exec_result"},
+        {"trace_id", trace_id},
+        {"execution_id", execution_id},
+        {"status", "failed"},
+        {"stdout", ""},
+        {"stderr", "empty command"},
+        {"exit_code", -1}
+    };
+    if (mqtt_control_plane_) {
+      mqtt_control_plane_->PublishResponse("shell_exec_result", error_json.dump());
+    }
+    return;
+  }
+
+  // Execute command
+  monitor::ShellExecRequest req;
+  req.trace_id = trace_id;
+  req.execution_id = execution_id;
+  req.command = command;
+  req.timeout_seconds = timeout_seconds;
+  req.callback_url = callback_url;
+
+  monitor::ShellExecResult result;
+  if (command_executor_) {
+    result = command_executor_->Execute(req);
+  } else {
+    result.error_message = "Command executor not initialized";
+    result.success = false;
+    result.exit_code = -1;
+  }
+
+  // Build result JSON
+  json result_json = {
+      {"type", "shell_exec_result"},
+      {"trace_id", trace_id},
+      {"execution_id", execution_id},
+      {"node_id", config_.node_id},
+      {"status", result.success ? "success" : "failed"},
+      {"stdout", result.stdout_str},
+      {"stderr", result.stderr_str},
+      {"exit_code", result.exit_code},
+      {"duration_ms", result.duration_ms}
+  };
+
+  if (!result.error_message.empty()) {
+    result_json["error_message"] = result.error_message;
+  }
+
+  // Publish result via MQTT response topic
+  if (mqtt_control_plane_) {
+    mqtt_control_plane_->PublishResponse("shell_exec_result", result_json.dump());
+  }
+
+  std::cout << "[Engine] ShellExec result: execution_id=" << execution_id
+            << " status=" << (result.success ? "success" : "failed")
+            << " exit_code=" << result.exit_code
+            << " duration=" << result.duration_ms << "ms" << std::endl;
+}
+
+// ============================================================
+// Phase 3: Remote Operations — PTY Module
+// ============================================================
+
+void InferenceEngine::HandlePtyOpen(const uint8_t *payload,
+                                     size_t size, uint64_t seq)
+{
+  (void)seq;
+  const std::string payload_str = PayloadToString(payload, size);
+  std::string session_id = ExtractJsonField(payload_str, "session_id");
+
+  std::cout << "[Engine] HandlePtyOpen: session_id=" << session_id << std::endl;
+
+  if (session_id.empty()) {
+    std::cerr << "[Engine] PtyOpen: missing session_id" << std::endl;
+    return;
+  }
+
+  if (!pty_module_) {
+    std::cerr << "[Engine] PtyOpen: PTY module not initialized" << std::endl;
+    return;
+  }
+
+  bool ok = pty_module_->OpenSession(session_id);
+  if (!ok) {
+    std::cerr << "[Engine] PtyOpen: failed to open session: " << session_id << std::endl;
+    json error_json = {
+        {"type", "pty_error"},
+        {"session_id", session_id},
+        {"error", "Failed to open PTY session"}
+    };
+    if (mqtt_control_plane_) {
+      mqtt_control_plane_->PublishResponse("pty_error", error_json.dump());
+    }
+  }
+}
+
+void InferenceEngine::HandlePtyWrite(const uint8_t *payload,
+                                      size_t size, uint64_t seq)
+{
+  (void)seq;
+  const std::string payload_str = PayloadToString(payload, size);
+  std::string session_id = ExtractJsonField(payload_str, "session_id");
+  std::string data = ExtractJsonField(payload_str, "data");
+
+  if (session_id.empty() || data.empty()) {
+    return;
+  }
+
+  if (pty_module_) {
+    // Unescape JSON string (embedded newlines, etc.)
+    // The data comes JSON-encoded, so we parse it to get the actual string
+    try {
+      json js = json::parse(payload_str);
+      if (js.contains("data")) {
+        std::string raw_data = js["data"].get<std::string>();
+        pty_module_->WriteToSession(session_id, raw_data);
+      }
+    } catch (...) {
+      pty_module_->WriteToSession(session_id, data);
+    }
+  }
+}
+
+void InferenceEngine::HandlePtyResize(const uint8_t *payload,
+                                       size_t size, uint64_t seq)
+{
+  (void)seq;
+  const std::string payload_str = PayloadToString(payload, size);
+
+  try {
+    json js = json::parse(payload_str);
+    std::string session_id = js.value("session_id", "");
+    unsigned short cols = static_cast<unsigned short>(js.value("cols", 80));
+    unsigned short rows = static_cast<unsigned short>(js.value("rows", 24));
+
+    if (!session_id.empty() && pty_module_) {
+      pty_module_->ResizeSession(session_id, cols, rows);
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[Engine] PtyResize error: " << e.what() << std::endl;
+  }
+}
+
+void InferenceEngine::HandlePtyClose(const uint8_t *payload,
+                                      size_t size, uint64_t seq)
+{
+  (void)seq;
+  const std::string payload_str = PayloadToString(payload, size);
+  std::string session_id = ExtractJsonField(payload_str, "session_id");
+
+  if (session_id.empty()) {
+    return;
+  }
+
+  if (pty_module_) {
+    pty_module_->CloseSession(session_id);
   }
 }
 

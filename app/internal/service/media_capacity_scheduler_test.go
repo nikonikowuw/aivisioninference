@@ -39,7 +39,7 @@ func TestMediaCapacitySchedulerDoesNotOversubscribeLastSlot(t *testing.T) {
 		created_by TEXT, updated_by TEXT, name TEXT, endpoint TEXT, auth_token TEXT,
 		status TEXT, enabled INTEGER, media_decode_capacity INTEGER,
 		media_encode_capacity INTEGER, media_egress_capacity_bps INTEGER,
-		media_metrics_ttl_seconds INTEGER
+		media_metrics_ttl_seconds INTEGER, cpu_usage REAL DEFAULT 0, memory_usage REAL DEFAULT 0
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE media_capacity_reservations (
 		id TEXT PRIMARY KEY, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME,
@@ -118,7 +118,7 @@ func setupMediaCapacitySchedulerDB(t *testing.T) *gorm.DB {
 		created_by TEXT, updated_by TEXT, name TEXT, endpoint TEXT, auth_token TEXT,
 		status TEXT, enabled INTEGER, media_decode_capacity INTEGER,
 		media_encode_capacity INTEGER, media_egress_capacity_bps INTEGER,
-		media_metrics_ttl_seconds INTEGER
+		media_metrics_ttl_seconds INTEGER, cpu_usage REAL DEFAULT 0, memory_usage REAL DEFAULT 0
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE media_capacity_reservations (
 		id TEXT PRIMARY KEY, created_at DATETIME, updated_at DATETIME, deleted_at DATETIME,

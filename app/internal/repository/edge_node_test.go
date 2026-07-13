@@ -52,7 +52,9 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			enabled INTEGER DEFAULT 1,
 			remark TEXT,
 			ssh_port INTEGER DEFAULT 22,
-			ssh_private_key TEXT
+			ssh_private_key TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -109,7 +111,9 @@ func setupEdgeNodeTestDB(t *testing.T) *gorm.DB {
 			status TEXT NOT NULL DEFAULT 'draft',
 			ref_count INTEGER DEFAULT 0,
 			is_current INTEGER DEFAULT 0,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 

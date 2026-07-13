@@ -23,6 +23,8 @@
 #include "pipeline/worker_pool.h"
 #include "pipeline/pipeline_manager.h"
 #include "monitor/metrics_reporter.h"
+#include "monitor/command_executor.h"
+#include "monitor/pty_module.h"
 #include "response_router.h"
 
 namespace aivision
@@ -168,6 +170,8 @@ namespace aivision
         algo::AlgoManager *GetAlgoManager() { return algo_mgr_.get(); }
         monitor::MetricsReporter *GetMetricsReporter() { return metrics_reporter_.get(); }
         monitor::DeviceMonitor *GetDeviceMonitor() { return device_monitor_.get(); }
+        monitor::CommandExecutor *GetCommandExecutor() { return command_executor_.get(); }
+        monitor::PTYModule *GetPTYModule() { return pty_module_.get(); }
 
         /// 统一发布 FlatBuffers 结果事件
         bool PublishEvent(uint16_t signal_type, flatbuffers::FlatBufferBuilder &fbb);
@@ -218,6 +222,21 @@ namespace aivision
         /// 处理单张图片人脸特征提取指令
         void HandleFaceEmbeddingExtract(const uint8_t *payload, size_t size, uint64_t seq);
 
+        /// 处理 Shell 命令执行指令
+        void HandleShellExec(const uint8_t *payload, size_t size, uint64_t seq);
+
+        /// 处理 PTY 打开指令
+        void HandlePtyOpen(const uint8_t *payload, size_t size, uint64_t seq);
+
+        /// 处理 PTY 写入指令
+        void HandlePtyWrite(const uint8_t *payload, size_t size, uint64_t seq);
+
+        /// 处理 PTY 窗口调整指令
+        void HandlePtyResize(const uint8_t *payload, size_t size, uint64_t seq);
+
+        /// 处理 PTY 关闭指令
+        void HandlePtyClose(const uint8_t *payload, size_t size, uint64_t seq);
+
         /// 调用 ZLM addStreamProxy API 拉取 RTSP 流
         /// 返回 ZLM 的播放 URL，失败返回空字符串
         std::string AddStreamProxy(const std::string &device_id, const std::string &rtsp_url);
@@ -246,6 +265,12 @@ namespace aivision
 
         // 设备状态监控模块
         std::unique_ptr<monitor::DeviceMonitor> device_monitor_;
+
+        // Shell 命令执行模块
+        std::unique_ptr<monitor::CommandExecutor> command_executor_;
+
+        // Web 终端 PTY 模块
+        std::unique_ptr<monitor::PTYModule> pty_module_;
 
         // MQTT & Command Dispatcher
         std::unique_ptr<CommandDispatcher> command_dispatcher_;

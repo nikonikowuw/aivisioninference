@@ -60,7 +60,9 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			enabled INTEGER DEFAULT 1,
 			remark TEXT,
 			ssh_port INTEGER DEFAULT 22,
-			ssh_private_key TEXT
+			ssh_private_key TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -117,7 +119,9 @@ func setupServiceTestDB(t *testing.T) *gorm.DB {
 			status TEXT NOT NULL DEFAULT 'draft',
 			ref_count INTEGER DEFAULT 0,
 			is_current INTEGER DEFAULT 0,
-			remark TEXT
+			remark TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -245,6 +249,7 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// 1. Create Node
@@ -476,7 +481,7 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	streamManager := NewStreamManager(&MockEngineClient{}, deviceRepo, repository.NewMediaStreamRepository(db), zap.NewNop())
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage2, nil, streamManager)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage2, nil, streamManager, nil, nil)
 	ctx := context.Background()
 
 	// Create an online node
@@ -653,6 +658,7 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage3, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage3, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// Create online node
@@ -736,6 +742,7 @@ func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
 
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil)
+	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
 
 	// Create a camera device
 	device := &model.Device{

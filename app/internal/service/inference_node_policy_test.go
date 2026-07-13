@@ -22,7 +22,8 @@ func setupInferenceNodePolicy(t *testing.T) (*InferenceNodePolicy, *gorm.DB) {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`CREATE TABLE edge_nodes (
 		id TEXT PRIMARY KEY, name TEXT, endpoint TEXT, auth_token TEXT, status TEXT,
-		enabled NUMERIC, current_load INTEGER, max_load INTEGER, updated_at DATETIME, deleted_at DATETIME
+		enabled NUMERIC, current_load INTEGER, max_load INTEGER, updated_at DATETIME, deleted_at DATETIME,
+		cpu_usage REAL DEFAULT 0, memory_usage REAL DEFAULT 0
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE edge_node_algorithms (
 		id TEXT PRIMARY KEY, node_id TEXT, algo_package_id TEXT, status TEXT, updated_at DATETIME, deleted_at DATETIME

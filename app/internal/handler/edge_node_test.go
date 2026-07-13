@@ -59,7 +59,9 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 			enabled INTEGER DEFAULT 1,
 			remark TEXT,
 			ssh_port INTEGER DEFAULT 22,
-			ssh_private_key TEXT
+			ssh_private_key TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -117,7 +119,9 @@ func setupHandlerTestDB(t *testing.T) *gorm.DB {
 			is_current INTEGER DEFAULT 0,
 			remark TEXT,
 			ssh_port INTEGER DEFAULT 22,
-			ssh_private_key TEXT
+			ssh_private_key TEXT,
+			cpu_usage REAL DEFAULT 0,
+			memory_usage REAL DEFAULT 0
 		);
 	`).Error)
 
@@ -163,11 +167,8 @@ func TestEdgeNodeHandler_Endpoints(t *testing.T) {
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil)
-	tagRepo := repository.NewEdgeNodeTagRepository(db)
-	schTaskRepo := repository.NewEdgeScheduledTaskRepository(db)
-	tagSvc := service.NewEdgeNodeTagService(tagRepo, schTaskRepo)
-	h := NewEdgeNodeHandler(svc, tagSvc)
+	svc := service.NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, jwtManager, fileStorage, nil, nil, nil, nil)
+	h := NewEdgeNodeHandler(svc)
 
 	r := gin.New()
 	// Middleware for i18n or other elements if needed, but simple router works:

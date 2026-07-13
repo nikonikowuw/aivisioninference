@@ -245,7 +245,7 @@ export default function EdgeNodeList() {
                         </Text>
                       </Td>
                       <Td>
-                        <Text fontSize="sm">{node.hardware_info?.platform || node.platform || '-'}</Text>
+                        <Text fontSize="sm">{node.hal_platform || '-'}</Text>
                       </Td>
                       <Td>
                         <Tag

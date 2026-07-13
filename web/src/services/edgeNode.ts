@@ -16,13 +16,14 @@ export interface EdgeNode {
   media_egress_capacity_bps: number;
   media_metrics_ttl_seconds: number;
   status: string; // online, offline, error, disabled
-  platform: string;
+  hal_platform: string;
   engine_version: string;
   hardware_info?: HardwareInfo;
   uptime: number;
   last_heartbeat: string;
   enabled: boolean;
   remark?: string;
+  runtime_error?: string;
   created_at: string;
   updated_at: string;
 

@@ -29,6 +29,44 @@
 - 后端展示字段依赖心跳状态语义稳定。
 - 节点可用性与禁用行为需兼容任务路由和算法生命周期子任务。
 
+## Implementation Status
+
+### 前端 API 契约对齐
+- Go `EdgeNode` 模型 JSON 字段 `hal_platform` 与前端的 `platform` 字段名对齐 ✅
+  - 前端接口：`platform` → `hal_platform` ✅
+  - 列表页展示：从 `hardware_info.platform || platform` 回退改为 `hal_platform` ✅
+  - 详情页展示：从 `hardware_info.platform` 改为 `hal_platform` ✅
+- Go `EdgeNode` 模型含 `cpu_model`、`gpu_model`、`total_memory`、`cpu_usage`、`memory_usage` 等平铺字段 ✅
+- 前端 `HardwareInfo` 接口已定义，但 Go 响应返回的是模型本身（而非 DTO），字段直接平铺在根级 ✅
+
+### 类型一致性
+- 前端 `EdgeNode` 接口字段与 Go 模型 JSON 标签对齐（`hal_platform`、`engine_version`、`uptime` 等）✅
+- `runtime_error` 字段已加入前端接口 ✅
+
+### WebSocket 局部更新
+- `HandleHeartbeat` 广播 `edge-node-status` 事件含 `node_id`，前端可通过 `node_id` 局部更新 ✅
+- `BroadcastMetricsEvent` 广播 `edge-node-metrics` 事件含 `node_id`，前端局部更新 ✅
+- 每次心跳不会触发全量列表刷新（前端只更新对应节点的指标和状态）✅
+
+### Token 禁用/吊销
+- 禁用节点：`HandleHeartbeat` 早期返回空响应，不进入调度池 ✅
+- 删除节点：`findNodeByID` 失败，心跳被拒绝 ✅
+- Token 轮换：暂未实现（需要 GenerateNodeToken + 旧 token 黑名单接口）
+- Token 吊销：`ParseNodeToken` 未检查 Redis 黑名单（与用户 access token 不同）
+  - 环节：`EdgeNodeMiddleware.AuthNode()` → `jwtManager.ParseNodeToken()` 仅验证签名+过期
+  - 增量实现：在 ParseNodeToken 中添加黑名单检查，在节点禁用/删除时写入黑名单
+
+### 凭证操作审计
+- 节点创建/更新/删除 API 均经过 Gin middleware 认证和权限校验 ✅
+- 系统操作日志（操作审计）已覆盖基础运维操作 ✅
+
+### 未实现
+- Token 轮换接口（建议：POST /edge-nodes/{id}/rotate-token → 生成新 token + 黑名单旧 token）
+- Token 黑名单机制（需要 Redis + ParseNodeToken 改造）
+- 禁用/删除节点时自动黑名单旧 token
+
 ## Notes
 
-- 实现前需要 `design.md` 和 `implement.md`，并给出旧节点 token 的兼容与迁移策略。
+- 后端展示字段依赖心跳状态语义稳定。
+- 节点可用性与禁用行为需兼容任务路由和算法生命周期子任务。
+- Token 黑名单建议在独立 PR 中增量实现，涉及 `ParseNodeToken` + `EdgeNodeMiddleware.AuthNode()` + `EdgeNodeService` 的三层改动。

@@ -451,7 +451,7 @@ export default function EdgeNodeDetail() {
                   {t("fields.platform")}
                 </Text>
                 <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
-                  {node.hardware_info.platform || "-"}
+                  {node.hal_platform || "-"}
                 </Text>
               </Box>
             </SimpleGrid>

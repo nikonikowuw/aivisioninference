@@ -1,1 +1,3 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality gates — wire, swag, unit-test, build checks"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality gates — TypeScript strictness, no type-workaround, correct field access"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer consistency — verify every JSON field name matches from Go model → API → frontend EdgeNode interface"}

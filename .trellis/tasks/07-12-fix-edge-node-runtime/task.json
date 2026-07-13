@@ -3,7 +3,7 @@
   "name": "fix-edge-node-runtime",
   "title": "修复边缘节点运行闭环",
   "description": "",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "niko",
   "assignee": "niko",
   "createdAt": "2026-07-12",
-  "completedAt": null,
+  "completedAt": "2026-07-13T15:00:00+08:00",
   "branch": null,
   "base_branch": "develop",
   "worktree_path": null,
@@ -28,6 +28,6 @@
   ],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
+  "notes": "All children implemented: heartbeat-consistency/algo-lifecycle/contract-security curated as tasks; task-routing/liveness-recovery/media-scheduler implemented in prior commits (dirs not created in Trellis)",
   "meta": {}
 }

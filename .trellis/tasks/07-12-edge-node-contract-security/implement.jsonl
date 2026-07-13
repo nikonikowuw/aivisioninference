@@ -1,1 +1,7 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend layout for edge node model, handler, middleware — understand API contract layer"}
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "Heartbeat handling and disabled node early-return pattern for token validation contract"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality gates for backend contract and security changes"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Frontend EdgeNode/HardwareInfo type alignment with Go API response fields"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "WebSocket partial update handling — local node updates instead of full list refresh"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality gates for contract alignment and type safety"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Contract alignment spans: Go model JSON tags → API response → Frontend TypeScript interfaces → Display components"}

@@ -1,1 +1,13 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Go backend layout — new model/repo/service/handler placement for metrics and alert modules"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "GORM model definitions, migration registration, query patterns with scopes/pagination for edge_node_metrics table"}
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "Heartbeat handling contract — extend HandleHeartbeat to persist metrics snapshot"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for new service/repository/task code in metrics and alert modules"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "API error patterns for metrics query endpoints and alert rules CRUD"}
+{"file": ".trellis/spec/engine/architecture.md", "reason": "Engine module layout, CMakeLists.txt source registration for new metrics_flattener and device_monitor extensions"}
+{"file": ".trellis/spec/engine/protocols-algorithms.md", "reason": "MQTT command/response payload patterns if Phase 2/3 command execution is needed"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Frontend page/service/component placement for new monitoring dashboard pages and chart components"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Chakra UI patterns for stat cards, tables, forms (alert rules), and chart integration"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Data fetching hooks, polling, WebSocket subscriptions for real-time metrics updates"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "State architecture for dashboard data and real-time metrics across pages"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "DTO type definitions matching new Go metrics/alert API responses"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Contract checklist for changes spanning engine heartbeat payload → Go DTO/model → frontend API types"}

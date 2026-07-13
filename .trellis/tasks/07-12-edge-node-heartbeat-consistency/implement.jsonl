@@ -1,1 +1,5 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/edge-node-lifecycle.md", "reason": "Heartbeat handling contract — HandleHeartbeat serialization, HandleNodeOffline transaction, LWT + timeout convergence"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "GORM transaction patterns, WithTx propagation, per-node mutex vs DB transaction tradeoffs"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend layout for edge node service, repository, task modules"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for heartbeat processing, offline transitions, and WebSocket broadcasts"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Heartbeat contract spans: engine payload → Go DTO/model → service logic → WebSocket broadcast"}

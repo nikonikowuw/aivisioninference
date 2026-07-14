@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -29,6 +31,10 @@ type AIVisionTaskService struct {
 	sipSvc               *SIPService
 	streamManager        *StreamManager
 	nodePolicy           *InferenceNodePolicy
+
+	cacheMu     sync.RWMutex
+	activeCache map[string]*model.AIVisionTask // status=ready or running
+	patrolCount int64                          // atomic access, for periodic full refresh
 }
 
 // NewAIVisionTaskService 创建新的 AIVisionTaskService
@@ -54,6 +60,67 @@ func NewAIVisionTaskService(
 		streamManager.Subscribe(svc.HandleDeviceEvent)
 	}
 	return svc
+}
+
+// InitCache 从数据库加载所有活跃任务（status=ready or running）到内存缓存。
+// 调用后 PatrolTasks 和 HandleDeviceEvent 将使用缓存而非数据库查询。
+func (s *AIVisionTaskService) InitCache(ctx context.Context) error {
+	return s.refreshActiveCache(ctx)
+}
+
+// refreshActiveCache 重新从数据库加载活跃任务缓存
+func (s *AIVisionTaskService) refreshActiveCache(ctx context.Context) error {
+	var items []model.AIVisionTask
+	if err := s.aivisiontaskRepo.FindAllActive(ctx, &items); err != nil {
+		return err
+	}
+	cache := make(map[string]*model.AIVisionTask, len(items))
+	for i := range items {
+		cp := items[i] // copy
+		cache[cp.ID] = &cp
+	}
+	s.cacheMu.Lock()
+	s.activeCache = cache
+	s.cacheMu.Unlock()
+	return nil
+}
+
+// readActiveTasks 从缓存读取活跃任务列表，缓存未初始化时回退到数据库
+func (s *AIVisionTaskService) readActiveTasks(ctx context.Context) ([]model.AIVisionTask, error) {
+	s.cacheMu.RLock()
+	cache := s.activeCache
+	if cache != nil {
+		items := make([]model.AIVisionTask, 0, len(cache))
+		for _, t := range cache {
+			items = append(items, *t)
+		}
+		s.cacheMu.RUnlock()
+		return items, nil
+	}
+	s.cacheMu.RUnlock()
+
+	// 缓存未初始化，回退数据库
+	var items []model.AIVisionTask
+	if err := s.aivisiontaskRepo.FindAllActive(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// upsertActiveCache 将任务插入或更新到活跃缓存。
+// 任务状态为 ready 或 running 时加入缓存，否则从缓存移除。
+func (s *AIVisionTaskService) upsertActiveCache(task *model.AIVisionTask) {
+	cp := *task // 复制防止外部修改影响缓存
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	if s.activeCache == nil {
+		s.activeCache = make(map[string]*model.AIVisionTask)
+	}
+	if cp.Status == model.TaskStatusReady || cp.Status == model.TaskStatusRunning {
+		s.activeCache[cp.ID] = &cp
+	} else {
+		delete(s.activeCache, cp.ID)
+	}
 }
 
 // validateDeviceForInference 校验设备是否可用于推理任务
@@ -147,29 +214,32 @@ func (s *AIVisionTaskService) CheckResourceConflict(ctx context.Context, nodeID 
 
 // HandleDeviceEvent 处理流管理器/引擎返回的设备和流事件
 func (s *AIVisionTaskService) HandleDeviceEvent(ctx context.Context, event DeviceEvent) error {
-	var items []model.AIVisionTask
-	if err := s.aivisiontaskRepo.FindAllActive(ctx, &items); err == nil {
-		for _, task := range items {
-			if task.TargetNodeID == event.NodeID && task.DeviceChannelID == event.DeviceID {
-				if event.EventType == "online" {
-					if task.Status != model.TaskStatusRunning {
-						task.Status = model.TaskStatusRunning
-						task.ErrorReason = ""
-						_ = s.aivisiontaskRepo.Update(ctx, &task)
+	items, err := s.readActiveTasks(ctx)
+	if err != nil {
+		return err
+	}
+	for _, task := range items {
+		if task.TargetNodeID == event.NodeID && task.DeviceChannelID == event.DeviceID {
+			if event.EventType == "online" {
+				if task.Status != model.TaskStatusRunning {
+					task.Status = model.TaskStatusRunning
+					task.ErrorReason = ""
+					_ = s.aivisiontaskRepo.Update(ctx, &task)
+					s.upsertActiveCache(&task)
+				}
+			} else if event.EventType == "offline" || event.EventType == "error" {
+				if task.Status == model.TaskStatusRunning {
+					task.Status = model.TaskStatusError
+					reason := "errors.streamOffline"
+					if _, ok := event.Metadata["error"].(string); ok {
+						reason = "errors.streamError"
+					} else if event.EventType == "offline" {
+						reason = "errors.gb28181SourceOffline"
 					}
-				} else if event.EventType == "offline" || event.EventType == "error" {
-					if task.Status == model.TaskStatusRunning {
-						task.Status = model.TaskStatusError
-						reason := "errors.streamOffline"
-						if _, ok := event.Metadata["error"].(string); ok {
-							reason = "errors.streamError"
-						} else if event.EventType == "offline" {
-							reason = "errors.gb28181SourceOffline"
-						}
-						task.ErrorReason = reason
-						_ = s.aivisiontaskRepo.Update(ctx, &task)
-						_ = s.StopTask(ctx, &task, reason)
-					}
+					task.ErrorReason = reason
+					_ = s.aivisiontaskRepo.Update(ctx, &task)
+					s.upsertActiveCache(&task)
+					_ = s.StopTask(ctx, &task, reason)
 				}
 			}
 		}
@@ -225,6 +295,8 @@ func (s *AIVisionTaskService) Create(ctx context.Context, req dto.CreateAIVision
 	if err := s.aivisiontaskRepo.Create(ctx, item); err != nil {
 		return nil, err
 	}
+	// 新创建的任务默认 status=ready，加入活跃缓存
+	s.upsertActiveCache(item)
 	return item, nil
 }
 
@@ -299,12 +371,26 @@ func (s *AIVisionTaskService) Update(ctx context.Context, id string, req dto.Upd
 	if req.LineRegions != nil {
 		item.LineRegions = datatypes.JSON(req.LineRegions)
 	}
-	return s.aivisiontaskRepo.Update(ctx, item)
+	if err := s.aivisiontaskRepo.Update(ctx, item); err != nil {
+		return err
+	}
+	s.upsertActiveCache(item)
+	return nil
 }
 
 // Delete 删除推理任务
 func (s *AIVisionTaskService) Delete(ctx context.Context, id string) error {
-	return s.aivisiontaskRepo.Delete(ctx, id)
+	// 先查当前状态以便从缓存移除
+	item, err := s.aivisiontaskRepo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.aivisiontaskRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+	// 从活跃缓存移除
+	s.upsertActiveCache(item)
+	return nil
 }
 
 // PatrolTasks 巡检任务，根据时间窗启动或停止推理流
@@ -313,8 +399,8 @@ func (s *AIVisionTaskService) PatrolTasks(ctx context.Context) error {
 		return err
 	}
 
-	var items []model.AIVisionTask
-	if err := s.aivisiontaskRepo.FindAllActive(ctx, &items); err != nil {
+	items, err := s.readActiveTasks(ctx)
+	if err != nil {
 		return err
 	}
 
@@ -352,6 +438,12 @@ func (s *AIVisionTaskService) PatrolTasks(ctx context.Context) error {
 		} else if !shouldRun && task.Status == model.TaskStatusRunning {
 			_ = s.StopTask(ctx, &task, "")
 		}
+	}
+
+	// 每 5 次 patrol 做一次全量刷新，捕获其他实例（API）做的变更
+	patrolCount := atomic.AddInt64(&s.patrolCount, 1)
+	if patrolCount%5 == 0 {
+		_ = s.refreshActiveCache(ctx)
 	}
 	return nil
 }
@@ -424,7 +516,11 @@ func (s *AIVisionTaskService) StartTask(ctx context.Context, task *model.AIVisio
 
 	task.Status = model.TaskStatusRunning
 	task.ErrorReason = ""
-	return s.aivisiontaskRepo.Update(ctx, task)
+	if err := s.aivisiontaskRepo.Update(ctx, task); err != nil {
+		return err
+	}
+	s.upsertActiveCache(task)
+	return nil
 }
 
 // StopTask 停止推理流并更新状态
@@ -440,7 +536,11 @@ func (s *AIVisionTaskService) StopTask(ctx context.Context, task *model.AIVision
 		task.Status = model.TaskStatusReady
 		task.ErrorReason = ""
 	}
-	return s.aivisiontaskRepo.Update(ctx, task)
+	if err := s.aivisiontaskRepo.Update(ctx, task); err != nil {
+		return err
+	}
+	s.upsertActiveCache(task)
+	return nil
 }
 
 // RestartTask 释放旧推理流并重新拉起任务。

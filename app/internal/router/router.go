@@ -2,6 +2,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -612,6 +613,9 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo, streamSessionRepo, rdb)
 	policy := service.NewInferenceNodePolicy(nodeRepo, nodeAlgoRepo)
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager, policy)
+	if err := aiTaskSvc.InitCache(context.Background()); err != nil {
+		zap.L().Error("failed to init AIVisionTaskService cache", zap.Error(err))
+	}
 
 	mux := task.NewMux(provideMailServiceForAsynq(db), deviceStatusHandler, cronCleanupHandler, thresholdCleanupHandler, aiTaskSvc)
 

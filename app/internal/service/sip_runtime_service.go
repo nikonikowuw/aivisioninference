@@ -626,7 +626,7 @@ func (s *SIPRuntimeService) handleMessage(msg *sip.Message, remoteAddr *net.UDPA
 			_ = s.server.Send(resp, remoteAddr)
 			return
 		}
-		_ = s.sipSvc.HandleHeartbeat(ctx, deviceID)
+		_ = s.sipSvc.HandleHeartbeat(ctx, gbDev)
 		resp := s.newResponse(msg, 200, "OK")
 		_ = s.server.Send(resp, remoteAddr)
 		return

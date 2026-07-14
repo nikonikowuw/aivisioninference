@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -31,26 +30,20 @@ func (r *GB28181DeviceRepository) FindByDeviceCode(ctx context.Context, deviceCo
 	return &item, err
 }
 
-// UpdateHeartbeat updates the last heartbeat timestamp for a device.
-func (r *GB28181DeviceRepository) UpdateHeartbeat(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Model(&model.GB28181Device{}).Where("id = ?", id).
-		Update("last_heartbeat_at", time.Now()).Error
+// FindByDeviceCodes finds devices by multiple device codes.
+func (r *GB28181DeviceRepository) FindByDeviceCodes(ctx context.Context, deviceCodes []string) ([]model.GB28181Device, error) {
+	if len(deviceCodes) == 0 {
+		return nil, nil
+	}
+	var items []model.GB28181Device
+	err := r.db.WithContext(ctx).Where("device_code IN ?", deviceCodes).Find(&items).Error
+	return items, err
 }
 
 // UpdateStatus updates the device status.
 func (r *GB28181DeviceRepository) UpdateStatus(ctx context.Context, id, status string) error {
 	return r.db.WithContext(ctx).Model(&model.GB28181Device{}).Where("id = ?", id).
 		Update("status", status).Error
-}
-
-// FindOfflineDevices finds devices that haven't sent heartbeat within the given timeout.
-func (r *GB28181DeviceRepository) FindOfflineDevices(ctx context.Context, heartbeatTimeout time.Duration) ([]model.GB28181Device, error) {
-	var items []model.GB28181Device
-	cutoff := time.Now().Add(-heartbeatTimeout)
-	err := r.db.WithContext(ctx).
-		Where("status = ? AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)", model.GB28181StatusOnline, cutoff).
-		Find(&items).Error
-	return items, err
 }
 
 // FindByID finds a device by its internal UUID.

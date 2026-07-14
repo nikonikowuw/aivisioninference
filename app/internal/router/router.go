@@ -609,7 +609,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	deviceRepoV2 := repository.NewDeviceRepositoryV2(db)
 	auditRepo := repository.NewAuditRepository(db)
 	streamSessionRepo := repository.NewGB28181StreamSessionRepository(db)
-	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo, streamSessionRepo)
+	sipSvc := provideSIPServiceWithZLM(deviceRepo, gbDeviceRepo, mediaStreamRepo, smartRecordRepo, deviceSipConfigRepo, deviceRepoV2, nil, zlmClient, streamManager, cfg, nil, nil, auditRepo, streamSessionRepo, rdb)
 	policy := service.NewInferenceNodePolicy(nodeRepo, nodeAlgoRepo)
 	aiTaskSvc := service.NewAIVisionTaskService(aiTaskRepo, aiScheduleRepo, algorithmPackageRepo, deviceRepo, sipSvc, streamManager, policy)
 

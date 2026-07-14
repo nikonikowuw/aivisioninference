@@ -385,6 +385,7 @@ func provideSIPServiceWithZLM(
 	hub *ws.Hub,
 	auditRepo *repository.AuditRepository,
 	streamSessionRepo *repository.GB28181StreamSessionRepository,
+	rdb *redis.Client,
 ) *service.SIPService {
 	zlmBaseIP := cfg.ZLMExternalIP
 	if zlmBaseIP == "" {
@@ -401,6 +402,7 @@ func provideSIPServiceWithZLM(
 		cache, hub,
 		auditRepo,
 		streamSessionRepo,
+		service.NewGB28181HeartbeatStore(rdb),
 	)
 }
 

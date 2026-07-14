@@ -308,6 +308,7 @@ func TestSIPRuntimeService_RegisterFlows(t *testing.T) {
 		nil,
 		auditRepo,
 		repository.NewGB28181StreamSessionRepository(db),
+		NewMemoryHeartbeatStore(),
 	)
 
 	// Create SIPRuntimeService
@@ -546,7 +547,7 @@ func TestSIPRuntimeService_RegisterFlows(t *testing.T) {
 		assert.Contains(t, lastLog.ResultSummary, "address changed from 192.168.1.50:5060 to 192.168.1.100:5070")
 	})
 
-	t.Run("6.2 实现有效 Keepalive 更新 last_heartbeat_at 并保持设备在线", func(t *testing.T) {
+	t.Run("6.2 实现有效 Keepalive 记录心跳状态并保持设备在线", func(t *testing.T) {
 		mockClient.Reset()
 
 		// Set initial status to Online
@@ -585,10 +586,9 @@ func TestSIPRuntimeService_RegisterFlows(t *testing.T) {
 		require.Len(t, sent, 1)
 		assert.Contains(t, sent[0], "SIP/2.0 200 OK")
 
-		// Verify heartbeat time updated
+		// Verify device is online
 		dbDevice, err := gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
 		require.NoError(t, err)
-		assert.True(t, dbDevice.LastHeartbeatAt.After(time.Now().Add(-10*time.Second)))
 		assert.Equal(t, model.GB28181StatusOnline, dbDevice.Status)
 	})
 
@@ -627,17 +627,25 @@ func TestSIPRuntimeService_RegisterFlows(t *testing.T) {
 	})
 
 	t.Run("6.4 实现心跳超时扫描任务，将超时设备标记为 offline", func(t *testing.T) {
-		// Set heartbeat to long ago
+		// Ensure device status is online
 		err := db.Model(&model.GB28181Device{}).Where("device_code = ?", deviceCode).Updates(map[string]interface{}{
-			"status":            model.GB28181StatusOnline,
-			"last_heartbeat_at": time.Now().Add(-10 * time.Minute),
+			"status": model.GB28181StatusOnline,
 		}).Error
 		require.NoError(t, err)
 
-		// Run timeout check manually
-		offline, err := sipSvc.CheckHeartbeatTimeout(ctx, 3*time.Minute)
+		// Record a heartbeat in the store to simulate an active device.
+		gbDev, err := gbDeviceRepo.FindByDeviceCode(ctx, deviceCode)
 		require.NoError(t, err)
-		assert.Len(t, offline, 1)
+		err = sipSvc.HandleHeartbeat(ctx, gbDev)
+		require.NoError(t, err)
+
+		// Wait a tiny bit so the recorded heartbeat becomes expired.
+		time.Sleep(10 * time.Millisecond)
+
+		// Run timeout check with a very short timeout to catch the expired heartbeat.
+		offline, err := sipSvc.CheckHeartbeatTimeout(ctx, 1*time.Millisecond)
+		require.NoError(t, err)
+		require.Len(t, offline, 1)
 		assert.Equal(t, deviceCode, offline[0].DeviceCode)
 
 		// Verify device is offline in database

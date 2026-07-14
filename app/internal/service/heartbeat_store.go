@@ -12,7 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const redisHeartbeatZSet = "aivision:edge:heartbeats"
+const (
+	redisHeartbeatZSet       = "aivision:edge:heartbeats"
+	redisGB28181HeartbeatZSet = "aivision:gb28181:heartbeats"
+)
 
 // HeartbeatStore 节点心跳存活性存储接口。
 type HeartbeatStore interface {
@@ -24,10 +27,20 @@ type HeartbeatStore interface {
 	Remove(ctx context.Context, nodeID string) error
 }
 
-// NewHeartbeatStore 根据 Redis 客户端可用性创建合适的 HeartbeatStore。
+// NewHeartbeatStore 根据 Redis 客户端可用性创建边缘节点 HeartbeatStore。
 func NewHeartbeatStore(rdb *redis.Client) HeartbeatStore {
+	return NewHeartbeatStoreWithKey(rdb, redisHeartbeatZSet)
+}
+
+// NewGB28181HeartbeatStore 创建 GB28181 设备 HeartbeatStore。
+func NewGB28181HeartbeatStore(rdb *redis.Client) HeartbeatStore {
+	return NewHeartbeatStoreWithKey(rdb, redisGB28181HeartbeatZSet)
+}
+
+// NewHeartbeatStoreWithKey 创建指定 Redis key 的 HeartbeatStore。
+func NewHeartbeatStoreWithKey(rdb *redis.Client, key string) HeartbeatStore {
 	if rdb != nil {
-		return &RedisHeartbeatStore{rdb: rdb}
+		return &RedisHeartbeatStore{rdb: rdb, key: key}
 	}
 	zap.L().Warn("redis client not available, using in-memory heartbeat store (node liveness resets on restart)")
 	return &MemoryHeartbeatStore{}
@@ -40,24 +53,25 @@ func NewHeartbeatStore(rdb *redis.Client) HeartbeatStore {
 // RedisHeartbeatStore implements HeartbeatStore using a Redis sorted set.
 type RedisHeartbeatStore struct {
 	rdb *redis.Client
+	key string // Redis key for the sorted set
 }
 
 func (s *RedisHeartbeatStore) Record(ctx context.Context, nodeID string, ts time.Time) error {
-	return s.rdb.ZAdd(ctx, redisHeartbeatZSet, redis.Z{
+	return s.rdb.ZAdd(ctx, s.key, redis.Z{
 		Score:  float64(ts.Unix()),
 		Member: nodeID,
 	}).Err()
 }
 
 func (s *RedisHeartbeatStore) GetExpired(ctx context.Context, cutoff time.Time) ([]string, error) {
-	return s.rdb.ZRangeByScore(ctx, redisHeartbeatZSet, &redis.ZRangeBy{
+	return s.rdb.ZRangeByScore(ctx, s.key, &redis.ZRangeBy{
 		Min: "-inf",
 		Max: strconv.FormatInt(cutoff.Unix(), 10),
 	}).Result()
 }
 
 func (s *RedisHeartbeatStore) Remove(ctx context.Context, nodeID string) error {
-	return s.rdb.ZRem(ctx, redisHeartbeatZSet, nodeID).Err()
+	return s.rdb.ZRem(ctx, s.key, nodeID).Err()
 }
 
 // ---------------------------------------------------------------------------

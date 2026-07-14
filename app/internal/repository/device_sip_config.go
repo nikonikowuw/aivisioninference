@@ -66,14 +66,6 @@ func (r *DeviceSipConfigRepository) UpdateRegisterAddress(ctx context.Context, d
 		}).Error
 }
 
-func (r *DeviceSipConfigRepository) FindOfflineDevices(ctx context.Context, timeout time.Duration) ([]model.DeviceSipConfig, error) {
-	var items []model.DeviceSipConfig
-	cutoff := time.Now().Add(-timeout)
-	err := r.db.WithContext(ctx).
-		Where("last_heartbeat_at IS NULL OR last_heartbeat_at < ?", cutoff).
-		Find(&items).Error
-	return items, err
-}
 
 func (r *DeviceSipConfigRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.DeviceSipConfig{}).Error

@@ -46,6 +46,9 @@ type SIPService struct {
 	cache pkgcache.Cache
 	hub   *ws.Hub
 
+	// 心跳存活性追踪（Redis / 内存）
+	heartbeats HeartbeatStore
+
 	// SIP Runtime
 	runtimeSvc *SIPRuntimeService
 }
@@ -67,6 +70,7 @@ func NewSIPServiceWithZLM(
 	hub *ws.Hub,
 	auditRepo *repository.AuditRepository,
 	streamSessionRepo *repository.GB28181StreamSessionRepository,
+	heartbeats HeartbeatStore,
 ) *SIPService {
 	return &SIPService{
 		deviceRepo:          deviceRepo,
@@ -86,6 +90,7 @@ func NewSIPServiceWithZLM(
 		hub:                 hub,
 		auditRepo:           auditRepo,
 		streamSessionRepo:   streamSessionRepo,
+		heartbeats:          heartbeats,
 	}
 }
 
@@ -192,21 +197,29 @@ func (s *SIPService) HandleInviteOK(ctx context.Context, callID string, sdpBody 
 	return s.streamSessionRepo.Update(ctx, session.StreamID, updates)
 }
 
-// HandleHeartbeat updates the heartbeat timestamp for a registered device.
-func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error {
-	gbDevice, err := s.gbDeviceRepo.FindByDeviceCode(ctx, deviceID)
-	if err != nil {
-		return fmt.Errorf("find device for heartbeat: %w", err)
+// HandleHeartbeat records the heartbeat in store and DB, and transitions device to online if needed.
+func (s *SIPService) HandleHeartbeat(ctx context.Context, gbDevice *model.GB28181Device) error {
+	deviceID := gbDevice.DeviceCode
+
+	// Record heartbeat in store (fast, no DB).
+	if err := s.heartbeats.Record(ctx, deviceID, time.Now()); err != nil {
+		zap.L().Warn("record heartbeat in store failed", zap.String("device_code", deviceID), zap.Error(err))
 	}
-	if err := s.gbDeviceRepo.UpdateHeartbeat(ctx, gbDevice.ID); err != nil {
-		zap.L().Warn("update heartbeat failed", zap.String("device_code", deviceID), zap.Error(err))
-	}
-	// Sync heartbeat to DeviceSipConfig
+
+	// Sync heartbeat timestamp to DeviceSipConfig
 	if s.deviceSipConfigRepo != nil {
 		if err := s.deviceSipConfigRepo.UpdateHeartbeat(ctx, deviceID); err != nil {
 			zap.L().Debug("update DeviceSipConfig heartbeat failed", zap.String("device_code", deviceID), zap.Error(err))
 		}
 	}
+
+	// Sync last_heartbeat_at on gb28181_devices for API display.
+	if err := s.gbDeviceRepo.Update(ctx, gbDevice.ID, map[string]interface{}{
+		"last_heartbeat_at": time.Now(),
+	}); err != nil {
+		zap.L().Warn("update last_heartbeat_at failed", zap.String("device_code", deviceID), zap.Error(err))
+	}
+
 	if gbDevice.Status != model.GB28181StatusOnline {
 		if err := s.gbDeviceRepo.UpdateStatus(ctx, gbDevice.ID, model.GB28181StatusOnline); err != nil {
 			zap.L().Warn("update device status to online failed", zap.String("device_code", deviceID), zap.Error(err))
@@ -216,15 +229,47 @@ func (s *SIPService) HandleHeartbeat(ctx context.Context, deviceID string) error
 	return nil
 }
 
-// CheckHeartbeatTimeout scans for devices that have timed out and marks them offline.
+// CheckHeartbeatTimeout checks heartbeat store for expired devices and marks them offline.
 func (s *SIPService) CheckHeartbeatTimeout(ctx context.Context, timeout time.Duration) ([]model.GB28181Device, error) {
-	offlineDevices, err := s.gbDeviceRepo.FindOfflineDevices(ctx, timeout)
+	cutoff := time.Now().Add(-timeout)
+	expiredCodes, err := s.heartbeats.GetExpired(ctx, cutoff)
 	if err != nil {
-		return nil, fmt.Errorf("find offline devices: %w", err)
+		return nil, fmt.Errorf("get expired heartbeats: %w", err)
 	}
-	for _, dev := range offlineDevices {
+	if len(expiredCodes) == 0 {
+		return nil, nil
+	}
+
+	// Batch load devices from DB to verify they still exist and are online.
+	devices, err := s.gbDeviceRepo.FindByDeviceCodes(ctx, expiredCodes)
+	if err != nil {
+		return nil, fmt.Errorf("find devices by codes: %w", err)
+	}
+
+	deviceMap := make(map[string]model.GB28181Device, len(devices))
+	for _, dev := range devices {
+		deviceMap[dev.DeviceCode] = dev
+	}
+
+	var offlineDevices []model.GB28181Device
+	var firstErr error
+	for _, code := range expiredCodes {
+		dev, ok := deviceMap[code]
+		if !ok || dev.Status != model.GB28181StatusOnline {
+			// Device doesn't exist or is already offline — clean up stale store entry.
+			if err := s.heartbeats.Remove(ctx, code); err != nil {
+				zap.L().Warn("failed to remove stale heartbeat entry from store",
+					zap.String("device_code", code), zap.Error(err))
+			}
+			continue
+		}
+
 		if err := s.gbDeviceRepo.UpdateStatus(ctx, dev.ID, model.GB28181StatusOffline); err != nil {
 			zap.L().Warn("update device to offline failed", zap.String("device_code", dev.DeviceCode), zap.Error(err))
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
 		if dev.DeviceID != nil {
 			if err := s.deviceRepo.UpdateStatus(ctx, *dev.DeviceID, model.DeviceStatusOffline, "", ""); err != nil {
@@ -232,8 +277,17 @@ func (s *SIPService) CheckHeartbeatTimeout(ctx context.Context, timeout time.Dur
 			}
 		}
 		s.broadcastStatus(dev.DeviceCode, model.DeviceStatusOffline)
+
+		// Remove from store after successful offline transition.
+		if err := s.heartbeats.Remove(ctx, code); err != nil {
+			zap.L().Warn("failed to remove device from heartbeat store",
+				zap.String("device_code", code), zap.Error(err))
+		}
+
+		offlineDevices = append(offlineDevices, dev)
 	}
-	return offlineDevices, nil
+
+	return offlineDevices, firstErr
 }
 
 func (s *SIPService) broadcastStatus(deviceCode, status string) {

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <set>
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -301,6 +302,8 @@ namespace aivision
                 uint64_t largest_total = 0;
                 size_t best_idx = SIZE_MAX;
 
+                std::set<uint64_t> seen_fsids;
+
                 for (int i = 0; i < count; ++i)
                 {
                     const std::string mnt_path(mounts[i].f_mntonname);
@@ -314,6 +317,21 @@ namespace aivision
                         fs_type == "fdescfs" || fs_type == "autofs" ||
                         fs_type == "sysfs" || fs_type == "fuse" ||
                         fs_type == "devtmpfs")
+                        continue;
+
+                    // On macOS APFS, /System/Volumes sub-volumes (VM, Preboot, Update, xarts,
+                    // iSCPreboot, Hardware) share the same APFS container and are not meaningful
+                    // for disk monitoring. Keep only /System/Volumes/Data (the writable volume).
+                    if (mnt_path.find("/System/Volumes/") == 0 &&
+                        mnt_path != "/System/Volumes/Data")
+                        continue;
+
+                    // Deduplicate by filesystem ID: APFS volumes in the same container share
+                    // the same fsid. Keep only the first one encountered.
+                    const auto& fsid = mounts[i].f_fsid;
+                    uint64_t fsid_key = (static_cast<uint64_t>(static_cast<uint32_t>(fsid.val[0])) << 32) |
+                                         static_cast<uint64_t>(static_cast<uint32_t>(fsid.val[1]));
+                    if (!seen_fsids.insert(fsid_key).second)
                         continue;
 
                     // statvfs for actual usage

@@ -58,6 +58,9 @@ namespace aivision
             DeviceMonitor* device_monitor_ = nullptr;
             std::unique_ptr<MetricsFlattener> metrics_flattener_;
             uint64_t last_flatten_timestamp_ms_ = 0;
+            uint64_t last_net_rx_bytes_hb_ = 0;
+            uint64_t last_net_tx_bytes_hb_ = 0;
+            uint64_t last_net_timestamp_ms_ = 0;
             int consecutive_failures_ = 0;
             std::atomic<bool> running_{false};
             std::unique_ptr<std::thread> thread_;

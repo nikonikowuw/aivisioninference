@@ -662,7 +662,7 @@ export default function EdgeNodeDetail() {
                 </Flex>
 
                 {/* Installed Algorithms Card */}
-                <Card px="0px" pb="20px">
+                <Card px="0px" pb="20px" mb="20px">
                     <Text
                         color={textColor}
                         fontSize="lg"

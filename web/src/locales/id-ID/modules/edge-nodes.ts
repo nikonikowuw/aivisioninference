@@ -62,6 +62,11 @@ export const edgeNodes = {
     activeStreams: 'Aliran Aktif',
     acceleratorUsage: 'Utilitas NPU / GPU',
     sortBy: 'Urutkan Berdasarkan',
+    bandwidth: 'Bandwidth',
+    decoders: 'Dekoder',
+    tasks: 'Tugas',
+    npuUsage: 'NPU%',
+    gpuUsage: 'GPU%',
   },
   sort: {
     default: 'Urutan Default',

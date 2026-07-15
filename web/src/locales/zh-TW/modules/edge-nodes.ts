@@ -62,6 +62,11 @@ export const edgeNodes = {
     activeStreams: '活躍視訊流數',
     acceleratorUsage: 'NPU / GPU 使用率',
     sortBy: '排序方式',
+    bandwidth: '頻寬',
+    decoders: '解碼器',
+    tasks: '任務',
+    npuUsage: 'NPU%',
+    gpuUsage: 'GPU%',
   },
   sort: {
     default: '預設排序',

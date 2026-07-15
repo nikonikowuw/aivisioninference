@@ -7,7 +7,6 @@ import {
   HStack,
   Spinner,
   Text,
-  Select,
   SimpleGrid,
   Stat,
   StatLabel,
@@ -17,11 +16,10 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
-import Pagination from 'components/pagination/Pagination';
 import Card from 'components/card/Card';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
-import { usePagination } from 'hooks/usePagination';
+import { useInfiniteScroll } from 'hooks/useInfiniteScroll';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -37,6 +35,9 @@ export default function EdgeNodeList() {
   const { t: tCommon } = useTranslation('common');
   const textColor = useColorModeValue('navy.700', 'white');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
+  const emptyBg = useColorModeValue('white', 'gray.700');
+  const toggleBg = useColorModeValue('rgba(0,0,0,0.02)', 'rgba(255,255,255,0.02)');
+  const footerColor = useColorModeValue('secondaryGray.600', 'gray.500');
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -74,21 +75,18 @@ export default function EdgeNodeList() {
   const {
     list: nodes,
     total,
-    page,
-    pageSize,
     initialLoading,
-    pageLoading,
-    load: loadNodes,
-    changePage,
-    changePageSize,
+    loadingMore,
+    reload: reloadNodes,
     setList: setNodes,
-  } = usePagination<EdgeNodeCardSnapshot>(fetchNodes);
+  } = useInfiniteScroll<EdgeNodeCardSnapshot>(fetchNodes, { pageSize: 24 });
 
+  // 首次加载 & 筛选条件变更时重新拉取
   useEffect(() => {
-    loadNodes({ page: 1 }).catch(() => {
+    reloadNodes().catch(() => {
       toast({ title: t('message.loadFailed'), status: 'error' });
     });
-  }, [searchTrigger, loadNodes, toast, t]);
+  }, [searchTrigger, reloadNodes, toast, t]);
 
   // Fetch overview stats on mount
   useEffect(() => {
@@ -117,6 +115,8 @@ export default function EdgeNodeList() {
           ...updated[idx],
           cpu_usage: payload.cpu_usage,
           memory_usage: payload.memory_usage,
+          net_rx_speed: payload.net_rx_speed,
+          net_tx_speed: payload.net_tx_speed,
         };
         return updated;
       });
@@ -143,18 +143,19 @@ export default function EdgeNodeList() {
     }
   }, [refresh, setNodes, fetchOverview]);
   const { send } = useWebSocket({
-    onOpen: useCallback((ws: WebSocket) => {
-      ws.send(JSON.stringify({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-status' } }));
-      ws.send(JSON.stringify({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } }));
+    onOpen: useCallback((_ws: WebSocket) => {
+      // Subscriptions are handled in the useEffect below for cleaner lifecycle management
     }, []),
     onMessage: handleWsMessage,
   });
 
   useEffect(() => {
     send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-status' } });
+    send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-metrics' } });
     send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } });
     return () => {
       send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-status' } });
+      send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-metrics' } });
       send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } });
     };
   }, [send]);
@@ -167,13 +168,13 @@ export default function EdgeNodeList() {
       toast({ title: t('message.deleteSuccess'), status: 'success' });
       setDeleteTarget(null);
       onDeleteClose();
-      loadNodes({ page: page > 1 && nodes.length <= 1 ? page - 1 : page });
+      reloadNodes();
     } catch {
       toast({ title: t('message.deleteFailed'), status: 'error' });
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteTarget, toast, t, onDeleteClose, loadNodes, page, nodes.length]);
+  }, [deleteTarget, toast, t, onDeleteClose, reloadNodes]);
 
   const handleDeploy = useCallback((node: EdgeNodeCardSnapshot) => {
     setDeployTarget(node);
@@ -215,7 +216,7 @@ export default function EdgeNodeList() {
               borderColor={borderColor}
               borderRadius="9px"
               p="2px"
-              bg={useColorModeValue('rgba(0,0,0,0.02)', 'rgba(255,255,255,0.02)')}
+              bg={toggleBg}
             >
               <Button
                 size="sm"
@@ -225,7 +226,7 @@ export default function EdgeNodeList() {
                 h="32px"
                 onClick={() => setCompact(false)}
               >
-                {t('view.normal') || '卡片'}
+                {t('view.normal')}
               </Button>
               <Button
                 size="sm"
@@ -235,7 +236,7 @@ export default function EdgeNodeList() {
                 h="32px"
                 onClick={() => setCompact(true)}
               >
-                {t('view.compact') || '紧凑'}
+                {t('view.compact')}
               </Button>
             </HStack>
             <Button
@@ -296,12 +297,12 @@ export default function EdgeNodeList() {
             },
             {
               name: 'sortBy',
-              label: t('fields.sortBy') || '排序方式',
+              label: t('fields.sortBy'),
               options: [
-                { value: 'default', label: t('sort.default') || '默认排序' },
-                { value: 'cpu', label: t('sort.cpu') || 'CPU 使用率' },
-                { value: 'memory', label: t('sort.memory') || '内存使用率' },
-                { value: 'load', label: t('sort.load') || '任务负载' },
+                { value: 'default', label: t('sort.default') },
+                { value: 'cpu', label: t('sort.cpu') },
+                { value: 'memory', label: t('sort.memory') },
+                { value: 'load', label: t('sort.load') },
               ],
             },
           ]}
@@ -309,10 +310,8 @@ export default function EdgeNodeList() {
 
         {/* Card Grid */}
         <Box>
-          {(pageLoading && sortedNodes.length === 0) ? (
-            <Center py="100px"><Spinner color="brand.500" size="xl" /></Center>
-          ) : sortedNodes.length === 0 ? (
-            <Center py="100px" bg={useColorModeValue('white', 'gray.700')} borderRadius="14px" border="1px solid" borderColor={borderColor}>
+          {sortedNodes.length === 0 ? (
+            <Center py="100px" bg={emptyBg} borderRadius="14px" border="1px solid" borderColor={borderColor}>
               <Text color={textColor}>{tCommon('noData')}</Text>
             </Center>
           ) : (
@@ -331,20 +330,23 @@ export default function EdgeNodeList() {
               ))}
             </SimpleGrid>
           )}
-        </Box>
 
-        {/* Pagination */}
-        {total > 0 && (
-          <Box mt="10px">
-            <Pagination
-              total={total}
-              page={page}
-              pageSize={pageSize}
-              onChange={changePage}
-              onPageSizeChange={changePageSize}
-            />
-          </Box>
-        )}
+          {/* 滚动加载指示器 */}
+          {loadingMore && (
+            <Center py="32px">
+              <Spinner color="brand.500" size="md" />
+            </Center>
+          )}
+
+          {/* 已加载全部提示 */}
+          {!loadingMore && nodes.length > 0 && nodes.length >= total && (
+            <Center py="24px">
+              <Text fontSize="xs" color={footerColor}>
+                {t('fields.node', { count: total })}
+              </Text>
+            </Center>
+          )}
+        </Box>
 
         {/* Delete Confirmation */}
         <ConfirmDialog
@@ -369,7 +371,7 @@ export default function EdgeNodeList() {
         <EdgeNodeCreateModal
           isOpen={isCreateOpen}
           onClose={onCreateClose}
-          onSuccess={() => loadNodes({ page: 1 })}
+          onSuccess={() => reloadNodes()}
         />
       </Flex>
     </Box>

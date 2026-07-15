@@ -4,10 +4,11 @@ import {
   Text,
   Tag,
   Progress,
-  CircularProgress,
   Icon,
   HStack,
+  VStack,
   useColorModeValue,
+  keyframes,
 } from '@chakra-ui/react';
 import {
   FiCpu,
@@ -15,6 +16,7 @@ import {
   FiDatabase,
   FiClock,
   FiArrowUp,
+  FiArrowDown,
   FiPlay,
   FiChevronRight,
   FiVideo,
@@ -31,63 +33,164 @@ interface EdgeNodeCardProps {
   onDeployClick?: (e: React.MouseEvent) => void;
 }
 
-function formatBandwidth(bps?: number): string {
-  if (bps === undefined || bps === null) return '-';
-  const kbps = bps / 1000;
-  if (kbps < 1000) return `${kbps.toFixed(1)} Kbps`;
-  const mbps = kbps / 1000;
-  return `${mbps.toFixed(1)} Mbps`;
+/** 呼吸光晕动画：用于 online 状态徽章前的指示点 */
+const pulseGlow = keyframes`
+  0%, 100% { box-shadow: 0 0 0 0 rgba(1, 181, 116, 0.55); }
+  50%      { box-shadow: 0 0 6px 3px rgba(1, 181, 116, 0.25); }
+`;
+
+const statusConfig: Record<string, { colorScheme: string; dotColor: string; glow: boolean }> = {
+  online:   { colorScheme: 'green',  dotColor: '#01B574', glow: true },
+  offline:  { colorScheme: 'gray',   dotColor: '#A0AEC0', glow: false },
+  error:    { colorScheme: 'red',    dotColor: '#EE5D50', glow: false },
+  disabled: { colorScheme: 'orange', dotColor: '#FFB547', glow: false },
+};
+
+/**
+ * 将字节/秒格式化为人类可读的网络速率字符串。
+ * 输入单位为字节/秒 (bytes/sec)，使用 1024 进制（二进制前缀）。
+ * IEC 标准对应名称为 KiB/s、MiB/s，保留 KB/s 作为常用别名。
+ */
+function formatNetworkSpeed(bytesPerSec?: number): string {
+  if (bytesPerSec === undefined || bytesPerSec === null) return '-';
+  if (bytesPerSec < 1024) return `${bytesPerSec.toFixed(0)} B/s`;
+  const kbps = bytesPerSec / 1024;
+  if (kbps < 1024) return `${kbps.toFixed(1)} KiB/s`;
+  const mbps = kbps / 1024;
+  return `${mbps.toFixed(1)} MiB/s`;
+}
+
+/** 阈值色：≥90 红 / ≥75 橙黄 / 默认保持各指标特征色 */
+function getMetricColor(val?: number, normalColor = 'green'): string {
+  if (val === undefined || val === null) return 'gray';
+  if (val >= 90) return 'red';
+  if (val >= 75) return 'orange';
+  return normalColor;
+}
+
+/** 单条资源进度行的渲染 */
+function MetricRow({
+  icon,
+  label,
+  value,
+  colorScheme,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value?: number;
+  colorScheme: string;
+}) {
+  const textColor = useColorModeValue('navy.700', 'white');
+  const mutedColor = useColorModeValue('secondaryGray.600', 'gray.400');
+  const progressTrack = useColorModeValue('rgba(0, 0, 0, 0.05)', 'rgba(255, 255, 255, 0.06)');
+
+  return (
+    <Box>
+      <Flex justify="space-between" align="center" mb="6px">
+        <HStack spacing="5px" color={mutedColor}>
+          <Icon as={icon} w="13px" h="13px" />
+          <Text fontSize="10px" fontWeight="600">{label}</Text>
+        </HStack>
+        <Text
+          fontSize="10px"
+          fontWeight="bold"
+          color={textColor}
+          sx={{ fontVariantNumeric: 'tabular-nums' }}
+        >
+          {value !== undefined ? `${value.toFixed(1)}%` : 'N/A'}
+        </Text>
+      </Flex>
+      <Progress
+        value={value ?? 0}
+        borderRadius="full"
+        colorScheme={getMetricColor(value, colorScheme)}
+        bg={progressTrack}
+        h="6px"
+        sx={{
+          '& > div': {
+            transition: 'width 0.6s cubic-bezier(0.22, 1, 0.36, 1)',
+          },
+        }}
+      />
+    </Box>
+  );
+}
+
+/** Stats Bar 中单个 stat 单元 */
+function StatCell({
+  icon,
+  iconColor,
+  value,
+  label,
+}: {
+  icon: React.ElementType;
+  iconColor: string;
+  value: string;
+  label: string;
+}) {
+  const textColor = useColorModeValue('navy.700', 'white');
+  const mutedColor = useColorModeValue('secondaryGray.600', 'gray.400');
+  const statsIconBg = useColorModeValue('rgba(0, 0, 0, 0.04)', 'rgba(255, 255, 255, 0.06)');
+
+  return (
+    <VStack spacing="4px" flex="1" py="10px" px="6px">
+      <Flex
+        w="28px"
+        h="28px"
+        borderRadius="8px"
+        bg={statsIconBg}
+        align="center"
+        justify="center"
+      >
+        <Icon as={icon} w="14px" h="14px" color={iconColor} />
+      </Flex>
+      <Text
+        fontSize="11px"
+        fontWeight="bold"
+        color={textColor}
+        sx={{ fontVariantNumeric: 'tabular-nums' }}
+        lineHeight="1"
+      >
+        {value}
+      </Text>
+      <Text fontSize="9px" color={mutedColor} lineHeight="1">
+        {label}
+      </Text>
+    </VStack>
+  );
 }
 
 export default function EdgeNodeCard({ node, compact = false, onClick, onDeployClick }: EdgeNodeCardProps) {
   const { t } = useTranslation('modules/edge-nodes');
-  const cardBg = useColorModeValue('rgba(255, 255, 255, 0.67)', 'rgba(26, 32, 44, 0.67)');
-  const hoverBg = useColorModeValue('rgba(255, 255, 255, 0.85)', 'rgba(45, 55, 72, 0.85)');
-  const borderColor = useColorModeValue('rgba(255, 255, 255, 0.82)', 'rgba(255, 255, 255, 0.12)');
+  const cardBg = useColorModeValue('rgba(255, 255, 255, 0.78)', 'rgba(22, 27, 45, 0.82)');
+  const hoverBg = useColorModeValue('rgba(255, 255, 255, 0.92)', 'rgba(30, 37, 58, 0.92)');
+  const borderColor = useColorModeValue('rgba(0, 0, 0, 0.06)', 'rgba(255, 255, 255, 0.08)');
   const textColor = useColorModeValue('navy.700', 'white');
-  const mutedColor = useColorModeValue('gray.500', 'gray.400');
+  const mutedColor = useColorModeValue('secondaryGray.600', 'gray.400');
+  const statsBarBg = useColorModeValue('rgba(0, 0, 0, 0.025)', 'rgba(255, 255, 255, 0.035)');
+  const statsDivider = useColorModeValue('rgba(0, 0, 0, 0.06)', 'rgba(255, 255, 255, 0.06)');
 
   const frozen = node.status === 'offline' || node.status === 'disabled';
 
-  const statusColors: Record<string, string> = {
-    online: 'green',
-    offline: 'gray',
-    error: 'red',
-    disabled: 'orange',
-  };
+  const status = statusConfig[node.status] || statusConfig.offline;
 
-  // Helper to color metrics based on utilization thresholds
-  const getMetricColor = (val?: number, normalColor = 'green') => {
-    if (val === undefined || val === null) return 'gray';
-    if (val >= 90) return 'red';
-    if (val >= 75) return 'yellow';
-    return normalColor;
-  };
-
-  // 1. Host stats
+  // Host stats
   const cpuVal = frozen ? undefined : node.cpu_usage;
   const memVal = frozen ? undefined : node.memory_usage;
-  
+
   const diskInfo = node.disk_usage && node.disk_usage.length > 0 ? node.disk_usage[0] : null;
   const diskVal = diskInfo ? diskInfo.percent : undefined;
 
-  // 2. Accelerator (NPU/GPU)
+  // Accelerator (NPU/GPU)
   const hasAcc = node.accelerator_metrics_valid;
-  const accVal = frozen || !hasAcc ? undefined : (node.accelerator_utilization !== undefined && node.accelerator_utilization !== null ? Number(node.accelerator_utilization) : undefined);
+  const accVal = frozen || !hasAcc
+    ? undefined
+    : (node.accelerator_utilization !== undefined && node.accelerator_utilization !== null
+        ? Number(node.accelerator_utilization)
+        : undefined);
 
-  // 3. Ring calculations
-  // Egress usage
-  const egressUsage = node.egress_capacity_bps && node.egress_capacity_bps > 0 && node.egress_bps
-    ? (Number(node.egress_bps) / Number(node.egress_capacity_bps)) * 100
-    : 0;
-
-  // Decode usage
-  const decodeUsage = node.hardware_info?.cpu_cores && node.decode_slots_used
-    ? (node.decode_slots_used / (node.hardware_info.cpu_cores * 2)) * 100 // default mock capacity base on cpu_cores
-    : 0;
-
-  // Active load usage
-  const loadUsage = node.max_load > 0 ? (node.current_load / node.max_load) * 100 : 0;
+  // 默认解码器容量 = CPU 核心数 × 2（常见边缘设备每核支持 2 路解码的近似估算）
+  const decoderCapacity = node.hardware_info?.cpu_cores ? node.hardware_info.cpu_cores * 2 : null;
 
   return (
     <Box
@@ -95,22 +198,22 @@ export default function EdgeNodeCard({ node, compact = false, onClick, onDeployC
       bg={cardBg}
       border="1px solid"
       borderColor={borderColor}
-      borderRadius="14px"
-      boxShadow="0 12px 35px rgba(19, 32, 25, 0.08)"
-      backdropFilter="blur(20px) saturate(1.12)"
+      borderRadius="16px"
+      boxShadow="0 8px 32px rgba(0, 0, 0, 0.08)"
+      backdropFilter="blur(24px) saturate(1.15)"
       cursor="pointer"
-      transition="transform 180ms ease, box-shadow 180ms ease, background 180ms ease"
+      transition="transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease, background 180ms ease"
       _hover={{
-        transform: 'translateY(-3px)',
-        boxShadow: '0 18px 42px rgba(19, 32, 25, 0.16)',
+        transform: 'translateY(-4px)',
+        boxShadow: '0 16px 48px rgba(0, 0, 0, 0.14)',
         bg: hoverBg,
       }}
       onClick={onClick}
-      p="16px"
+      p="18px"
       display="flex"
       flexDirection="column"
-      gap="12px"
-      opacity={frozen ? 0.72 : 1}
+      gap="14px"
+      opacity={frozen ? 0.68 : 1}
       tabIndex={0}
       role="button"
       aria-label={`Manage ${node.name}`}
@@ -121,137 +224,71 @@ export default function EdgeNodeCard({ node, compact = false, onClick, onDeployC
         }
       }}
     >
-      {/* Header */}
+      {/* ─── Header ─── */}
       <Flex justify="space-between" align="flex-start" gap="8px">
         <Box minW="0" flex="1">
           <Text
             color={textColor}
-            fontSize="sm"
+            fontSize="14px"
             fontWeight="bold"
             noOfLines={1}
             title={node.name}
+            letterSpacing="-0.3px"
           >
             {node.name}
           </Text>
           <Text
             color={mutedColor}
-            fontSize="9.5px"
+            fontSize="10px"
             noOfLines={1}
-            mt="2px"
+            mt="3px"
             title={`${node.hardware_info?.cpu_model || ''} · ${node.hardware_info?.gpu_model || ''}`}
           >
-            {node.hardware_info?.cpu_model ? `${node.hardware_info.cpu_model} · ${node.hardware_info.gpu_model || ''}` : node.endpoint}
+            {node.hardware_info?.cpu_model
+              ? `${node.hardware_info.cpu_model} · ${node.hardware_info.gpu_model || ''}`
+              : node.endpoint}
           </Text>
         </Box>
         <Tag
-          colorScheme={statusColors[node.status] || 'gray'}
-          variant="solid"
+          colorScheme={status.colorScheme}
+          variant="subtle"
           size="sm"
           borderRadius="full"
-          fontSize="9px"
+          fontSize="10px"
           fontWeight="bold"
-          px="8px"
-          py="2px"
+          px="10px"
+          py="3px"
+          gap="5px"
         >
+          {/* 状态指示点（online 时带呼吸动画） */}
+          <Box
+            w="6px"
+            h="6px"
+            borderRadius="full"
+            bg={status.dotColor}
+            animation={status.glow ? `${pulseGlow} 2s ease-in-out infinite` : undefined}
+          />
           {t(`status.${node.status}`)}
         </Tag>
       </Flex>
 
-      {/* Progress Bars */}
-      <Flex direction="column" gap="8px" mt="4px">
-        {/* CPU */}
-        <Box>
-          <Flex justify="space-between" align="center" fontSize="9.5px">
-            <HStack spacing="4px" color={mutedColor}>
-              <Icon as={FiCpu} w="13px" h="13px" />
-              <Text>{t('fields.cpuUsage')}</Text>
-            </HStack>
-            <Text fontWeight="bold" color={textColor}>
-              {cpuVal !== undefined ? `${cpuVal.toFixed(1)}%` : 'N/A'}
-            </Text>
-          </Flex>
-          <Progress
-            value={cpuVal ?? 0}
-            size="xs"
-            borderRadius="full"
-            mt="4px"
-            colorScheme={getMetricColor(cpuVal, 'green')}
-            bg="rgba(0,0,0,0.06)"
-          />
-        </Box>
-
-        {/* Memory */}
-        <Box>
-          <Flex justify="space-between" align="center" fontSize="9.5px">
-            <HStack spacing="4px" color={mutedColor}>
-              <Icon as={MdMemory} w="13px" h="13px" />
-              <Text>{t('fields.memUsage')}</Text>
-            </HStack>
-            <Text fontWeight="bold" color={textColor}>
-              {memVal !== undefined ? `${memVal.toFixed(1)}%` : 'N/A'}
-            </Text>
-          </Flex>
-          <Progress
-            value={memVal ?? 0}
-            size="xs"
-            borderRadius="full"
-            mt="4px"
-            colorScheme={getMetricColor(memVal, 'green')}
-            bg="rgba(0,0,0,0.06)"
-          />
-        </Box>
-
-        {/* Accelerator / NPU / GPU */}
-        <Box>
-          <Flex justify="space-between" align="center" fontSize="9.5px">
-            <HStack spacing="4px" color={mutedColor}>
-              <Icon as={FiZap} w="13px" h="13px" />
-              <Text>{hasAcc ? 'NPU' : 'GPU'}</Text>
-            </HStack>
-            <Text fontWeight="bold" color={textColor}>
-              {accVal !== undefined ? `${accVal.toFixed(1)}%` : 'N/A'}
-            </Text>
-          </Flex>
-          <Progress
-            value={accVal ?? 0}
-            size="xs"
-            borderRadius="full"
-            mt="4px"
-            colorScheme={getMetricColor(accVal, 'blue')}
-            bg="rgba(0,0,0,0.06)"
-          />
-        </Box>
-
-        {/* Disk */}
-        <Box>
-          <Flex justify="space-between" align="center" fontSize="9.5px">
-            <HStack spacing="4px" color={mutedColor}>
-              <Icon as={FiDatabase} w="13px" h="13px" />
-              <Text>{t('fields.diskUsage') || 'Disk'}</Text>
-            </HStack>
-            <Text fontWeight="bold" color={textColor}>
-              {diskVal !== undefined ? `${diskVal.toFixed(1)}%` : 'N/A'}
-            </Text>
-          </Flex>
-          <Progress
-            value={diskVal ?? 0}
-            size="xs"
-            borderRadius="full"
-            mt="4px"
-            colorScheme={getMetricColor(diskVal, 'cyan')}
-            bg="rgba(0,0,0,0.06)"
-          />
-        </Box>
+      {/* ─── Progress Bars ─── */}
+      <Flex direction="column" gap="10px">
+        <MetricRow icon={FiCpu} label={t('fields.cpuUsage')} value={cpuVal} colorScheme="green" />
+        <MetricRow icon={MdMemory} label={t('fields.memUsage')} value={memVal} colorScheme="blue" />
+        <MetricRow icon={FiZap} label={hasAcc ? t('fields.npuUsage') : t('fields.gpuUsage')} value={accVal} colorScheme="purple" />
+        <MetricRow icon={FiDatabase} label={t('fields.diskUsage')} value={diskVal} colorScheme="cyan" />
       </Flex>
 
-      {/* Error Banner */}
+      {/* ─── Error Banner ─── */}
       {!frozen && node.status === 'error' && node.description && (
         <Box
-          bg="rgba(241, 70, 90, 0.11)"
-          color="red.600"
-          borderRadius="7px"
-          p="6px 8px"
-          fontSize="9px"
+          bg="rgba(238, 93, 80, 0.1)"
+          color="red.500"
+          borderRadius="8px"
+          px="10px"
+          py="7px"
+          fontSize="10px"
           noOfLines={1}
           title={node.description}
         >
@@ -259,136 +296,69 @@ export default function EdgeNodeCard({ node, compact = false, onClick, onDeployC
         </Box>
       )}
 
-      {/* Circular Rings */}
+      {/* ─── Stats Bar（运行时指标横向展示） ─── */}
       {!compact && (
-        <Flex
-          justify="space-between"
-          align="center"
-          pt="12px"
-          borderTop="1px solid"
-          borderColor={borderColor}
+        <Box
+          bg={statsBarBg}
+          borderRadius="12px"
+          border="1px solid"
+          borderColor={statsDivider}
           mt="auto"
+          overflow="hidden"
         >
-          {/* Ring 1: Bandwidth / Egress */}
-          <Flex direction="column" align="center" gap="4px" flex="1">
-            <Box position="relative" display="inline-flex">
-              <CircularProgress
-                value={frozen ? 0 : egressUsage}
-                size="40px"
-                thickness="8px"
-                color={getMetricColor(egressUsage, 'blue')}
-                trackColor="rgba(0,0,0,0.05)"
-              />
-              <Box
-                position="absolute"
-                inset="0"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color={getMetricColor(egressUsage, 'blue')}
-              >
-                <Icon as={FiArrowUp} w="12px" h="12px" />
-              </Box>
-            </Box>
-            <Text color={mutedColor} fontSize="8px" fontWeight="bold" noOfLines={1}>
-              {frozen ? '0 B/s' : formatBandwidth(Number(node.egress_bps))}
-            </Text>
+          <Flex align="stretch">
+            <StatCell
+              icon={FiArrowDown}
+              iconColor="blue.400"
+              value={frozen ? '-' : formatNetworkSpeed(node.net_rx_speed)}
+              label={t('metrics.netRx')}
+            />
+            <Box w="1px" bg={statsDivider} my="10px" />
+            <StatCell
+              icon={FiArrowUp}
+              iconColor="blue.400"
+              value={frozen ? '-' : formatNetworkSpeed(node.net_tx_speed)}
+              label={t('metrics.netTx')}
+            />
+            <Box w="1px" bg={statsDivider} my="10px" />
+            <StatCell
+              icon={FiVideo}
+              iconColor="green.400"
+              value={frozen ? '-' : `${node.decode_slots_used ?? 0} / ${decoderCapacity ?? '-'}`}
+              label={t('fields.decoders')}
+            />
+            <Box w="1px" bg={statsDivider} my="10px" />
+            <StatCell
+              icon={FiPlay}
+              iconColor="brand.400"
+              value={`${node.current_load ?? 0} / ${node.max_load ?? '-'}`}
+              label={t('fields.tasks')}
+            />
+            <Box w="1px" bg={statsDivider} my="10px" />
+            <StatCell
+              icon={FiClock}
+              iconColor="teal.400"
+              value={frozen ? '-' : formatUptime(Number(node.uptime))}
+              label={t('fields.uptime')}
+            />
           </Flex>
-
-          {/* Ring 2: Decoders */}
-          <Flex direction="column" align="center" gap="4px" flex="1">
-            <Box position="relative" display="inline-flex">
-              <CircularProgress
-                value={frozen ? 0 : decodeUsage}
-                size="40px"
-                thickness="8px"
-                color="green.400"
-                trackColor="rgba(0,0,0,0.05)"
-              />
-              <Box
-                position="absolute"
-                inset="0"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="green.400"
-              >
-                <Icon as={FiVideo} w="12px" h="12px" />
-              </Box>
-            </Box>
-            <Text color={mutedColor} fontSize="8px" fontWeight="bold" noOfLines={1}>
-              {frozen ? '-' : `${node.decode_slots_used ?? 0} / ${node.hardware_info?.cpu_cores ? node.hardware_info.cpu_cores * 2 : '-'}`}
-            </Text>
-          </Flex>
-
-          {/* Ring 3: Load / Tasks */}
-          <Flex direction="column" align="center" gap="4px" flex="1">
-            <Box position="relative" display="inline-flex">
-              <CircularProgress
-                value={frozen ? 0 : loadUsage}
-                size="40px"
-                thickness="8px"
-                color="blue.400"
-                trackColor="rgba(0,0,0,0.05)"
-              />
-              <Box
-                position="absolute"
-                inset="0"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="blue.400"
-              >
-                <Icon as={FiPlay} w="12px" h="12px" />
-              </Box>
-            </Box>
-            <Text color={mutedColor} fontSize="8px" fontWeight="bold" noOfLines={1}>
-              {node.current_load ?? 0} / {node.max_load ?? '-'}
-            </Text>
-          </Flex>
-
-          {/* Ring 4: Uptime */}
-          <Flex direction="column" align="center" gap="4px" flex="1">
-            <Box position="relative" display="inline-flex">
-              <CircularProgress
-                value={frozen ? 0 : 100}
-                size="40px"
-                thickness="8px"
-                color="teal.400"
-                trackColor="rgba(0,0,0,0.05)"
-              />
-              <Box
-                position="absolute"
-                inset="0"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                color="teal.400"
-              >
-                <Icon as={FiClock} w="12px" h="12px" />
-              </Box>
-            </Box>
-            <Text color={mutedColor} fontSize="8px" fontWeight="bold" noOfLines={1}>
-              {frozen ? '-' : formatUptime(Number(node.uptime))}
-            </Text>
-          </Flex>
-        </Flex>
+        </Box>
       )}
 
-      {/* Footer */}
+      {/* ─── Footer ─── */}
       <Flex
         justify="space-between"
         align="center"
-        fontSize="8.5px"
+        fontSize="10px"
         color={mutedColor}
-        mt={compact ? '4px' : '8px'}
+        mt={compact ? '2px' : '0'}
       >
         <Text noOfLines={1}>
           {node.metrics_received_at
             ? `${t('fields.lastHeartbeat')}: ${new Date(node.metrics_received_at).toLocaleTimeString()}`
             : (node.uptime ? `${t('fields.lastHeartbeat')}: 刚刚` : '-')}
         </Text>
-        <HStack spacing="2px" color={textColor} fontWeight="bold">
+        <HStack spacing="2px" color={textColor} fontWeight="bold" _hover={{ color: 'brand.400' }} transition="color 150ms">
           <Text>{t('actions.detail') || 'Manage'}</Text>
           <Icon as={FiChevronRight} />
         </HStack>

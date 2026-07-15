@@ -168,6 +168,8 @@ export interface EdgeNodeCardSnapshot extends EdgeNode {
     accelerator_metrics_valid: boolean;
     metrics_received_at?: string;
     disk_usage?: DiskUsageInfo[];
+    net_rx_speed?: number;
+    net_tx_speed?: number;
 }
 
 export const edgeNodeApi = {

@@ -62,6 +62,11 @@ export const edgeNodes = {
     activeStreams: 'アクティブなストリーム数',
     acceleratorUsage: 'NPU / GPU 使用率',
     sortBy: 'ソート順',
+    bandwidth: '帯域幅',
+    decoders: 'デコーダ',
+    tasks: 'タスク',
+    npuUsage: 'NPU%',
+    gpuUsage: 'GPU%',
   },
   sort: {
     default: 'デフォルトソート',

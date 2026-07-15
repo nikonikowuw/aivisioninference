@@ -501,6 +501,26 @@ namespace aivision
             uint64_t net_rx_bytes = net_stats.rx_bytes;
             uint64_t net_tx_bytes = net_stats.tx_bytes;
 
+            double rx_speed = 0.0;
+            double tx_speed = 0.0;
+            if (last_net_timestamp_ms_ > 0 && now_ms > last_net_timestamp_ms_)
+            {
+                uint64_t elapsed_ms = now_ms - last_net_timestamp_ms_;
+                if (net_rx_bytes >= last_net_rx_bytes_hb_)
+                {
+                    uint64_t rx_delta = net_rx_bytes - last_net_rx_bytes_hb_;
+                    rx_speed = (static_cast<double>(rx_delta) * 1000.0) / static_cast<double>(elapsed_ms);
+                }
+                if (net_tx_bytes >= last_net_tx_bytes_hb_)
+                {
+                    uint64_t tx_delta = net_tx_bytes - last_net_tx_bytes_hb_;
+                    tx_speed = (static_cast<double>(tx_delta) * 1000.0) / static_cast<double>(elapsed_ms);
+                }
+            }
+            last_net_rx_bytes_hb_ = net_rx_bytes;
+            last_net_tx_bytes_hb_ = net_tx_bytes;
+            last_net_timestamp_ms_ = now_ms;
+
             json j;
             j["uptime"] = (system_uptime > 0 ? system_uptime : uptime);
             j["current_load"] = load;
@@ -524,8 +544,8 @@ namespace aivision
             // Network fields
             j["net_rx_bytes"] = net_rx_bytes;
             j["net_tx_bytes"] = net_tx_bytes;
-            j["net_rx_speed"] = (interval_ms > 0 ? flat_metrics.net_rx_speed : 0.0);
-            j["net_tx_speed"] = (interval_ms > 0 ? flat_metrics.net_tx_speed : 0.0);
+            j["net_rx_speed"] = rx_speed;
+            j["net_tx_speed"] = tx_speed;
             j["temperature"] = temperature;
             j["process_count"] = proc_counts.processes;
             j["thread_count"] = proc_counts.threads;

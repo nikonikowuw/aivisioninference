@@ -11,6 +11,7 @@
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
+#include <sys/mount.h>
 #include <mach/mach.h>
 #include <mach/vm_statistics.h>
 #endif
@@ -259,6 +260,77 @@ namespace aivision
             void CollectExpensiveMetrics(const DeviceMonitorConfig& config, DeviceDynamicMetrics& metrics, std::vector<AcceleratorInfo>& accelerators) override
             {
                 // macOS doesn't have expensive CLI collection
+            }
+
+            void CollectExtendedSnapshot(
+                const DeviceMonitorConfig& config,
+                DeviceSnapshot& snapshot,
+                uint64_t now_ms) override
+            {
+#ifdef __APPLE__
+                // Per-mountpoint disk usage via getmntinfo + statvfs
+                snapshot.disks.clear();
+
+                struct statfs* mounts = nullptr;
+                int count = getmntinfo(&mounts, MNT_NOWAIT);
+                if (count <= 0 || mounts == nullptr)
+                    return;
+
+                for (int i = 0; i < count; ++i)
+                {
+                    const std::string mnt_path(mounts[i].f_mntonname);
+                    if (mnt_path.empty())
+                        continue;
+
+                    // Skip pseudo filesystems
+                    const std::string fs_type(mounts[i].f_fstypename);
+                    if (fs_type == "procfs" || fs_type == "devfs" ||
+                        fs_type == "tmpfs" || fs_type == "ramfs" ||
+                        fs_type == "fdescfs" || fs_type == "autofs" ||
+                        fs_type == "sysfs" || fs_type == "fuse" ||
+                        fs_type == "devtmpfs")
+                        continue;
+
+                    // statvfs for actual usage
+                    struct statvfs vfs;
+                    if (statvfs(mnt_path.c_str(), &vfs) != 0)
+                        continue;
+                    if (vfs.f_blocks == 0)
+                        continue;
+
+                    DiskInfo disk;
+                    disk.path = mnt_path;
+                    disk.total_bytes = static_cast<uint64_t>(vfs.f_blocks) * vfs.f_frsize;
+                    disk.used_bytes = (static_cast<uint64_t>(vfs.f_blocks) - static_cast<uint64_t>(vfs.f_bavail)) * vfs.f_frsize;
+                    snapshot.disks.push_back(disk);
+                }
+
+                // Load average via sysctl
+                {
+                    double load[3] = {0, 0, 0};
+                    size_t len = sizeof(load);
+                    if (sysctlbyname("vm.loadavg", &load, &len, NULL, 0) == 0)
+                    {
+                        snapshot.metrics.load_average_1m.available = true;
+                        snapshot.metrics.load_average_1m.value = load[0];
+                        snapshot.metrics.load_average_1m.unit = "load";
+                        snapshot.metrics.load_average_1m.source = "sysctl vm.loadavg (1m)";
+                        snapshot.metrics.load_average_1m.collected_at_ms = now_ms;
+
+                        snapshot.metrics.load_average_5m.available = true;
+                        snapshot.metrics.load_average_5m.value = load[1];
+                        snapshot.metrics.load_average_5m.unit = "load";
+                        snapshot.metrics.load_average_5m.source = "sysctl vm.loadavg (5m)";
+                        snapshot.metrics.load_average_5m.collected_at_ms = now_ms;
+
+                        snapshot.metrics.load_average_15m.available = true;
+                        snapshot.metrics.load_average_15m.value = load[2];
+                        snapshot.metrics.load_average_15m.unit = "load";
+                        snapshot.metrics.load_average_15m.source = "sysctl vm.loadavg (15m)";
+                        snapshot.metrics.load_average_15m.collected_at_ms = now_ms;
+                    }
+                }
+#endif
             }
 
         private:

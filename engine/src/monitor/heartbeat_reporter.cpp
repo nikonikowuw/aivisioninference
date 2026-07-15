@@ -575,10 +575,22 @@ namespace aivision
                 // Parse JSON response using nlohmann/json library
                 auto response = json::parse(response_json);
 
-                // Check for successful response structure
-                if (!response.contains("code") || response["code"].get<int>() != 0) {
-                    std::cerr << "[HeartbeatReporter] Heartbeat response error: "
-                              << (response.contains("message") ? response["message"].get<std::string>() : "unknown")
+                // Check for successful response structure.
+                // "code" may be a number (e.g. 0) or a string (e.g. "0") depending on
+                // the API version — handle both without throwing type_error.302.
+                if (!response.contains("code")) {
+                    std::cerr << "[HeartbeatReporter] Heartbeat response missing 'code' field" << std::endl;
+                    return;
+                }
+                int code = 0;
+                if (response["code"].is_number()) {
+                    code = response["code"].get<int>();
+                } else if (response["code"].is_string()) {
+                    code = std::stoi(response["code"].get<std::string>());
+                }
+                if (code != 0) {
+                    std::cerr << "[HeartbeatReporter] Heartbeat response error: code=" << code
+                              << ", message=" << (response.contains("message") ? response["message"].get<std::string>() : "unknown")
                               << std::endl;
                     return;
                 }

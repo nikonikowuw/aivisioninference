@@ -168,6 +168,35 @@ namespace aivision
                 }
             }
 
+            // Also import per-mountpoint disk info from snapshot.disks.
+            // This field is populated by LinuxGenericProbe::CollectExtendedSnapshot
+            // (from /proc/mounts) and now also by MacOSProbe::CollectExtendedSnapshot
+            // (from getmntinfo). Merge into disks, preferring the already-populated
+            // diagnostics evidence when both contain the same mount point.
+            for (const auto& disk : snapshot.disks)
+            {
+                bool found = false;
+                for (const auto& d : disks)
+                {
+                    if (d.path == disk.path)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    DiskUsageInfo du;
+                    du.path = disk.path;
+                    du.total = disk.total_bytes;
+                    du.used = disk.used_bytes;
+                    du.percent = (disk.total_bytes > 0)
+                        ? (static_cast<double>(disk.used_bytes) / disk.total_bytes) * 100.0
+                        : 0.0;
+                    disks.push_back(du);
+                }
+            }
+
             return disks;
         }
 

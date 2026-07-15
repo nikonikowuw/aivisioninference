@@ -205,6 +205,10 @@ func main() {
 	mustExec(db, `CREATE INDEX IF NOT EXISTS idx_edge_node_metrics_node_created_at
 		ON edge_node_metrics USING brin (node_id, created_at) WITH (pages_per_range = 32)`)
 
+	// FindFiringNotifySent 复合索引：WHERE status=? AND notify_sent=? AND notify_sent_at IS NOT NULL
+	mustExec(db, `CREATE INDEX IF NOT EXISTS idx_alert_events_status_notify
+		ON alert_events (status, notify_sent, notify_sent_at)`)
+
 	// 清理数据库中重复的智能记录菜单（旧版系统管理下的告警记录子菜单）。
 	cleanupDuplicateSmartRecordsMenu(db)
 

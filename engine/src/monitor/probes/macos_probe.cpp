@@ -276,6 +276,13 @@ namespace aivision
                 if (count <= 0 || mounts == nullptr)
                     return;
 
+                // Track the mount point with the largest capacity — this is the
+                // main data volume. On modern macOS (Big Sur+) the root "/" is a
+                // sealed read-only APFS snapshot; statvfs("/") may fail or return
+                // f_blocks == 0. We fall back to the largest writable volume instead.
+                uint64_t largest_total = 0;
+                size_t best_idx = SIZE_MAX;
+
                 for (int i = 0; i < count; ++i)
                 {
                     const std::string mnt_path(mounts[i].f_mntonname);
@@ -298,11 +305,45 @@ namespace aivision
                     if (vfs.f_blocks == 0)
                         continue;
 
+                    uint64_t total_bytes = static_cast<uint64_t>(vfs.f_blocks) * vfs.f_frsize;
+                    uint64_t used_bytes = (static_cast<uint64_t>(vfs.f_blocks) - static_cast<uint64_t>(vfs.f_bavail)) * vfs.f_frsize;
+
                     DiskInfo disk;
                     disk.path = mnt_path;
-                    disk.total_bytes = static_cast<uint64_t>(vfs.f_blocks) * vfs.f_frsize;
-                    disk.used_bytes = (static_cast<uint64_t>(vfs.f_blocks) - static_cast<uint64_t>(vfs.f_bavail)) * vfs.f_frsize;
+                    disk.total_bytes = total_bytes;
+                    disk.used_bytes = used_bytes;
                     snapshot.disks.push_back(disk);
+
+                    // Track the mount point with the largest total (main data volume)
+                    if (total_bytes > largest_total)
+                    {
+                        largest_total = total_bytes;
+                        best_idx = snapshot.disks.size() - 1;
+                    }
+                }
+
+                // If the root "/" from CollectStaticInfo/CollectDynamicMetrics had
+                // no usable data (statvfs("/") failed on the sealed system volume),
+                // overwrite storage_usage/total_storage with the largest data volume.
+                if (best_idx < snapshot.disks.size())
+                {
+                    const DiskInfo& best = snapshot.disks[best_idx];
+                    if (!snapshot.metrics.storage_usage.available ||
+                        snapshot.info.total_storage == 0)
+                    {
+                        double pct = (best.total_bytes > 0)
+                            ? (static_cast<double>(best.used_bytes) / best.total_bytes) * 100.0
+                            : 0.0;
+
+                        snapshot.metrics.storage_usage.available = true;
+                        snapshot.metrics.storage_usage.stale = false;
+                        snapshot.metrics.storage_usage.value = pct;
+                        snapshot.metrics.storage_usage.unit = "percent";
+                        snapshot.metrics.storage_usage.source = "getmntinfo+statvfs(" + best.path + ")";
+                        snapshot.metrics.storage_usage.collected_at_ms = now_ms;
+
+                        snapshot.info.total_storage = best.total_bytes;
+                    }
                 }
 
                 // Load average via sysctl

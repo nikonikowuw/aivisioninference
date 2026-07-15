@@ -176,11 +176,22 @@ namespace aivision
             for (const auto& disk : snapshot.disks)
             {
                 bool found = false;
-                for (const auto& d : disks)
+                for (auto& d : disks)
                 {
                     if (d.path == disk.path)
                     {
                         found = true;
+                        // If the existing entry has zero total but snapshot.disks
+                        // has valid data (e.g. statvfs("/") failed on a sealed
+                        // macOS system volume), update in place.
+                        if (d.total == 0 && disk.total_bytes > 0)
+                        {
+                            d.total = disk.total_bytes;
+                            d.used = disk.used_bytes;
+                            d.percent = (disk.total_bytes > 0)
+                                ? (static_cast<double>(disk.used_bytes) / disk.total_bytes) * 100.0
+                                : 0.0;
+                        }
                         break;
                     }
                 }

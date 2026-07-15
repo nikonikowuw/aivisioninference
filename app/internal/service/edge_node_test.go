@@ -250,7 +250,24 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil, NewMemoryHeartbeatStore(), nil, 0)
+	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
+		NodeRepo:        nodeRepo,
+		NodeAlgoRepo:    nodeAlgoRepo,
+		AlgoPackageRepo: pkgRepo,
+		TaskRepo:        taskRepo,
+		DeviceRepo:      deviceRepo,
+		SmartRecordRepo: smartRecordRepo,
+		MetricsSvc:      nil,
+		JWTManager:      jwtManager,
+		Storage:         fileStorage,
+		Hub:             nil,
+		StreamManager:   nil,
+		MetricsRepo:     nil,
+		AlertEngine:     nil,
+		Heartbeats:      NewMemoryHeartbeatStore(),
+		EngineMetricsStore: nil,
+		HeartbeatTimeout: 0,
+	})
 	ctx := context.Background()
 
 	// 1. Create Node
@@ -485,7 +502,24 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	streamManager := NewStreamManager(&MockEngineClient{}, deviceRepo, repository.NewMediaStreamRepository(db), zap.NewNop())
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage2, nil, streamManager, nil, nil, NewMemoryHeartbeatStore(), nil, 0)
+	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
+		NodeRepo:        nodeRepo,
+		NodeAlgoRepo:    nodeAlgoRepo,
+		AlgoPackageRepo: pkgRepo,
+		TaskRepo:        taskRepo,
+		DeviceRepo:      deviceRepo,
+		SmartRecordRepo: smartRecordRepo,
+		MetricsSvc:      nil,
+		JWTManager:      jwtManager,
+		Storage:         fileStorage2,
+		Hub:             nil,
+		StreamManager:   streamManager,
+		MetricsRepo:     nil,
+		AlertEngine:     nil,
+		Heartbeats:      NewMemoryHeartbeatStore(),
+		EngineMetricsStore: nil,
+		HeartbeatTimeout: 0,
+	})
 	ctx := context.Background()
 
 	// Create an online node
@@ -661,7 +695,24 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	fileStorage3, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage3, nil, nil, nil, nil, NewMemoryHeartbeatStore(), nil, 0)
+	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
+		NodeRepo:        nodeRepo,
+		NodeAlgoRepo:    nodeAlgoRepo,
+		AlgoPackageRepo: pkgRepo,
+		TaskRepo:        taskRepo,
+		DeviceRepo:      deviceRepo,
+		SmartRecordRepo: smartRecordRepo,
+		MetricsSvc:      nil,
+		JWTManager:      jwtManager,
+		Storage:         fileStorage3,
+		Hub:             nil,
+		StreamManager:   nil,
+		MetricsRepo:     nil,
+		AlertEngine:     nil,
+		Heartbeats:      NewMemoryHeartbeatStore(),
+		EngineMetricsStore: nil,
+		HeartbeatTimeout: 0,
+	})
 	ctx := context.Background()
 
 	// Create online node
@@ -744,7 +795,24 @@ func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
 	jwtManager := jwt.NewManager("my-very-secure-jwt-secret-at-least-32-chars", "niko-admin", "niko-admin", 3600, 86400, nil)
 
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
-	svc := NewEdgeNodeService(nodeRepo, nodeAlgoRepo, pkgRepo, taskRepo, deviceRepo, smartRecordRepo, nil, jwtManager, fileStorage, nil, nil, nil, nil, NewMemoryHeartbeatStore(), nil, 0)
+	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
+		NodeRepo:        nodeRepo,
+		NodeAlgoRepo:    nodeAlgoRepo,
+		AlgoPackageRepo: pkgRepo,
+		TaskRepo:        taskRepo,
+		DeviceRepo:      deviceRepo,
+		SmartRecordRepo: smartRecordRepo,
+		MetricsSvc:      nil,
+		JWTManager:      jwtManager,
+		Storage:         fileStorage,
+		Hub:             nil,
+		StreamManager:   nil,
+		MetricsRepo:     nil,
+		AlertEngine:     nil,
+		Heartbeats:      NewMemoryHeartbeatStore(),
+		EngineMetricsStore: nil,
+		HeartbeatTimeout: 0,
+	})
 
 	// Create a camera device
 	device := &model.Device{

@@ -531,24 +531,24 @@ func provideEdgeNodeService(
 	alertEngine *service.AlertEngine,
 	engineMetricsStore *service.EngineMetricsStore,
 ) *service.EdgeNodeService {
-	svc := service.NewEdgeNodeService(
-		nodeRepo,
-		nodeAlgoRepo,
-		algoPackageRepo,
-		taskRepo,
-		deviceRepo,
-		smartRecordRepo,
-		metricsSvc,
-		jwtManager,
-		fileStorage,
-		hub,
-		streamManager,
-		metricsRepo,
-		alertEngine,
-		service.NewHeartbeatStore(rdb),
-		engineMetricsStore,
-		time.Duration(cfg.Engine.HeartbeatTimeoutSec) * time.Second,
-	)
+	svc := service.NewEdgeNodeService(&service.EdgeNodeServiceConfig{
+		NodeRepo:             nodeRepo,
+		NodeAlgoRepo:         nodeAlgoRepo,
+		AlgoPackageRepo:      algoPackageRepo,
+		TaskRepo:             taskRepo,
+		DeviceRepo:           deviceRepo,
+		SmartRecordRepo:      smartRecordRepo,
+		MetricsSvc:           metricsSvc,
+		JWTManager:           jwtManager,
+		Storage:              fileStorage,
+		Hub:                  hub,
+		StreamManager:        streamManager,
+		MetricsRepo:          metricsRepo,
+		AlertEngine:          alertEngine,
+		Heartbeats:           service.NewHeartbeatStore(rdb),
+		EngineMetricsStore:   engineMetricsStore,
+		HeartbeatTimeout:     time.Duration(cfg.Engine.HeartbeatTimeoutSec) * time.Second,
+	})
 	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
 	return svc
 }

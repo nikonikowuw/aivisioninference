@@ -59,46 +59,49 @@ type EdgeNodeService struct {
 	heartbeatTimeout     time.Duration
 }
 
-// NewEdgeNodeService creates a new EdgeNodeService.
-func NewEdgeNodeService(
-	nodeRepo *repository.EdgeNodeRepository,
-	nodeAlgoRepo *repository.EdgeNodeAlgorithmRepository,
-	algoPackageRepo *repository.AlgorithmPackageRepository,
-	taskRepo *repository.AIVisionTaskRepository,
-	deviceRepo *repository.DeviceRepository,
-	smartRecordRepo *repository.SmartRecordRepository,
-	metricsSvc *EdgeNodeMetricsService,
-	jwtManager *jwt.Manager,
-	storage storage.Storage,
-	hub *ws.Hub,
-	streamManager *StreamManager,
-	metricsRepo *repository.EdgeNodeMetricsRepository,
-	alertEngine *AlertEngine,
-	heartbeats HeartbeatStore,
-	engineMetricsStore *EngineMetricsStore,
-	heartbeatTimeout time.Duration,
-) *EdgeNodeService {
+// EdgeNodeServiceConfig holds all dependencies for EdgeNodeService.
+type EdgeNodeServiceConfig struct {
+	NodeRepo             *repository.EdgeNodeRepository
+	NodeAlgoRepo         *repository.EdgeNodeAlgorithmRepository
+	AlgoPackageRepo      *repository.AlgorithmPackageRepository
+	TaskRepo             *repository.AIVisionTaskRepository
+	DeviceRepo           *repository.DeviceRepository
+	SmartRecordRepo      *repository.SmartRecordRepository
+	MetricsSvc           *EdgeNodeMetricsService
+	JWTManager           *jwt.Manager
+	Storage              storage.Storage
+	Hub                  *ws.Hub
+	StreamManager        *StreamManager
+	MetricsRepo          *repository.EdgeNodeMetricsRepository
+	AlertEngine          *AlertEngine
+	Heartbeats           HeartbeatStore
+	EngineMetricsStore   *EngineMetricsStore
+	HeartbeatTimeout     time.Duration
+}
+
+// NewEdgeNodeService creates a new EdgeNodeService from the given config.
+func NewEdgeNodeService(cfg *EdgeNodeServiceConfig) *EdgeNodeService {
 	svc := &EdgeNodeService{
-		nodeRepo:             nodeRepo,
-		nodeAlgoRepo:         nodeAlgoRepo,
-		algoPackageRepo:      algoPackageRepo,
-		taskRepo:             taskRepo,
-		deviceRepo:           deviceRepo,
-		smartRecordRepo:      smartRecordRepo,
-		metricsSvc:           metricsSvc,
-		jwtManager:           jwtManager,
-		storage:              storage,
+		nodeRepo:             cfg.NodeRepo,
+		nodeAlgoRepo:         cfg.NodeAlgoRepo,
+		algoPackageRepo:      cfg.AlgoPackageRepo,
+		taskRepo:             cfg.TaskRepo,
+		deviceRepo:           cfg.DeviceRepo,
+		smartRecordRepo:      cfg.SmartRecordRepo,
+		metricsSvc:           cfg.MetricsSvc,
+		jwtManager:           cfg.JWTManager,
+		storage:              cfg.Storage,
 		minCompatibleVersion: "",
-		heartbeats:           heartbeats,
+		heartbeats:           cfg.Heartbeats,
 		versionCheckEnabled:  false,
-		hub:                  hub,
-		streamManager:        streamManager,
+		hub:                  cfg.Hub,
+		streamManager:        cfg.StreamManager,
 		inferenceChan:        make(chan *controlproto.InferenceResultParams, 10000),
 		stopChan:             make(chan struct{}),
-		metricsRepo:          metricsRepo,
-		alertEngine:          alertEngine,
-		engineMetricsStore:   engineMetricsStore,
-		heartbeatTimeout:     heartbeatTimeout,
+		metricsRepo:          cfg.MetricsRepo,
+		alertEngine:          cfg.AlertEngine,
+		engineMetricsStore:   cfg.EngineMetricsStore,
+		heartbeatTimeout:     cfg.HeartbeatTimeout,
 	}
 	go svc.batchInsertWorker()
 	return svc

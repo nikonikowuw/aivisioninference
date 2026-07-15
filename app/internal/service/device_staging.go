@@ -19,6 +19,7 @@ type discoveredDeviceRepo interface {
 	FindByID(ctx context.Context, id string) (*model.DiscoveredDevice, error)
 	MarkImported(ctx context.Context, id, deviceID string) error
 	ResetByDeviceID(ctx context.Context, deviceID string) error
+	BatchResetByDeviceIDs(ctx context.Context, deviceIDs []string) error
 }
 
 type DeviceStagingService struct {

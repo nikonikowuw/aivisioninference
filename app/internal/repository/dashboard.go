@@ -72,47 +72,47 @@ type UserStatRow struct {
 }
 
 // RecentUserStats 查询最近 days 天的用户新增和活跃统计。
+// 使用单次 SQL 查询避免对每一天循环查询数据库 (N+1)。
 func (r *DashboardRepository) RecentUserStats(ctx context.Context, days int) ([]UserStatRow, error) {
-	stats := make([]UserStatRow, days)
-	now := time.Now()
-	for i := 0; i < days; i++ {
-		day := now.AddDate(0, 0, i-days+1)
-		start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
-		end := start.AddDate(0, 0, 1)
+	type row struct {
+		Day         time.Time `gorm:"column:day"`
+		NewUsers    int64     `gorm:"column:new_users"`
+		ActiveUsers int64     `gorm:"column:active_users"`
+	}
+	var rows []row
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT d::date AS day,
+			COALESCE(u.cnt, 0) AS new_users,
+			COALESCE(a.cnt, 0) AS active_users
+		FROM generate_series(?::date, ?::date, '1 day'::interval) d
+		LEFT JOIN (
+			SELECT created_at::date AS day, COUNT(*) AS cnt
+			FROM users
+			WHERE created_at >= ? AND created_at < ?
+			GROUP BY created_at::date
+		) u ON u.day = d::date
+		LEFT JOIN (
+			SELECT created_at::date AS day, COUNT(DISTINCT user_id) AS cnt
+			FROM audit_logs
+			WHERE created_at >= ? AND created_at < ? AND user_id IS NOT NULL
+			GROUP BY created_at::date
+		) a ON a.day = d::date
+		ORDER BY d::date ASC
+	`, time.Now().AddDate(0, 0, -days+1), time.Now(),
+		time.Now().AddDate(0, 0, -days+1), time.Now().AddDate(0, 0, 1),
+		time.Now().AddDate(0, 0, -days+1), time.Now().AddDate(0, 0, 1),
+	).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
 
-		newUsers, err := r.countNewUsers(ctx, start, end)
-		if err != nil {
-			return nil, err
-		}
-		activeUsers, err := r.countActiveUsers(ctx, start, end)
-		if err != nil {
-			return nil, err
-		}
-
+	stats := make([]UserStatRow, len(rows))
+	for i, r := range rows {
 		stats[i] = UserStatRow{
-			Date:   day.Format("01-02"),
-			New:    newUsers,
-			Active: activeUsers,
+			Date:   r.Day.Format("01-02"),
+			New:    r.NewUsers,
+			Active: r.ActiveUsers,
 		}
 	}
 	return stats, nil
-}
-
-// countNewUsers 统计指定日期范围内新增用户数。
-func (r *DashboardRepository) countNewUsers(ctx context.Context, start, end time.Time) (int64, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&model.User{}).
-		Where("created_at >= ? AND created_at < ?", start, end).
-		Count(&count).Error
-	return count, err
-}
-
-// countActiveUsers 统计指定日期范围内有审计记录的去重用户数。
-func (r *DashboardRepository) countActiveUsers(ctx context.Context, start, end time.Time) (int64, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&model.AuditLog{}).
-		Where("created_at >= ? AND created_at < ? AND user_id IS NOT NULL", start, end).
-		Distinct("user_id").
-		Count(&count).Error
-	return count, err
 }

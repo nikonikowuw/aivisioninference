@@ -120,6 +120,21 @@ func (r *DiscoveredDeviceRepository) ResetByDeviceID(ctx context.Context, device
 		}).Error
 }
 
+// BatchResetByDeviceIDs 批量重置关联指定设备ID列表的待接入设备状态为 pending。
+// 相比循环调用 ResetByDeviceID，可消除 N+1 数据库更新。
+func (r *DiscoveredDeviceRepository) BatchResetByDeviceIDs(ctx context.Context, deviceIDs []string) error {
+	if len(deviceIDs) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.DiscoveredDevice{}).
+		Where("matched_device_id IN ? AND status = ?", deviceIDs, model.StatusImported).
+		Updates(map[string]interface{}{
+			"status":            model.StatusPending,
+			"imported_at":       nil,
+			"matched_device_id": nil,
+		}).Error
+}
+
 func (r *DiscoveredDeviceRepository) FindByGB28181Code(ctx context.Context, code string) (*model.DiscoveredDevice, error) {
 	var item model.DiscoveredDevice
 	err := r.db.WithContext(ctx).Where("gb28181_code = ?", code).First(&item).Error

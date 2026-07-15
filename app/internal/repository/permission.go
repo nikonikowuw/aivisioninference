@@ -141,6 +141,33 @@ func (r *PermissionRepository) CountAssignedRoles(ctx context.Context, permissio
 	return count, err
 }
 
+// BatchCountAssignedRoles 批量统计多个权限分别被多少个角色授予。
+// 返回 permissionID → count 映射。相比循环调用 CountAssignedRoles，可消除 N+1 查询。
+func (r *PermissionRepository) BatchCountAssignedRoles(ctx context.Context, permissionIDs []string) (map[string]int64, error) {
+	if len(permissionIDs) == 0 {
+		return map[string]int64{}, nil
+	}
+	type permCount struct {
+		PermissionID string `gorm:"column:permission_id"`
+		Count        int64  `gorm:"column:count"`
+	}
+	var rows []permCount
+	err := r.db.WithContext(ctx).
+		Table("role_permissions").
+		Select("permission_id, COUNT(*) AS count").
+		Where("permission_id IN ?", permissionIDs).
+		Group("permission_id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]int64, len(permissionIDs))
+	for _, r := range rows {
+		result[r.PermissionID] = r.Count
+	}
+	return result, nil
+}
+
 // FindMenusByRoleIDs 根据一组角色 ID 列表，关联角色权限关系，查询这些角色拥有的所有“菜单”类型权限 (按排序权重排序)
 func (r *PermissionRepository) FindMenusByRoleIDs(ctx context.Context, roleIDs []string) ([]model.Permission, error) {
 	var items []model.Permission

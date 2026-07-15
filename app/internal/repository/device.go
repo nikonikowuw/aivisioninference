@@ -281,3 +281,30 @@ func (r *DeviceGroupRepository) CountByGroupID(ctx context.Context, groupID stri
 		Count(&count).Error
 	return count, err
 }
+
+// BatchCountByGroupIDs 批量查询多个分组的设备数量，返回 groupID → count 映射。
+// 相比循环调用 CountByGroupID，可消除 N+1 数据库查询。
+func (r *DeviceGroupRepository) BatchCountByGroupIDs(ctx context.Context, groupIDs []string) (map[string]int64, error) {
+	if len(groupIDs) == 0 {
+		return map[string]int64{}, nil
+	}
+	type groupCount struct {
+		GroupID string `gorm:"column:group_id"`
+		Count   int64  `gorm:"column:count"`
+	}
+	var rows []groupCount
+	err := r.db.WithContext(ctx).
+		Model(&model.DeviceGroupMember{}).
+		Select("group_id, COUNT(*) AS count").
+		Where("group_id IN ?", groupIDs).
+		Group("group_id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]int64, len(groupIDs))
+	for _, r := range rows {
+		result[r.GroupID] = r.Count
+	}
+	return result, nil
+}

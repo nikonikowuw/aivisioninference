@@ -155,14 +155,15 @@ func (s *PermissionService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 批量查询所有待检查权限的角色授予数，消除 N+1 循环查询
 	checkIDs := append([]string{id}, descendants...)
+	counts, err := s.permRepo.BatchCountAssignedRoles(ctx, checkIDs)
+	if err != nil {
+		zap.L().Error("batch check permission usage failed", zap.Error(err))
+		return apperrors.New(apperrors.ErrInternal, "")
+	}
 	for _, pid := range checkIDs {
-		roleCount, err := s.permRepo.CountAssignedRoles(ctx, pid)
-		if err != nil {
-			zap.L().Error("check permission usage failed", zap.Error(err))
-			return apperrors.New(apperrors.ErrInternal, "")
-		}
-		if roleCount > 0 {
+		if counts[pid] > 0 {
 			return apperrors.New(apperrors.ErrPermissionAssigned, "")
 		}
 	}

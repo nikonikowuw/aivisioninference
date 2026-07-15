@@ -185,6 +185,11 @@ func (m *MockDiscoveredDeviceRepo) ResetByDeviceID(ctx context.Context, deviceID
 	return args.Error(0)
 }
 
+func (m *MockDiscoveredDeviceRepo) BatchResetByDeviceIDs(ctx context.Context, deviceIDs []string) error {
+	args := m.Called(ctx, deviceIDs)
+	return args.Error(0)
+}
+
 func TestDeviceService_Integration_Workflow(t *testing.T) {
 	mockRepo := new(MockDeviceRepo)
 	mockDiscoveredRepo := new(MockDiscoveredDeviceRepo)

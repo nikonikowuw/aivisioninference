@@ -85,6 +85,13 @@ func (m *mockStagingRepo) ResetByDeviceID(ctx context.Context, deviceID string) 
 	return nil
 }
 
+func (m *mockStagingRepo) BatchResetByDeviceIDs(ctx context.Context, deviceIDs []string) error {
+	for _, id := range deviceIDs {
+		_ = m.ResetByDeviceID(ctx, id)
+	}
+	return nil
+}
+
 func TestDeviceStaging_Upsert(t *testing.T) {
 	_ = zap.NewNop()
 	repo := newMockStagingRepo()

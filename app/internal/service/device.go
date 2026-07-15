@@ -52,6 +52,7 @@ type deviceGroupRepo interface {
 	Update(ctx context.Context, item *model.DeviceGroup) error
 	Delete(ctx context.Context, id string) error
 	CountByGroupID(ctx context.Context, groupID string) (int64, error)
+	BatchCountByGroupIDs(ctx context.Context, groupIDs []string) (map[string]int64, error)
 }
 
 // cache 接口抽象,复用 internal/pkg/cache
@@ -355,11 +356,9 @@ func (s *DeviceService) BatchDelete(ctx context.Context, ids []string) *dto.Batc
 		}
 	}
 
-	// 批量重置关联的待接入设备状态为 pending
-	for _, id := range validIDs {
-		if err := s.discoveredDeviceRepo.ResetByDeviceID(ctx, id); err != nil {
-			zap.L().Warn("reset discovered device status failed", zap.String("device_id", id), zap.Error(err))
-		}
+	// 批量重置关联的待接入设备状态为 pending（消除 N+1 数据库更新）
+	if err := s.discoveredDeviceRepo.BatchResetByDeviceIDs(ctx, validIDs); err != nil {
+		zap.L().Warn("batch reset discovered device status failed", zap.Error(err))
 	}
 
 	return &dto.BatchResult{
@@ -627,10 +626,16 @@ func (s *DeviceGroupService) List(ctx context.Context, req dto.DeviceGroupListRe
 		return nil, 0, apperrors.New(apperrors.ErrInternal, "")
 	}
 
+	// 批量查询所有分组的设备数量，消除 N+1
+	groupIDs := make([]string, len(items))
+	for i, item := range items {
+		groupIDs[i] = item.ID
+	}
+	counts, _ := s.groupRepo.BatchCountByGroupIDs(ctx, groupIDs)
+
 	result := make([]dto.DeviceGroupResponse, len(items))
 	for i, item := range items {
-		count, _ := s.groupRepo.CountByGroupID(ctx, item.ID)
-		resp := toDeviceGroupResponse(&item, count)
+		resp := toDeviceGroupResponse(&item, counts[item.ID])
 		result[i] = *resp
 	}
 	return result, total, nil

@@ -59,6 +59,7 @@ var repositorySet = wire.NewSet(
 	repository.NewEdgeScheduledTaskRecordRepository,
 	repository.NewTerminalSessionRepository,
 	repository.NewEdgeNodeMetricsRepository,
+	repository.NewEdgeNodeEngineMetricsRepository,
 	repository.NewAlertRuleRepository,
 	repository.NewAlertEventRepository,
 	repository.NewEdgeNodeScheduledTaskRepository,

@@ -121,6 +121,10 @@ table EngineMetricsMsg {
     preview_in_use: uint;
     /// 预览容量配置有效；旧 Engine 和非法配置均为 false
     preview_capacity_valid: bool = false;
+    /// 加速器计算利用率 (百分比)
+    accelerator_utilization: float = 0.0;
+    /// 加速器指标是否有效
+    accelerator_metrics_valid: bool = false;
 }
 
 /// 心跳回复 (SignalType.HeartbeatAck)

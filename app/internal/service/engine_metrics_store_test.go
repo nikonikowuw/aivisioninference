@@ -8,7 +8,7 @@ import (
 )
 
 func TestEngineMetricsStoreKeepsNodeSnapshotsIsolated(t *testing.T) {
-	store := NewEngineMetricsStore(NewHistoryBuffer(10))
+	store := NewEngineMetricsStore(NewHistoryBuffer(10), nil, nil)
 	store.UpdateNode("node-a", &controlproto.EngineMetricsSnapshot{PreviewInUse: 1})
 	store.UpdateNode("node-b", &controlproto.EngineMetricsSnapshot{PreviewInUse: 2})
 
@@ -29,7 +29,7 @@ func TestEngineMetricsStoreKeepsNodeSnapshotsIsolated(t *testing.T) {
 }
 
 func TestEngineMetricsStoreRequiresFreshCollectionAndReceiveTimes(t *testing.T) {
-	store := NewEngineMetricsStore(NewHistoryBuffer(10))
+	store := NewEngineMetricsStore(NewHistoryBuffer(10), nil, nil)
 	now := time.Now()
 	store.UpdateNode("node-a", &controlproto.EngineMetricsSnapshot{
 		TimestampNS:          uint64(now.UnixNano()),

@@ -44,6 +44,20 @@ export const edgeNodes = {
     createdBy: '建立者',
     createdAt: '建立時間',
     updatedAt: '更新時間',
+    diskUsage: '磁碟使用率',
+    utilization: '使用率',
+    activeStreams: '活躍視訊流數',
+    sortBy: '排序方式',
+  },
+  sort: {
+    default: '預設排序',
+    cpu: 'CPU 使用率',
+    memory: '記憶體使用率',
+    load: '任務負載',
+  },
+  view: {
+    normal: '卡片檢視',
+    compact: '緊湊檢視',
   },
   status: {
     online: '在線',

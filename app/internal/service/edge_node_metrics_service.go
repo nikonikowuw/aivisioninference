@@ -16,15 +16,21 @@ import (
 
 // EdgeNodeMetricsService 边缘节点指标业务逻辑
 type EdgeNodeMetricsService struct {
-	metricsRepo *repository.EdgeNodeMetricsRepository
-	hub         *ws.Hub
+	metricsRepo       *repository.EdgeNodeMetricsRepository
+	engineMetricsRepo *repository.EdgeNodeEngineMetricsRepository
+	hub               *ws.Hub
 }
 
 // NewEdgeNodeMetricsService creates a new EdgeNodeMetricsService.
-func NewEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository, hub *ws.Hub) *EdgeNodeMetricsService {
+func NewEdgeNodeMetricsService(
+	metricsRepo *repository.EdgeNodeMetricsRepository,
+	engineMetricsRepo *repository.EdgeNodeEngineMetricsRepository,
+	hub *ws.Hub,
+) *EdgeNodeMetricsService {
 	return &EdgeNodeMetricsService{
-		metricsRepo: metricsRepo,
-		hub:         hub,
+		metricsRepo:       metricsRepo,
+		engineMetricsRepo: engineMetricsRepo,
+		hub:               hub,
 	}
 }
 
@@ -74,7 +80,8 @@ func BroadcastMetricsEvent(hub *ws.Hub, nodeID string, metrics *model.EdgeNodeMe
 		return
 	}
 	hub.Broadcast(&ws.Message{
-		Type: "edge-node-metrics",
+		Type:   "edge-node-metrics",
+		NodeID: nodeID,
 		Payload: map[string]interface{}{
 			"node_id":       nodeID,
 			"cpu_usage":     metrics.CPUUsage,
@@ -113,7 +120,59 @@ func (s *EdgeNodeMetricsService) RecordMetrics(ctx context.Context, metrics *mod
 
 // QueryMetrics 查询指定节点的历史指标数据，支持按时间范围、指标类型、聚合方式和分页。
 func (s *EdgeNodeMetricsService) QueryMetrics(ctx context.Context, nodeID string, req dto.MetricQueryRequest) (*dto.MetricQueryResponse, error) {
-	items, total, err := s.metricsRepo.ListMetrics(ctx, nodeID, req)
+	from, err := req.GetFromTime()
+	if err != nil {
+		return nil, fmt.Errorf("invalid from time: %w", err)
+	}
+	to, err := req.GetToTime()
+	if err != nil {
+		return nil, fmt.Errorf("invalid to time: %w", err)
+	}
+
+	// 1. Auto-select aggregation window and method to enforce 600-point limit
+	duration := to.Sub(from)
+	if req.Interval == "" && req.Aggregation == "" {
+		req.Aggregation = "avg"
+		if duration <= 1*time.Hour {
+			req.Interval = "10s"
+		} else if duration <= 6*time.Hour {
+			req.Interval = "1m"
+		} else if duration <= 24*time.Hour {
+			req.Interval = "5m"
+		} else if duration <= 7*24*time.Hour {
+			req.Interval = "30m"
+		} else {
+			req.Interval = "2h"
+		}
+	}
+
+	// Force page size limit for aggregation trends
+	if req.PageSize == 0 || req.PageSize > 600 {
+		req.PageSize = 600
+	}
+
+	// 2. Route metric query to corresponding repository
+	isEngineMetric := false
+	switch req.Metric {
+	case "active_stream_count", "dma_used_bytes", "dma_total_bytes", "npu_used_bytes", "npu_total_bytes",
+		"worker_count", "idle_worker_count", "decode_sessions", "encode_sessions", "decode_slots_used",
+		"encode_slots_used", "egress_bps", "preview_pipeline_count", "inference_pipeline_count",
+		"mixed_pipeline_count", "preview_capacity", "preview_in_use", "accelerator_utilization":
+		isEngineMetric = true
+	}
+
+	var items []dto.MetricDataPoint
+	var total int64
+
+	if isEngineMetric {
+		if s.engineMetricsRepo == nil {
+			return nil, fmt.Errorf("engine metrics repository not initialized")
+		}
+		items, total, err = s.engineMetricsRepo.ListMetrics(ctx, nodeID, req)
+	} else {
+		items, total, err = s.metricsRepo.ListMetrics(ctx, nodeID, req)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("查询指标失败: %w", err)
 	}
@@ -128,23 +187,37 @@ func (s *EdgeNodeMetricsService) QueryMetrics(ctx context.Context, nodeID string
 // 由定时任务调度，默认保留 7 天数据。
 func (s *EdgeNodeMetricsService) DeleteOldMetrics(ctx context.Context, retentionDays int) (int64, error) {
 	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
+
+	// Clean host metrics
 	count, err := s.metricsRepo.DeleteOlderThan(ctx, cutoff)
 	if err != nil {
-		zap.L().Error("failed to delete old edge node metrics",
+		zap.L().Error("failed to delete old edge node host metrics",
 			zap.Time("cutoff", cutoff),
 			zap.Error(err),
 		)
-		return 0, fmt.Errorf("清理过期指标失败: %w", err)
+		return 0, fmt.Errorf("清理过期系统指标失败: %w", err)
 	}
 
-	if count > 0 {
-		zap.L().Info("deleted old edge node metrics",
-			zap.Int64("count", count),
+	// Clean engine metrics
+	engineCount, err := s.engineMetricsRepo.DeleteOlderThan(ctx, cutoff)
+	if err != nil {
+		zap.L().Error("failed to delete old edge node engine metrics",
+			zap.Time("cutoff", cutoff),
+			zap.Error(err),
+		)
+		return count, fmt.Errorf("清理过期引擎指标失败: %w", err)
+	}
+
+	totalDeleted := count + engineCount
+	if totalDeleted > 0 {
+		zap.L().Info("deleted old edge node metrics physically",
+			zap.Int64("host_metrics_count", count),
+			zap.Int64("engine_metrics_count", engineCount),
 			zap.Time("cutoff", cutoff),
 		)
 	}
 
-	return count, nil
+	return totalDeleted, nil
 }
 
 

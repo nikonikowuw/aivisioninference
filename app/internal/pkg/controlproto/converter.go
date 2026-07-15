@@ -464,27 +464,29 @@ type StreamMetricsSnapshot struct {
 
 // EngineMetricsSnapshot 表示引擎全局指标快照。
 type EngineMetricsSnapshot struct {
-	Streams                []StreamMetricsSnapshot
-	ActiveStreamCount      uint32
-	DMAUsedBytes           uint64
-	DMATotalBytes          uint64
-	NPUUsedBytes           uint64
-	NPUTotalBytes          uint64
-	WorkerCount            uint32
-	IdleWorkerCount        uint32
-	TimestampNS            uint64
-	DecodeSessions         uint32
-	EncodeSessions         uint32
-	DecodeSlotsUsed        uint32
-	EncodeSlotsUsed        uint32
-	EgressBPS              uint64
-	PreviewPipelineCount   uint32
-	InferencePipelineCount uint32
-	MixedPipelineCount     uint32
-	MediaMetricsValid      bool
-	PreviewCapacity        uint32
-	PreviewInUse           uint32
-	PreviewCapacityValid   bool
+	Streams                 []StreamMetricsSnapshot
+	ActiveStreamCount       uint32
+	DMAUsedBytes            uint64
+	DMATotalBytes           uint64
+	NPUUsedBytes            uint64
+	NPUTotalBytes           uint64
+	WorkerCount             uint32
+	IdleWorkerCount         uint32
+	TimestampNS             uint64
+	DecodeSessions          uint32
+	EncodeSessions          uint32
+	DecodeSlotsUsed         uint32
+	EncodeSlotsUsed         uint32
+	EgressBPS               uint64
+	PreviewPipelineCount    uint32
+	InferencePipelineCount  uint32
+	MixedPipelineCount      uint32
+	MediaMetricsValid       bool
+	PreviewCapacity         uint32
+	PreviewInUse            uint32
+	PreviewCapacityValid    bool
+	AcceleratorUtilization  float32
+	AcceleratorMetricsValid bool
 }
 
 // FlatBuffersToEngineMetrics parses an EngineMetricsMsg payload, with or without a ControlEnvelope.
@@ -526,27 +528,29 @@ func FlatBuffersToEngineMetrics(fbData []byte) *EngineMetricsSnapshot {
 	}
 
 	return &EngineMetricsSnapshot{
-		Streams:                streams,
-		ActiveStreamCount:      msg.ActiveStreamCount(),
-		DMAUsedBytes:           msg.DmaUsedBytes(),
-		DMATotalBytes:          msg.DmaTotalBytes(),
-		NPUUsedBytes:           msg.NpuUsedBytes(),
-		NPUTotalBytes:          msg.NpuTotalBytes(),
-		WorkerCount:            msg.WorkerCount(),
-		IdleWorkerCount:        msg.IdleWorkerCount(),
-		TimestampNS:            msg.TimestampNs(),
-		DecodeSessions:         msg.DecodeSessions(),
-		EncodeSessions:         msg.EncodeSessions(),
-		DecodeSlotsUsed:        msg.DecodeSlotsUsed(),
-		EncodeSlotsUsed:        msg.EncodeSlotsUsed(),
-		EgressBPS:              msg.EgressBps(),
-		PreviewPipelineCount:   msg.PreviewPipelineCount(),
-		InferencePipelineCount: msg.InferencePipelineCount(),
-		MixedPipelineCount:     msg.MixedPipelineCount(),
-		MediaMetricsValid:      msg.MediaMetricsValid(),
-		PreviewCapacity:        msg.PreviewCapacity(),
-		PreviewInUse:           msg.PreviewInUse(),
-		PreviewCapacityValid:   msg.PreviewCapacityValid(),
+		Streams:                 streams,
+		ActiveStreamCount:       msg.ActiveStreamCount(),
+		DMAUsedBytes:            msg.DmaUsedBytes(),
+		DMATotalBytes:           msg.DmaTotalBytes(),
+		NPUUsedBytes:            msg.NpuUsedBytes(),
+		NPUTotalBytes:           msg.NpuTotalBytes(),
+		WorkerCount:             msg.WorkerCount(),
+		IdleWorkerCount:         msg.IdleWorkerCount(),
+		TimestampNS:             msg.TimestampNs(),
+		DecodeSessions:          msg.DecodeSessions(),
+		EncodeSessions:          msg.EncodeSessions(),
+		DecodeSlotsUsed:         msg.DecodeSlotsUsed(),
+		EncodeSlotsUsed:         msg.EncodeSlotsUsed(),
+		EgressBPS:               msg.EgressBps(),
+		PreviewPipelineCount:    msg.PreviewPipelineCount(),
+		InferencePipelineCount:  msg.InferencePipelineCount(),
+		MixedPipelineCount:      msg.MixedPipelineCount(),
+		MediaMetricsValid:       msg.MediaMetricsValid(),
+		PreviewCapacity:         msg.PreviewCapacity(),
+		PreviewInUse:            msg.PreviewInUse(),
+		PreviewCapacityValid:    msg.PreviewCapacityValid(),
+		AcceleratorUtilization:  msg.AcceleratorUtilization(),
+		AcceleratorMetricsValid: msg.AcceleratorMetricsValid(),
 	}
 }
 

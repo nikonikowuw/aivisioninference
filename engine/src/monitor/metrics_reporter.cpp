@@ -1,5 +1,6 @@
 // MetricsReporter 实现
 #include "monitor/metrics_reporter.h"
+#include "monitor/device_monitor.h"
 
 #include <iostream>
 
@@ -76,6 +77,39 @@ namespace aivision
             metrics.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                        std::chrono::system_clock::now().time_since_epoch())
                                        .count();
+
+            // 采集加速器利用率
+            if (device_monitor_)
+            {
+                auto snapshot_ptr = device_monitor_->GetSnapshotPtr();
+                if (snapshot_ptr)
+                {
+                    bool found = false;
+                    for (const auto& acc : snapshot_ptr->accelerators)
+                    {
+                        if (acc.usage.available)
+                        {
+                            metrics.accelerator_utilization = static_cast<float>(acc.usage.value);
+                            metrics.accelerator_metrics_valid = true;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        if (snapshot_ptr->metrics.npu_usage.available)
+                        {
+                            metrics.accelerator_utilization = static_cast<float>(snapshot_ptr->metrics.npu_usage.value);
+                            metrics.accelerator_metrics_valid = true;
+                        }
+                        else if (snapshot_ptr->metrics.gpu_usage.available)
+                        {
+                            metrics.accelerator_utilization = static_cast<float>(snapshot_ptr->metrics.gpu_usage.value);
+                            metrics.accelerator_metrics_valid = true;
+                        }
+                    }
+                }
+            }
 
             // 采集 Worker 池状态
             if (worker_pool_)

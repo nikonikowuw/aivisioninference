@@ -29,6 +29,7 @@ namespace aivision
 {
     namespace monitor
     {
+        class DeviceMonitor;
 
         /// 引擎全局指标快照
         struct EngineMetrics
@@ -67,6 +68,8 @@ namespace aivision
 			uint32_t preview_capacity = 0;
 			uint32_t preview_in_use = 0;
 			bool preview_capacity_valid = false;
+            float accelerator_utilization = 0.0f;
+            bool accelerator_metrics_valid = false;
         };
 
         /// 指标回调 (由 MetricsReporter 构造后传递)
@@ -109,6 +112,9 @@ namespace aivision
             /// 设置自定义指标回调 (用于单元测试或额外消费)
             void SetMetricsCallback(MetricsCallback cb) { metrics_cb_ = std::move(cb); }
 
+            /// 关联 DeviceMonitor 以获取完整设备快照
+            void SetDeviceMonitor(DeviceMonitor *monitor) { device_monitor_ = monitor; }
+
             /// 手动触发一次采集 (同步)
             EngineMetrics CollectNow();
 
@@ -125,6 +131,7 @@ namespace aivision
             pipeline::StreamQueueManager *queue_mgr_;
             algo::AlgoManager *algo_mgr_;
             pipeline::PipelineManager *pipeline_mgr_;
+            DeviceMonitor *device_monitor_ = nullptr;
 
             MetricsReporterConfig config_;
             std::atomic<bool> running_{false};

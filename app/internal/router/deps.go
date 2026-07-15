@@ -216,8 +216,12 @@ func provideHistoryBuffer() *service.HistoryBuffer {
 	return service.NewHistoryBuffer(60)
 }
 
-func provideEngineMetricsStore(history *service.HistoryBuffer) *service.EngineMetricsStore {
-	return service.NewEngineMetricsStore(history)
+func provideEngineMetricsStore(
+	history *service.HistoryBuffer,
+	hub *ws.Hub,
+	engineMetricsRepo *repository.EdgeNodeEngineMetricsRepository,
+) *service.EngineMetricsStore {
+	return service.NewEngineMetricsStore(history, hub, engineMetricsRepo)
 }
 
 func newRouteDeps(
@@ -525,6 +529,7 @@ func provideEdgeNodeService(
 	streamManager *service.StreamManager,
 	metricsRepo *repository.EdgeNodeMetricsRepository,
 	alertEngine *service.AlertEngine,
+	engineMetricsStore *service.EngineMetricsStore,
 ) *service.EdgeNodeService {
 	svc := service.NewEdgeNodeService(
 		nodeRepo,
@@ -541,6 +546,8 @@ func provideEdgeNodeService(
 		metricsRepo,
 		alertEngine,
 		service.NewHeartbeatStore(rdb),
+		engineMetricsStore,
+		time.Duration(cfg.Engine.HeartbeatTimeoutSec) * time.Second,
 	)
 	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
 	return svc
@@ -584,8 +591,12 @@ func provideEdgeNodeMetricsRepository(db *gorm.DB) *repository.EdgeNodeMetricsRe
 	return repository.NewEdgeNodeMetricsRepository(db)
 }
 
-func provideEdgeNodeMetricsService(metricsRepo *repository.EdgeNodeMetricsRepository, hub *ws.Hub) *service.EdgeNodeMetricsService {
-	return service.NewEdgeNodeMetricsService(metricsRepo, hub)
+func provideEdgeNodeMetricsService(
+	metricsRepo *repository.EdgeNodeMetricsRepository,
+	engineMetricsRepo *repository.EdgeNodeEngineMetricsRepository,
+	hub *ws.Hub,
+) *service.EdgeNodeMetricsService {
+	return service.NewEdgeNodeMetricsService(metricsRepo, engineMetricsRepo, hub)
 }
 
 func provideEdgeNodeMetricsHandler(

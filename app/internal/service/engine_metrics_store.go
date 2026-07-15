@@ -1,13 +1,17 @@
 package service
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/niko-admin/niko-admin/internal/model"
 	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
+	"github.com/niko-admin/niko-admin/internal/pkg/ws"
+	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
 // EngineMetricsStore 引擎指标存储
@@ -33,6 +37,10 @@ type EngineMetricsStore struct {
 
 	logger *zap.Logger
 	nodes  map[string]*NodeEngineMetrics
+
+	hub    *ws.Hub
+	dbRepo *repository.EdgeNodeEngineMetricsRepository
+	dbChan chan *model.EdgeNodeEngineMetrics
 }
 
 // NodeEngineMetrics is the latest metrics snapshot and receive time for one edge node.
@@ -42,15 +50,38 @@ type NodeEngineMetrics struct {
 }
 
 // NewEngineMetricsStore 创建引擎指标存储
-func NewEngineMetricsStore(historyBuffer *HistoryBuffer) *EngineMetricsStore {
+func NewEngineMetricsStore(historyBuffer *HistoryBuffer, hub *ws.Hub, dbRepo *repository.EdgeNodeEngineMetricsRepository) *EngineMetricsStore {
 	store := &EngineMetricsStore{
 		streamMetrics: make(map[string]*controlproto.StreamMetricsSnapshot),
 		historyBuffer: historyBuffer,
 		logger:        zap.L().With(zap.String("component", "engine_metrics_store")),
 		nodes:         make(map[string]*NodeEngineMetrics),
+		hub:           hub,
+		dbRepo:        dbRepo,
+		dbChan:        make(chan *model.EdgeNodeEngineMetrics, 1000),
 	}
 	store.lastUpdateTime.Store(time.Time{})
+
+	go store.dbWriteWorker()
+
 	return store
+}
+
+// Stop closes dbChan and allows dbWriteWorker to terminate gracefully.
+func (s *EngineMetricsStore) Stop() {
+	if s.dbChan != nil {
+		close(s.dbChan)
+	}
+}
+
+func (s *EngineMetricsStore) dbWriteWorker() {
+	for dbModel := range s.dbChan {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := s.dbRepo.Create(ctx, dbModel); err != nil {
+			s.logger.Error("Failed to persist engine metrics snapshot to database", zap.Error(err))
+		}
+		cancel()
+	}
 }
 
 // UpdateNode updates a node-scoped snapshot without mixing metrics from other nodes.
@@ -63,6 +94,49 @@ func (s *EngineMetricsStore) UpdateNode(nodeID string, snapshot *controlproto.En
 	s.nodes[nodeID] = &NodeEngineMetrics{Snapshot: cloneEngineMetrics(snapshot), ReceivedAt: now}
 	s.mu.Unlock()
 	s.Update(cloneEngineMetrics(snapshot))
+
+	// 1. Asynchronously persist to PostgreSQL
+	if s.dbRepo != nil {
+		dbModel := &model.EdgeNodeEngineMetrics{
+			NodeID:                 nodeID,
+			CreatedAt:              now,
+			ActiveStreamCount:      snapshot.ActiveStreamCount,
+			DMAUsedBytes:           snapshot.DMAUsedBytes,
+			DMATotalBytes:          snapshot.DMATotalBytes,
+			NPUUsedBytes:           snapshot.NPUUsedBytes,
+			NPUTotalBytes:          snapshot.NPUTotalBytes,
+			WorkerCount:            snapshot.WorkerCount,
+			IdleWorkerCount:        snapshot.IdleWorkerCount,
+			DecodeSessions:         snapshot.DecodeSessions,
+			EncodeSessions:         snapshot.EncodeSessions,
+			DecodeSlotsUsed:        snapshot.DecodeSlotsUsed,
+			EncodeSlotsUsed:        snapshot.EncodeSlotsUsed,
+			EgressBPS:              snapshot.EgressBPS,
+			PreviewPipelineCount:   snapshot.PreviewPipelineCount,
+			InferencePipelineCount: snapshot.InferencePipelineCount,
+			MixedPipelineCount:     snapshot.MixedPipelineCount,
+			MediaMetricsValid:      snapshot.MediaMetricsValid,
+			PreviewCapacity:        snapshot.PreviewCapacity,
+			PreviewInUse:           snapshot.PreviewInUse,
+			PreviewCapacityValid:   snapshot.PreviewCapacityValid,
+			AcceleratorUtilization:  snapshot.AcceleratorUtilization,
+			AcceleratorMetricsValid: snapshot.AcceleratorMetricsValid,
+		}
+		select {
+		case s.dbChan <- dbModel:
+		default:
+			s.logger.Warn("Engine metrics DB queue is full, dropping database persistence")
+		}
+	}
+
+	// 2. Broadcast to WebSocket clients
+	if s.hub != nil {
+		s.hub.Broadcast(&ws.Message{
+			Type:    "edge-node-engine-metrics",
+			NodeID:  nodeID,
+			Payload: snapshot,
+		})
+	}
 }
 
 // GetNodeLatest returns a copy of one node's latest snapshot and its control-plane receive time.

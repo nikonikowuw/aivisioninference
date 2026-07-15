@@ -675,7 +675,8 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 
 	// Metrics Retention Handler (daily cleanup of old edge node metrics)
 	metricsRepo := repository.NewEdgeNodeMetricsRepository(db)
-	metricsSvc := service.NewEdgeNodeMetricsService(metricsRepo, hub)
+	engineMetricsRepo := repository.NewEdgeNodeEngineMetricsRepository(db)
+	metricsSvc := service.NewEdgeNodeMetricsService(metricsRepo, engineMetricsRepo, hub)
 	metricsRetentionHandler := task.NewMetricsRetentionHandler(metricsSvc)
 	metricsRetentionHandler.RegisterHandlers(mux)
 	if scheduler != nil {

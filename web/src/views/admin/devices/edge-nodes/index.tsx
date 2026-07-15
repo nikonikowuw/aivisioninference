@@ -1,25 +1,18 @@
-import { AddIcon, DeleteIcon, InfoIcon, ViewIcon } from '@chakra-ui/icons';
+import { AddIcon, ViewIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
   Center,
   Flex,
   HStack,
-  IconButton,
   Spinner,
-  Table,
-  Tag,
-  Tbody,
-  Td,
   Text,
-  Th,
-  Thead,
-  Tr,
+  Select,
+  SimpleGrid,
   useColorModeValue,
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
-import Card from 'components/card/Card';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -28,33 +21,11 @@ import { usePagination } from 'hooks/usePagination';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { edgeNodeApi, type EdgeNode } from 'services/edgeNode';
+import { edgeNodeApi, type EdgeNodeCardSnapshot } from 'services/edgeNode';
 import { useWebSocket } from 'hooks/useWebSocket';
 import { AlgorithmDeployModal } from './components/AlgorithmDeployModal';
 import EdgeNodeCreateModal from './components/EdgeNodeCreateModal';
-
-function formatUptime(seconds: number): string {
-  if (!seconds) return '-';
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  parts.push(`${m}m`);
-  return parts.join(' ');
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  online: 'green',
-  offline: 'gray',
-  error: 'red',
-  disabled: 'orange',
-};
-
-function formatPercent(value?: number): string {
-  return value === undefined ? '-' : `${value.toFixed(1)}%`;
-}
+import EdgeNodeCard from './components/EdgeNodeCard';
 
 export default function EdgeNodeList() {
   const { t } = useTranslation('modules/edge-nodes');
@@ -68,10 +39,14 @@ export default function EdgeNodeList() {
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
   const { isOpen: isDeployOpen, onOpen: onDeployOpen, onClose: onDeployClose } = useDisclosure();
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
-  const [deleteTarget, setDeleteTarget] = useState<EdgeNode | null>(null);
-  const [deployTarget, setDeployTarget] = useState<EdgeNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EdgeNodeCardSnapshot | null>(null);
+  const [deployTarget, setDeployTarget] = useState<EdgeNodeCardSnapshot | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+
+  // Card view density state
+  const [compact, setCompact] = useState(false);
+  const sortBy = filters.sortBy || 'default';
 
   const fetchNodes = useCallback((page: number, pageSize: number) => edgeNodeApi.list({
     page,
@@ -80,7 +55,18 @@ export default function EdgeNodeList() {
     status: filters.status,
   }), [filters]);
 
-  const { list: nodes, total, page, pageSize, initialLoading, pageLoading, load: loadNodes, changePage, changePageSize, setList: setNodes } = usePagination<EdgeNode>(fetchNodes);
+  const {
+    list: nodes,
+    total,
+    page,
+    pageSize,
+    initialLoading,
+    pageLoading,
+    load: loadNodes,
+    changePage,
+    changePageSize,
+    setList: setNodes,
+  } = usePagination<EdgeNodeCardSnapshot>(fetchNodes);
 
   useEffect(() => {
     loadNodes({ page: 1 }).catch(() => {
@@ -112,10 +98,45 @@ export default function EdgeNodeList() {
         };
         return updated;
       });
+    } else if (msg.type === 'edge-node-engine-metrics') {
+      // Update engine & accelerator metrics in real-time
+      setNodes((prev) => {
+        if (!prev || !prev.length) return prev;
+        const payload = msg.payload || msg;
+        const idx = prev.findIndex((n) => n.id === payload.node_id);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        updated[idx] = {
+          ...updated[idx],
+          active_stream_count: payload.active_stream_count,
+          decode_slots_used: payload.decode_slots_used,
+          encode_slots_used: payload.encode_slots_used,
+          egress_bps: payload.egress_bps,
+          accelerator_utilization: payload.accelerator_utilization,
+          accelerator_metrics_valid: payload.accelerator_metrics_valid,
+          metrics_received_at: payload.received_at,
+        };
+        return updated;
+      });
     }
   }, [lastRefreshTime, refresh, setNodes]);
 
-  useWebSocket({ onMessage: handleWsMessage });
+  const { send } = useWebSocket({
+    onOpen: useCallback((ws: WebSocket) => {
+      ws.send(JSON.stringify({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-status' } }));
+      ws.send(JSON.stringify({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } }));
+    }, []),
+    onMessage: handleWsMessage,
+  });
+
+  useEffect(() => {
+    send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-status' } });
+    send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } });
+    return () => {
+      send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-status' } });
+      send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } });
+    };
+  }, [send]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -133,10 +154,24 @@ export default function EdgeNodeList() {
     }
   }, [deleteTarget, toast, t, onDeleteClose, loadNodes, page, nodes.length]);
 
-  const handleDeploy = useCallback((node: EdgeNode) => {
+  const handleDeploy = useCallback((node: EdgeNodeCardSnapshot) => {
     setDeployTarget(node);
     onDeployOpen();
   }, [onDeployOpen]);
+
+  // Client-side sorting
+  const sortedNodes = [...nodes].sort((a, b) => {
+    if (sortBy === 'cpu') {
+      return (b.cpu_usage ?? 0) - (a.cpu_usage ?? 0);
+    }
+    if (sortBy === 'memory') {
+      return (b.memory_usage ?? 0) - (a.memory_usage ?? 0);
+    }
+    if (sortBy === 'load') {
+      return (b.current_load ?? 0) - (a.current_load ?? 0);
+    }
+    return 0; // default
+  });
 
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
@@ -151,7 +186,37 @@ export default function EdgeNodeList() {
             {t('title')}
           </Text>
           <HStack spacing={3}>
+            <HStack
+              spacing="1px"
+              border="1px solid"
+              borderColor={borderColor}
+              borderRadius="9px"
+              p="2px"
+              bg={useColorModeValue('rgba(0,0,0,0.02)', 'rgba(255,255,255,0.02)')}
+            >
+              <Button
+                size="sm"
+                variant={!compact ? 'brand' : 'ghost'}
+                borderRadius="7px"
+                px="3"
+                h="32px"
+                onClick={() => setCompact(false)}
+              >
+                {t('view.normal') || '卡片'}
+              </Button>
+              <Button
+                size="sm"
+                variant={compact ? 'brand' : 'ghost'}
+                borderRadius="7px"
+                px="3"
+                h="32px"
+                onClick={() => setCompact(true)}
+              >
+                {t('view.compact') || '紧凑'}
+              </Button>
+            </HStack>
             <Button
+              h="36px"
               leftIcon={<ViewIcon />}
               variant="outline"
               onClick={() => navigate('/admin/devices/edge-nodes/overview')}
@@ -159,6 +224,7 @@ export default function EdgeNodeList() {
               {t('overview')}
             </Button>
             <Button
+              h="36px"
               leftIcon={<AddIcon />}
               colorScheme="brand"
               onClick={onCreateOpen}
@@ -185,132 +251,57 @@ export default function EdgeNodeList() {
                 { value: 'disabled', label: t('status.disabled') },
               ],
             },
+            {
+              name: 'sortBy',
+              label: t('fields.sortBy') || '排序方式',
+              options: [
+                { value: 'default', label: t('sort.default') || '默认排序' },
+                { value: 'cpu', label: t('sort.cpu') || 'CPU 使用率' },
+                { value: 'memory', label: t('sort.memory') || '内存使用率' },
+                { value: 'load', label: t('sort.load') || '任务负载' },
+              ],
+            },
           ]}
         />
 
-        {/* Table */}
-        <Card px="0px" pb="20px">
-          <Box overflowX="auto">
-            <Table variant="simple" color="gray.500" mb="24px">
-              <Thead>
-                <Tr>
-                  <Th>{t('fields.name')}</Th>
-                  <Th>{t('fields.status')}</Th>
-                  <Th>{t('fields.currentLoad')}</Th>
-                  <Th>{t('fields.cpuUsage')}</Th>
-                  <Th>{t('fields.memUsage')}</Th>
-                  <Th>{t('fields.uptime')}</Th>
-                  <Th>{t('fields.platform')}</Th>
-                  <Th>{t('fields.engineVersion')}</Th>
-                  <Th>{t('fields.lastHeartbeat')}</Th>
-                  <Th textAlign="right">{t('fields.actions')}</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {(pageLoading && nodes.length === 0) ? (
-                  <Tr><Td colSpan={10}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
-                ) : nodes.length === 0 ? (
-                  <Tr><Td colSpan={10}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
-                ) : (
-                  nodes.map((node) => (
-                    <Tr key={node.id}>
-                      <Td>
-                        <Text color={textColor} fontSize="sm" fontWeight="700">
-                          {node.name}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Tag colorScheme={STATUS_COLORS[node.status] || 'gray'} variant="solid" size="sm">
-                          {t(`status.${node.status}`)}
-                        </Tag>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">
-                          {node.current_load ?? 0}/{node.max_load ?? '-'}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">
-                          {formatPercent(node.cpu_usage ?? node.hardware_info?.cpu_usage)}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">
-                          {formatPercent(node.memory_usage ?? node.hardware_info?.memory_usage)}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">
-                          {formatUptime(node.uptime)}
-                        </Text>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">{node.hal_platform || '-'}</Text>
-                      </Td>
-                      <Td>
-                        <Tag
-                          colorScheme={node.engine_version ? 'green' : 'gray'}
-                          size="sm"
-                          variant="outline"
-                        >
-                          {node.engine_version || '-'}
-                        </Tag>
-                      </Td>
-                      <Td>
-                        <Text fontSize="sm">
-                          {node.last_heartbeat
-                            ? new Date(node.last_heartbeat).toLocaleString()
-                            : '-'}
-                        </Text>
-                      </Td>
-                      <Td textAlign="right">
-                        <HStack justify="flex-end">
-                          <IconButton
-                            aria-label={t('actions.detail')}
-                            icon={<InfoIcon />}
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => navigate(`/admin/devices/edge-nodes/${node.id}`)}
-                          />
-                          <IconButton
-                            aria-label={t('actions.deployAlgo')}
-                            icon={<ViewIcon />}
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeploy(node)}
-                          />
-                          <IconButton
-                            aria-label={t('actions.delete')}
-                            icon={<DeleteIcon />}
-                            size="sm"
-                            variant="ghost"
-                            colorScheme="red"
-                            onClick={() => {
-                              setDeleteTarget(node);
-                              onDeleteOpen();
-                            }}
-                          />
-                        </HStack>
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </Tbody>
-            </Table>
-          </Box>
-
-          {total > 0 && (
-            <Box px="25px">
-              <Pagination
-                total={total}
-                page={page}
-                pageSize={pageSize}
-                onChange={changePage}
-                onPageSizeChange={changePageSize}
-              />
-            </Box>
+        {/* Card Grid */}
+        <Box>
+          {(pageLoading && sortedNodes.length === 0) ? (
+            <Center py="100px"><Spinner color="brand.500" size="xl" /></Center>
+          ) : sortedNodes.length === 0 ? (
+            <Center py="100px" bg={useColorModeValue('white', 'gray.700')} borderRadius="14px" border="1px solid" borderColor={borderColor}>
+              <Text color={textColor}>{tCommon('noData')}</Text>
+            </Center>
+          ) : (
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3, xl: compact ? 4 : 3 }} gap="16px">
+              {sortedNodes.map((node) => (
+                <EdgeNodeCard
+                  key={node.id}
+                  node={node}
+                  compact={compact}
+                  onClick={() => navigate(`/admin/devices/edge-nodes/${node.id}`)}
+                  onDeployClick={(e) => {
+                    e.stopPropagation();
+                    handleDeploy(node);
+                  }}
+                />
+              ))}
+            </SimpleGrid>
           )}
-        </Card>
+        </Box>
+
+        {/* Pagination */}
+        {total > 0 && (
+          <Box mt="10px">
+            <Pagination
+              total={total}
+              page={page}
+              pageSize={pageSize}
+              onChange={changePage}
+              onPageSizeChange={changePageSize}
+            />
+          </Box>
+        )}
 
         {/* Delete Confirmation */}
         <ConfirmDialog
@@ -327,7 +318,7 @@ export default function EdgeNodeList() {
           <AlgorithmDeployModal
             isOpen={isDeployOpen}
             onClose={() => { setDeployTarget(null); onDeployClose(); }}
-            node={deployTarget}
+            node={deployTarget as any}
           />
         )}
 

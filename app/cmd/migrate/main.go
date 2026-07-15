@@ -136,6 +136,7 @@ func main() {
 
 		// AIVisionInference: Edge Node Metrics.
 		&model.EdgeNodeMetrics{},
+		&model.EdgeNodeEngineMetrics{},
 	); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}
@@ -153,8 +154,8 @@ func main() {
 			DROP INDEX idx_edge_node_name_deleted_at;
 		END IF;
 		IF EXISTS (
-			SELECT 1 FROM pg_indexes 
-			WHERE indexname = 'idx_edge_nodes_name' 
+			SELECT 1 FROM pg_indexes
+			WHERE indexname = 'idx_edge_nodes_name'
 			  AND (indexdef NOT LIKE '%WHERE%')
 		) THEN
 			DROP INDEX idx_edge_nodes_name;

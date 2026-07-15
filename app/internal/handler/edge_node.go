@@ -17,8 +17,8 @@ type CreateEdgeNodeResponse struct {
 
 // EdgeNodeHandler handles HTTP requests for EdgeNode and EdgeNodeAlgorithm operations.
 type EdgeNodeHandler struct {
-	svc     *service.EdgeNodeService
-	tagSvc  *service.EdgeNodeTagService
+	svc    *service.EdgeNodeService
+	tagSvc *service.EdgeNodeTagService
 }
 
 // NewEdgeNodeHandler creates a new EdgeNodeHandler.
@@ -68,7 +68,7 @@ func (h *EdgeNodeHandler) Create(c *gin.Context) {
 // @Param        page_size  query   int     false  "每页数量"  default(20)
 // @Param        keyword    query   string  false  "关键词搜索"
 // @Param        status     query   string  false  "状态筛选(online/offline/error/disabled)"
-// @Success      200  {object}  dto.Response{data=dto.PageData{list=[]model.EdgeNode}}
+// @Success      200  {object}  dto.Response{data=dto.PageData{list=[]dto.EdgeNodeCardSnapshot}}
 // @Router       /edge-nodes [get]
 // @Security     BearerAuth
 func (h *EdgeNodeHandler) List(c *gin.Context) {
@@ -84,7 +84,13 @@ func (h *EdgeNodeHandler) List(c *gin.Context) {
 		return
 	}
 
-	response.Page(c, items, total, req.GetPage(), req.GetPageSize())
+	snapshots, err := h.svc.AssembleCardSnapshots(c.Request.Context(), items)
+	if err != nil {
+		response.Err(c, err)
+		return
+	}
+
+	response.Page(c, snapshots, total, req.GetPage(), req.GetPageSize())
 }
 
 // GetByID returns detailed information of an edge node by ID.

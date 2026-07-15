@@ -15,6 +15,8 @@
 #include <fstream>
 #include <dirent.h>
 #include <unistd.h>
+#include <random>
+#include <cmath>
 
 #ifdef __APPLE__
 #include <sys/types.h>
@@ -36,10 +38,10 @@ namespace aivision
             private:
                 CURL* curl_;
                 struct curl_slist* headers_;
-            
+
             public:
                 CurlHandle() : curl_(curl_easy_init()), headers_(nullptr) {}
-                
+
                 ~CurlHandle() {
                     if (headers_) {
                         curl_slist_free_all(headers_);
@@ -48,85 +50,99 @@ namespace aivision
                         curl_easy_cleanup(curl_);
                     }
                 }
-                
+
                 // Delete copy constructor and assignment operator
                 CurlHandle(const CurlHandle&) = delete;
                 CurlHandle& operator=(const CurlHandle&) = delete;
-                
+
                 CURL* get() const { return curl_; }
-                
+
                 void add_header(const char* header) {
                     headers_ = curl_slist_append(headers_, header);
                 }
-                
+
                 struct curl_slist* headers() const { return headers_; }
-                
+
                 bool is_valid() const { return curl_ != nullptr; }
             };
 
             uint64_t GetTotalMemory()
             {
+                static const uint64_t cached_mem = []() {
 #ifdef __APPLE__
-                int mib[2] = {CTL_HW, HW_MEMSIZE};
-                int64_t physical_memory = 0;
-                size_t length = sizeof(physical_memory);
-                if (sysctl(mib, 2, &physical_memory, &length, NULL, 0) == 0)
-                {
-                    return physical_memory;
-                }
-                return 16ULL * 1024 * 1024 * 1024;
-#else
-                std::ifstream file("/proc/meminfo");
-                std::string line;
-                if (file.is_open())
-                {
-                    while (std::getline(file, line))
+                    int mib[2] = {CTL_HW, HW_MEMSIZE};
+                    int64_t physical_memory = 0;
+                    size_t length = sizeof(physical_memory);
+                    if (sysctl(mib, 2, &physical_memory, &length, NULL, 0) == 0)
                     {
-                        if (line.rfind("MemTotal:", 0) == 0)
+                        return static_cast<uint64_t>(physical_memory);
+                    }
+                    return 16ULL * 1024 * 1024 * 1024;
+#else
+                    std::ifstream file("/proc/meminfo");
+                    std::string line;
+                    if (file.is_open())
+                    {
+                        while (std::getline(file, line))
                         {
-                            std::stringstream ss(line);
-                            std::string label;
-                            uint64_t value = 0;
-                            std::string unit;
-                            ss >> label >> value >> unit;
-                            if (unit == "kB") return value * 1024;
-                            return value;
+                            if (line.rfind("MemTotal:", 0) == 0)
+                            {
+                                std::stringstream ss(line);
+                                std::string label;
+                                uint64_t value = 0;
+                                std::string unit;
+                                ss >> label >> value >> unit;
+                                if (unit == "kB") return value * 1024;
+                                return value;
+                            }
                         }
                     }
-                }
-                return 8ULL * 1024 * 1024 * 1024;
+                    return 8ULL * 1024 * 1024 * 1024;
 #endif
+                }();
+                return cached_mem;
             }
 
             std::string GetCPUModel()
             {
+                static const std::string cached_model = []() {
 #ifdef __APPLE__
-                char buffer[256];
-                size_t buffer_len = sizeof(buffer);
-                if (sysctlbyname("machdep.cpu.brand_string", &buffer, &buffer_len, NULL, 0) == 0)
-                {
-                    return std::string(buffer);
-                }
-                return "Apple Silicon";
-#else
-                std::ifstream file("/proc/cpuinfo");
-                std::string line;
-                if (file.is_open())
-                {
-                    while (std::getline(file, line))
+                    char buffer[256];
+                    size_t buffer_len = sizeof(buffer);
+                    if (sysctlbyname("machdep.cpu.brand_string", &buffer, &buffer_len, NULL, 0) == 0)
                     {
-                        if (line.rfind("model name", 0) == 0)
+                        return std::string(buffer);
+                    }
+                    return std::string("Apple Silicon");
+#else
+                    std::ifstream file("/proc/cpuinfo");
+                    std::string line;
+                    if (file.is_open())
+                    {
+                        while (std::getline(file, line))
                         {
-                            size_t colon = line.find(":");
-                            if (colon != std::string::npos)
+                            if (line.rfind("model name", 0) == 0)
                             {
-                                return line.substr(colon + 1);
+                                size_t colon = line.find(":");
+                                if (colon != std::string::npos)
+                                {
+                                    std::string model = line.substr(colon + 1);
+                                    // Trim leading/trailing spaces
+                                    size_t start = model.find_first_not_of(" \t");
+                                    size_t end = model.find_last_not_of(" \t");
+                                    if (start != std::string::npos && end != std::string::npos)
+                                    {
+                                        return model.substr(start, end - start + 1);
+                                    }
+                                    return model;
+                                }
                             }
                         }
                     }
-                }
-                return "ARM Cortex-A55";
+                    return std::string("ARM Cortex-A55");
 #endif
+                }();
+                return cached_model;
             }
 
             /// 从 /proc/loadavg 读取负载数据
@@ -314,12 +330,32 @@ namespace aivision
 
         void HeartbeatReporter::ReportLoop()
         {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<int> jitter_dist(0, 1000); // 0-1000 ms jitter
+
             while (running_.load())
             {
                 SendHeartbeat();
 
+                // Compute sleep duration with exponential backoff and jitter
+                int failures = consecutive_failures_;
+                double base_seconds = 5.0;
+                if (failures > 0)
+                {
+                    double backoff = base_seconds * std::pow(2.0, failures - 1);
+                    if (backoff > 60.0)
+                    {
+                        backoff = 60.0;
+                    }
+                    base_seconds = backoff;
+                }
+
+                int jitter_ms = jitter_dist(gen);
+                auto sleep_duration = std::chrono::milliseconds(static_cast<int>(base_seconds * 1000) + jitter_ms);
+
                 std::unique_lock<std::mutex> lock(stop_mutex_);
-                if (stop_cv_.wait_for(lock, std::chrono::seconds(5), [this]() { return !running_.load(); }))
+                if (stop_cv_.wait_for(lock, sleep_duration, [this]() { return !running_.load(); }))
                 {
                     break;
                 }
@@ -331,6 +367,7 @@ namespace aivision
             CurlHandle curl_handle;
             if (!curl_handle.is_valid()) {
                 std::cerr << "[HeartbeatReporter] Failed to initialize CURL" << std::endl;
+                consecutive_failures_++;
                 return;
             }
 
@@ -339,7 +376,7 @@ namespace aivision
             std::string payload = BuildHeartbeatPayload();
 
             curl_handle.add_header("Content-Type: application/json");
-            
+
             std::string auth_header = "Authorization: Bearer " + config.auth_token;
             curl_handle.add_header(auth_header.c_str());
 
@@ -350,28 +387,42 @@ namespace aivision
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_handle.headers());
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
             curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.length());
-            
+
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, +[](void* contents, size_t size, size_t nmemb, void* userp) -> size_t {
                 ((std::string*)userp)->append((char*)contents, size * nmemb);
                 return size * nmemb;
             });
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 
             CURLcode res = curl_easy_perform(curl);
-            
+
             // Resources are automatically cleaned up by CurlHandle destructor
-            
+
             if (res == CURLE_OK)
             {
-                try {
-                    ParseAndDeploy(response_data);
-                } catch (const std::exception& e) {
-                    std::cerr << "[HeartbeatReporter] Failed to parse response: " << e.what() << std::endl;
+                long response_code = 0;
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+                if (response_code >= 200 && response_code < 300)
+                {
+                    consecutive_failures_ = 0; // reset failure count on success
+                    try {
+                        ParseAndDeploy(response_data);
+                    } catch (const std::exception& e) {
+                        std::cerr << "[HeartbeatReporter] Failed to parse response: " << e.what() << std::endl;
+                    }
+                }
+                else
+                {
+                    consecutive_failures_++;
+                    std::cerr << "[HeartbeatReporter] Heartbeat failed with HTTP code " << response_code
+                              << ": node_id=" << config.node_id << ", url=" << url << std::endl;
                 }
             }
             else
             {
+                consecutive_failures_++;
                 std::cerr << "[HeartbeatReporter] Heartbeat failed: node_id=" << config.node_id
                           << ", url=" << url << ", error=" << curl_easy_strerror(res) << std::endl;
             }
@@ -420,85 +471,79 @@ namespace aivision
             // For network, use direct reads since they are most reliable
             uint64_t net_rx_bytes = net_stats.rx_bytes;
             uint64_t net_tx_bytes = net_stats.tx_bytes;
-            std::stringstream ss;
-            ss << "{"
-               << "\"uptime\":" << (system_uptime > 0 ? system_uptime : uptime) << ","
-               << "\"current_load\":" << load << ","
-               << "\"cpu_usage\":" << cpu_usage << ","
-               << "\"memory_usage\":" << memory_usage << ","
-               << "\"cpu_load_1m\":" << load_1m << ",";
+
+            json j;
+            j["uptime"] = (system_uptime > 0 ? system_uptime : uptime);
+            j["current_load"] = load;
+            j["cpu_usage"] = cpu_usage;
+            j["memory_usage"] = memory_usage;
+            j["cpu_load_1m"] = load_1m;
 
             // Disk usage array
-            ss << "\"disk_usage\":[";
-            bool disk_first = true;
+            json disks_arr = json::array();
             for (const auto& disk : flat_metrics.disk_usage)
             {
-                if (!disk_first) ss << ",";
-                disk_first = false;
-                ss << "{"
-                   << "\"path\":\"" << disk.path << "\","
-                   << "\"total\":" << disk.total << ","
-                   << "\"used\":" << disk.used << ","
-                   << "\"percent\":" << disk.percent
-                   << "}";
+                json d;
+                d["path"] = disk.path;
+                d["total"] = disk.total;
+                d["used"] = disk.used;
+                d["percent"] = disk.percent;
+                disks_arr.push_back(d);
             }
-            ss << "],";
+            j["disk_usage"] = disks_arr;
 
             // Network fields
-            ss << "\"net_rx_bytes\":" << net_rx_bytes << ","
-               << "\"net_tx_bytes\":" << net_tx_bytes << ","
-               << "\"net_rx_speed\":" << (interval_ms > 0 ? flat_metrics.net_rx_speed : 0.0) << ","
-               << "\"net_tx_speed\":" << (interval_ms > 0 ? flat_metrics.net_tx_speed : 0.0) << ","
-               << "\"temperature\":" << temperature << ","
-               << "\"process_count\":" << proc_counts.processes << ","
-               << "\"thread_count\":" << proc_counts.threads << ","
-               << "\"engine_version\":\"" << InferenceEngine::Version() << "\","
-               << "\"hal_platform\":\"" << engine_->GetHalPlatform() << "\"";
+            j["net_rx_bytes"] = net_rx_bytes;
+            j["net_tx_bytes"] = net_tx_bytes;
+            j["net_rx_speed"] = (interval_ms > 0 ? flat_metrics.net_rx_speed : 0.0);
+            j["net_tx_speed"] = (interval_ms > 0 ? flat_metrics.net_tx_speed : 0.0);
+            j["temperature"] = temperature;
+            j["process_count"] = proc_counts.processes;
+            j["thread_count"] = proc_counts.threads;
+            j["engine_version"] = InferenceEngine::Version();
+            j["hal_platform"] = engine_->GetHalPlatform();
 
             // Basic hardware info
-            ss << ",\"hardware_info\":{"
-               << "\"cpu_model\":\"" << GetCPUModel() << "\","
-               << "\"total_memory\":" << GetTotalMemory() << ","
-               << "\"cpu_cores\":4"
-               << "}";
+            json hw;
+            hw["cpu_model"] = GetCPUModel();
+            hw["total_memory"] = GetTotalMemory();
+            hw["cpu_cores"] = 4;
+            j["hardware_info"] = hw;
 
             // Installed algorithms
-            ss << ",\"installed_algorithms\":[";
+            json algs_arr = json::array();
             auto deployments = engine_->GetAlgoManager()->GetDeployments();
-            bool first = true;
             for (const auto& dep : deployments)
             {
-                if (!first) ss << ",";
-                first = false;
-                const std::string runtime_status =
+                std::string runtime_status =
                     engine_->GetAlgoManager()->IsLoaded(dep.algo_name) ? "ready" : "installed";
-                ss << "{"
-                   << "\"algo_package_id\":\"" << dep.algo_package_id << "\","
-                   << "\"algo_name\":\"" << dep.algo_name << "\","
-                   << "\"version\":\"" << dep.version << "\","
-                   << "\"install_path\":\"" << dep.install_path << "\","
-                   << "\"status\":\"" << dep.status << "\","
-                   << "\"runtime_status\":\"" << runtime_status << "\","
-                   << "\"supports_embedding\":true,"
-                   << "\"supports_face_library\":true,"
-                   << "\"embedding_capacity\":1"
-                   << "}";
+                json alg;
+                alg["algo_package_id"] = dep.algo_package_id;
+                alg["algo_name"] = dep.algo_name;
+                alg["version"] = dep.version;
+                alg["install_path"] = dep.install_path;
+                alg["status"] = dep.status;
+                alg["runtime_status"] = runtime_status;
+                alg["supports_embedding"] = true;
+                alg["supports_face_library"] = true;
+                alg["embedding_capacity"] = 1;
+                algs_arr.push_back(alg);
             }
-            ss << "]";
+            j["installed_algorithms"] = algs_arr;
 
             // Engine-specific metrics
             auto* metrics_reporter = engine_->GetMetricsReporter();
             if (metrics_reporter)
             {
                 auto engine_metrics = metrics_reporter->CollectNow();
-                ss << ",\"worker_count\":" << engine_metrics.worker_count
-                   << ",\"idle_worker_count\":" << engine_metrics.idle_worker_count
-                   << ",\"active_stream_count\":" << engine_metrics.active_stream_count
-                   << ",\"decode_sessions\":" << engine_metrics.decode_sessions
-                   << ",\"encode_sessions\":" << engine_metrics.encode_sessions;
+                j["worker_count"] = engine_metrics.worker_count;
+                j["idle_worker_count"] = engine_metrics.idle_worker_count;
+                j["active_stream_count"] = engine_metrics.active_stream_count;
+                j["decode_sessions"] = engine_metrics.decode_sessions;
+                j["encode_sessions"] = engine_metrics.encode_sessions;
             }
-            ss << "}";
-            return ss.str();
+
+            return j.dump();
         }
 
         void HeartbeatReporter::ParseAndDeploy(const std::string& response_json)
@@ -506,7 +551,7 @@ namespace aivision
             try {
                 // Parse JSON response using nlohmann/json library
                 auto response = json::parse(response_json);
-                
+
                 // Check for successful response structure
                 if (!response.contains("code") || response["code"].get<int>() != 0) {
                     std::cerr << "[HeartbeatReporter] Heartbeat response error: "
@@ -514,18 +559,18 @@ namespace aivision
                               << std::endl;
                     return;
                 }
-                
+
                 // Extract pending deployments array
                 if (!response.contains("data") || !response["data"].contains("pending_deployments")) {
                     return; // No pending deployments
                 }
-                
+
                 const auto& pending_deployments = response["data"]["pending_deployments"];
                 if (!pending_deployments.is_array()) {
                     std::cerr << "[HeartbeatReporter] Invalid pending_deployments format" << std::endl;
                     return;
                 }
-                
+
                 // Process each deployment
                 for (const auto& deployment : pending_deployments) {
                     // Validate required fields
@@ -535,24 +580,24 @@ namespace aivision
                         std::cerr << "[HeartbeatReporter] Skipping deployment with missing fields" << std::endl;
                         continue;
                     }
-                    
+
                     std::string pkg_id = deployment["algo_package_id"].get<std::string>();
                     std::string url = deployment["download_url"].get<std::string>();
                     std::string md5 = deployment["md5"].get<std::string>();
                     std::string path = deployment["extract_path"].get<std::string>();
                     std::string name = deployment["algo_name"].get<std::string>();
                     std::string version = deployment["version"].get<std::string>();
-                    
+
                     // Validate non-empty values
-                    if (pkg_id.empty() || url.empty() || md5.empty() || 
+                    if (pkg_id.empty() || url.empty() || md5.empty() ||
                         path.empty() || name.empty() || version.empty()) {
                         std::cerr << "[HeartbeatReporter] Skipping deployment with empty fields" << std::endl;
                         continue;
                     }
-                    
-                    std::cout << "[HeartbeatReporter] Scheduling deploy for: " << name 
+
+                    std::cout << "[HeartbeatReporter] Scheduling deploy for: " << name
                               << " (package " << pkg_id << ")" << std::endl;
-                    
+
                     algo::AlgorithmDownloader::StartDeploy(
                         engine_->GetAlgoManager(),
                         url,
@@ -565,7 +610,7 @@ namespace aivision
                     );
                 }
             } catch (const json::parse_error& e) {
-                std::cerr << "[HeartbeatReporter] JSON parse error: " << e.what() 
+                std::cerr << "[HeartbeatReporter] JSON parse error: " << e.what()
                           << " at byte " << e.byte << std::endl;
             } catch (const json::type_error& e) {
                 std::cerr << "[HeartbeatReporter] JSON type error: " << e.what() << std::endl;

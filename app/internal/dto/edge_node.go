@@ -96,22 +96,22 @@ type HeartbeatRequest struct {
 	ErrorMessage        string                   `json:"error_message" binding:"omitempty"`
 
 	// Extended metrics (from C++ Engine MetricsFlattener)
-	CPULoad1m    float64        `json:"cpu_load_1m,omitempty"`
-	CPULoad5m    float64        `json:"cpu_load_5m,omitempty"`
-	CPULoad15m   float64        `json:"cpu_load_15m,omitempty"`
-	DiskUsage    []DiskUsageInfo `json:"disk_usage,omitempty"`
-	NetRxBytes   int64          `json:"net_rx_bytes,omitempty"`
-	NetTxBytes   int64          `json:"net_tx_bytes,omitempty"`
-	NetRxSpeed   float64        `json:"net_rx_speed,omitempty"`
-	NetTxSpeed   float64        `json:"net_tx_speed,omitempty"`
-	ProcessCount int            `json:"process_count,omitempty"`
-	ThreadCount  int            `json:"thread_count,omitempty"`
-	Temperature  float64        `json:"temperature,omitempty"`
-	WorkerCount       int       `json:"worker_count,omitempty"`
-	IdleWorkerCount   int       `json:"idle_worker_count,omitempty"`
-	ActiveStreamCount int       `json:"active_stream_count,omitempty"`
-	DecodeSessions    int       `json:"decode_sessions,omitempty"`
-	EncodeSessions    int       `json:"encode_sessions,omitempty"`
+	CPULoad1m         float64         `json:"cpu_load_1m,omitempty"`
+	CPULoad5m         float64         `json:"cpu_load_5m,omitempty"`
+	CPULoad15m        float64         `json:"cpu_load_15m,omitempty"`
+	DiskUsage         []DiskUsageInfo `json:"disk_usage,omitempty"`
+	NetRxBytes        int64           `json:"net_rx_bytes,omitempty"`
+	NetTxBytes        int64           `json:"net_tx_bytes,omitempty"`
+	NetRxSpeed        float64         `json:"net_rx_speed,omitempty"`
+	NetTxSpeed        float64         `json:"net_tx_speed,omitempty"`
+	ProcessCount      int             `json:"process_count,omitempty"`
+	ThreadCount       int             `json:"thread_count,omitempty"`
+	Temperature       float64         `json:"temperature,omitempty"`
+	WorkerCount       int             `json:"worker_count,omitempty"`
+	IdleWorkerCount   int             `json:"idle_worker_count,omitempty"`
+	ActiveStreamCount int             `json:"active_stream_count,omitempty"`
+	DecodeSessions    int             `json:"decode_sessions,omitempty"`
+	EncodeSessions    int             `json:"encode_sessions,omitempty"`
 }
 
 // PendingDeployment 待下发算法包信息
@@ -138,4 +138,50 @@ type DeployAlgorithmRequest struct {
 type DeployAlgorithmResponse struct {
 	DeploymentID string `json:"deployment_id"`
 	Message      string `json:"message"`
+}
+
+// EdgeNodeCardSnapshot represents a unified real-time dashboard card data structure for an edge node.
+type EdgeNodeCardSnapshot struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Endpoint    string `json:"endpoint"`
+	Status      string `json:"status"` // online, offline, error, disabled
+	Enabled     bool   `json:"enabled"`
+	MaxLoad     int    `json:"max_load"`
+	CurrentLoad int    `json:"current_load"`
+	Uptime      *int64 `json:"uptime"`
+
+	// Host Metrics
+	CPUUsage     *float64        `json:"cpu_usage"`
+	MemoryUsage  *float64        `json:"memory_usage"`
+	MemoryUsed   *int64          `json:"memory_used"`
+	MemoryTotal  *int64          `json:"memory_total"`
+	DiskUsage    []DiskUsageInfo `json:"disk_usage"`
+	NetRxSpeed   *float64        `json:"net_rx_speed"`
+	NetTxSpeed   *float64        `json:"net_tx_speed"`
+	Temperature  *float64        `json:"temperature"`
+	HardwareInfo HardwareInfo    `json:"hardware_info"`
+
+	// Engine Metrics
+	ActiveStreamCount      *uint32 `json:"active_stream_count"`
+	WorkerCount            *uint32 `json:"worker_count"`
+	IdleWorkerCount        *uint32 `json:"idle_worker_count"`
+	DecodeSessions         *uint32 `json:"decode_sessions"`
+	EncodeSessions         *uint32 `json:"encode_sessions"`
+	DecodeSlotsUsed        *uint32 `json:"decode_slots_used"`
+	EncodeSlotsUsed        *uint32 `json:"encode_slots_used"`
+	EgressBPS              *uint64 `json:"egress_bps"`
+	PreviewPipelineCount   *uint32 `json:"preview_pipeline_count"`
+	InferencePipelineCount *uint32 `json:"inference_pipeline_count"`
+	MixedPipelineCount     *uint32 `json:"mixed_pipeline_count"`
+	PreviewCapacity        *uint32 `json:"preview_capacity"`
+	PreviewInUse           *uint32 `json:"preview_in_use"`
+
+	// Accelerator (NPU/GPU) Metrics
+	AcceleratorUtilization  *float32 `json:"accelerator_utilization"`
+	AcceleratorMetricsValid bool     `json:"accelerator_metrics_valid"`
+
+	// Metadata
+	MetricsReceivedAt *string `json:"metrics_received_at,omitempty"`
 }

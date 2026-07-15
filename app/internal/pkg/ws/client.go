@@ -4,6 +4,7 @@ package ws
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -26,20 +27,60 @@ const (
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub    *Hub
-	conn   *websocket.Conn
-	send   chan []byte
-	userID string
+	hub           *Hub
+	conn          *websocket.Conn
+	send          chan []byte
+	userID        string
+	mu            sync.RWMutex
+	subscriptions map[string]bool
+}
+
+// SubscriptionPayload is the payload for subscribing to specific node topics.
+type SubscriptionPayload struct {
+	NodeID string `json:"node_id"`
+	Topic  string `json:"topic"`
 }
 
 // newClient creates a new Client. It does not start the read/write pumps.
 func newClient(hub *Hub, conn *websocket.Conn, userID string) *Client {
 	return &Client{
-		hub:    hub,
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		userID: userID,
+		hub:           hub,
+		conn:          conn,
+		send:          make(chan []byte, 256),
+		userID:        userID,
+		subscriptions: make(map[string]bool),
 	}
+}
+
+// Subscribe registers a client subscription for a node and topic.
+func (c *Client) Subscribe(nodeID string, topic string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := nodeID + ":" + topic
+	c.subscriptions[key] = true
+	zap.L().Info("WebSocket client subscribed", zap.String("user_id", c.userID), zap.String("key", key))
+}
+
+// Unsubscribe removes a client subscription for a node and topic.
+func (c *Client) Unsubscribe(nodeID string, topic string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := nodeID + ":" + topic
+	delete(c.subscriptions, key)
+	zap.L().Info("WebSocket client unsubscribed", zap.String("user_id", c.userID), zap.String("key", key))
+}
+
+// IsSubscribed checks if the client is subscribed to a specific node and topic.
+func (c *Client) IsSubscribed(nodeID string, topic string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if topic == "edge-node-metrics" || topic == "edge-node-engine-metrics" {
+		if c.subscriptions[nodeID+":metrics"] || c.subscriptions["*:metrics"] {
+			return true
+		}
+	}
+	key := nodeID + ":" + topic
+	return c.subscriptions[key] || c.subscriptions["*:"+topic] || c.subscriptions["*:*"]
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -91,6 +132,22 @@ func (c *Client) readPump() {
 			select {
 			case c.send <- data:
 			default:
+			}
+		case "subscribe":
+			var sub SubscriptionPayload
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				if err := json.Unmarshal(payloadBytes, &sub); err == nil && sub.NodeID != "" {
+					c.Subscribe(sub.NodeID, sub.Topic)
+				}
+			}
+		case "unsubscribe":
+			var sub SubscriptionPayload
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err == nil {
+				if err := json.Unmarshal(payloadBytes, &sub); err == nil && sub.NodeID != "" {
+					c.Unsubscribe(sub.NodeID, sub.Topic)
+				}
 			}
 		default:
 			zap.L().Debug("unhandled message type",

@@ -28,24 +28,24 @@ func (r *EdgeNodeMetricsRepository) Create(ctx context.Context, item *model.Edge
 
 // metricColumnMap maps metric type names to their database column names
 var metricColumnMap = map[string]string{
-	"cpu_usage":        "cpu_usage",
-	"memory_usage":     "memory_usage",
-	"disk_usage":       "disk_usage",
-	"net_rx_bytes":     "net_rx_bytes",
-	"net_tx_bytes":     "net_tx_bytes",
-	"net_rx_speed":     "net_rx_speed",
-	"net_tx_speed":     "net_tx_speed",
-	"temperature":      "temperature",
-	"process_count":    "process_count",
-	"thread_count":     "thread_count",
-	"uptime":           "uptime",
-	"cpu_load_1m":      "cpu_load_1m",
-	"cpu_load_5m":      "cpu_load_5m",
-	"cpu_load_15m":     "cpu_load_15m",
-	"worker_count":     "worker_count",
-	"idle_worker_count": "idle_worker_count",
+	"cpu_usage":           "cpu_usage",
+	"memory_usage":        "memory_usage",
+	"disk_usage":          "disk_usage",
+	"net_rx_bytes":        "net_rx_bytes",
+	"net_tx_bytes":        "net_tx_bytes",
+	"net_rx_speed":        "net_rx_speed",
+	"net_tx_speed":        "net_tx_speed",
+	"temperature":         "temperature",
+	"process_count":       "process_count",
+	"thread_count":        "thread_count",
+	"uptime":              "uptime",
+	"cpu_load_1m":         "cpu_load_1m",
+	"cpu_load_5m":         "cpu_load_5m",
+	"cpu_load_15m":        "cpu_load_15m",
+	"worker_count":        "worker_count",
+	"idle_worker_count":   "idle_worker_count",
 	"active_stream_count": "active_stream_count",
-	"current_load":     "current_load",
+	"current_load":        "current_load",
 }
 
 // ListMetrics returns paginated time-series metrics for a specific node and metric type.
@@ -167,7 +167,7 @@ func (r *EdgeNodeMetricsRepository) listMetricsAggregated(ctx context.Context, n
 
 // DeleteOlderThan deletes all metrics records older than the given time.
 func (r *EdgeNodeMetricsRepository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
-	result := r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).Unscoped().
 		Where("created_at < ?", cutoff).
 		Delete(&model.EdgeNodeMetrics{})
 	if result.Error != nil {
@@ -204,6 +204,32 @@ func (r *EdgeNodeMetricsRepository) CountViolationsInWindow(ctx context.Context,
 // DB returns the underlying GORM DB instance for ad-hoc queries.
 func (r *EdgeNodeMetricsRepository) DB(ctx context.Context) *gorm.DB {
 	return r.db.WithContext(ctx)
+}
+
+// GetLatestHostMetricsByNodes returns a map of the latest EdgeNodeMetrics for each provided nodeID in a single query.
+func (r *EdgeNodeMetricsRepository) GetLatestHostMetricsByNodes(ctx context.Context, nodeIDs []string) (map[string]*model.EdgeNodeMetrics, error) {
+	result := make(map[string]*model.EdgeNodeMetrics, len(nodeIDs))
+	if len(nodeIDs) == 0 {
+		return result, nil
+	}
+	var metrics []model.EdgeNodeMetrics
+	err := r.db.WithContext(ctx).
+		Where("(node_id, created_at) IN (SELECT node_id, MAX(created_at) FROM edge_node_metrics WHERE node_id IN (?) GROUP BY node_id)", nodeIDs).
+		Find(&metrics).Error
+	if err != nil {
+		// Fallback if driver does not support tuple IN subquery
+		for _, id := range nodeIDs {
+			var m model.EdgeNodeMetrics
+			if e := r.db.WithContext(ctx).Where("node_id = ?", id).Order("created_at DESC").First(&m).Error; e == nil {
+				result[id] = &m
+			}
+		}
+		return result, nil
+	}
+	for i := range metrics {
+		result[metrics[i].NodeID] = &metrics[i]
+	}
+	return result, nil
 }
 
 // CountByStatus returns count of nodes by status (overview stats)

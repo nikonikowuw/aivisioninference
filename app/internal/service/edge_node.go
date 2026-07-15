@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -54,6 +55,8 @@ type EdgeNodeService struct {
 	metricsRepo          *repository.EdgeNodeMetricsRepository
 	alertEngine          *AlertEngine
 	heartbeats           HeartbeatStore
+	engineMetricsStore   *EngineMetricsStore
+	heartbeatTimeout     time.Duration
 }
 
 // NewEdgeNodeService creates a new EdgeNodeService.
@@ -72,6 +75,8 @@ func NewEdgeNodeService(
 	metricsRepo *repository.EdgeNodeMetricsRepository,
 	alertEngine *AlertEngine,
 	heartbeats HeartbeatStore,
+	engineMetricsStore *EngineMetricsStore,
+	heartbeatTimeout time.Duration,
 ) *EdgeNodeService {
 	svc := &EdgeNodeService{
 		nodeRepo:             nodeRepo,
@@ -92,6 +97,8 @@ func NewEdgeNodeService(
 		stopChan:             make(chan struct{}),
 		metricsRepo:          metricsRepo,
 		alertEngine:          alertEngine,
+		engineMetricsStore:   engineMetricsStore,
+		heartbeatTimeout:     heartbeatTimeout,
 	}
 	go svc.batchInsertWorker()
 	return svc
@@ -963,4 +970,140 @@ func (s *EdgeNodeService) resolveInferenceMetadata(params *controlproto.Inferenc
 		}
 	}
 	return
+}
+
+// AssembleCardSnapshots constructs a list of EdgeNodeCardSnapshots for a list of EdgeNodes.
+func (s *EdgeNodeService) AssembleCardSnapshots(ctx context.Context, nodes []model.EdgeNode) ([]dto.EdgeNodeCardSnapshot, error) {
+	snapshots := make([]dto.EdgeNodeCardSnapshot, 0, len(nodes))
+	if len(nodes) == 0 {
+		return snapshots, nil
+	}
+
+	// Batch query latest host metrics to eliminate N+1 database queries
+	var hostMetricsMap map[string]*model.EdgeNodeMetrics
+	if s.metricsRepo != nil {
+		nodeIDs := make([]string, len(nodes))
+		for i, n := range nodes {
+			nodeIDs[i] = n.ID
+		}
+		var err error
+		hostMetricsMap, err = s.metricsRepo.GetLatestHostMetricsByNodes(ctx, nodeIDs)
+		if err != nil {
+			zap.L().Warn("failed to batch query latest host metrics for nodes", zap.Error(err))
+		}
+	}
+
+	for _, node := range nodes {
+		// 1. Get status from Redis HeartbeatStore
+		isOnline := false
+		if s.heartbeats != nil {
+			isOnline, _ = s.heartbeats.IsOnline(ctx, node.ID, s.heartbeatTimeout)
+		}
+		status := node.Status
+		if status != string(model.NodeStatusDisabled) {
+			if isOnline {
+				status = string(model.NodeStatusOnline)
+			} else {
+				status = string(model.NodeStatusOffline)
+			}
+		}
+
+		// 2. Query latest host metrics from batch result
+		var hostMetrics *model.EdgeNodeMetrics
+		if hostMetricsMap != nil {
+			hostMetrics = hostMetricsMap[node.ID]
+		}
+
+		// 3. Query latest engine metrics from EngineMetricsStore
+		var engineMetrics *controlproto.EngineMetricsSnapshot
+		var engineRecTime time.Time
+		if s.engineMetricsStore != nil {
+			engineMetrics, engineRecTime = s.engineMetricsStore.GetNodeLatest(node.ID)
+		}
+
+		// Assemble snapshot DTO
+		snap := dto.EdgeNodeCardSnapshot{
+			ID:          node.ID,
+			Name:        node.Name,
+			Description: node.Description,
+			Endpoint:    node.Endpoint,
+			Status:      status,
+			Enabled:     node.Enabled,
+			MaxLoad:     node.MaxLoad,
+		}
+
+		// Map hardware info
+		snap.HardwareInfo = dto.HardwareInfo{
+			CPUModel:    node.CPUModel,
+			GPUModel:    node.GPUModel,
+			TotalMemory: node.TotalMemory,
+			CPUCores:    0,
+		}
+
+		// Map host metrics (if available)
+		if hostMetrics != nil {
+			snap.CPUUsage = &hostMetrics.CPUUsage
+			snap.MemoryUsage = &hostMetrics.MemoryUsage
+			snap.MemoryUsed = &hostMetrics.MemoryUsed
+			snap.MemoryTotal = &hostMetrics.MemoryTotal
+			snap.NetRxSpeed = &hostMetrics.NetRxSpeed
+			snap.NetTxSpeed = &hostMetrics.NetTxSpeed
+			snap.Temperature = &hostMetrics.Temperature
+			snap.Uptime = &hostMetrics.Uptime
+			snap.CurrentLoad = hostMetrics.CurrentLoad
+
+			// Parse DiskUsage jsonb array
+			if len(hostMetrics.DiskUsage) > 0 {
+				var diskUsage []dto.DiskUsageInfo
+				if err := json.Unmarshal(hostMetrics.DiskUsage, &diskUsage); err == nil {
+					snap.DiskUsage = diskUsage
+				}
+			}
+		}
+
+		// Map engine metrics (if available)
+		if engineMetrics != nil {
+			snap.ActiveStreamCount = &engineMetrics.ActiveStreamCount
+			snap.WorkerCount = &engineMetrics.WorkerCount
+			snap.IdleWorkerCount = &engineMetrics.IdleWorkerCount
+			snap.DecodeSessions = &engineMetrics.DecodeSessions
+			snap.EncodeSessions = &engineMetrics.EncodeSessions
+			snap.DecodeSlotsUsed = &engineMetrics.DecodeSlotsUsed
+			snap.EncodeSlotsUsed = &engineMetrics.EncodeSlotsUsed
+			snap.EgressBPS = &engineMetrics.EgressBPS
+			snap.PreviewPipelineCount = &engineMetrics.PreviewPipelineCount
+			snap.InferencePipelineCount = &engineMetrics.InferencePipelineCount
+			snap.MixedPipelineCount = &engineMetrics.MixedPipelineCount
+			snap.PreviewCapacity = &engineMetrics.PreviewCapacity
+			snap.PreviewInUse = &engineMetrics.PreviewInUse
+
+			if engineMetrics.AcceleratorMetricsValid {
+				snap.AcceleratorUtilization = &engineMetrics.AcceleratorUtilization
+				snap.AcceleratorMetricsValid = true
+			}
+			if !engineRecTime.IsZero() {
+				recStr := engineRecTime.Format(time.RFC3339)
+				snap.MetricsReceivedAt = &recStr
+			}
+		}
+
+		snapshots = append(snapshots, snap)
+	}
+
+	return snapshots, nil
+}
+
+func (s *EdgeNodeService) getLatestHostMetrics(ctx context.Context, nodeID string) (*model.EdgeNodeMetrics, error) {
+	var metrics model.EdgeNodeMetrics
+	err := s.metricsRepo.DB(ctx).
+		Where("node_id = ?", nodeID).
+		Order("created_at DESC").
+		First(&metrics).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &metrics, nil
 }

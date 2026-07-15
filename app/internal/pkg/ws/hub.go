@@ -15,7 +15,8 @@ import (
 type Message struct {
 	Type     string      `json:"type"`
 	Payload  interface{} `json:"payload"`
-	DeviceID string      `json:"-"` // used for inference event rate limiting; set before Broadcast
+	DeviceID string      `json:"-"`                 // used for inference event rate limiting; set before Broadcast
+	NodeID   string      `json:"node_id,omitempty"` // Node ID for subscription filtering
 }
 
 // Hub manages a set of active WebSocket clients and broadcasts messages.
@@ -100,6 +101,9 @@ func (h *Hub) Run() {
 			h.mu.RLock()
 			for userID, clients := range h.clients {
 				for client := range clients {
+					if msg.NodeID != "" && !client.IsSubscribed(msg.NodeID, msg.Type) {
+						continue
+					}
 					select {
 					case client.send <- data:
 					default:

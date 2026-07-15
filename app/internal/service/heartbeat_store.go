@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"sync"
 	"time"
@@ -25,6 +26,8 @@ type HeartbeatStore interface {
 	GetExpired(ctx context.Context, cutoff time.Time) ([]string, error)
 	// Remove 移除节点的心跳记录。
 	Remove(ctx context.Context, nodeID string) error
+	// IsOnline 检查节点是否在线。
+	IsOnline(ctx context.Context, nodeID string, timeout time.Duration) (bool, error)
 }
 
 // NewHeartbeatStore 根据 Redis 客户端可用性创建边缘节点 HeartbeatStore。
@@ -72,6 +75,18 @@ func (s *RedisHeartbeatStore) GetExpired(ctx context.Context, cutoff time.Time) 
 
 func (s *RedisHeartbeatStore) Remove(ctx context.Context, nodeID string) error {
 	return s.rdb.ZRem(ctx, s.key, nodeID).Err()
+}
+
+func (s *RedisHeartbeatStore) IsOnline(ctx context.Context, nodeID string, timeout time.Duration) (bool, error) {
+	score, err := s.rdb.ZScore(ctx, s.key, nodeID).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return false, nil
+		}
+		return false, err
+	}
+	lastHeartbeat := time.Unix(int64(score), 0)
+	return time.Since(lastHeartbeat) <= timeout, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -123,4 +138,14 @@ func (s *MemoryHeartbeatStore) Remove(_ context.Context, nodeID string) error {
 	defer s.mu.Unlock()
 	delete(s.data, nodeID)
 	return nil
+}
+
+func (s *MemoryHeartbeatStore) IsOnline(_ context.Context, nodeID string, timeout time.Duration) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	last, ok := s.data[nodeID]
+	if !ok {
+		return false, nil
+	}
+	return time.Since(last) <= timeout, nil
 }

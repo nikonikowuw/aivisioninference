@@ -44,6 +44,20 @@ export const edgeNodes = {
     createdBy: '作成者',
     createdAt: '作成日時',
     updatedAt: '更新日時',
+    diskUsage: 'ディスク使用率',
+    utilization: '使用率',
+    activeStreams: 'アクティブなストリーム数',
+    sortBy: 'ソート順',
+  },
+  sort: {
+    default: 'デフォルトソート',
+    cpu: 'CPU使用率',
+    memory: 'メモリ使用率',
+    load: 'タスク負荷',
+  },
+  view: {
+    normal: 'カードビュー',
+    compact: 'コンパクトビュー',
   },
   status: {
     online: 'オンライン',

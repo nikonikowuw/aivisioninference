@@ -1,10 +1,9 @@
-import { useEffect, useRef } from 'react';
-import { useToast } from '@chakra-ui/react';
+import { useCallback, useEffect, useRef } from 'react';
 import { getAccessToken } from 'services/api';
 
 interface UseWebSocketOptions {
   onMessage: (msg: any) => void;
-  onOpen?: () => void;
+  onOpen?: (ws: WebSocket) => void;
   onClose?: () => void;
   onError?: () => void;
   urlPath?: string;
@@ -16,6 +15,14 @@ export function useWebSocket({ onMessage, onOpen, onClose, onError, urlPath = '/
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryDelayRef = useRef(1000);
   const maxRetryDelay = 30000;
+
+  const send = useCallback((data: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(typeof data === 'string' ? data : JSON.stringify(data));
+      return true;
+    }
+    return false;
+  }, []);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -33,7 +40,7 @@ export function useWebSocket({ onMessage, onOpen, onClose, onError, urlPath = '/
 
       ws.onopen = () => {
         retryDelayRef.current = 1000;
-        if (onOpen) onOpen();
+        if (onOpen) onOpen(ws);
       };
 
       ws.onmessage = (event) => {
@@ -66,5 +73,6 @@ export function useWebSocket({ onMessage, onOpen, onClose, onError, urlPath = '/
     };
   }, [onMessage, onOpen, onClose, onError, urlPath]);
 
-  return { ws: wsRef.current };
+  return { ws: wsRef.current, send };
 }
+

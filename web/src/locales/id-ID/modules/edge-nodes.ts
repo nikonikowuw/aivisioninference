@@ -44,6 +44,20 @@ export const edgeNodes = {
     createdBy: 'Dibuat Oleh',
     createdAt: 'Waktu Dibuat',
     updatedAt: 'Waktu Diperbarui',
+    diskUsage: 'Penggunaan Disk',
+    utilization: 'Utilitas',
+    activeStreams: 'Aliran Aktif',
+    sortBy: 'Urutkan Berdasarkan',
+  },
+  sort: {
+    default: 'Urutan Default',
+    cpu: 'Penggunaan CPU',
+    memory: 'Penggunaan Memori',
+    load: 'Beban Tugas',
+  },
+  view: {
+    normal: 'Tampilan Kartu',
+    compact: 'Tampilan Ringkas',
   },
   status: {
     online: 'Online',

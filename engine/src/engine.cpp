@@ -214,6 +214,8 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
 	msg.add_preview_capacity(metrics.preview_capacity);
 	msg.add_preview_in_use(metrics.preview_in_use);
 	msg.add_preview_capacity_valid(metrics.preview_capacity_valid);
+    msg.add_accelerator_utilization(metrics.accelerator_utilization);
+    msg.add_accelerator_metrics_valid(metrics.accelerator_metrics_valid);
     builder.Finish(msg.Finish());
     PublishEvent(0x0203, builder);
   });
@@ -230,9 +232,12 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
           config.device_light_probe_interval_ms,
           config.device_expensive_probe_interval_ms});
 
-  // 将 DeviceMonitor 关联到 HeartbeatReporter 以获取完整设备快照
+  // 将 DeviceMonitor 关联到 HeartbeatReporter 和 MetricsReporter 以获取完整设备快照
   if (heartbeat_reporter_) {
     heartbeat_reporter_->SetDeviceMonitor(device_monitor_.get());
+  }
+  if (metrics_reporter_) {
+    metrics_reporter_->SetDeviceMonitor(device_monitor_.get());
   }
 
   // 创建 Command Executor（Phase 3 — 远程运维）

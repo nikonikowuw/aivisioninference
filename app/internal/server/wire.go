@@ -28,6 +28,7 @@ func InitializeApp() (*App, error) {
 		router.NewAsynqServer,
 		router.NewAsynqScheduler,
 		provideAsynqMux,
+		provideRuntimeStateStore,
 		provideMqttClient,
 		provideMqttServer,
 		provideEdgeNodeService,

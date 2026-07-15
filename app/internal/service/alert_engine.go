@@ -120,13 +120,7 @@ func (e *AlertEngine) RestoreSilenceState(ctx context.Context) {
 // fires/resolves alert events as needed.
 //
 // This is the core method that should be called from HandleHeartbeat.
-func (e *AlertEngine) EvaluateAfterHeartbeat(ctx context.Context, nodeID string, metricsRecord *model.EdgeNodeMetrics) error {
-	// Get node info for notifications
-	node, err := e.nodeRepo.FindByID(ctx, nodeID)
-	if err != nil {
-		return fmt.Errorf("alert engine: find node: %w", err)
-	}
-
+func (e *AlertEngine) EvaluateAfterHeartbeat(ctx context.Context, nodeID string, nodeName string, metricsRecord *model.EdgeNodeMetrics) error {
 	// Get all active rules for this node
 	rules, err := e.ruleRepo.ListActiveByNode(ctx, nodeID)
 	if err != nil {
@@ -139,9 +133,9 @@ func (e *AlertEngine) EvaluateAfterHeartbeat(ctx context.Context, nodeID string,
 
 	for _, rule := range rules {
 		// Get the metric value for this rule's metric type
-		metricValue := e.extractMetricValueForRule(metricsRecord, &rule, node)
+		metricValue := e.extractMetricValueForRule(metricsRecord, rule.MetricType)
 
-		if err := e.evaluateRule(ctx, &rule, nodeID, node.Name, metricValue); err != nil {
+		if err := e.evaluateRule(ctx, &rule, nodeID, nodeName, metricValue); err != nil {
 			zap.L().Error("alert engine: rule evaluation failed",
 				zap.String("rule_id", rule.ID),
 				zap.String("rule_name", rule.Name),
@@ -332,19 +326,19 @@ func (e *AlertEngine) checkDuration(ctx context.Context, nodeID string, rule *mo
 }
 
 // extractMetricValueForRule extracts the current metric value for a specific rule's metric type.
-func (e *AlertEngine) extractMetricValueForRule(metrics *model.EdgeNodeMetrics, rule *model.AlertRule, node *model.EdgeNode) float64 {
+func (e *AlertEngine) extractMetricValueForRule(metrics *model.EdgeNodeMetrics, metricType string) float64 {
 	if metrics == nil {
 		return 0
 	}
 
 	// Handle status-based metric types separately
-	switch rule.MetricType {
+	switch metricType {
 	case "node_offline", "node_error":
 		// When we have a metrics record, the node is online.
 		// For status rules, 0 = normal (online/not error).
 		return 0
 	default:
-		val, ok := extractMetricValueForRule(metrics, rule.MetricType)
+		val, ok := extractMetricValueForRule(metrics, metricType)
 		if !ok {
 			return 0
 		}

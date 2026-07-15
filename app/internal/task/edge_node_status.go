@@ -21,11 +21,12 @@ const (
 
 // EdgeNodeStatusTask handles periodic checks for edge nodes statuses.
 type EdgeNodeStatusTask struct {
-	nodeRepo       *repository.EdgeNodeRepository
-	taskRepo       *repository.AIVisionTaskRepository
-	hub            *ws.Hub
-	timeoutSeconds int
-	store          service.HeartbeatStore
+	nodeRepo          *repository.EdgeNodeRepository
+	taskRepo          *repository.AIVisionTaskRepository
+	hub               *ws.Hub
+	timeoutSeconds    int
+	store             service.HeartbeatStore
+	runtimeStateStore *service.EdgeNodeRuntimeStateStore
 }
 
 // NewEdgeNodeStatusTask creates a new EdgeNodeStatusTask.
@@ -35,13 +36,15 @@ func NewEdgeNodeStatusTask(
 	hub *ws.Hub,
 	timeoutSeconds int,
 	store service.HeartbeatStore,
+	runtimeStateStore *service.EdgeNodeRuntimeStateStore,
 ) *EdgeNodeStatusTask {
 	return &EdgeNodeStatusTask{
-		nodeRepo:       nodeRepo,
-		taskRepo:       taskRepo,
-		hub:            hub,
-		timeoutSeconds: timeoutSeconds,
-		store:          store,
+		nodeRepo:          nodeRepo,
+		taskRepo:          taskRepo,
+		hub:               hub,
+		timeoutSeconds:    timeoutSeconds,
+		store:             store,
+		runtimeStateStore: runtimeStateStore,
 	}
 }
 
@@ -112,9 +115,10 @@ func (h *EdgeNodeStatusTask) handleEdgeNodeStatusCheck(ctx context.Context, t *a
 			zap.String("id", node.ID),
 			zap.String("name", node.Name))
 
-		if _, err := service.HandleNodeOffline(ctx, h.nodeRepo, h.taskRepo, h.hub, h.store, node,
+		transitioned, err := service.HandleNodeOffline(ctx, h.nodeRepo, h.taskRepo, h.hub, h.store, node,
 			model.SuspendedReasonNodeOffline,
-			"节点 %s 心跳超时，任务自动暂停", &cutoff, node.Name); err != nil {
+			"节点 %s 心跳超时，任务自动暂停", &cutoff, node.Name)
+		if err != nil {
 			zap.L().Error("failed to process node offline",
 				zap.String("node_id", node.ID),
 				zap.Error(err),
@@ -124,9 +128,14 @@ func (h *EdgeNodeStatusTask) handleEdgeNodeStatusCheck(ctx context.Context, t *a
 			}
 			continue
 		}
+		if !transitioned {
+			continue
+		}
 		// HandleNodeOffline removes from store on successful transition.
-		// For non-transitioned (concurrent heartbeat refreshed DB), the store
-		// entry was also refreshed by the concurrent Record call — leave it.
+		// Invalidate the same runtime cache used by heartbeat processing.
+		if h.runtimeStateStore != nil {
+			h.runtimeStateStore.Delete(ctx, node.ID)
+		}
 	}
 
 	return firstErr

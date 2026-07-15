@@ -72,21 +72,21 @@ type RouteDeps struct {
 	EngineMetricsStore       *service.EngineMetricsStore
 
 	// Phase 2: Alert Engine.
-	AlertRuleRepo         *repository.AlertRuleRepository
-	AlertEventRepo        *repository.AlertEventRepository
-	AlertRuleService      *service.AlertRuleService
-	AlertEventService     *service.AlertEventService
-	AlertRuleHandler      *handler.AlertRuleHandler
-	AlertEventHandler     *handler.AlertEventHandler
-	AlertEngine           *service.AlertEngine
+	AlertRuleRepo     *repository.AlertRuleRepository
+	AlertEventRepo    *repository.AlertEventRepository
+	AlertRuleService  *service.AlertRuleService
+	AlertEventService *service.AlertEventService
+	AlertRuleHandler  *handler.AlertRuleHandler
+	AlertEventHandler *handler.AlertEventHandler
+	AlertEngine       *service.AlertEngine
 
 	// Phase 3: Remote Operations.
-	EdgeNodeScheduledTaskRepo       *repository.EdgeNodeScheduledTaskRepository
-	EdgeNodeTaskExecutionRepo       *repository.EdgeNodeTaskExecutionRepository
-	EdgeNodeScheduledTaskService    *service.EdgeNodeScheduledTaskService
-	EdgeNodeTerminalService         *service.EdgeNodeTerminalService
-	EdgeNodeScheduledTaskHandler    *handler.EdgeNodeScheduledTaskHandler
-	EdgeNodeTerminalHandler         *handler.EdgeNodeTerminalHandler
+	EdgeNodeScheduledTaskRepo    *repository.EdgeNodeScheduledTaskRepository
+	EdgeNodeTaskExecutionRepo    *repository.EdgeNodeTaskExecutionRepository
+	EdgeNodeScheduledTaskService *service.EdgeNodeScheduledTaskService
+	EdgeNodeTerminalService      *service.EdgeNodeTerminalService
+	EdgeNodeScheduledTaskHandler *handler.EdgeNodeScheduledTaskHandler
+	EdgeNodeTerminalHandler      *handler.EdgeNodeTerminalHandler
 }
 
 func provideFileStorage(cfg *Config) (storage.Storage, error) {
@@ -321,17 +321,17 @@ func newRouteDeps(
 		TerminalHandler:          terminalHandler,
 		MqttMux:                  mqttMux,
 		EngineMetricsStore:       metricsStore,
-		AlertRuleHandler:        alertRuleHandler,
-		AlertEventHandler:       alertEventHandler,
-		AlertEngine:             alertEngine,
+		AlertRuleHandler:         alertRuleHandler,
+		AlertEventHandler:        alertEventHandler,
+		AlertEngine:              alertEngine,
 
 		// Phase 3: Remote Operations.
-		EdgeNodeScheduledTaskRepo:       edgeNodeScheduledTaskRepo,
-		EdgeNodeTaskExecutionRepo:       edgeNodeTaskExecutionRepo,
-		EdgeNodeScheduledTaskService:    edgeNodeScheduledTaskService,
-		EdgeNodeTerminalService:         edgeNodeTerminalService,
-		EdgeNodeScheduledTaskHandler:    edgeNodeScheduledTaskHandler,
-		EdgeNodeTerminalHandler:         edgeNodeTerminalHandler,
+		EdgeNodeScheduledTaskRepo:    edgeNodeScheduledTaskRepo,
+		EdgeNodeTaskExecutionRepo:    edgeNodeTaskExecutionRepo,
+		EdgeNodeScheduledTaskService: edgeNodeScheduledTaskService,
+		EdgeNodeTerminalService:      edgeNodeTerminalService,
+		EdgeNodeScheduledTaskHandler: edgeNodeScheduledTaskHandler,
+		EdgeNodeTerminalHandler:      edgeNodeTerminalHandler,
 	}
 }
 
@@ -532,22 +532,23 @@ func provideEdgeNodeService(
 	engineMetricsStore *service.EngineMetricsStore,
 ) *service.EdgeNodeService {
 	svc := service.NewEdgeNodeService(&service.EdgeNodeServiceConfig{
-		NodeRepo:             nodeRepo,
-		NodeAlgoRepo:         nodeAlgoRepo,
-		AlgoPackageRepo:      algoPackageRepo,
-		TaskRepo:             taskRepo,
-		DeviceRepo:           deviceRepo,
-		SmartRecordRepo:      smartRecordRepo,
-		MetricsSvc:           metricsSvc,
-		JWTManager:           jwtManager,
-		Storage:              fileStorage,
-		Hub:                  hub,
-		StreamManager:        streamManager,
-		MetricsRepo:          metricsRepo,
-		AlertEngine:          alertEngine,
-		Heartbeats:           service.NewHeartbeatStore(rdb),
-		EngineMetricsStore:   engineMetricsStore,
-		HeartbeatTimeout:     time.Duration(cfg.Engine.HeartbeatTimeoutSec) * time.Second,
+		NodeRepo:           nodeRepo,
+		NodeAlgoRepo:       nodeAlgoRepo,
+		AlgoPackageRepo:    algoPackageRepo,
+		TaskRepo:           taskRepo,
+		DeviceRepo:         deviceRepo,
+		SmartRecordRepo:    smartRecordRepo,
+		MetricsSvc:         metricsSvc,
+		JWTManager:         jwtManager,
+		Storage:            fileStorage,
+		Hub:                hub,
+		StreamManager:      streamManager,
+		MetricsRepo:        metricsRepo,
+		AlertEngine:        alertEngine,
+		Heartbeats:         service.NewHeartbeatStore(rdb),
+		EngineMetricsStore: engineMetricsStore,
+		HeartbeatTimeout:   time.Duration(cfg.Engine.HeartbeatTimeoutSec) * time.Second,
+		RuntimeStateStore:  service.NewEdgeNodeRuntimeStateStore(cache.NewMemoryCache(0)),
 	})
 	svc.SetVersionConfig(cfg.Engine.MinCompatibleVersion, cfg.Engine.VersionCheckEnabled)
 	return svc
@@ -681,7 +682,6 @@ func provideEdgeNodeTerminalHandler(terminalSvc *service.EdgeNodeTerminalService
 func provideMqttSyncManager(rdb *redis.Client) *mqttsync.MqttSyncManager {
 	return mqttsync.NewMqttSyncManager(rdb)
 }
-
 
 func provideRecorder() *service.Recorder {
 	return service.NewRecorder(zap.L().Named("terminal_recorder"))

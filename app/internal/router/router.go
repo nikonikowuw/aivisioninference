@@ -584,7 +584,7 @@ func NewAsynqScheduler(rdb *redis.Client) *asynq.Scheduler {
 }
 
 // NewAsynqMux creates an Asynq mux with all task handlers registered.
-func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Client, syncManager *mqttsync.MqttSyncManager, scheduler *asynq.Scheduler, hub *ws.Hub) *asynq.ServeMux {
+func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Client, syncManager *mqttsync.MqttSyncManager, scheduler *asynq.Scheduler, hub *ws.Hub, runtimeStateStore *service.EdgeNodeRuntimeStateStore) *asynq.ServeMux {
 	deviceRepo := repository.NewDeviceRepository(db)
 	zlmClient := provideZLMClient(cfg)
 
@@ -637,7 +637,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	}
 
 	// Edge Node Status Checker
-	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec, service.NewHeartbeatStore(rdb))
+	edgeNodeStatusTask := task.NewEdgeNodeStatusTask(nodeRepo, aiTaskRepo, hub, cfg.Engine.HeartbeatTimeoutSec, service.NewHeartbeatStore(rdb), runtimeStateStore)
 	edgeNodeStatusTask.RegisterHandlers(mux)
 	edgeNodeStatusTask.RegisterPeriodic(scheduler, cfg.Engine.HeartbeatCheckIntervalSec)
 
@@ -665,13 +665,13 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	edgeScheduledTaskHandler.RegisterHandlers(mux)
 	edgeScheduledTaskHandler.RegisterPeriodic(scheduler)
 
-		// Terminal Session Cleanup Task
-		termSessionCleanupRepo := repository.NewTerminalSessionRepository(db)
-		termSessionCleanupPool := service.NewSSHPool()
-		termSessionCleanupSvc := service.NewTerminalSessionService(termSessionCleanupRepo, nodeRepo, termSessionCleanupPool, zap.L())
-		termSessionCleanupHandler := task.NewTerminalSessionHandler(termSessionCleanupRepo, termSessionCleanupSvc)
-		termSessionCleanupHandler.RegisterHandlers(mux)
-		termSessionCleanupHandler.RegisterPeriodic(scheduler)
+	// Terminal Session Cleanup Task
+	termSessionCleanupRepo := repository.NewTerminalSessionRepository(db)
+	termSessionCleanupPool := service.NewSSHPool()
+	termSessionCleanupSvc := service.NewTerminalSessionService(termSessionCleanupRepo, nodeRepo, termSessionCleanupPool, zap.L())
+	termSessionCleanupHandler := task.NewTerminalSessionHandler(termSessionCleanupRepo, termSessionCleanupSvc)
+	termSessionCleanupHandler.RegisterHandlers(mux)
+	termSessionCleanupHandler.RegisterPeriodic(scheduler)
 
 	// Metrics Retention Handler (daily cleanup of old edge node metrics)
 	metricsRepo := repository.NewEdgeNodeMetricsRepository(db)

@@ -251,22 +251,22 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
-		NodeRepo:        nodeRepo,
-		NodeAlgoRepo:    nodeAlgoRepo,
-		AlgoPackageRepo: pkgRepo,
-		TaskRepo:        taskRepo,
-		DeviceRepo:      deviceRepo,
-		SmartRecordRepo: smartRecordRepo,
-		MetricsSvc:      nil,
-		JWTManager:      jwtManager,
-		Storage:         fileStorage,
-		Hub:             nil,
-		StreamManager:   nil,
-		MetricsRepo:     nil,
-		AlertEngine:     nil,
-		Heartbeats:      NewMemoryHeartbeatStore(),
+		NodeRepo:           nodeRepo,
+		NodeAlgoRepo:       nodeAlgoRepo,
+		AlgoPackageRepo:    pkgRepo,
+		TaskRepo:           taskRepo,
+		DeviceRepo:         deviceRepo,
+		SmartRecordRepo:    smartRecordRepo,
+		MetricsSvc:         nil,
+		JWTManager:         jwtManager,
+		Storage:            fileStorage,
+		Hub:                nil,
+		StreamManager:      nil,
+		MetricsRepo:        nil,
+		AlertEngine:        nil,
+		Heartbeats:         NewMemoryHeartbeatStore(),
 		EngineMetricsStore: nil,
-		HeartbeatTimeout: 0,
+		HeartbeatTimeout:   0,
 	})
 	ctx := context.Background()
 
@@ -390,6 +390,13 @@ func TestEdgeNodeService_Lifecycle(t *testing.T) {
 	assert.Equal(t, "/opt/aivision/algo/yolov8_1.0.0", hbRes.PendingDeployments[0].ExtractPath)
 	var heartbeatNode model.EdgeNode
 	require.NoError(t, db.First(&heartbeatNode, "id = ?", node.ID).Error)
+	require.NotNil(t, heartbeatNode.LastHeartbeat)
+	assert.Equal(t, hbReq.CurrentLoad, heartbeatNode.CurrentLoad)
+	assert.Equal(t, hbReq.EngineVersion, heartbeatNode.EngineVersion)
+	assert.Equal(t, hbReq.HALPlatform, heartbeatNode.HALPlatform)
+	assert.Equal(t, hbReq.HardwareInfo.CPUModel, heartbeatNode.CPUModel)
+	assert.Equal(t, hbReq.HardwareInfo.GPUModel, heartbeatNode.GPUModel)
+	assert.Equal(t, hbReq.HardwareInfo.TotalMemory, heartbeatNode.TotalMemory)
 	// Remark must be preserved across heartbeats (R4: admin remark not overwritten)
 	assert.Equal(t, "Updated remark", heartbeatNode.Remark)
 
@@ -503,22 +510,22 @@ func TestEdgeNodeService_HandleHeartbeat_ResumesSuspendedTasks(t *testing.T) {
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	streamManager := NewStreamManager(&MockEngineClient{}, deviceRepo, repository.NewMediaStreamRepository(db), zap.NewNop())
 	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
-		NodeRepo:        nodeRepo,
-		NodeAlgoRepo:    nodeAlgoRepo,
-		AlgoPackageRepo: pkgRepo,
-		TaskRepo:        taskRepo,
-		DeviceRepo:      deviceRepo,
-		SmartRecordRepo: smartRecordRepo,
-		MetricsSvc:      nil,
-		JWTManager:      jwtManager,
-		Storage:         fileStorage2,
-		Hub:             nil,
-		StreamManager:   streamManager,
-		MetricsRepo:     nil,
-		AlertEngine:     nil,
-		Heartbeats:      NewMemoryHeartbeatStore(),
+		NodeRepo:           nodeRepo,
+		NodeAlgoRepo:       nodeAlgoRepo,
+		AlgoPackageRepo:    pkgRepo,
+		TaskRepo:           taskRepo,
+		DeviceRepo:         deviceRepo,
+		SmartRecordRepo:    smartRecordRepo,
+		MetricsSvc:         nil,
+		JWTManager:         jwtManager,
+		Storage:            fileStorage2,
+		Hub:                nil,
+		StreamManager:      streamManager,
+		MetricsRepo:        nil,
+		AlertEngine:        nil,
+		Heartbeats:         NewMemoryHeartbeatStore(),
 		EngineMetricsStore: nil,
-		HeartbeatTimeout: 0,
+		HeartbeatTimeout:   0,
 	})
 	ctx := context.Background()
 
@@ -696,22 +703,22 @@ func TestEdgeNodeService_buildPresignedURL(t *testing.T) {
 	deviceRepo := repository.NewDeviceRepository(db)
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
-		NodeRepo:        nodeRepo,
-		NodeAlgoRepo:    nodeAlgoRepo,
-		AlgoPackageRepo: pkgRepo,
-		TaskRepo:        taskRepo,
-		DeviceRepo:      deviceRepo,
-		SmartRecordRepo: smartRecordRepo,
-		MetricsSvc:      nil,
-		JWTManager:      jwtManager,
-		Storage:         fileStorage3,
-		Hub:             nil,
-		StreamManager:   nil,
-		MetricsRepo:     nil,
-		AlertEngine:     nil,
-		Heartbeats:      NewMemoryHeartbeatStore(),
+		NodeRepo:           nodeRepo,
+		NodeAlgoRepo:       nodeAlgoRepo,
+		AlgoPackageRepo:    pkgRepo,
+		TaskRepo:           taskRepo,
+		DeviceRepo:         deviceRepo,
+		SmartRecordRepo:    smartRecordRepo,
+		MetricsSvc:         nil,
+		JWTManager:         jwtManager,
+		Storage:            fileStorage3,
+		Hub:                nil,
+		StreamManager:      nil,
+		MetricsRepo:        nil,
+		AlertEngine:        nil,
+		Heartbeats:         NewMemoryHeartbeatStore(),
 		EngineMetricsStore: nil,
-		HeartbeatTimeout: 0,
+		HeartbeatTimeout:   0,
 	})
 	ctx := context.Background()
 
@@ -796,22 +803,22 @@ func TestEdgeNodeService_PushInferenceResult(t *testing.T) {
 
 	fileStorage, _ := storage.NewLocalStorage(".", "http://minio:9000/aivision-algorithms")
 	svc := NewEdgeNodeService(&EdgeNodeServiceConfig{
-		NodeRepo:        nodeRepo,
-		NodeAlgoRepo:    nodeAlgoRepo,
-		AlgoPackageRepo: pkgRepo,
-		TaskRepo:        taskRepo,
-		DeviceRepo:      deviceRepo,
-		SmartRecordRepo: smartRecordRepo,
-		MetricsSvc:      nil,
-		JWTManager:      jwtManager,
-		Storage:         fileStorage,
-		Hub:             nil,
-		StreamManager:   nil,
-		MetricsRepo:     nil,
-		AlertEngine:     nil,
-		Heartbeats:      NewMemoryHeartbeatStore(),
+		NodeRepo:           nodeRepo,
+		NodeAlgoRepo:       nodeAlgoRepo,
+		AlgoPackageRepo:    pkgRepo,
+		TaskRepo:           taskRepo,
+		DeviceRepo:         deviceRepo,
+		SmartRecordRepo:    smartRecordRepo,
+		MetricsSvc:         nil,
+		JWTManager:         jwtManager,
+		Storage:            fileStorage,
+		Hub:                nil,
+		StreamManager:      nil,
+		MetricsRepo:        nil,
+		AlertEngine:        nil,
+		Heartbeats:         NewMemoryHeartbeatStore(),
 		EngineMetricsStore: nil,
-		HeartbeatTimeout: 0,
+		HeartbeatTimeout:   0,
 	})
 
 	// Create a camera device

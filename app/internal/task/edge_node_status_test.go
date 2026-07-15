@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/niko-admin/niko-admin/internal/model"
+	"github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/repository"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
@@ -81,7 +82,8 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 	nodeRepo := repository.NewEdgeNodeRepository(db)
 	taskRepo := repository.NewAIVisionTaskRepository(db)
 	store := service.NewMemoryHeartbeatStore()
-	taskHandler := NewEdgeNodeStatusTask(nodeRepo, taskRepo, nil, 15, store)
+	runtimeStateStore := service.NewEdgeNodeRuntimeStateStore(cache.NewMemoryCache(0))
+	taskHandler := NewEdgeNodeStatusTask(nodeRepo, taskRepo, nil, 15, store, runtimeStateStore)
 
 	ctx := context.Background()
 	now := time.Now()
@@ -116,9 +118,22 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 		Status:    model.NodeStatusOffline,
 	}
 
+	// Node 4: stale store entry but fresh durable heartbeat (concurrent heartbeat won the race).
+	node4 := &model.EdgeNode{
+		BaseModel:     model.BaseModel{ID: "node-concurrent-heartbeat"},
+		Name:          "Concurrent Heartbeat Node",
+		Endpoint:      "http://127.0.0.1:8083",
+		Status:        model.NodeStatusOnline,
+		LastHeartbeat: &now,
+	}
+	require.NoError(t, store.Record(ctx, node4.ID, oldHB))
+
 	require.NoError(t, nodeRepo.Create(ctx, node1))
 	require.NoError(t, nodeRepo.Create(ctx, node2))
 	require.NoError(t, nodeRepo.Create(ctx, node3))
+	require.NoError(t, nodeRepo.Create(ctx, node4))
+	runtimeStateStore.LoadFromNode(ctx, node1)
+	runtimeStateStore.LoadFromNode(ctx, node4)
 
 	// Execute Task
 	asynqTask := asynq.NewTask(TypeEdgeNodeStatusCheck, nil)
@@ -138,6 +153,15 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, model.NodeStatusOffline, n3.Status) // Node 3 should remain offline
 
+	n4, err := nodeRepo.FindByID(ctx, "node-concurrent-heartbeat")
+	require.NoError(t, err)
+	assert.Equal(t, model.NodeStatusOnline, n4.Status)
+
+	_, cached := runtimeStateStore.Get(ctx, node1.ID)
+	assert.False(t, cached, "timed-out node cache must be invalidated")
+	_, cached = runtimeStateStore.Get(ctx, node4.ID)
+	assert.True(t, cached, "non-transitioned node cache must remain available")
+
 	// Verify stale heartbeat entry for node3 was cleaned up
 	remaining, err := store.GetExpired(ctx, now)
 	require.NoError(t, err)
@@ -145,6 +169,7 @@ func TestEdgeNodeStatusTask_handleEdgeNodeStatusCheck(t *testing.T) {
 
 	// Verify node-timed-out was removed from store after offline processing
 	assert.NotContains(t, remaining, "node-timed-out")
+	assert.Contains(t, remaining, "node-concurrent-heartbeat")
 }
 
 func TestHandleNodeOffline_IsConditionalAndIdempotent(t *testing.T) {

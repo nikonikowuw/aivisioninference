@@ -16,6 +16,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-version v1.9.0
 	github.com/hibiken/asynq v0.26.0
+	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/lib/pq v1.12.3
 	github.com/minio/minio-go/v7 v7.1.0
 	github.com/pgvector/pgvector-go v0.4.0

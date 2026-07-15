@@ -6,10 +6,15 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/jellydator/ttlcache/v3"
 )
 
 // ErrCacheMiss 表示缓存未命中的哨兵错误。
 var ErrCacheMiss = errors.New("cache: miss")
+
+// DefaultMemoryCacheCapacity 是本地缓存的默认最大条目数。
+const DefaultMemoryCacheCapacity uint64 = 50_000
 
 // Cache 定义了统一的缓存读写接口，支持 Redis 和本地内存两种实现。
 type Cache interface {
@@ -18,36 +23,39 @@ type Cache interface {
 	Del(ctx context.Context, key string) error
 }
 
-type memoryItem struct {
-	value     []byte
-	expiresAt time.Time
-}
-
 // MemoryCache 是一个基于内存的 Cache 实现，支持 TTL 过期和定时清理。
 type MemoryCache struct {
-	mu     sync.RWMutex
-	items  map[string]memoryItem
-	stopCh chan struct{}
+	store    *ttlcache.Cache[string, []byte]
+	cancel   context.CancelFunc
+	stopOnce sync.Once
+	done     chan struct{}
+}
+
+type memoryCacheConfig struct {
+	capacity uint64
+}
+
+// MemoryCacheOption 配置 MemoryCache 的容量等运行参数。
+type MemoryCacheOption func(*memoryCacheConfig)
+
+// WithMemoryCacheCapacity 设置最大条目数；传入 0 表示不限制容量。
+func WithMemoryCacheCapacity(capacity uint64) MemoryCacheOption {
+	return func(config *memoryCacheConfig) {
+		config.capacity = capacity
+	}
 }
 
 // NewMemoryCache creates a new memory cache.
-// cleanupInterval specifies how often the janitor goroutine scans for expired
-// items and removes them. Pass 0 to disable periodic cleanup (expired items
-// are still lazily evicted on Get).
+// cleanupInterval specifies how often the janitor goroutine removes expired
+// items from ttlcache's expiration queue. Pass 0 to disable periodic cleanup;
+// expired items are still lazily evicted on Get.
 //
 // The caller MUST call Stop() when the cache is no longer needed to stop the
 // background janitor goroutine. Failure to do so will leak a goroutine for the
 // lifetime of the process.
 // For context-aware lifecycle management, use NewMemoryCacheWithContext instead.
-func NewMemoryCache(cleanupInterval time.Duration) *MemoryCache {
-	c := &MemoryCache{
-		items:  make(map[string]memoryItem),
-		stopCh: make(chan struct{}),
-	}
-	if cleanupInterval > 0 {
-		go c.janitor(cleanupInterval)
-	}
-	return c
+func NewMemoryCache(cleanupInterval time.Duration, options ...MemoryCacheOption) *MemoryCache {
+	return newMemoryCache(context.Background(), cleanupInterval, options...)
 }
 
 // NewMemoryCacheWithContext is like NewMemoryCache but binds the janitor
@@ -55,14 +63,35 @@ func NewMemoryCache(cleanupInterval time.Duration) *MemoryCache {
 // automatically, making it suitable for short-lived or context-scoped usage.
 // The returned MemoryCache may still be used after ctx cancellation; only
 // the background cleanup goroutine exits.
-func NewMemoryCacheWithContext(ctx context.Context, cleanupInterval time.Duration) *MemoryCache {
+func NewMemoryCacheWithContext(ctx context.Context, cleanupInterval time.Duration, options ...MemoryCacheOption) *MemoryCache {
+	return newMemoryCache(ctx, cleanupInterval, options...)
+}
+
+func newMemoryCache(ctx context.Context, cleanupInterval time.Duration, options ...MemoryCacheOption) *MemoryCache {
+	config := memoryCacheConfig{capacity: DefaultMemoryCacheCapacity}
+	for _, option := range options {
+		option(&config)
+	}
+
+	storeOptions := []ttlcache.Option[string, []byte]{
+		ttlcache.WithDisableTouchOnHit[string, []byte](),
+	}
+	if config.capacity > 0 {
+		storeOptions = append(storeOptions, ttlcache.WithCapacity[string, []byte](config.capacity))
+	}
+
+	janitorCtx, cancel := context.WithCancel(ctx)
 	c := &MemoryCache{
-		items:  make(map[string]memoryItem),
-		stopCh: make(chan struct{}),
+		store:  ttlcache.New(storeOptions...),
+		cancel: cancel,
+		done:   make(chan struct{}),
 	}
-	if cleanupInterval > 0 {
-		go c.janitorWithContext(ctx, cleanupInterval)
+	if cleanupInterval <= 0 {
+		close(c.done)
+		return c
 	}
+
+	go c.janitor(janitorCtx, cleanupInterval)
 	return c
 }
 
@@ -71,29 +100,20 @@ func NewMemoryCacheWithContext(ctx context.Context, cleanupInterval time.Duratio
 // Callers MUST call Stop() (or use NewMemoryCacheWithContext) to avoid leaking
 // the janitor goroutine.
 func (c *MemoryCache) Stop() {
-	select {
-	case <-c.stopCh:
-	default:
-		close(c.stopCh)
-	}
+	c.stopOnce.Do(c.cancel)
+	<-c.done
 }
 
-// Get 从内存缓存中获取指定键的值（在读取时惰性删除已过期的条目）。
+// Get 从内存缓存中获取指定键的值。
+// ttlcache 内部已处理惰性淘汰，不需要额外调用 DeleteExpired。
 func (c *MemoryCache) Get(_ context.Context, key string) ([]byte, error) {
-	c.mu.RLock()
-	item, ok := c.items[key]
-	c.mu.RUnlock()
-	if !ok {
+	item := c.store.Get(key)
+	if item == nil {
 		return nil, ErrCacheMiss
 	}
-	if !item.expiresAt.IsZero() && time.Now().After(item.expiresAt) {
-		c.mu.Lock()
-		delete(c.items, key)
-		c.mu.Unlock()
-		return nil, ErrCacheMiss
-	}
-	data := make([]byte, len(item.value))
-	copy(data, item.value)
+	value := item.Value()
+	data := make([]byte, len(value))
+	copy(data, value)
 	return data, nil
 }
 
@@ -102,62 +122,29 @@ func (c *MemoryCache) Set(_ context.Context, key string, value []byte, ttl time.
 	copied := make([]byte, len(value))
 	copy(copied, value)
 
-	item := memoryItem{value: copied}
+	itemTTL := ttlcache.NoTTL
 	if ttl > 0 {
-		item.expiresAt = time.Now().Add(ttl)
+		itemTTL = ttl
 	}
-
-	c.mu.Lock()
-	c.items[key] = item
-	c.mu.Unlock()
+	c.store.Set(key, copied, itemTTL)
 	return nil
 }
 
 // Del 从内存缓存中删除指定键。
 func (c *MemoryCache) Del(_ context.Context, key string) error {
-	c.mu.Lock()
-	delete(c.items, key)
-	c.mu.Unlock()
+	c.store.Delete(key)
 	return nil
 }
 
-// deleteExpired removes all expired items under a write lock.
-func (c *MemoryCache) deleteExpired() {
-	now := time.Now()
-	c.mu.Lock()
-	for k, item := range c.items {
-		if !item.expiresAt.IsZero() && now.After(item.expiresAt) {
-			delete(c.items, k)
-		}
-	}
-	c.mu.Unlock()
-}
-
-// janitor runs periodic expired-item cleanup until Stop is called.
-func (c *MemoryCache) janitor(interval time.Duration) {
+// janitor triggers ttlcache's expiration-queue cleanup on the configured interval.
+func (c *MemoryCache) janitor(ctx context.Context, interval time.Duration) {
+	defer close(c.done)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			c.deleteExpired()
-		case <-c.stopCh:
-			return
-		}
-	}
-}
-
-// janitorWithContext is like janitor but also exits when ctx is done.
-// This allows context-based lifecycle management without an explicit Stop call.
-func (c *MemoryCache) janitorWithContext(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			c.deleteExpired()
-		case <-c.stopCh:
-			return
+			c.store.DeleteExpired()
 		case <-ctx.Done():
 			return
 		}

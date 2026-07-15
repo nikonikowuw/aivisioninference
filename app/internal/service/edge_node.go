@@ -14,6 +14,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/model"
+	cachedriver "github.com/niko-admin/niko-admin/internal/pkg/cache"
 	"github.com/niko-admin/niko-admin/internal/pkg/controlproto"
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
 	"github.com/niko-admin/niko-admin/internal/pkg/jwt"
@@ -57,30 +58,36 @@ type EdgeNodeService struct {
 	heartbeats           HeartbeatStore
 	engineMetricsStore   *EngineMetricsStore
 	heartbeatTimeout     time.Duration
+	runtimeStateStore    *EdgeNodeRuntimeStateStore
 }
 
 // EdgeNodeServiceConfig holds all dependencies for EdgeNodeService.
 type EdgeNodeServiceConfig struct {
-	NodeRepo             *repository.EdgeNodeRepository
-	NodeAlgoRepo         *repository.EdgeNodeAlgorithmRepository
-	AlgoPackageRepo      *repository.AlgorithmPackageRepository
-	TaskRepo             *repository.AIVisionTaskRepository
-	DeviceRepo           *repository.DeviceRepository
-	SmartRecordRepo      *repository.SmartRecordRepository
-	MetricsSvc           *EdgeNodeMetricsService
-	JWTManager           *jwt.Manager
-	Storage              storage.Storage
-	Hub                  *ws.Hub
-	StreamManager        *StreamManager
-	MetricsRepo          *repository.EdgeNodeMetricsRepository
-	AlertEngine          *AlertEngine
-	Heartbeats           HeartbeatStore
-	EngineMetricsStore   *EngineMetricsStore
-	HeartbeatTimeout     time.Duration
+	NodeRepo           *repository.EdgeNodeRepository
+	NodeAlgoRepo       *repository.EdgeNodeAlgorithmRepository
+	AlgoPackageRepo    *repository.AlgorithmPackageRepository
+	TaskRepo           *repository.AIVisionTaskRepository
+	DeviceRepo         *repository.DeviceRepository
+	SmartRecordRepo    *repository.SmartRecordRepository
+	MetricsSvc         *EdgeNodeMetricsService
+	JWTManager         *jwt.Manager
+	Storage            storage.Storage
+	Hub                *ws.Hub
+	StreamManager      *StreamManager
+	MetricsRepo        *repository.EdgeNodeMetricsRepository
+	AlertEngine        *AlertEngine
+	Heartbeats         HeartbeatStore
+	EngineMetricsStore *EngineMetricsStore
+	HeartbeatTimeout   time.Duration
+	RuntimeStateStore  *EdgeNodeRuntimeStateStore
 }
 
 // NewEdgeNodeService creates a new EdgeNodeService from the given config.
 func NewEdgeNodeService(cfg *EdgeNodeServiceConfig) *EdgeNodeService {
+	runtimeStateStore := cfg.RuntimeStateStore
+	if runtimeStateStore == nil {
+		runtimeStateStore = NewEdgeNodeRuntimeStateStore(cachedriver.NewMemoryCache(0))
+	}
 	svc := &EdgeNodeService{
 		nodeRepo:             cfg.NodeRepo,
 		nodeAlgoRepo:         cfg.NodeAlgoRepo,
@@ -102,6 +109,7 @@ func NewEdgeNodeService(cfg *EdgeNodeServiceConfig) *EdgeNodeService {
 		alertEngine:          cfg.AlertEngine,
 		engineMetricsStore:   cfg.EngineMetricsStore,
 		heartbeatTimeout:     cfg.HeartbeatTimeout,
+		runtimeStateStore:    runtimeStateStore,
 	}
 	go svc.batchInsertWorker()
 	return svc
@@ -126,6 +134,20 @@ func (s *EdgeNodeService) findNodeByID(ctx context.Context, id string) (*model.E
 		return nil, apperrors.New(apperrors.ErrNotFound, "节点不存在")
 	}
 	return node, err
+}
+
+// getRuntimeState 返回节点运行时状态，未命中时从 DB 回填。
+func (s *EdgeNodeService) getRuntimeState(ctx context.Context, id string) (*EdgeNodeRuntimeState, error) {
+	if cached, ok := s.runtimeStateStore.Get(ctx, id); ok {
+		return cached, nil
+	}
+	node, err := s.findNodeByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.runtimeStateStore.LoadFromNode(ctx, node)
+	loaded, _ := s.runtimeStateStore.Get(ctx, id)
+	return loaded, nil
 }
 
 // Create generates a JWT token for the node, saves the node in the DB, and returns the node & token.
@@ -172,7 +194,18 @@ func (s *EdgeNodeService) List(ctx context.Context, req dto.EdgeNodeListRequest)
 }
 
 func (s *EdgeNodeService) GetByID(ctx context.Context, id string) (*model.EdgeNode, error) {
-	return s.findNodeByID(ctx, id)
+	node, err := s.findNodeByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// 从内存缓存中补齐最新运行时字段，避免 edge_nodes 中的值陈旧
+	s.runtimeStateStore.ApplyToNode(ctx, node)
+	return node, nil
+}
+
+// RuntimeStateStore returns the node runtime-state store shared with background workers.
+func (s *EdgeNodeService) RuntimeStateStore() *EdgeNodeRuntimeStateStore {
+	return s.runtimeStateStore
 }
 
 func (s *EdgeNodeService) Update(ctx context.Context, id string, req dto.UpdateEdgeNodeRequest) error {
@@ -225,7 +258,13 @@ func (s *EdgeNodeService) Update(ctx context.Context, id string, req dto.UpdateE
 		node.Status = req.Status
 	}
 
-	return s.nodeRepo.Update(ctx, node)
+	if err := s.nodeRepo.Update(ctx, node); err != nil {
+		return err
+	}
+
+	// 配置变更后使缓存失效，下次心跳重新加载
+	s.runtimeStateStore.Delete(ctx, id)
+	return nil
 }
 
 func (s *EdgeNodeService) Delete(ctx context.Context, id string) error {
@@ -242,7 +281,13 @@ func (s *EdgeNodeService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrForbidden, "节点上有运行中的任务,无法删除")
 	}
 
-	return s.nodeRepo.Delete(ctx, id)
+	if err := s.nodeRepo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	// 删除节点后清理缓存
+	s.runtimeStateStore.Delete(ctx, id)
+	return nil
 }
 
 func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *dto.HeartbeatRequest) (*dto.HeartbeatResponse, error) {
@@ -252,7 +297,8 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	lock.Lock()
 	defer lock.Unlock()
 
-	node, err := s.findNodeByID(ctx, id)
+	// 从内存缓存读取节点运行时状态（避免每次心跳 SELECT edge_nodes）
+	runtimeState, err := s.getRuntimeState(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -262,32 +308,33 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	}
 
 	// Disabled nodes: accept heartbeat for liveness tracking but skip all processing
-	if node.Status == model.NodeStatusDisabled || !node.Enabled {
+	if runtimeState.Status == model.NodeStatusDisabled || !runtimeState.Enabled {
 		now := time.Now()
 		if err := s.nodeRepo.UpdateHeartbeatFields(ctx, id, map[string]interface{}{
 			"last_heartbeat": &now,
 		}); err != nil {
 			return nil, fmt.Errorf("更新心跳字段失败: %w", err)
 		}
-		// Record heartbeat for liveness tracking
 		s.recordHeartbeat(ctx, id, now)
+		s.runtimeStateStore.UpdateFromHeartbeat(ctx, id, req, runtimeState.Status, now, runtimeState.RuntimeError)
 		zap.L().Warn("heartbeat from disabled node, accepted for liveness tracking only",
 			zap.String("node_id", id))
 		return &dto.HeartbeatResponse{}, nil
 	}
 
 	now := time.Now()
-	status := model.NodeStatusOnline
+	newStatus := model.NodeStatusOnline
+	runtimeError := ""
 	if req.Status == model.NodeStatusError {
-		status = model.NodeStatusError
+		newStatus = model.NodeStatusError
+		runtimeError = req.ErrorMessage
 		zap.L().Info("node reported error via heartbeat",
 			zap.String("node_id", id),
 			zap.String("error_message", req.ErrorMessage),
 		)
-	} else if node.Status == model.NodeStatusDisabled {
-		status = model.NodeStatusDisabled
 	}
 
+	wasOffline := runtimeState.Status != model.NodeStatusOnline
 	hbFields := map[string]interface{}{
 		"last_heartbeat": &now,
 		"uptime":         req.Uptime,
@@ -297,115 +344,81 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 		"cpu_model":      req.HardwareInfo.CPUModel,
 		"gpu_model":      req.HardwareInfo.GPUModel,
 		"total_memory":   req.HardwareInfo.TotalMemory,
-		"status":         status,
+		"status":         newStatus,
 		"cpu_usage":      req.CPUUsage,
 		"memory_usage":   req.MemoryUsage,
+		"runtime_error":  runtimeError,
 	}
-
-	// Do NOT include "remark" in hbFields to preserve admin remark (R4).
-	// Only set runtime error message to a separate field for display.
-	if req.Status == "error" && req.ErrorMessage != "" {
-		hbFields["runtime_error"] = req.ErrorMessage
-	}
-
-	// Update heartbeat fields with node state.
-	// The per-node mutex above provides serialization for concurrent heartbeats
-	// on the same node, so no DB-level transaction is needed here.
-	// SyncInstalled and FindNodeOfflineSuspendedTasks use their own connections
-	// to avoid SQLite "table is locked" errors that would occur if they were
-	// inside a shared transaction with UpdateHeartbeatFields.
 	if err := s.nodeRepo.UpdateHeartbeatFields(ctx, id, hbFields); err != nil {
 		return nil, fmt.Errorf("更新心跳字段失败: %w", err)
 	}
 
-	// Record heartbeat for liveness tracking
+	// Publish liveness only after persistence so timeout scans can verify freshness in DB.
 	s.recordHeartbeat(ctx, id, now)
+	// Publish the cache after the durable update, before independent downstream work.
+	s.runtimeStateStore.UpdateFromHeartbeat(ctx, id, req, newStatus, now, runtimeError)
 
 	// Sync installed algorithms
-	var suspendedTasks []model.AIVisionTask
 	if err := s.nodeAlgoRepo.SyncInstalled(ctx, id, req.InstalledAlgorithms); err != nil {
 		return nil, fmt.Errorf("同步算法列表失败: %w", err)
 	}
 
-	// Query node-offline suspended tasks for post-tx recovery
-	if status == model.NodeStatusOnline {
+	// Query node-offline suspended tasks for recovery
+	var suspendedTasks []model.AIVisionTask
+	if newStatus == model.NodeStatusOnline {
 		tasks, err := s.taskRepo.FindNodeOfflineSuspendedTasks(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("查询暂停任务失败: %w", err)
 		}
 		suspendedTasks = tasks
 
-		// Alert engine: if node was previously offline/error, resolve those alerts
-		if s.alertEngine != nil && node.Status != model.NodeStatusOnline {
+		// 节点刚从离线/错误恢复，触发告警恢复
+		if wasOffline && s.alertEngine != nil {
 			if err := s.alertEngine.EvaluateNodeBackOnline(ctx, id); err != nil {
 				zap.L().Error("failed to evaluate node back online alerts",
-					zap.String("node_id", id),
-					zap.Error(err),
-				)
+					zap.String("node_id", id), zap.Error(err))
 			}
 		}
 	}
 
-	// Persist metrics snapshot to edge_node_metrics table
+	// Persist metrics snapshot to edge_node_metrics table（时序数据，仍需写入）
 	if s.metricsRepo != nil {
 		metrics := s.buildMetricsRecord(id, req)
 		if err := s.metricsRepo.Create(ctx, metrics); err != nil {
 			zap.L().Error("failed to persist edge node metrics snapshot",
-				zap.String("node_id", id),
-				zap.Error(err),
-			)
-			// Non-fatal: continue processing heartbeat even if metrics persistence fails
+				zap.String("node_id", id), zap.Error(err))
 		}
 
-		// Broadcast metrics event to WebSocket admin clients
 		BroadcastMetricsEvent(s.hub, id, metrics)
 
 		// Phase 2: Evaluate alert rules after metrics persistence
 		if s.alertEngine != nil {
-			if err := s.alertEngine.EvaluateAfterHeartbeat(ctx, id, metrics); err != nil {
+			// 传入 cachedState.Name 避免 alertEngine 内部重复查询 edge_nodes
+			if err := s.alertEngine.EvaluateAfterHeartbeat(ctx, id, runtimeState.Name, metrics); err != nil {
 				zap.L().Error("failed to evaluate alert rules",
-					zap.String("node_id", id),
-					zap.Error(err),
-				)
-				// Non-fatal: continue processing heartbeat even if alert evaluation fails
+					zap.String("node_id", id), zap.Error(err))
 			}
 		}
 	}
 
-	// Update in-memory node for downstream use (after successful transaction)
-	node.LastHeartbeat = &now
-	node.Uptime = req.Uptime
-	node.CurrentLoad = req.CurrentLoad
-	node.CPUUsage = req.CPUUsage
-	node.MemoryUsage = req.MemoryUsage
-	node.EngineVersion = req.EngineVersion
-	node.HALPlatform = req.HALPlatform
-	node.CPUModel = req.HardwareInfo.CPUModel
-	node.GPUModel = req.HardwareInfo.GPUModel
-	node.TotalMemory = req.HardwareInfo.TotalMemory
-	node.Status = status
-
-	// Broadcast WebSocket events after transaction commits (avoid notifying on rollback)
+	// Broadcast WebSocket events
 	if s.hub != nil {
 		s.hub.Broadcast(&ws.Message{
 			Type: "edge-node-status",
 			Payload: map[string]interface{}{
 				"node_id":        id,
-				"status":         node.Status,
-				"current_load":   node.CurrentLoad,
-				"cpu_usage":      node.CPUUsage,
-				"memory_usage":   node.MemoryUsage,
-				"engine_version": node.EngineVersion,
-				"last_heartbeat": node.LastHeartbeat,
+				"status":         newStatus,
+				"current_load":   req.CurrentLoad,
+				"cpu_usage":      req.CPUUsage,
+				"memory_usage":   req.MemoryUsage,
+				"engine_version": req.EngineVersion,
+				"last_heartbeat": &now,
 			},
 		})
 	}
 
-	// Attempt Engine pipeline restart for node-offline suspended tasks
-	// Only restore tasks that were suspended due to node offline.
-	// For each task, restart the Engine pipeline first; only mark as running
-	// if Engine confirms the pipeline is active.
-	if status == model.NodeStatusOnline && len(suspendedTasks) > 0 {
+	// Restore suspended pipelines if back online
+	if newStatus == model.NodeStatusOnline && len(suspendedTasks) > 0 {
 		s.restoreSuspendedPipelines(ctx, id, suspendedTasks)
 	}
 
@@ -605,8 +618,7 @@ func (s *EdgeNodeService) DeployAlgorithm(ctx context.Context, nodeID string, re
 }
 
 func (s *EdgeNodeService) ListAlgorithms(ctx context.Context, nodeID string) ([]model.EdgeNodeAlgorithm, error) {
-	_, err := s.findNodeByID(ctx, nodeID)
-	if err != nil {
+	if _, err := s.findNodeByID(ctx, nodeID); err != nil {
 		return nil, err
 	}
 
@@ -671,12 +683,19 @@ func (s *EdgeNodeService) HandleLWTNodeOffline(ctx context.Context, nodeID strin
 	lock.Lock()
 	defer lock.Unlock()
 
-	node, err := s.findNodeByID(ctx, nodeID)
+	// 用缓存的节点状态，避免 SELECT edge_nodes
+	runtimeState, err := s.getRuntimeState(ctx, nodeID)
 	if err != nil {
 		return fmt.Errorf("LWT: node not found %s: %w", nodeID, err)
 	}
 
-	transitioned, err := HandleNodeOffline(ctx, s.nodeRepo, s.taskRepo, s.hub, s.heartbeats, *node,
+	// 构造最小化 EdgeNode 用于 HandleNodeOffline（仅需 ID 和 Name）
+	node := model.EdgeNode{
+		BaseModel: model.BaseModel{ID: nodeID},
+		Name:      runtimeState.Name,
+	}
+
+	transitioned, err := HandleNodeOffline(ctx, s.nodeRepo, s.taskRepo, s.hub, s.heartbeats, node,
 		model.SuspendedReasonNodeOffline,
 		"节点 %s 离线(MQTT LWT)，任务自动暂停", nil, node.Name)
 	if err != nil {
@@ -685,6 +704,9 @@ func (s *EdgeNodeService) HandleLWTNodeOffline(ctx context.Context, nodeID strin
 	if !transitioned {
 		return nil
 	}
+
+	// 成功转换后使缓存失效，下次心跳重新从 DB 加载
+	s.runtimeStateStore.Delete(ctx, nodeID)
 
 	// Alert engine: evaluate offline rules
 	if s.alertEngine != nil {
@@ -1105,5 +1127,3 @@ func (s *EdgeNodeService) AssembleCardSnapshots(ctx context.Context, nodes []mod
 
 	return snapshots, nil
 }
-
-

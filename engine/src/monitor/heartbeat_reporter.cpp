@@ -21,7 +21,6 @@
 #ifdef __APPLE__
 #include <sys/types.h>
 #include <sys/sysctl.h>
-#include <sys/loadavg.h>
 #else
 #include <sys/sysinfo.h>
 #endif
@@ -167,11 +166,10 @@ namespace aivision
             double ReadLoad1m()
             {
 #ifdef __APPLE__
-                // sysctl vm.loadavg returns a struct loadavg with fixed-point values.
-                // The kernel layout is uint32_t ldavg[3] + padding + long fscale.
-                // Using a double[3] buffer would reinterpret the uint32_t bits as
-                // IEEE 754, producing denormalized garbage.
-                struct loadavg load_info;
+                // sysctl vm.loadavg returns fixed-point load averages with the
+                // layout { uint32_t ldavg[3]; long fscale; }. The struct loadavg
+                // is not available in macOS user-space headers, so define inline.
+                struct { uint32_t ldavg[3]; long fscale; } load_info;
                 size_t len = sizeof(load_info);
                 if (sysctlbyname("vm.loadavg", &load_info, &len, NULL, 0) == 0 &&
                     load_info.fscale > 0)

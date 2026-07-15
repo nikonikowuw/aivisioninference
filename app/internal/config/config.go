@@ -170,10 +170,10 @@ func Load() (*Config, error) {
 	v := viper.New()
 	setDefaults(v)
 
-	// Determine the environment (default to "development").
+	// Determine the environment (default to "dev" to match config.dev.yaml).
 	env := os.Getenv("NIKO_APP_ENV")
 	if env == "" {
-		env = "development"
+		env = "dev"
 	}
 
 	// Merge environment-specific config file (lowest priority).

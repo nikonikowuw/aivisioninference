@@ -137,6 +137,10 @@ func main() {
 		// AIVisionInference: Edge Node Metrics.
 		&model.EdgeNodeMetrics{},
 		&model.EdgeNodeEngineMetrics{},
+
+		// AIVisionInference: Alert Rules and Events.
+		&model.AlertRule{},
+		&model.AlertEvent{},
 	); err != nil {
 		log.Fatalf("auto migrate: %v", err)
 	}

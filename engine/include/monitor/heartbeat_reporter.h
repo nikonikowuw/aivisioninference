@@ -18,6 +18,11 @@ namespace aivision
         class DeviceMonitor;
         class MetricsFlattener;
 
+        namespace detail
+        {
+            class CurlHandle;
+        }
+
         class HeartbeatReporter
         {
         public:
@@ -59,6 +64,7 @@ namespace aivision
             std::mutex stop_mutex_;
             std::condition_variable stop_cv_;
             std::chrono::steady_clock::time_point start_time_;
+            std::unique_ptr<detail::CurlHandle> curl_handle_;
         };
     }
 }

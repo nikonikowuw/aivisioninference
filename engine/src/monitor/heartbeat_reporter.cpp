@@ -31,9 +31,11 @@ namespace aivision
 {
     namespace monitor
     {
-        namespace
+        namespace detail
         {
-            // RAII wrapper for CURL resources to ensure cleanup on exception/early return
+            // RAII wrapper for CURL resources to ensure cleanup on exception/early return.
+            // Must outlive individual requests — used as a member of HeartbeatReporter
+            // so the underlying connection pool and TLS sessions survive across heartbeats.
             class CurlHandle {
             private:
                 CURL* curl_;
@@ -64,8 +66,23 @@ namespace aivision
                 struct curl_slist* headers() const { return headers_; }
 
                 bool is_valid() const { return curl_ != nullptr; }
-            };
 
+                /// Reset all request-specific options while keeping the connection cache alive.
+                /// Call before reusing this handle for a new request.
+                void reset() {
+                    if (headers_) {
+                        curl_slist_free_all(headers_);
+                        headers_ = nullptr;
+                    }
+                    if (curl_) {
+                        curl_easy_reset(curl_);
+                    }
+                }
+            };
+        }
+
+        namespace
+        {
             uint64_t GetTotalMemory()
             {
                 static const uint64_t cached_mem = []() {
@@ -364,8 +381,16 @@ namespace aivision
 
         void HeartbeatReporter::SendHeartbeat()
         {
-            CurlHandle curl_handle;
-            if (!curl_handle.is_valid()) {
+            // Lazy-init the CURL handle on first use so it stays alive across heartbeats.
+            // curl_easy_reset() below reinitialises request-specific options while keeping
+            // the connection pool, DNS cache, and TLS session cache alive — eliminating
+            // the TCP/TLS handshake overhead on every heartbeat.
+            if (!curl_handle_) {
+                curl_handle_ = std::make_unique<detail::CurlHandle>();
+            }
+            curl_handle_->reset();
+
+            if (!curl_handle_->is_valid()) {
                 std::cerr << "[HeartbeatReporter] Failed to initialize CURL" << std::endl;
                 consecutive_failures_++;
                 return;
@@ -375,16 +400,16 @@ namespace aivision
             std::string url = config.platform_url + "/api/v1/edge-nodes/" + config.node_id + "/heartbeat";
             std::string payload = BuildHeartbeatPayload();
 
-            curl_handle.add_header("Content-Type: application/json");
+            curl_handle_->add_header("Content-Type: application/json");
 
             std::string auth_header = "Authorization: Bearer " + config.auth_token;
-            curl_handle.add_header(auth_header.c_str());
+            curl_handle_->add_header(auth_header.c_str());
 
             std::string response_data;
 
-            CURL* curl = curl_handle.get();
+            CURL* curl = curl_handle_->get();
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_handle.headers());
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_handle_->headers());
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
             curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.length());
 
@@ -397,8 +422,6 @@ namespace aivision
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 
             CURLcode res = curl_easy_perform(curl);
-
-            // Resources are automatically cleaned up by CurlHandle destructor
 
             if (res == CURLE_OK)
             {

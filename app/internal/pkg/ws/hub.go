@@ -11,6 +11,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// Well-known topic types for WebSocket messages.
+const (
+	TopicEdgeNodeMetrics      = "edge-node-metrics"
+	TopicEdgeNodeEngineMetrics = "edge-node-engine-metrics"
+)
+
 // Message is the envelope for all WebSocket messages.
 type Message struct {
 	Type     string      `json:"type"`

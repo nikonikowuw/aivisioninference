@@ -74,7 +74,7 @@ func (c *Client) Unsubscribe(nodeID string, topic string) {
 func (c *Client) IsSubscribed(nodeID string, topic string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if topic == "edge-node-metrics" || topic == "edge-node-engine-metrics" {
+	if topic == TopicEdgeNodeMetrics || topic == TopicEdgeNodeEngineMetrics {
 		if c.subscriptions[nodeID+":metrics"] || c.subscriptions["*:metrics"] {
 			return true
 		}

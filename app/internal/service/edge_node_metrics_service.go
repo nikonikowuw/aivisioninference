@@ -80,7 +80,7 @@ func BroadcastMetricsEvent(hub *ws.Hub, nodeID string, metrics *model.EdgeNodeMe
 		return
 	}
 	hub.Broadcast(&ws.Message{
-		Type:   "edge-node-metrics",
+		Type:   ws.TopicEdgeNodeMetrics,
 		NodeID: nodeID,
 		Payload: map[string]interface{}{
 			"node_id":       nodeID,
@@ -152,14 +152,7 @@ func (s *EdgeNodeMetricsService) QueryMetrics(ctx context.Context, nodeID string
 	}
 
 	// 2. Route metric query to corresponding repository
-	isEngineMetric := false
-	switch req.Metric {
-	case "active_stream_count", "dma_used_bytes", "dma_total_bytes", "npu_used_bytes", "npu_total_bytes",
-		"worker_count", "idle_worker_count", "decode_sessions", "encode_sessions", "decode_slots_used",
-		"encode_slots_used", "egress_bps", "preview_pipeline_count", "inference_pipeline_count",
-		"mixed_pipeline_count", "preview_capacity", "preview_in_use", "accelerator_utilization":
-		isEngineMetric = true
-	}
+	isEngineMetric := s.engineMetricsRepo.IsEngineMetric(req.Metric)
 
 	var items []dto.MetricDataPoint
 	var total int64

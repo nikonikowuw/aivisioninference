@@ -132,7 +132,7 @@ func (s *EngineMetricsStore) UpdateNode(nodeID string, snapshot *controlproto.En
 	// 2. Broadcast to WebSocket clients
 	if s.hub != nil {
 		s.hub.Broadcast(&ws.Message{
-			Type:    "edge-node-engine-metrics",
+			Type:    ws.TopicEdgeNodeEngineMetrics,
 			NodeID:  nodeID,
 			Payload: snapshot,
 		})

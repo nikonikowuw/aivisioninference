@@ -18,7 +18,7 @@ import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { edgeNodeApi, type EdgeNodeCardSnapshot } from 'services/edgeNode';
@@ -160,18 +160,20 @@ export default function EdgeNodeList() {
   }, [onDeployOpen]);
 
   // Client-side sorting
-  const sortedNodes = [...nodes].sort((a, b) => {
-    if (sortBy === 'cpu') {
-      return (b.cpu_usage ?? 0) - (a.cpu_usage ?? 0);
-    }
-    if (sortBy === 'memory') {
-      return (b.memory_usage ?? 0) - (a.memory_usage ?? 0);
-    }
-    if (sortBy === 'load') {
-      return (b.current_load ?? 0) - (a.current_load ?? 0);
-    }
-    return 0; // default
-  });
+  const sortedNodes = useMemo(() => {
+    return [...nodes].sort((a, b) => {
+      if (sortBy === 'cpu') {
+        return (b.cpu_usage ?? 0) - (a.cpu_usage ?? 0);
+      }
+      if (sortBy === 'memory') {
+        return (b.memory_usage ?? 0) - (a.memory_usage ?? 0);
+      }
+      if (sortBy === 'load') {
+        return (b.current_load ?? 0) - (a.current_load ?? 0);
+      }
+      return 0; // default
+    });
+  }, [nodes, sortBy]);
 
   if (initialLoading) {
     return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;

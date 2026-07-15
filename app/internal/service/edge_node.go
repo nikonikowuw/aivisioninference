@@ -1093,17 +1093,4 @@ func (s *EdgeNodeService) AssembleCardSnapshots(ctx context.Context, nodes []mod
 	return snapshots, nil
 }
 
-func (s *EdgeNodeService) getLatestHostMetrics(ctx context.Context, nodeID string) (*model.EdgeNodeMetrics, error) {
-	var metrics model.EdgeNodeMetrics
-	err := s.metricsRepo.DB(ctx).
-		Where("node_id = ?", nodeID).
-		Order("created_at DESC").
-		First(&metrics).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &metrics, nil
-}
+

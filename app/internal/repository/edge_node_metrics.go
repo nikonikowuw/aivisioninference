@@ -119,6 +119,9 @@ func (r *EdgeNodeMetricsRepository) listMetricsAggregated(ctx context.Context, n
 	}
 
 	aggFunc := req.Aggregation
+	if aggFunc != "avg" && aggFunc != "max" && aggFunc != "min" && aggFunc != "sum" && aggFunc != "count" {
+		return nil, 0, fmt.Errorf("unsupported aggregation function: %s", aggFunc)
+	}
 	query := fmt.Sprintf(
 		"date_trunc('second', date_trunc('minute', created_at) + "+
 			"ceil(extract(epoch from created_at) / extract(epoch from interval '%s')) * "+

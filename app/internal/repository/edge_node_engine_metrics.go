@@ -48,6 +48,12 @@ var engineMetricColumnMap = map[string]string{
 	"accelerator_utilization":  "accelerator_utilization",
 }
 
+// IsEngineMetric checks whether a metric name belongs to the engine metrics table.
+func (r *EdgeNodeEngineMetricsRepository) IsEngineMetric(metric string) bool {
+	_, ok := engineMetricColumnMap[metric]
+	return ok
+}
+
 // ListMetrics returns paginated time-series metrics for a specific node and metric type.
 func (r *EdgeNodeEngineMetricsRepository) ListMetrics(ctx context.Context, nodeID string, req dto.MetricQueryRequest) ([]dto.MetricDataPoint, int64, error) {
 	from, err := req.GetFromTime()

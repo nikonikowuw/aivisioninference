@@ -17,7 +17,6 @@
 #include <unistd.h>
 #include <random>
 #include <cmath>
-#include <stdexcept>
 
 #ifdef __APPLE__
 #include <sys/types.h>
@@ -576,26 +575,14 @@ namespace aivision
                 // Parse JSON response using nlohmann/json library
                 auto response = json::parse(response_json);
 
-                // Check for successful response structure.
-                // "code" may be a number (e.g. 0) or a string (e.g. "0") depending on
-                // the API version — handle both without throwing type_error.302.
-                if (!response.contains("code")) {
-                    std::cerr << "[HeartbeatReporter] Heartbeat response missing 'code' field" << std::endl;
+                // The Go backend returns "code" as a string — "OK" for success,
+                // or an error code like "NODE_NOT_FOUND", "ENGINE_VERSION_INCOMPATIBLE" etc.
+                if (!response.contains("code") || !response["code"].is_string()) {
+                    std::cerr << "[HeartbeatReporter] Heartbeat response missing or invalid 'code' field" << std::endl;
                     return;
                 }
-                int code = 0;
-                if (response["code"].is_number()) {
-                    code = response["code"].get<int>();
-                } else if (response["code"].is_string()) {
-                    const std::string code_str = response["code"].get<std::string>();
-                    // String may not be a valid integer (e.g. "success") — treat as error.
-                    try {
-                        code = std::stoi(code_str);
-                    } catch (const std::exception&) {
-                        code = -1;
-                    }
-                }
-                if (code != 0) {
+                const std::string code = response["code"].get<std::string>();
+                if (code != "OK") {
                     std::cerr << "[HeartbeatReporter] Heartbeat response error: code=" << code
                               << ", message=" << (response.contains("message") ? response["message"].get<std::string>() : "unknown")
                               << std::endl;

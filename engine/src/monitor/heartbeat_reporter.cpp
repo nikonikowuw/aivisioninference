@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <random>
 #include <cmath>
+#include <stdexcept>
 
 #ifdef __APPLE__
 #include <sys/types.h>
@@ -586,7 +587,13 @@ namespace aivision
                 if (response["code"].is_number()) {
                     code = response["code"].get<int>();
                 } else if (response["code"].is_string()) {
-                    code = std::stoi(response["code"].get<std::string>());
+                    const std::string code_str = response["code"].get<std::string>();
+                    // String may not be a valid integer (e.g. "success") — treat as error.
+                    try {
+                        code = std::stoi(code_str);
+                    } catch (const std::exception&) {
+                        code = -1;
+                    }
                 }
                 if (code != 0) {
                     std::cerr << "[HeartbeatReporter] Heartbeat response error: code=" << code

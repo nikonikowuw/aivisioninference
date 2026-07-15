@@ -551,7 +551,7 @@ export default function EdgeNodeDetail() {
                                 </Text>
                             </Box>
                             <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
-                                <Text color={textColorSecondary} fontSize="xs">NPU / GPU {t('fields.utilization') || '使用率'}</Text>
+                                <Text color={textColorSecondary} fontSize="xs">{t('fields.acceleratorUsage')}</Text>
                                 <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
                                     {liveMetrics.accelerator_metrics_valid && liveMetrics.accelerator_utilization !== undefined
                                         ? `${liveMetrics.accelerator_utilization.toFixed(1)}%`
@@ -559,7 +559,7 @@ export default function EdgeNodeDetail() {
                                 </Text>
                             </Box>
                             <Box borderBottom="1px solid" borderColor={borderColor} pb="10px">
-                                <Text color={textColorSecondary} fontSize="xs">{t('fields.activeStreams') || '活跃流数'}</Text>
+                                <Text color={textColorSecondary} fontSize="xs">{t('fields.activeStreams')}</Text>
                                 <Text color={textColor} fontSize="sm" fontWeight="500" mt="5px">
                                     {liveMetrics.active_stream_count !== undefined ? liveMetrics.active_stream_count : 'N/A'}
                                 </Text>
@@ -633,7 +633,7 @@ export default function EdgeNodeDetail() {
                         </Box>
                         <Box>
                             <MetricsTimeSeries
-                                title="NPU / GPU 使用率"
+                                title={t('metrics.acceleratorUsage')}
                                 data={accData}
                                 loading={metricsLoading}
                                 unit="%"
@@ -643,7 +643,7 @@ export default function EdgeNodeDetail() {
                         </Box>
                         <Box>
                             <MetricsTimeSeries
-                                title="活跃视频流数"
+                                title={t('metrics.activeVideoStreams')}
                                 data={streamData}
                                 loading={metricsLoading}
                                 unit=""

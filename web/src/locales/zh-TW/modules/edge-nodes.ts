@@ -6,6 +6,19 @@ export const edgeNodes = {
   overviewOffline: '離線節點',
   overviewError: '錯誤節點',
   basicInfo: '基本資訊',
+  metrics: {
+    title: '指標趨勢',
+    last1h: '近1小時',
+    last6h: '近6小時',
+    last24h: '近24小時',
+    last7d: '近7天',
+    cpuUsage: 'CPU 使用率',
+    memoryUsage: '記憶體使用率',
+    netRx: '網路接收',
+    netTx: '網路傳送',
+    acceleratorUsage: 'NPU / GPU 使用率',
+    activeVideoStreams: '活躍視訊流數',
+  },
   fields: {
     id: 'ID',
     node: '個節點',
@@ -47,6 +60,7 @@ export const edgeNodes = {
     diskUsage: '磁碟使用率',
     utilization: '使用率',
     activeStreams: '活躍視訊流數',
+    acceleratorUsage: 'NPU / GPU 使用率',
     sortBy: '排序方式',
   },
   sort: {

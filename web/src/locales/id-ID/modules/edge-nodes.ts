@@ -6,6 +6,19 @@ export const edgeNodes = {
   overviewOffline: 'Node Offline',
   overviewError: 'Node Error',
   basicInfo: 'Informasi Dasar',
+  metrics: {
+    title: 'Tren Metrik',
+    last1h: '1 Jam Terakhir',
+    last6h: '6 Jam Terakhir',
+    last24h: '24 Jam Terakhir',
+    last7d: '7 Hari Terakhir',
+    cpuUsage: 'Penggunaan CPU',
+    memoryUsage: 'Penggunaan Memori',
+    netRx: 'RX Jaringan',
+    netTx: 'TX Jaringan',
+    acceleratorUsage: 'Utilitas NPU / GPU',
+    activeVideoStreams: 'Aliran Video Aktif',
+  },
   fields: {
     id: 'ID',
     node: 'node',
@@ -47,6 +60,7 @@ export const edgeNodes = {
     diskUsage: 'Penggunaan Disk',
     utilization: 'Utilitas',
     activeStreams: 'Aliran Aktif',
+    acceleratorUsage: 'Utilitas NPU / GPU',
     sortBy: 'Urutkan Berdasarkan',
   },
   sort: {

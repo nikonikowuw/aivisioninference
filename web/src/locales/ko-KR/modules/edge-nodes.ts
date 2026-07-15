@@ -6,6 +6,19 @@ export const edgeNodes = {
   overviewOffline: '오프라인 노드',
   overviewError: '오류 노드',
   basicInfo: '기본 정보',
+  metrics: {
+    title: '메트릭 추세',
+    last1h: '최근 1시간',
+    last6h: '최근 6시간',
+    last24h: '최근 24시간',
+    last7d: '최근 7일',
+    cpuUsage: 'CPU 사용률',
+    memoryUsage: '메모리 사용률',
+    netRx: '네트워크 수신',
+    netTx: '네트워크 송신',
+    acceleratorUsage: 'NPU / GPU 사용률',
+    activeVideoStreams: '활성 비디오 스트림 수',
+  },
   fields: {
     id: 'ID',
     node: '노드',
@@ -47,6 +60,7 @@ export const edgeNodes = {
     diskUsage: '디스크 사용률',
     utilization: '사용률',
     activeStreams: '활성 스트림 수',
+    acceleratorUsage: 'NPU / GPU 사용률',
     sortBy: '정렬 기준',
   },
   sort: {

@@ -1,4 +1,4 @@
-import { AddIcon, ViewIcon } from '@chakra-ui/icons';
+import { AddIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
@@ -9,19 +9,24 @@ import {
   Text,
   Select,
   SimpleGrid,
+  Stat,
+  StatLabel,
+  StatNumber,
   useColorModeValue,
   useDisclosure,
   useToast,
 } from '@chakra-ui/react';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
+import Card from 'components/card/Card';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { edgeNodeApi, type EdgeNodeCardSnapshot } from 'services/edgeNode';
+import { edgeNodeMetricsApi, type OverviewStats } from 'services/edgeNodeMetrics';
 import { useWebSocket } from 'hooks/useWebSocket';
 import { AlgorithmDeployModal } from './components/AlgorithmDeployModal';
 import EdgeNodeCreateModal from './components/EdgeNodeCreateModal';
@@ -42,7 +47,18 @@ export default function EdgeNodeList() {
   const [deleteTarget, setDeleteTarget] = useState<EdgeNodeCardSnapshot | null>(null);
   const [deployTarget, setDeployTarget] = useState<EdgeNodeCardSnapshot | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const lastRefreshTimeRef = useRef(0);
+
+  // Overview stats
+  const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const fetchOverview = useCallback(async () => {
+    try {
+      const data = await edgeNodeMetricsApi.getOverview();
+      setOverview(data);
+    } catch {
+      // Silent — overview is a non-critical enhancement
+    }
+  }, []);
 
   // Card view density state
   const [compact, setCompact] = useState(false);
@@ -74,14 +90,20 @@ export default function EdgeNodeList() {
     });
   }, [searchTrigger, loadNodes, toast, t]);
 
+  // Fetch overview stats on mount
+  useEffect(() => {
+    fetchOverview();
+  }, [fetchOverview]);
+
   // WebSocket real-time updates with throttling to prevent excessive refreshes
   const handleWsMessage = useCallback((msg: any) => {
     if (msg.type === 'edge-node-status') {
       const now = Date.now();
       // Throttle refreshes to at most once every 2 seconds
-      if (now - lastRefreshTime > 2000) {
-        setLastRefreshTime(now);
+      if (now - lastRefreshTimeRef.current > 2000) {
+        lastRefreshTimeRef.current = now;
         refresh();
+        fetchOverview();
       }
     } else if (msg.type === 'edge-node-metrics') {
       // Update node metrics in-place for real-time display
@@ -119,8 +141,7 @@ export default function EdgeNodeList() {
         return updated;
       });
     }
-  }, [lastRefreshTime, refresh, setNodes]);
-
+  }, [refresh, setNodes, fetchOverview]);
   const { send } = useWebSocket({
     onOpen: useCallback((ws: WebSocket) => {
       ws.send(JSON.stringify({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-status' } }));
@@ -219,14 +240,6 @@ export default function EdgeNodeList() {
             </HStack>
             <Button
               h="36px"
-              leftIcon={<ViewIcon />}
-              variant="outline"
-              onClick={() => navigate('/admin/devices/edge-nodes/overview')}
-            >
-              {t('overview')}
-            </Button>
-            <Button
-              h="36px"
               leftIcon={<AddIcon />}
               colorScheme="brand"
               onClick={onCreateOpen}
@@ -235,6 +248,34 @@ export default function EdgeNodeList() {
             </Button>
           </HStack>
         </Flex>
+
+        {/* Overview Stats */}
+        <SimpleGrid columns={{ base: 2, sm: 4 }} spacing="16px">
+          <Card p={4}>
+            <Stat>
+              <StatLabel color="gray.400" fontSize="sm">{t('overviewTotal')}</StatLabel>
+              <StatNumber color={textColor} fontSize="2xl">{overview?.total ?? total}</StatNumber>
+            </Stat>
+          </Card>
+          <Card p={4}>
+            <Stat>
+              <StatLabel color="gray.400" fontSize="sm">{t('overviewOnline')}</StatLabel>
+              <StatNumber color="green.500" fontSize="2xl">{overview?.online ?? '-'}</StatNumber>
+            </Stat>
+          </Card>
+          <Card p={4}>
+            <Stat>
+              <StatLabel color="gray.400" fontSize="sm">{t('overviewOffline')}</StatLabel>
+              <StatNumber color="gray.500" fontSize="2xl">{overview?.offline ?? '-'}</StatNumber>
+            </Stat>
+          </Card>
+          <Card p={4}>
+            <Stat>
+              <StatLabel color="gray.400" fontSize="sm">{t('overviewError')}</StatLabel>
+              <StatNumber color="red.500" fontSize="2xl">{overview?.error ?? '-'}</StatNumber>
+            </Stat>
+          </Card>
+        </SimpleGrid>
 
         {/* Filters */}
         <SearchBar

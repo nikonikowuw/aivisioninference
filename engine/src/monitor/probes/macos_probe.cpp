@@ -168,15 +168,30 @@ namespace aivision
                 vm_size_t page_size;
                 host_page_size(host_port, &page_size);
 
-                vm_statistics64_data_t vm_stats;
+                vm_statistics64_data_t vm_stats = {};
                 mach_msg_type_number_t vm_count = HOST_VM_INFO64_COUNT;
                 if (host_statistics64(host_port, HOST_VM_INFO64, (host_info64_t)&vm_stats, &vm_count) == KERN_SUCCESS)
                 {
-                    uint64_t active_bytes = static_cast<uint64_t>(vm_stats.active_count) * page_size;
-                    uint64_t wire_bytes = static_cast<uint64_t>(vm_stats.wire_count) * page_size;
-                    uint64_t speculative_bytes = static_cast<uint64_t>(vm_stats.speculative_count) * page_size;
-
-                    uint64_t used_mem = active_bytes + wire_bytes + speculative_bytes;
+                    // Matching Activity Monitor's "Memory Used":
+                    //   active  — pages recently referenced, actively in use
+                    //   wire    — pages pinned in RAM (cannot be paged out)
+                    //   speculative — pages likely to be accessed soon
+                    //   compressed — pages compressed by memory compressor (counted as used)
+                    //   purgeable  — pages marked purgeable (reclaimable, deducted from used)
+                    //
+                    // Formula: used = (active + wire + speculative + compressed - purgeable)
+                    //
+                    // On older macOS kernels that don't fill compressor_page_count or
+                    // purgeable_count, the zero-initialized struct makes these 0,
+                    // gracefully degrading to the legacy formula.
+                    // Use int64_t for used_pages to avoid unsigned underflow when
+                    // purgeable_count exceeds the sum of the other counters.
+                    int64_t used_pages = static_cast<int64_t>(vm_stats.active_count)
+                                       + static_cast<int64_t>(vm_stats.wire_count)
+                                       + static_cast<int64_t>(vm_stats.speculative_count)
+                                       + static_cast<int64_t>(vm_stats.compressor_page_count)
+                                       - static_cast<int64_t>(vm_stats.purgeable_count);
+                    if (used_pages < 0) used_pages = 0;
 
                     int64_t total_mem = 0;
                     size_t total_mem_len = sizeof(total_mem);
@@ -185,11 +200,14 @@ namespace aivision
 
                     if (total_mem > 0)
                     {
+                        double pct = (static_cast<double>(used_pages) * page_size / total_mem) * 100.0;
+                        if (pct > 100.0) pct = 100.0;
+
                         metrics.memory_usage.available = true;
                         metrics.memory_usage.stale = false;
-                        metrics.memory_usage.value = (static_cast<double>(used_mem) / total_mem) * 100.0;
+                        metrics.memory_usage.value = pct;
                         metrics.memory_usage.unit = "percent";
-                        metrics.memory_usage.source = "host_statistics64";
+                        metrics.memory_usage.source = "host_statistics64 (active+wire+spec+compressed-purgeable)";
                         metrics.memory_usage.error = "";
                         metrics.memory_usage.collected_at_ms = now_ms;
                     }

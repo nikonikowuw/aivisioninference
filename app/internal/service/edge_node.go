@@ -993,11 +993,21 @@ func (s *EdgeNodeService) AssembleCardSnapshots(ctx context.Context, nodes []mod
 		}
 	}
 
+	// Batch query heartbeat liveness to eliminate N+1 Redis ZSCORE rounds
+	var onlineMap map[string]bool
+	if s.heartbeats != nil {
+		nodeIDs := make([]string, len(nodes))
+		for i, n := range nodes {
+			nodeIDs[i] = n.ID
+		}
+		onlineMap, _ = s.heartbeats.BatchIsOnline(ctx, nodeIDs, s.heartbeatTimeout)
+	}
+
 	for _, node := range nodes {
-		// 1. Get status from Redis HeartbeatStore
+		// 1. Get status from Redis HeartbeatStore (batch result map lookup)
 		isOnline := false
-		if s.heartbeats != nil {
-			isOnline, _ = s.heartbeats.IsOnline(ctx, node.ID, s.heartbeatTimeout)
+		if onlineMap != nil {
+			isOnline = onlineMap[node.ID]
 		}
 		status := node.Status
 		if status != string(model.NodeStatusDisabled) {

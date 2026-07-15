@@ -26,6 +26,11 @@ func (r *EdgeNodeEngineMetricsRepository) Create(ctx context.Context, item *mode
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
+// BatchCreate inserts multiple metrics records in batches, reducing per-row overhead.
+func (r *EdgeNodeEngineMetricsRepository) BatchCreate(ctx context.Context, items []*model.EdgeNodeEngineMetrics) error {
+	return r.db.WithContext(ctx).CreateInBatches(items, 100).Error
+}
+
 // engineMetricColumnMap maps metric type names to their database column names
 var engineMetricColumnMap = map[string]string{
 	"active_stream_count":      "active_stream_count",

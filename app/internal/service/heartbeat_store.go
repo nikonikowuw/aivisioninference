@@ -28,6 +28,9 @@ type HeartbeatStore interface {
 	Remove(ctx context.Context, nodeID string) error
 	// IsOnline 检查节点是否在线。
 	IsOnline(ctx context.Context, nodeID string, timeout time.Duration) (bool, error)
+	// BatchIsOnline 批量检查节点在线状态，返回 nodeID → online 映射。
+	// 相比循环调用 IsOnline，可减少 Redis 往返次数。
+	BatchIsOnline(ctx context.Context, nodeIDs []string, timeout time.Duration) (map[string]bool, error)
 }
 
 // NewHeartbeatStore 根据 Redis 客户端可用性创建边缘节点 HeartbeatStore。
@@ -89,6 +92,29 @@ func (s *RedisHeartbeatStore) IsOnline(ctx context.Context, nodeID string, timeo
 	return time.Since(lastHeartbeat) <= timeout, nil
 }
 
+// BatchIsOnline 通过 ZMSCORE 一次查询所有节点的心跳分数，消除 N+1 Redis 往返。
+func (s *RedisHeartbeatStore) BatchIsOnline(ctx context.Context, nodeIDs []string, timeout time.Duration) (map[string]bool, error) {
+	if len(nodeIDs) == 0 {
+		return map[string]bool{}, nil
+	}
+	scores, err := s.rdb.ZMScore(ctx, s.key, nodeIDs...).Result()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]bool, len(nodeIDs))
+	for i, nodeID := range nodeIDs {
+		score := scores[i]
+		// ZMScore returns 0 for non-existent members; treat as offline
+		if score == 0 {
+			result[nodeID] = false
+			continue
+		}
+		lastHeartbeat := time.Unix(int64(score), 0)
+		result[nodeID] = time.Since(lastHeartbeat) <= timeout
+	}
+	return result, nil
+}
+
 // ---------------------------------------------------------------------------
 // NewMemoryHeartbeatStore creates an in-memory HeartbeatStore for testing.
 // It does not require a Redis connection and is intended for unit tests.
@@ -148,4 +174,19 @@ func (s *MemoryHeartbeatStore) IsOnline(_ context.Context, nodeID string, timeou
 		return false, nil
 	}
 	return time.Since(last) <= timeout, nil
+}
+
+func (s *MemoryHeartbeatStore) BatchIsOnline(_ context.Context, nodeIDs []string, timeout time.Duration) (map[string]bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make(map[string]bool, len(nodeIDs))
+	for _, nodeID := range nodeIDs {
+		last, ok := s.data[nodeID]
+		if !ok {
+			result[nodeID] = false
+		} else {
+			result[nodeID] = time.Since(last) <= timeout
+		}
+	}
+	return result, nil
 }

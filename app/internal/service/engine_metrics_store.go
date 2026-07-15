@@ -41,6 +41,8 @@ type EngineMetricsStore struct {
 	hub    *ws.Hub
 	dbRepo *repository.EdgeNodeEngineMetricsRepository
 	dbChan chan *model.EdgeNodeEngineMetrics
+
+	stopped chan struct{} // closed on first Stop() call to prevent double-close
 }
 
 // NodeEngineMetrics is the latest metrics snapshot and receive time for one edge node.
@@ -59,6 +61,7 @@ func NewEngineMetricsStore(historyBuffer *HistoryBuffer, hub *ws.Hub, dbRepo *re
 		hub:           hub,
 		dbRepo:        dbRepo,
 		dbChan:        make(chan *model.EdgeNodeEngineMetrics, 1000),
+		stopped:       make(chan struct{}),
 	}
 	store.lastUpdateTime.Store(time.Time{})
 
@@ -67,20 +70,82 @@ func NewEngineMetricsStore(historyBuffer *HistoryBuffer, hub *ws.Hub, dbRepo *re
 	return store
 }
 
-// Stop closes dbChan and allows dbWriteWorker to terminate gracefully.
+// Stop signals dbWriteWorker to terminate and drains remaining buffered records.
+// Safe to call multiple times — subsequent calls are no-ops.
+// Unlike the old implementation, dbChan is NOT closed — UpdateNode can still
+// safely send to the channel after shutdown (select goes to default/drop)
+// without panicking on a closed-channel send.
 func (s *EngineMetricsStore) Stop() {
-	if s.dbChan != nil {
-		close(s.dbChan)
+	select {
+	case <-s.stopped:
+		return
+	default:
+		close(s.stopped)
 	}
 }
 
+const (
+	dbBatchSize       = 100                // flush when this many records accumulated
+	dbFlushInterval   = 100 * time.Millisecond // or after this much idle time
+	dbBatchWriteTimeout = 10 * time.Second
+)
+
+// dbWriteWorker collects incoming engine metrics records into a batch and
+// flushes them to the database periodically or when the batch reaches capacity.
+// This replaces the old serial-per-record Create() pattern which couldn't keep
+// up with high-frequency metric ingestion from many edge nodes.
 func (s *EngineMetricsStore) dbWriteWorker() {
-	for dbModel := range s.dbChan {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := s.dbRepo.Create(ctx, dbModel); err != nil {
-			s.logger.Error("Failed to persist engine metrics snapshot to database", zap.Error(err))
+	batch := make([]*model.EdgeNodeEngineMetrics, 0, dbBatchSize)
+	ticker := time.NewTicker(dbFlushInterval)
+	defer ticker.Stop()
+
+	flush := func() {
+		if len(batch) == 0 {
+			return
 		}
-		cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), dbBatchWriteTimeout)
+		defer cancel()
+		if err := s.dbRepo.BatchCreate(ctx, batch); err != nil {
+			s.logger.Error("Failed to batch persist engine metrics snapshots",
+				zap.Int("count", len(batch)), zap.Error(err))
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case <-s.stopped:
+			// Drain remaining items from dbChan before exiting
+			drain := true
+			for drain {
+				select {
+				case dbModel, ok := <-s.dbChan:
+					if !ok {
+						drain = false
+						continue
+					}
+					batch = append(batch, dbModel)
+					if len(batch) >= dbBatchSize {
+						flush()
+					}
+				default:
+					drain = false
+				}
+			}
+			flush()
+			return
+		case dbModel, ok := <-s.dbChan:
+			if !ok {
+				flush()
+				return
+			}
+			batch = append(batch, dbModel)
+			if len(batch) >= dbBatchSize {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
+		}
 	}
 }
 

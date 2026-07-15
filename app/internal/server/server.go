@@ -112,6 +112,10 @@ func (a *App) Run() {
 		a.EdgeNodeSvc.Stop()
 	}
 
+	if a.Router != nil && a.Router.EngineMetricsStore != nil {
+		a.Router.EngineMetricsStore.Stop()
+	}
+
 	if err := a.HTTPServer.Shutdown(ctx); err != nil {
 		zap.L().Error("server forced shutdown", zap.Error(err))
 	}

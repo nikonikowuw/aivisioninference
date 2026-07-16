@@ -20,12 +20,13 @@ import Card from 'components/card/Card';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { useInfiniteScroll } from 'hooks/useInfiniteScroll';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { edgeNodeApi, type EdgeNodeCardSnapshot } from 'services/edgeNode';
 import { edgeNodeMetricsApi, type OverviewStats } from 'services/edgeNodeMetrics';
 import { useWebSocket } from 'hooks/useWebSocket';
+import { WS_CMD, WS_TOPIC } from 'constants/websocket';
 import { AlgorithmDeployModal } from './components/AlgorithmDeployModal';
 import EdgeNodeCreateModal from './components/EdgeNodeCreateModal';
 import EdgeNodeCard from './components/EdgeNodeCard';
@@ -48,7 +49,6 @@ export default function EdgeNodeList() {
   const [deleteTarget, setDeleteTarget] = useState<EdgeNodeCardSnapshot | null>(null);
   const [deployTarget, setDeployTarget] = useState<EdgeNodeCardSnapshot | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const lastRefreshTimeRef = useRef(0);
 
   // Overview stats
   const [overview, setOverview] = useState<OverviewStats | null>(null);
@@ -93,17 +93,12 @@ export default function EdgeNodeList() {
     fetchOverview();
   }, [fetchOverview]);
 
-  // WebSocket real-time updates with throttling to prevent excessive refreshes
+  // WebSocket real-time updates — metric updates mutate individual cards in-place;
+  // status-only refreshes are skipped because the metrics messages already carry
+  // the same data. Full list reloads only happen on search/filter changes, create,
+  // or delete (handled by their respective callbacks).
   const handleWsMessage = useCallback((msg: any) => {
-    if (msg.type === 'edge-node-status') {
-      const now = Date.now();
-      // Throttle refreshes to at most once every 2 seconds
-      if (now - lastRefreshTimeRef.current > 2000) {
-        lastRefreshTimeRef.current = now;
-        refresh();
-        fetchOverview();
-      }
-    } else if (msg.type === 'edge-node-metrics') {
+    if (msg.type === WS_TOPIC.EDGE_NODE_METRICS) {
       // Update node metrics in-place for real-time display
       setNodes((prev) => {
         if (!prev || !prev.length) return prev;
@@ -120,7 +115,7 @@ export default function EdgeNodeList() {
         };
         return updated;
       });
-    } else if (msg.type === 'edge-node-engine-metrics') {
+    } else if (msg.type === WS_TOPIC.EDGE_NODE_ENGINE_METRICS) {
       // Update engine & accelerator metrics in real-time
       setNodes((prev) => {
         if (!prev || !prev.length) return prev;
@@ -141,7 +136,7 @@ export default function EdgeNodeList() {
         return updated;
       });
     }
-  }, [refresh, setNodes, fetchOverview]);
+  }, [setNodes]);
   const { send } = useWebSocket({
     onOpen: useCallback((_ws: WebSocket) => {
       // Subscriptions are handled in the useEffect below for cleaner lifecycle management
@@ -150,13 +145,13 @@ export default function EdgeNodeList() {
   });
 
   useEffect(() => {
-    send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-status' } });
-    send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-metrics' } });
-    send({ type: 'subscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } });
+    send({ type: WS_CMD.SUBSCRIBE, payload: { node_id: '*', topic: WS_TOPIC.EDGE_NODE_STATUS } });
+    send({ type: WS_CMD.SUBSCRIBE, payload: { node_id: '*', topic: WS_TOPIC.EDGE_NODE_METRICS } });
+    send({ type: WS_CMD.SUBSCRIBE, payload: { node_id: '*', topic: WS_TOPIC.EDGE_NODE_ENGINE_METRICS } });
     return () => {
-      send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-status' } });
-      send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-metrics' } });
-      send({ type: 'unsubscribe', payload: { node_id: '*', topic: 'edge-node-engine-metrics' } });
+      send({ type: WS_CMD.UNSUBSCRIBE, payload: { node_id: '*', topic: WS_TOPIC.EDGE_NODE_STATUS } });
+      send({ type: WS_CMD.UNSUBSCRIBE, payload: { node_id: '*', topic: WS_TOPIC.EDGE_NODE_METRICS } });
+      send({ type: WS_CMD.UNSUBSCRIBE, payload: { node_id: '*', topic: WS_TOPIC.EDGE_NODE_ENGINE_METRICS } });
     };
   }, [send]);
 

@@ -62,7 +62,9 @@ func BuildEdgeNodeMetrics(nodeID string, req *dto.HeartbeatRequest) *model.EdgeN
 		Uptime:      req.Uptime,
 		ProcessCount:      req.ProcessCount,
 		ThreadCount:       req.ThreadCount,
-		Temperature:       req.Temperature,
+		Temperature:              req.Temperature,
+		AcceleratorUtilization:   req.AcceleratorUtilization,
+		AcceleratorMetricsValid:  req.AcceleratorMetricsValid,
 		WorkerCount:       req.WorkerCount,
 		IdleWorkerCount:   req.IdleWorkerCount,
 		ActiveStreamCount: req.ActiveStreamCount,
@@ -95,6 +97,11 @@ func BroadcastMetricsEvent(hub *ws.Hub, nodeID string, metrics *model.EdgeNodeMe
 			"thread_count":  metrics.ThreadCount,
 			"temperature":   metrics.Temperature,
 			"uptime":        metrics.Uptime,
+			"accelerator_utilization":  metrics.AcceleratorUtilization,
+			"accelerator_metrics_valid": metrics.AcceleratorMetricsValid,
+			"active_stream_count":  metrics.ActiveStreamCount,
+			"worker_count":        metrics.WorkerCount,
+			"idle_worker_count":   metrics.IdleWorkerCount,
 		},
 	})
 }

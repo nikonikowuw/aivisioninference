@@ -510,6 +510,12 @@ func (s *EdgeNodeService) GetOverviewStats(ctx context.Context) (*dto.OverviewSt
 }
 
 // buildMetricsRecord converts a HeartbeatRequest into an EdgeNodeMetrics model for persistence.
+// f32ptr converts float64 to *float32.
+func f32ptr(v float64) *float32 {
+	f := float32(v)
+	return &f
+}
+
 func (s *EdgeNodeService) buildMetricsRecord(nodeID string, req *dto.HeartbeatRequest) *model.EdgeNodeMetrics {
 	return BuildEdgeNodeMetrics(nodeID, req)
 }
@@ -1084,6 +1090,8 @@ func (s *EdgeNodeService) AssembleCardSnapshots(ctx context.Context, nodes []mod
 			snap.NetRxSpeed = &hostMetrics.NetRxSpeed
 			snap.NetTxSpeed = &hostMetrics.NetTxSpeed
 			snap.Temperature = &hostMetrics.Temperature
+			snap.AcceleratorUtilization = f32ptr(hostMetrics.AcceleratorUtilization)
+			snap.AcceleratorMetricsValid = hostMetrics.AcceleratorMetricsValid
 			snap.Uptime = &hostMetrics.Uptime
 			snap.CurrentLoad = hostMetrics.CurrentLoad
 

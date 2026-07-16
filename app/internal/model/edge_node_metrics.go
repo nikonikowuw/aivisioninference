@@ -42,6 +42,10 @@ type EdgeNodeMetrics struct {
 	ThreadCount  int     `gorm:"not null;default:0;comment:线程数" json:"thread_count"`
 	Temperature  float64 `gorm:"not null;default:0;comment:核心温度(摄氏度)" json:"temperature"`
 
+	// Accelerator (NPU/GPU)
+	AcceleratorUtilization  float64 `gorm:"not null;default:0;comment:加速器使用率 0-100" json:"accelerator_utilization"`
+	AcceleratorMetricsValid bool    `gorm:"not null;default:false;comment:加速器指标是否有效" json:"accelerator_metrics_valid"`
+
 	// Engine-specific
 	WorkerCount       int `gorm:"not null;default:0;comment:工作线程数" json:"worker_count"`
 	IdleWorkerCount   int `gorm:"not null;default:0;comment:空闲工作线程数" json:"idle_worker_count"`

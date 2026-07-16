@@ -112,6 +112,8 @@ type HeartbeatRequest struct {
 	ActiveStreamCount int             `json:"active_stream_count,omitempty"`
 	DecodeSessions    int             `json:"decode_sessions,omitempty"`
 	EncodeSessions    int             `json:"encode_sessions,omitempty"`
+	AcceleratorUtilization  float64 `json:"accelerator_utilization,omitempty"`
+	AcceleratorMetricsValid bool    `json:"accelerator_metrics_valid,omitempty"`
 }
 
 // PendingDeployment 待下发算法包信息

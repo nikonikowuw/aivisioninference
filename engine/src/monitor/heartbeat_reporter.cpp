@@ -604,6 +604,8 @@ namespace aivision
                 j["active_stream_count"] = engine_metrics.active_stream_count;
                 j["decode_sessions"] = engine_metrics.decode_sessions;
                 j["encode_sessions"] = engine_metrics.encode_sessions;
+                j["accelerator_utilization"] = engine_metrics.accelerator_utilization;
+                j["accelerator_metrics_valid"] = engine_metrics.accelerator_metrics_valid;
             }
 
             return j.dump();

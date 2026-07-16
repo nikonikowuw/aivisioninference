@@ -45,7 +45,9 @@ var metricColumnMap = map[string]string{
 	"worker_count":        "worker_count",
 	"idle_worker_count":   "idle_worker_count",
 	"active_stream_count": "active_stream_count",
-	"current_load":        "current_load",
+	"current_load":               "current_load",
+	"accelerator_utilization":     "accelerator_utilization",
+	"accelerator_metrics_valid":   "accelerator_metrics_valid",
 }
 
 // ListMetrics returns paginated time-series metrics for a specific node and metric type.

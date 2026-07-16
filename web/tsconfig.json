@@ -38,6 +38,9 @@
       "contexts/*": [
         "src/contexts/*"
       ],
+      "constants/*": [
+        "src/constants/*"
+      ],
       "layouts/*": [
         "src/layouts/*"
       ],

@@ -25,6 +25,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
+import { EmptyState } from "components/empty/EmptyState";
 import { useAuth } from "contexts/AuthContext";
 import { useDateFormat } from "hooks/useDateFormat";
 import { useCallback, useEffect, useState } from "react";
@@ -322,9 +323,7 @@ export default function PersonDetail() {
               <Spinner />
             </Center>
           ) : smartRecords.length === 0 ? (
-            <Center py="40px">
-              <Text color={textColorSecondary}>{t("detail.noRecords")}</Text>
-            </Center>
+            <EmptyState title={t("detail.noRecords")} />
           ) : (
             <Box overflowX="auto">
               <Table variant="simple" size="sm">

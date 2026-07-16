@@ -39,6 +39,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { deviceStagingApi, type DiscoveredDevice } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -481,15 +482,7 @@ export default function DeviceStaging() {
       <Card px="0px" pb="20px">
         <Box overflowX="auto">
           {devices.length === 0 ? (
-            <VStack py="60px" spacing={4}>
-              <Icon as={MdOutlineDeviceHub} w={12} h={12} color="gray.400" />
-              <Text fontSize="lg" color="gray.500">
-                {t('empty.title')}
-              </Text>
-              <Text fontSize="sm" color="gray.400">
-                {t('empty.description')}
-              </Text>
-            </VStack>
+            <EmptyState title={t('empty.title')} description={t('empty.description')} />
           ) : (
             <>
               <Table variant="simple" color="gray.500" mb="24px">

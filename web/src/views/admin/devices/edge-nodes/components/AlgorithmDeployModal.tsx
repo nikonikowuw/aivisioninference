@@ -90,8 +90,8 @@ export function AlgorithmDeployModal({ isOpen, onClose, onSuccess, node }: Algor
                 ))}
               </Select>
               {algoPackages.length === 0 && !isLoading && (
-                <Text color="gray.500" fontSize="sm" mt={1}>
-                  {tCommon('noData')}
+                <Text color="gray.400" fontSize="sm" mt={1}>
+                  {tCommon('empty.title')} - {tCommon('empty.description')}
                 </Text>
               )}
             </Box>

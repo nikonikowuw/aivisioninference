@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PersonImportTask, personImportsApi } from 'services/api';
+import { EmptyState } from 'components/empty/EmptyState';
 import { PersonImportModal } from './components/PersonImportModal';
 
 const statusColorMap: Record<string, string> = {
@@ -74,7 +75,7 @@ export default function PersonImportsPage() {
             {loading ? (
               <Tr><Td colSpan={5} textAlign="center">{tCommon('loading')}</Td></Tr>
             ) : tasks.length === 0 ? (
-              <Tr><Td colSpan={5} textAlign="center">{tCommon('noData')}</Td></Tr>
+              <Tr><Td colSpan={5}><EmptyState /></Td></Tr>
             ) : (
               tasks.map((task) => (
                 <Tr key={task.id}>

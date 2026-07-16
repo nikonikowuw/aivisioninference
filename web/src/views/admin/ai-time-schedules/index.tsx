@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { aiTimeSchedulesApi, type AITimeSchedule } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -180,8 +181,8 @@ export default function AITimeSchedules() {
             ))}
             {schedules.length === 0 && (
               <Tr>
-                <Td colSpan={6} textAlign="center" py={10} color="gray.500">
-                  {t('empty')}
+                <Td colSpan={6}>
+                  <EmptyState title={t('empty')} />
                 </Td>
               </Tr>
             )}

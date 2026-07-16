@@ -17,6 +17,7 @@ import {
 } from '@chakra-ui/react';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { useInfiniteScroll } from 'hooks/useInfiniteScroll';
@@ -36,7 +37,6 @@ export default function EdgeNodeList() {
   const { t: tCommon } = useTranslation('common');
   const textColor = useColorModeValue('navy.700', 'white');
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
-  const emptyBg = useColorModeValue('white', 'gray.700');
   const toggleBg = useColorModeValue('rgba(0,0,0,0.02)', 'rgba(255,255,255,0.02)');
   const footerColor = useColorModeValue('secondaryGray.600', 'gray.500');
   const toast = useToast();
@@ -306,9 +306,7 @@ export default function EdgeNodeList() {
         {/* Card Grid */}
         <Box>
           {sortedNodes.length === 0 ? (
-            <Center py="100px" bg={emptyBg} borderRadius="14px" border="1px solid" borderColor={borderColor}>
-              <Text color={textColor}>{tCommon('noData')}</Text>
-            </Center>
+            <EmptyState />
           ) : (
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3, xl: compact ? 4 : 3 }} gap="16px">
               {sortedNodes.map((node) => (

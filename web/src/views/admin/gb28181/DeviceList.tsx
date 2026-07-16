@@ -7,10 +7,11 @@ import {
   FormControl, FormLabel, useDisclosure, useToast, IconButton, Checkbox,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
   NumberInput, NumberInputField, NumberInputStepper, NumberIncrementStepper, NumberDecrementStepper,
-  Flex, Center, Spinner, useColorModeValue, Input,
+  Flex, Center, Spinner, useColorModeValue, Input, Icon,
 } from '@chakra-ui/react';
 import { MdRefresh, MdDelete, MdEdit, MdVisibility, MdDeviceHub, MdAdd, MdViewList } from 'react-icons/md';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -275,7 +276,7 @@ export default function DeviceList() {
               {pageLoading ? (
                 <Tr><Td colSpan={8}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : devices.length === 0 ? (
-                <Tr><Td colSpan={8}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
+                <Tr><Td colSpan={8}><EmptyState /></Td></Tr>
               ) : (
                 devices.map((d) => (
                   <Tr key={d.id}>
@@ -326,7 +327,7 @@ export default function DeviceList() {
                 {channelsLoading ? (
                   <Tr><Td colSpan={5}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
                 ) : channels.length === 0 ? (
-                  <Tr><Td colSpan={5}><Center py="20px">{t('channels.noData')}</Center></Td></Tr>
+                  <Tr><Td colSpan={5}><EmptyState title={t('channels.noData')} /></Td></Tr>
                 ) : (
                   channels.map((ch) => (
                     <Tr key={ch.id}>

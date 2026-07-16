@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { mediaApi, type StreamState } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
+import { EmptyState } from 'components/empty/EmptyState';
 import Card from 'components/card/Card';
 import { MdRefresh, MdTimeline } from 'react-icons/md';
 
@@ -152,9 +153,7 @@ export default function StreamStatus() {
               {safeStreams.length === 0 ? (
                 <Tr>
                   <Td colSpan={6}>
-                    <Center py={10}>
-                      <Text color="gray.400">{t('streamStatus.noActiveStreams')}</Text>
-                    </Center>
+                    <EmptyState title={t('streamStatus.noActiveStreams')} />
                   </Td>
                 </Tr>
               ) : (

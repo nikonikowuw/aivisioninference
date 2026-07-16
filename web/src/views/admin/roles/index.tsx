@@ -1,4 +1,5 @@
 import { AddIcon, DeleteIcon, EditIcon, SettingsIcon } from '@chakra-ui/icons';
+import { EmptyState } from 'components/empty/EmptyState';
 import {
   Badge,
   Box,
@@ -303,7 +304,12 @@ export default function Roles() {
             </Tr>
           </Thead>
           <Tbody>
-            {roles.map((r) => (
+            {pageLoading ? (
+              <Tr><Td colSpan={8}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+            ) : roles.length === 0 ? (
+              <Tr><Td colSpan={8}><EmptyState /></Td></Tr>
+            ) : (
+              roles.map((r) => (
               <Tr key={r.id}>
                 <Td>
                   <Checkbox
@@ -331,7 +337,8 @@ export default function Roles() {
                   </HStack>
                 </Td>
               </Tr>
-            ))}
+              ))
+            )}
           </Tbody>
         </Table>
         <Pagination

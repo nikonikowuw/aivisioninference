@@ -32,6 +32,7 @@ import {
   Td,
 } from '@chakra-ui/react';
 import { CopyIcon, CheckIcon, AttachmentIcon } from '@chakra-ui/icons';
+import { EmptyState } from 'components/empty/EmptyState';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { licenseApi, type FingerprintResponse, type LicenseInfo } from 'services/api';
@@ -407,7 +408,12 @@ export default function License() {
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {(licenses || []).map((lic) => (
+                  {pageLoading ? (
+                    <Tr><Td colSpan={9}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                  ) : (licenses || []).length === 0 ? (
+                    <Tr><Td colSpan={9}><EmptyState /></Td></Tr>
+                  ) : (
+                    (licenses || []).map((lic) => (
                     <Tr key={lic.id}>
                       <Td fontWeight="600" fontSize="sm">{lic.license_id}</Td>
                       <Td>
@@ -431,7 +437,8 @@ export default function License() {
                           : t('info.permanent')}
                       </Td>
                     </Tr>
-                  ))}
+                  ))
+                )}
                 </Tbody>
               </Table>
               <Pagination

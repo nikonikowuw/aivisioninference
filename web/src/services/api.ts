@@ -152,6 +152,36 @@ async function fetchApi(path: string, options: RequestInit = {}): Promise<Respon
   }
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) return false;
+      const json = await res.json();
+      if (json.code === 'OK' && json.data?.access_token) {
+        // 将刷新后的 token 写入原存储位置（localStorage 或 sessionStorage）
+        const storage = localStorage.getItem(ACCESS_TOKEN_KEY) !== null
+          ? localStorage
+          : sessionStorage.getItem(ACCESS_TOKEN_KEY) !== null
+            ? sessionStorage
+            : sessionStorage;
+        storage.setItem(ACCESS_TOKEN_KEY, json.data.access_token);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 function redirectOnUnauthorized(response: Response): void {
   if (response.status !== 401 || window.location.pathname.startsWith('/auth/')) return;
   clearAccessToken();
@@ -192,7 +222,20 @@ export async function request<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetchApi(path, { ...options, headers });
+  let response = await fetchApi(path, { ...options, headers });
+
+  // 401 时尝试静默刷新 token，刷新成功后重试原请求
+  if (response.status === 401 && !path.startsWith('/auth/')) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      const retryHeaders = authHeaders(options.headers);
+      if (!(options.body instanceof FormData) && !retryHeaders.has('Content-Type')) {
+        retryHeaders.set('Content-Type', 'application/json');
+      }
+      response = await fetchApi(path, { ...options, headers: retryHeaders });
+    }
+  }
+
   redirectOnUnauthorized(response);
 
   const json = await parseApiResponse<T>(response);
@@ -280,6 +323,8 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
+  refresh: () =>
+    request<{ access_token: string }>('/auth/refresh', { method: 'POST' }),
   logout: () =>
     request('/auth/logout', { method: 'POST' }),
   me: () =>
@@ -1101,6 +1146,11 @@ export const devicesApi = {
 
 export const deviceGroupsApi = {
   ...crud<DeviceGroup>('device-groups'),
+  batchDelete: (ids: string[]) =>
+    request<BatchResult>('/device-groups/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
 };
 
 // DiscoveredDevice types

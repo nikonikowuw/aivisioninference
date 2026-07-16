@@ -23,6 +23,7 @@ import {
 } from '@chakra-ui/react';
 import VideoPlayer from 'components/VideoPlayer';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -163,7 +164,7 @@ export default function RecordingsView() {
               {pageLoading ? (
                 <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : recordings.length === 0 ? (
-                <Tr><Td colSpan={7}><Center py="20px">{filters.keyword ? t('noRecordings') : t('enterDeviceIdHint')}</Center></Td></Tr>
+                <Tr><Td colSpan={7}><EmptyState title={filters.keyword ? t('noRecordings') : t('enterDeviceIdHint')} /></Td></Tr>
               ) : (
                 recordings.map(r => (
                   <Tr key={r.id}>

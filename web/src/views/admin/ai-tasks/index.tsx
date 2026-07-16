@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { aiVisionTasksApi, aiTimeSchedulesApi, type AIVisionTask, type AITimeSchedule } from 'services/api';
 import { useDateFormat } from 'hooks/useDateFormat';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -266,8 +267,8 @@ export default function AIVisionTasks() {
             })}
             {tasks.length === 0 && (
               <Tr>
-                <Td colSpan={7} textAlign="center" py={10} color="gray.500">
-                  {t('message.empty')}
+                <Td colSpan={7}>
+                  <EmptyState title={t('message.empty')} />
                 </Td>
               </Tr>
             )}

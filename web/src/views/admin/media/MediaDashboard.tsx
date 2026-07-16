@@ -12,6 +12,7 @@ import {
   useColorModeValue, useToast
 } from '@chakra-ui/react';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import VideoPlayer from 'components/VideoPlayer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -183,10 +184,14 @@ export default function MediaDashboard() {
   const tilesRef = useRef<(Tile | null)[]>(tiles);
   const [layout, setLayout] = useState(1);
   const [search, setSearch] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    devicesApi.list({ page: 1, page_size: 500 }).then(r => setDevices(r.list)).catch(() => toast({ title: t('loadDeviceFailed'), status: 'error', duration: 3000 }));
-    deviceGroupsApi.list({ page: 1, page_size: 100 }).then(r => setGroups(r.list)).catch(() => { });
+    setIsLoading(true);
+    Promise.all([
+      devicesApi.list({ page: 1, page_size: 500 }).then(r => setDevices(r.list)).catch(() => { toast({ title: t('loadDeviceFailed'), status: 'error', duration: 3000 }); return []; }),
+      deviceGroupsApi.list({ page: 1, page_size: 100 }).then(r => setGroups(r.list)).catch(() => { }),
+    ]).finally(() => setIsLoading(false));
   }, []);
 
   const treeData = useMemo(() => buildTree(groups, devices), [groups, devices]);
@@ -289,7 +294,8 @@ export default function MediaDashboard() {
             </InputGroup>
           </Box>
           <Box flex={1} overflowY="auto" px="2" pt="1">
-            {treeData.length === 0 ? <Center py="8"><Spinner color="gray.400" size="sm" /></Center>
+            {isLoading ? <Center py="8"><Spinner color="gray.400" size="sm" /></Center>
+              : treeData.length === 0 ? <EmptyState title={t('noDevices')} />
               : treeData.map(n => <TreeNodeView key={n.id} node={n} depth={0} search={search} onPlay={playDevice} t={t} />)}
           </Box>
         </Card>

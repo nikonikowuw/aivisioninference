@@ -7,6 +7,7 @@ import {
 } from '@chakra-ui/react';
 import { MdRefresh, MdPlayArrow, MdVideoLibrary } from 'react-icons/md';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { listGB28181Devices, getGB28181Channels, type GB28181Device, type GB28181Channel } from '../../../services/gb28181';
@@ -87,7 +88,7 @@ export default function ChannelList() {
               {loading ? (
                 <Tr><Td colSpan={6}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : channels.length === 0 ? (
-                <Tr><Td colSpan={6}><Center py="20px">{t('channels.noData')}</Center></Td></Tr>
+                <Tr><Td colSpan={6}><EmptyState title={t('channels.noData')} /></Td></Tr>
               ) : (
                 channels.map((ch) => (
                   <Tr key={ch.id}>

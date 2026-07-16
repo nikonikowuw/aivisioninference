@@ -1,0 +1,3 @@
+[submodule "aivision-algorithms"]
+	path = aivision-algorithms
+	url = git@github.com:nikonikowuw/aivision-algorithms.git

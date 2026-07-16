@@ -32,6 +32,7 @@ import { useDropzone } from 'react-dropzone';
 import { MdExtension, MdCloudUpload, MdSearch, MdContentCopy } from 'react-icons/md';
 
 import { algorithmPackagesApi, type AlgorithmPackage } from 'services/api';
+import { EmptyState } from 'components/empty/EmptyState';
 import { useDateFormat } from 'hooks/useDateFormat';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
@@ -303,12 +304,7 @@ export default function AlgorithmPackages() {
 
         {/* Card Grid List */}
         {packages.length === 0 ? (
-          <Center bg={bgCard} borderRadius="16px" p="60px" border="1px solid" borderColor={borderColor}>
-            <VStack spacing={4}>
-              <Box fontSize="48px" color="gray.400"><MdExtension /></Box>
-              <Text color={secondaryTextColor} fontSize="lg">{t('card.empty')}</Text>
-            </VStack>
-          </Center>
+          <EmptyState title={t('card.empty')} />
         ) : (
           <VStack spacing="20px" align="stretch">
             {packages.map((pkg) => (

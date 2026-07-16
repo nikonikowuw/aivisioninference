@@ -1,5 +1,6 @@
 import { DownloadIcon } from '@chakra-ui/icons';
 import { Badge, Box, Button, Center, Checkbox, Flex, Spinner, Table, Tbody, Td, Text, Th, Thead, Tr, useColorModeValue, useToast } from '@chakra-ui/react';
+import { EmptyState } from 'components/empty/EmptyState';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useDateFormat } from 'hooks/useDateFormat';
@@ -173,7 +174,12 @@ const togglePageSelection = () => {
             </Tr>
           </Thead>
           <Tbody>
-            {logs.map((l) => (
+            {pageLoading ? (
+              <Tr><Td colSpan={10}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+            ) : logs.length === 0 ? (
+              <Tr><Td colSpan={10}><EmptyState /></Td></Tr>
+            ) : (
+              logs.map((l) => (
               <Tr key={l.id}>
                 <Td>
                   <Checkbox
@@ -191,7 +197,8 @@ const togglePageSelection = () => {
                 <Td><Badge colorScheme={resultColor(l.result_summary)}>{l.result_summary_label || t(`filter.results.${l.result_summary}`, { defaultValue: l.result_summary || '-' })}</Badge></Td>
                 <Td whiteSpace="nowrap">{formatDateTime(l.created_at)}</Td>
               </Tr>
-            ))}
+              ))
+            )}
           </Tbody>
         </Table>
         <Pagination

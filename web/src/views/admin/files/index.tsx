@@ -20,6 +20,7 @@ import {
   Checkbox,
 } from '@chakra-ui/react';
 import { DeleteIcon, DownloadIcon } from '@chakra-ui/icons';
+import { EmptyState } from 'components/empty/EmptyState';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { filesApi, type FileItem } from 'services/api';
@@ -213,7 +214,12 @@ export default function Files() {
             </Tr>
           </Thead>
           <Tbody>
-            {files.map((f) => (
+            {pageLoading ? (
+              <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+            ) : files.length === 0 ? (
+              <Tr><Td colSpan={7}><EmptyState /></Td></Tr>
+            ) : (
+              files.map((f) => (
               <Tr key={f.id}>
                 <Td>
                   <Checkbox
@@ -233,7 +239,8 @@ export default function Files() {
                   </HStack>
                 </Td>
               </Tr>
-            ))}
+              ))
+            )}
           </Tbody>
         </Table>
         <Pagination

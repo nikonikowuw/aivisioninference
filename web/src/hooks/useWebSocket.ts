@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { getAccessToken } from 'services/api';
+import { getAccessToken, tryRefreshToken } from 'services/api';
 
 interface UseWebSocketOptions {
   onMessage: (msg: any) => void;
@@ -27,8 +27,12 @@ export function useWebSocket({ onMessage, onOpen, onClose, onError, urlPath = '/
   useEffect(() => {
     unmountedRef.current = false;
 
-    const connect = () => {
+    const connect = async () => {
       if (unmountedRef.current) return;
+
+      // 连接前尝试刷新 token，确保使用最新的有效令牌
+      await tryRefreshToken();
+
       const token = getAccessToken();
       if (!token) return;
       

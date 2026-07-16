@@ -2,7 +2,6 @@ import { DeleteIcon, EditIcon, ViewIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
-  Center,
   Flex,
   HStack,
   IconButton,
@@ -20,6 +19,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { useDateFormat } from 'hooks/useDateFormat';
@@ -163,7 +163,7 @@ export default function ScheduledTaskList({ nodeId }: ScheduledTaskListProps) {
               {tasks.length === 0 ? (
                 <Tr>
                   <Td colSpan={7}>
-                    <Center py={4}>{tCommon('noData')}</Center>
+                    <EmptyState />
                   </Td>
                 </Tr>
               ) : (

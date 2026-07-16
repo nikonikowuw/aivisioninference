@@ -45,6 +45,7 @@ import { devicesApi, deviceGroupsApi, type Device, type DeviceGroup } from 'serv
 import { triggerCatalog } from 'services/gb28181';
 import { useDateFormat } from 'hooks/useDateFormat';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar } from 'components/search-bar/SearchBar';
@@ -459,7 +460,7 @@ export default function Devices() {
               {(pageLoading && devices.length === 0) ? (
                 <Tr><Td colSpan={9}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : devices.length === 0 ? (
-                <Tr><Td colSpan={9}><Center py="20px">{tCommon('noData')}</Center></Td></Tr>
+                <Tr><Td colSpan={9}><EmptyState /></Td></Tr>
               ) : (
                 devices.map((device) => (
                   <Tr key={device.id} opacity={(pageLoading && !pendingIds.has(device.id)) ? 0.6 : 1} transition="opacity 0.2s">

@@ -273,6 +273,11 @@ func (r *DeviceGroupRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&model.DeviceGroup{}, "id = ?", id).Error
 }
 
+// BatchDelete 批量删除设备分组
+func (r *DeviceGroupRepository) BatchDelete(ctx context.Context, ids []string) error {
+	return r.db.WithContext(ctx).Delete(&model.DeviceGroup{}, "id IN ?", ids).Error
+}
+
 // CountByGroupID 获取指定分组下的设备数量
 func (r *DeviceGroupRepository) CountByGroupID(ctx context.Context, groupID string) (int64, error) {
 	var count int64

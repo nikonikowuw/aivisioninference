@@ -1,12 +1,15 @@
 import { AddIcon, DeleteIcon, EditIcon, SearchIcon } from '@chakra-ui/icons';
+import { EmptyState } from 'components/empty/EmptyState';
 import {
   Box,
   Button,
+  Center,
   HStack,
   IconButton,
   Input,
   InputGroup,
   InputLeftElement,
+  Spinner,
   Switch,
   Table,
   Tbody,
@@ -200,13 +203,11 @@ export default function AlertRuleList() {
                       </Td>
                     </Tr>
                   ))}
-                  {rules.length === 0 && (
-                    <Tr>
-                      <Td colSpan={7} textAlign="center" py="8">
-                        <Text color="gray.500">No alert rules configured</Text>
-                      </Td>
-                    </Tr>
-                  )}
+                  {pageLoading ? (
+                    <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                  ) : rules.length === 0 ? (
+                    <Tr><Td colSpan={7}><EmptyState /></Td></Tr>
+                  ) : null}
                 </Tbody>
               </Table>
 

@@ -35,6 +35,7 @@ import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { filterTree, type FilteredNode } from 'utils/treeFilter';
+import { EmptyState } from 'components/empty/EmptyState';
 import Card from 'components/card/Card';
 
 type PermissionWithDepth = Permission & { _depth: number };
@@ -383,12 +384,7 @@ export default function Permissions() {
               ))}
             </VStack>
           ) : (
-            <Center py={10}>
-              <VStack spacing={2}>
-                <Text color="gray.500">{t('message.emptyData')}</Text>
-                <Button variant="ghost" size="sm" onClick={resetFilters}>{tCommon('button.reset')}</Button>
-              </VStack>
-            </Center>
+            <EmptyState title={t('message.emptyData')} onClearFilters={resetFilters} />
           )}
         </Box>
       </Card>

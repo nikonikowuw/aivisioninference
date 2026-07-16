@@ -33,6 +33,7 @@ import {
   useToast,
   VStack,
 } from '@chakra-ui/react';
+import { EmptyState } from 'components/empty/EmptyState';
 import ConfirmDialog from 'components/confirm-dialog/ConfirmDialog';
 import Pagination from 'components/pagination/Pagination';
 import { SearchBar, type InputConfig, type SelectConfig } from 'components/search-bar/SearchBar';
@@ -462,7 +463,16 @@ export default function SmartRecords() {
             </Tr>
           </Thead>
           <Tbody>
-            {records.map((record) => (
+            {pageLoading ? (
+              <Tr><Td colSpan={columnCount}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+            ) : records.length === 0 ? (
+              <Tr>
+                <Td colSpan={columnCount}>
+                  <EmptyState title={t('empty.noData')} />
+                </Td>
+              </Tr>
+            ) : (
+              records.map((record) => (
               <Tr key={`${record.record_id}-${record.capture_time}`}>
                 <Td pe="10px">
                   <Checkbox isChecked={selectedIds.includes(record.record_id)} onChange={() => toggleOne(record.record_id)} />
@@ -530,14 +540,7 @@ export default function SmartRecords() {
                   </HStack>
                 </Td>
               </Tr>
-            ))}
-            {records.length === 0 && (
-              <Tr>
-                <Td colSpan={columnCount}>
-                  <Center py={10}><Text color={mutedColor}>{t('empty.noData')}</Text></Center>
-                </Td>
-              </Tr>
-            )}
+            )))}
           </Tbody>
         </Table>
       </Box>

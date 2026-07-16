@@ -19,6 +19,7 @@ import {
   Checkbox,
 } from '@chakra-ui/react';
 import { CloseIcon, DownloadIcon } from '@chakra-ui/icons';
+import { EmptyState } from 'components/empty/EmptyState';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { tasksApi, type Task } from 'services/api';
@@ -225,7 +226,12 @@ export default function Tasks() {
             </Tr>
           </Thead>
           <Tbody>
-            {tasks.map((task) => (
+            {pageLoading ? (
+              <Tr><Td colSpan={8}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+            ) : tasks.length === 0 ? (
+              <Tr><Td colSpan={8}><EmptyState /></Td></Tr>
+            ) : (
+              tasks.map((task) => (
               <Tr key={task.id}>
                 <Td>
                   <Checkbox
@@ -256,7 +262,8 @@ export default function Tasks() {
                   )}
                 </Td>
               </Tr>
-            ))}
+              ))
+            )}
           </Tbody>
         </Table>
         <Pagination

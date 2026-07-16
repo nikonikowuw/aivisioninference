@@ -27,6 +27,7 @@ import {
     useToast
 } from "@chakra-ui/react";
 import Card from "components/card/Card";
+import { EmptyState } from "components/empty/EmptyState";
 import MetricsTimeSeries from "components/charts/MetricsTimeSeries";
 import ConfirmDialog from "components/confirm-dialog/ConfirmDialog";
 import Terminal from "components/terminal/Terminal";
@@ -703,7 +704,7 @@ export default function EdgeNodeDetail() {
                                 ) : algorithms.length === 0 ? (
                                     <Tr>
                                         <Td colSpan={8}>
-                                            <Center py={4}>{tCommon("noData")}</Center>
+                                            <EmptyState />
                                         </Td>
                                     </Tr>
                                 ) : (

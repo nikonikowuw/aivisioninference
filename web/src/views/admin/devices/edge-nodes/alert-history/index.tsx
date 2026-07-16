@@ -2,8 +2,10 @@ import { CheckIcon } from '@chakra-ui/icons';
 import {
   Box,
   Button,
+  Center,
   HStack,
   Select,
+  Spinner,
   Table,
   Tbody,
   Td,
@@ -15,6 +17,7 @@ import {
   useToast,
   Badge,
 } from '@chakra-ui/react';
+import { EmptyState } from 'components/empty/EmptyState';
 import Card from 'components/card/Card';
 import Pagination from 'components/pagination/Pagination';
 import { usePagination } from 'hooks/usePagination';
@@ -135,13 +138,11 @@ export default function AlertEventHistory() {
                       </Td>
                     </Tr>
                   ))}
-                  {events.length === 0 && (
-                    <Tr>
-                      <Td colSpan={7} textAlign="center" py="8">
-                        <Text color="gray.500">No alert events</Text>
-                      </Td>
-                    </Tr>
-                  )}
+                  {pageLoading ? (
+                    <Tr><Td colSpan={7}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
+                  ) : events.length === 0 ? (
+                    <Tr><Td colSpan={7}><EmptyState /></Td></Tr>
+                  ) : null}
                 </Tbody>
               </Table>
 

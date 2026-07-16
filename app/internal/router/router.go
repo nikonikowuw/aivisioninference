@@ -429,6 +429,7 @@ func (r *Router) registerDeviceRoutes(authorized *gin.RouterGroup, deps *RouteDe
 	{
 		deviceGroups.GET("", deviceGroupHandler.List)
 		deviceGroups.POST("", deviceGroupHandler.Create)
+		deviceGroups.POST("/batch-delete", deviceGroupHandler.BatchDelete)
 		deviceGroups.GET("/:id", deviceGroupHandler.GetByID)
 		deviceGroups.PUT("/:id", deviceGroupHandler.Update)
 		deviceGroups.DELETE("/:id", deviceGroupHandler.Delete)

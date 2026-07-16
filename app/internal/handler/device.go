@@ -382,3 +382,23 @@ func (h *DeviceGroupHandler) Delete(c *gin.Context) {
 	}
 	response.OK(c, nil)
 }
+
+// BatchDelete 批量删除设备分组
+//
+// @Summary      批量删除设备分组
+// @Description  批量删除设备分组，分组下有设备时跳过
+// @Tags         设备分组管理
+// @Accept       json
+// @Produce      json
+// @Param        body  body  dto.BatchIDsRequest  true  "分组 ID 列表"
+// @Success      200   {object}  dto.Response{data=dto.BatchResult}
+// @Router       /device-groups/batch-delete [post]
+// @Security     BearerAuth
+func (h *DeviceGroupHandler) BatchDelete(c *gin.Context) {
+	var req dto.BatchIDsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		attachError(c, badRequestError(c, err))
+		return
+	}
+	response.OK(c, h.svc.BatchDelete(c.Request.Context(), req.IDs, currentLang(c)))
+}

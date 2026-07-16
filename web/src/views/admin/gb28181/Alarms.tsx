@@ -8,6 +8,7 @@ import {
 } from '@chakra-ui/react';
 import { MdRefresh, MdVisibility, MdDownload } from 'react-icons/md';
 import Card from 'components/card/Card';
+import { EmptyState } from 'components/empty/EmptyState';
 import Pagination from 'components/pagination/Pagination';
 import { listSmartRecords, getSmartRecordsExportUrl, type SmartRecord } from '../../../services/smartRecords';
 
@@ -109,7 +110,7 @@ export default function Alarms() {
               {loading ? (
                 <Tr><Td colSpan={5}><Center py="20px"><Spinner color="brand.500" /></Center></Td></Tr>
               ) : records.length === 0 ? (
-                <Tr><Td colSpan={5}><Center py="20px">{t('alarms.noData')}</Center></Td></Tr>
+                <Tr><Td colSpan={5}><EmptyState title={t('alarms.noData')} /></Td></Tr>
               ) : (
                 records.map((r) => (
                   <Tr key={r.record_id}>

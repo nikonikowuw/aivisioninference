@@ -52,6 +52,7 @@ type deviceGroupRepo interface {
 	Create(ctx context.Context, item *model.DeviceGroup) error
 	Update(ctx context.Context, item *model.DeviceGroup) error
 	Delete(ctx context.Context, id string) error
+	BatchDelete(ctx context.Context, ids []string) error
 	CountByGroupID(ctx context.Context, groupID string) (int64, error)
 	BatchCountByGroupIDs(ctx context.Context, groupIDs []string) (map[string]int64, error)
 }
@@ -743,6 +744,13 @@ func (s *DeviceGroupService) Delete(ctx context.Context, id string) error {
 		return apperrors.New(apperrors.ErrInternal, "")
 	}
 	return nil
+}
+
+// BatchDelete 批量删除设备分组，逐条复用 Delete 的校验逻辑（分组下有设备时跳过）。
+func (s *DeviceGroupService) BatchDelete(ctx context.Context, ids []string, lang string) dto.BatchResult {
+	return runBatch(ids, lang, func(id string) error {
+		return s.Delete(ctx, id)
+	})
 }
 
 // ---------- 辅助函数 ----------

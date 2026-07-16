@@ -196,7 +196,7 @@ func TestDeviceService_Integration_Workflow(t *testing.T) {
 	mockCache := new(MockCache)
 	mockTask := new(MockTaskClient)
 	mockZLM := new(MockZLMClient)
-	svc := NewDeviceService(mockRepo, mockDiscoveredRepo, mockCache, mockTask, mockZLM, nil)
+	svc := NewDeviceService(mockRepo, mockDiscoveredRepo, mockCache, mockTask, mockZLM, nil, nil)
 
 	ctx := context.Background()
 

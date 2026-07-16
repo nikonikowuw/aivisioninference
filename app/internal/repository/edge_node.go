@@ -276,3 +276,18 @@ func (r *EdgeNodeRepository) MarkOfflineIfTimedOut(ctx context.Context, id strin
 		Update("status", model.NodeStatusOffline)
 	return result.RowsAffected > 0, result.Error
 }
+
+
+// FindAnyOnlineNode 返回任意一个在线且启用的边缘节点（按 ID 排序取第一个）。
+// 用于连接探测等不需要特定算法的场景。
+func (r *EdgeNodeRepository) FindAnyOnlineNode(ctx context.Context) (*model.EdgeNode, error) {
+	var node model.EdgeNode
+	err := r.db.WithContext(ctx).
+		Where("status = ? AND enabled = ?", model.NodeStatusOnline, true).
+		Order("id ASC").
+		First(&node).Error
+	if err != nil {
+		return nil, err
+	}
+	return &node, nil
+}

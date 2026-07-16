@@ -348,8 +348,13 @@ func (m *StreamManager) ReleaseOnNode(ctx context.Context, route StreamRoute, re
 	newCount := state.RefCount.Load()
 
 	if newCount <= 0 {
-		if err := m.engine.StopStream(ctx, route.NodeID, route.DeviceID); err != nil {
-			m.logger.Error("stop engine stream failed", zap.Error(err), zap.String("node_id", route.NodeID), zap.String("device_id", route.DeviceID))
+		if route.NodeID != "" {
+			if err := m.engine.StopStream(ctx, route.NodeID, route.DeviceID); err != nil {
+				m.logger.Error("stop engine stream failed", zap.Error(err), zap.String("node_id", route.NodeID), zap.String("device_id", route.DeviceID))
+			}
+		} else {
+			m.logger.Debug("skip stop stream: no node assigned (stream never started)",
+				zap.String("device_id", route.DeviceID))
 		}
 		state.Status = "inactive"
 
@@ -362,12 +367,11 @@ func (m *StreamManager) ReleaseOnNode(ctx context.Context, route StreamRoute, re
 				_ = m.streamRepo.UpdateStatus(dbCtx, stream.ID, "inactive")
 			}
 		}()
-	} else if reason == "play" {
+	} else if reason == "play" && route.NodeID != "" {
 		if err := m.engine.StopPlayback(ctx, route.NodeID, route.DeviceID); err != nil {
 			m.logger.Warn("stop playback failed", zap.Error(err), zap.String("device_id", route.DeviceID))
 		}
 	}
-
 	return nil
 }
 

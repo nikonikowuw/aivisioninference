@@ -37,14 +37,16 @@ type DeviceStatusHandler struct {
 	deviceRepo    *repository.DeviceRepository
 	zlmClient     *zlm.Client
 	streamManager *service.StreamManager
+	edgeNodeRepo  *repository.EdgeNodeRepository
 }
 
 // NewDeviceStatusHandler 创建设备状态任务处理器
-func NewDeviceStatusHandler(deviceRepo *repository.DeviceRepository, zlmClient *zlm.Client, streamManager *service.StreamManager) *DeviceStatusHandler {
+func NewDeviceStatusHandler(deviceRepo *repository.DeviceRepository, zlmClient *zlm.Client, streamManager *service.StreamManager, edgeNodeRepo *repository.EdgeNodeRepository) *DeviceStatusHandler {
 	return &DeviceStatusHandler{
 		deviceRepo:    deviceRepo,
 		zlmClient:     zlmClient,
 		streamManager: streamManager,
+		edgeNodeRepo:  edgeNodeRepo,
 	}
 }
 
@@ -67,38 +69,52 @@ func (h *DeviceStatusHandler) handleDeviceDetect(ctx context.Context, t *asynq.T
 
 	zap.L().Info("executing instant device detection", zap.String("device_id", payload.ID))
 
-	// 使用 StreamManager 进行连接探测 (模拟 TestConnection 逻辑)
-	// 如果 StreamManager 为空，则回退到基础检查
-	if h.streamManager != nil {
-		err := h.streamManager.Acquire(ctx, payload.ID, "detect", nil)
-		testSuccess := err == nil
-
-		// 探测完成后释放
-		defer func() {
-			_ = h.streamManager.Release(ctx, payload.ID, "detect")
-		}()
-
-		newStatus := model.DeviceStatusOffline
-		if testSuccess {
-			newStatus = model.DeviceStatusOnline
-		}
-
-		if err := h.deviceRepo.UpdateStatus(ctx, payload.ID, newStatus, "", ""); err != nil {
-			return fmt.Errorf("update device status: %w", err)
-		}
-
-		zap.L().Info("instant device detection completed",
-			zap.String("device_id", payload.ID),
-			zap.String("status", newStatus))
-		return nil
-	}
-
-	// 回退逻辑
 	device, err := h.deviceRepo.FindByID(ctx, payload.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("find device: %w", err)
 	}
-	return h.checkDeviceStatus(ctx, device, &checkStats{})
+
+	// 解析目标节点：优先从已有流状态获取，否则选取任意在线节点
+	nodeID := ""
+	if h.streamManager != nil {
+		if state := h.streamManager.GetStream(ctx, payload.ID); state != nil && state.NodeID != "" {
+			nodeID = state.NodeID
+		}
+	}
+	if nodeID == "" && h.edgeNodeRepo != nil {
+		node, err := h.edgeNodeRepo.FindAnyOnlineNode(ctx)
+		if err == nil && node != nil {
+			nodeID = node.ID
+		}
+	}
+
+	if nodeID == "" {
+		// 无可用节点，回退到状态检查
+		return h.checkDeviceStatus(ctx, device, &checkStats{})
+	}
+
+	metadata := map[string]string{"target_node_id": nodeID}
+	err = h.streamManager.Acquire(ctx, payload.ID, "detect", metadata)
+	testSuccess := err == nil
+
+	// 探测完成后释放
+	defer func() {
+		_ = h.streamManager.Release(ctx, payload.ID, "detect")
+	}()
+
+	newStatus := model.DeviceStatusOffline
+	if testSuccess {
+		newStatus = model.DeviceStatusOnline
+	}
+
+	if err := h.deviceRepo.UpdateStatus(ctx, payload.ID, newStatus, "", ""); err != nil {
+		return fmt.Errorf("update device status: %w", err)
+	}
+
+	zap.L().Info("instant device detection completed",
+		zap.String("device_id", payload.ID),
+		zap.String("status", newStatus))
+	return nil
 }
 
 // handleDeviceStatusCheck 处理设备状态定时检查任务

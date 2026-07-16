@@ -168,8 +168,9 @@ func provideDeviceHandler(
 	taskClient *task.Client,
 	zlmClient *zlm.Client,
 	streamManager *service.StreamManager,
+	edgeNodeRepo *repository.EdgeNodeRepository,
 ) *handler.DeviceHandler {
-	deviceSvc := service.NewDeviceService(deviceRepo, discoveredDeviceRepo, permCache, taskClient, zlmClient, streamManager)
+	deviceSvc := service.NewDeviceService(deviceRepo, discoveredDeviceRepo, permCache, taskClient, zlmClient, streamManager, edgeNodeRepo)
 	return handler.NewDeviceHandler(deviceSvc)
 }
 

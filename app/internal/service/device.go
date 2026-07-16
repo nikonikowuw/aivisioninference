@@ -19,6 +19,7 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/hash"
 	"github.com/niko-admin/niko-admin/internal/pkg/i18n"
 	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
+	"github.com/niko-admin/niko-admin/internal/repository"
 )
 
 // deviceRepo 设备持久化接口
@@ -77,10 +78,11 @@ type DeviceService struct {
 	taskClient           taskClient
 	zlmClient            zlmClient
 	streamManager        *StreamManager
+	edgeNodeRepo         *repository.EdgeNodeRepository
 }
 
 // NewDeviceService 创建并返回一个新的 DeviceService 实例
-func NewDeviceService(repo deviceRepo, discoveredDeviceRepo discoveredDeviceRepo, cache cache, taskClient taskClient, zlmClient zlmClient, streamManager *StreamManager) *DeviceService {
+func NewDeviceService(repo deviceRepo, discoveredDeviceRepo discoveredDeviceRepo, cache cache, taskClient taskClient, zlmClient zlmClient, streamManager *StreamManager, edgeNodeRepo *repository.EdgeNodeRepository) *DeviceService {
 	return &DeviceService{
 		deviceRepo:           repo,
 		discoveredDeviceRepo: discoveredDeviceRepo,
@@ -88,6 +90,7 @@ func NewDeviceService(repo deviceRepo, discoveredDeviceRepo discoveredDeviceRepo
 		taskClient:           taskClient,
 		zlmClient:            zlmClient,
 		streamManager:        streamManager,
+		edgeNodeRepo:         edgeNodeRepo,
 	}
 }
 
@@ -366,28 +369,39 @@ func (s *DeviceService) BatchDelete(ctx context.Context, ids []string) *dto.Batc
 	}
 }
 
-// TestConnection 测试设备连接,进行真实的流可达性探测并更新设备状态
+// TestConnection 测试设备连接，通过 Edge 节点引擎探测流可达性并更新设备状态。
 func (s *DeviceService) TestConnection(ctx context.Context, id string, lang string) (*dto.DeviceTestResultResponse, error) {
-	_, err := s.deviceRepo.FindByID(ctx, id)
+	dev, err := s.deviceRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrDeviceNotFound, "")
 	}
 
 	now := time.Now().Format(time.RFC3339)
 
-	// 使用 StreamManager 进行连接探测(Acquire reason="detect")
-	err = s.streamManager.Acquire(ctx, id, "detect", nil)
+	// 解析目标节点：优先从已有流状态获取，否则选取任意在线节点
+	nodeID := s.resolveDetectNode(ctx, dev)
 
-	testSuccess := err == nil
-	testMessage := i18n.Translate(lang, apperrors.ErrConnectionTestOK)
-	if err != nil {
-		// 完整错误记入日志，不暴露内部细节给前端
-		zap.L().Warn("device connection test failed",
-			zap.String("device_id", id),
-			zap.Error(err),
-		)
-		errCode := classifyConnectionError(err)
-		testMessage = i18n.Translate(lang, errCode)
+	var testSuccess bool
+	var testMessage string
+
+	if nodeID == "" {
+		testSuccess = false
+		testMessage = i18n.Translate(lang, apperrors.ErrEdgeNodeNotFound)
+	} else {
+		metadata := map[string]string{"target_node_id": nodeID}
+		err = s.streamManager.Acquire(ctx, id, "detect", metadata)
+
+		testSuccess = err == nil
+		testMessage = i18n.Translate(lang, apperrors.ErrConnectionTestOK)
+		if err != nil {
+			zap.L().Warn("device connection test failed",
+				zap.String("device_id", id),
+				zap.String("node_id", nodeID),
+				zap.Error(err),
+			)
+			errCode := classifyConnectionError(err)
+			testMessage = i18n.Translate(lang, errCode)
+		}
 	}
 
 	// 探测完成后立即释放
@@ -406,12 +420,10 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string, lang stri
 		errorMessage = testMessage
 	}
 
-	// 更新设备状态和错误信息
 	if err := s.deviceRepo.UpdateStatus(ctx, id, newStatus, errorCode, errorMessage); err != nil {
 		zap.L().Error("update device status after test failed", zap.String("device_id", id), zap.Error(err))
 	}
 
-	// 更新缓存
 	statusData, _ := json.Marshal(newStatus)
 	_ = s.cache.Set(ctx, s.getStatusCacheKey(id), statusData, 24*time.Hour)
 
@@ -420,6 +432,23 @@ func (s *DeviceService) TestConnection(ctx context.Context, id string, lang stri
 		Message:  testMessage,
 		TestedAt: now,
 	}, nil
+}
+
+// resolveDetectNode 解析用于连接探测的 Edge 节点 ID。
+// 优先使用设备已有流所在的节点，否则选取任意在线节点。
+func (s *DeviceService) resolveDetectNode(ctx context.Context, dev *model.Device) string {
+	// 优先从已有流状态获取节点
+	if state := s.streamManager.GetStream(ctx, dev.ID); state != nil && state.NodeID != "" {
+		return state.NodeID
+	}
+	// 无活跃流时，选取任意在线节点
+	if s.edgeNodeRepo != nil {
+		node, err := s.edgeNodeRepo.FindAnyOnlineNode(ctx)
+		if err == nil && node != nil {
+			return node.ID
+		}
+	}
+	return ""
 }
 
 // classifyConnectionError 根据错误类型返回错误码,供 i18n 翻译。

@@ -415,7 +415,10 @@ namespace aivision
                 push_url = "rtsp://localhost:10554";
             if (!push_url.empty() && push_url.back() == '/')
                 push_url.pop_back();
-            return push_url + "/live/" + device_id;
+            push_url += "/live/" + device_id;
+            if (!config_.zlm_secret.empty())
+                push_url += "?secret=" + config_.zlm_secret;
+            return push_url;
         }
 
         bool PipelineManager::StartFFmpegFallback(const std::string &device_id, const std::string &rtsp_url)

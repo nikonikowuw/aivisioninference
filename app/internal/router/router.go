@@ -603,7 +603,7 @@ func NewAsynqMux(db *gorm.DB, rdb *redis.Client, cfg *Config, mqttClient mqtt.Cl
 	engineClient := provideEngineClient(mqttClient, syncManager)
 	streamManager := provideStreamManager(engineClient, deviceRepo, mediaStreamRepo)
 
-	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient, streamManager)
+	deviceStatusHandler := task.NewDeviceStatusHandler(deviceRepo, zlmClient, streamManager, nodeRepo)
 	// 由于 Asynq worker 自身消费任务队列，这里传入 nil taskClient 避免循环依赖（worker 内的 SIPService 不需要再派发任务）。
 	smartRecordRepo := repository.NewSmartRecordRepository(db)
 	deviceSipConfigRepo := repository.NewDeviceSipConfigRepository(db)

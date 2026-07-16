@@ -165,7 +165,7 @@ func (h *EdgeMqttHandler) HandleInferenceResult(msg mqtt.Message) {
 
 	if h.hub != nil {
 		h.hub.Broadcast(&ws.Message{
-			Type:     "inference",
+			Type:     ws.TopicInference,
 			DeviceID: params.DeviceID,
 			Payload: map[string]interface{}{
 				"device_id":  params.DeviceID,

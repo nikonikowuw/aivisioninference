@@ -17,6 +17,7 @@ import { SearchBar } from 'components/search-bar/SearchBar';
 import { useFilter } from 'hooks/useFilter';
 import { usePagination } from 'hooks/usePagination';
 import { useWebSocket } from 'hooks/useWebSocket';
+import { WS_TOPIC } from 'constants/websocket';
 import {
   listGB28181Devices, getGB28181Device, updateGB28181Device, deleteGB28181Device, createGB28181Device, batchDeleteGB28181Devices,
   listGB28181NVRs, getGB28181NVRChannels,
@@ -68,7 +69,7 @@ export default function DeviceList() {
   // WebSocket 订阅目录查询完成事件（带自动重连）
   useWebSocket({
     onMessage: (msg: any) => {
-      if (msg.type === 'gb28181_catalog_completed') {
+      if (msg.type === WS_TOPIC.GB28181_CATALOG_COMPLETED) {
         toast({ title: t('devices.messages.catalogCompleted', { count: msg.payload?.channelCount || 0 }), status: msg.payload?.success ? 'success' : 'warning', duration: 3000 });
         refresh();
       }

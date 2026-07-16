@@ -29,6 +29,7 @@ import { SearchBar } from 'components/search-bar/SearchBar';
 import { usePagination } from 'hooks/usePagination';
 import { useFilter } from 'hooks/useFilter';
 import { useWebSocket } from 'hooks/useWebSocket';
+import { WS_TOPIC } from 'constants/websocket';
 import TaskFormModal from './components/TaskFormModal';
 
 const statusColor: Record<string, string> = {
@@ -98,7 +99,7 @@ export default function AIVisionTasks() {
 
   // WebSocket real-time task status updates
   const handleWsMessage = useCallback((msg: any) => {
-    if (msg.type === 'task-status') {
+    if (msg.type === WS_TOPIC.TASK_STATUS) {
       load({ page });
     }
   }, [load, page]);

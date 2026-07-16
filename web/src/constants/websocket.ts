@@ -24,4 +24,10 @@ export const WS_TOPIC = {
   EDGE_NODE_ALGO_STATUS: 'edge-node-algo-status',
   /** 通用指标 topic（detail 页面使用） */
   METRICS: 'metrics',
+  /** 推理事件 */
+  INFERENCE: 'inference',
+  /** 任务状态变更 */
+  TASK_STATUS: 'task-status',
+  /** GB28181 目录查询完成 */
+  GB28181_CATALOG_COMPLETED: 'gb28181_catalog_completed',
 } as const;

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { WS_TOPIC } from 'constants/websocket';
 import { useWebSocket } from './useWebSocket';
 
 export interface Detection {
@@ -23,7 +24,7 @@ export function useThrottledInference(
 
   useWebSocket({
     onMessage: (msg: any) => {
-      if (msg.type === 'inference' && msg.payload && msg.payload.device_id === deviceId) {
+      if (msg.type === WS_TOPIC.INFERENCE && msg.payload && msg.payload.device_id === deviceId) {
         detectionsRef.current = msg.payload.detections || [];
         lastUpdateRef.current = Date.now();
       }

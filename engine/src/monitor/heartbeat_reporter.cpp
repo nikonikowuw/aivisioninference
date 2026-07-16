@@ -21,6 +21,9 @@
 #ifdef __APPLE__
 #include <sys/types.h>
 #include <sys/sysctl.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <net/if_dl.h>
 #else
 #include <sys/sysinfo.h>
 #endif
@@ -198,7 +201,18 @@ namespace aivision
             {
                 NetStats stats;
 #ifdef __APPLE__
-                (void)stats;
+                struct ifaddrs *ifap, *ifa;
+                if (getifaddrs(&ifap) != 0) return stats;
+                for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+                    if (!ifa->ifa_addr) continue;
+                    if (ifa->ifa_addr->sa_family != AF_LINK) continue;
+                    if (ifa->ifa_flags & IFF_LOOPBACK) continue;
+                    auto *ifdata = reinterpret_cast<struct if_data *>(ifa->ifa_data);
+                    if (!ifdata) continue;
+                    stats.rx_bytes += ifdata->ifi_ibytes;
+                    stats.tx_bytes += ifdata->ifi_obytes;
+                }
+                freeifaddrs(ifap);
                 return stats;
 #else
                 std::ifstream file("/proc/net/dev");

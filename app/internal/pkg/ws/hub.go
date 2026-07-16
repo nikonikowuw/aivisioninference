@@ -13,8 +13,12 @@ import (
 
 // Well-known topic types for WebSocket messages.
 const (
-	TopicEdgeNodeMetrics      = "edge-node-metrics"
+	TopicEdgeNodeStatus        = "edge-node-status"
+	TopicEdgeNodeMetrics       = "edge-node-metrics"
 	TopicEdgeNodeEngineMetrics = "edge-node-engine-metrics"
+	TopicEdgeNodeAlgoStatus    = "edge-node-algo-status"
+	TopicInference             = "inference"
+	TopicTaskStatus            = "task-status"
 )
 
 // Message is the envelope for all WebSocket messages.
@@ -87,7 +91,7 @@ func (h *Hub) Run() {
 		case msg := <-h.broadcast:
 			// Rate limit inference messages to 30fps (approx 33.3ms) per device.
 			// DeviceID is set by the caller before Broadcast, avoiding JSON parsing inside the lock.
-			if msg.Type == "inference" && msg.DeviceID != "" {
+			if msg.Type == TopicInference && msg.DeviceID != "" {
 				now := time.Now()
 				if lastSentVal, ok := h.lastInferenceSent.Load(msg.DeviceID); ok {
 					lastSent := lastSentVal.(time.Time)

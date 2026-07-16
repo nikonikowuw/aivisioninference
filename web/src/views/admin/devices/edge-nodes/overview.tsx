@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { edgeNodeMetricsApi, type OverviewStats } from 'services/edgeNodeMetrics';
 import { edgeNodeApi, type EdgeNode } from 'services/edgeNode';
+import { WS_TOPIC } from 'constants/websocket';
 import { useWebSocket } from 'hooks/useWebSocket';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -63,7 +64,7 @@ export default function EdgeNodeOverview() {
   useWebSocket({
     onMessage: useCallback(
       (msg: any) => {
-        if (msg.type === 'edge-node-status') fetchData();
+        if (msg.type === WS_TOPIC.EDGE_NODE_STATUS) fetchData();
       },
       [fetchData],
     ),

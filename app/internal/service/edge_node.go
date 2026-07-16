@@ -404,7 +404,7 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	// Broadcast WebSocket events
 	if s.hub != nil {
 		s.hub.Broadcast(&ws.Message{
-			Type: "edge-node-status",
+			Type: ws.TopicEdgeNodeStatus,
 			Payload: map[string]interface{}{
 				"node_id":        id,
 				"status":         newStatus,
@@ -468,7 +468,7 @@ func (s *EdgeNodeService) HandleHeartbeat(ctx context.Context, id string, req *d
 	// Broadcast again so frontend picks up the downloading/pending → downloading status change
 	if hasStatusChange && s.hub != nil {
 		s.hub.Broadcast(&ws.Message{
-			Type: "edge-node-algo-status",
+			Type: ws.TopicEdgeNodeAlgoStatus,
 			Payload: map[string]interface{}{
 				"node_id": id,
 			},
@@ -800,7 +800,7 @@ func (s *EdgeNodeService) restoreSuspendedPipelines(ctx context.Context, nodeID 
 
 			if s.hub != nil {
 				s.hub.Broadcast(&ws.Message{
-					Type: "task-status",
+					Type: ws.TopicTaskStatus,
 					Payload: map[string]interface{}{
 						"task_id":          r.task.ID,
 						"status":           model.TaskStatusRunning,

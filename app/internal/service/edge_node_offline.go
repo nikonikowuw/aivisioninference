@@ -81,7 +81,7 @@ func HandleNodeOffline(
 
 	if hub != nil {
 		hub.Broadcast(&ws.Message{
-			Type: "edge-node-status",
+			Type: ws.TopicEdgeNodeStatus,
 			Payload: map[string]interface{}{
 				"node_id": node.ID,
 				"status":  model.NodeStatusOffline,
@@ -91,7 +91,7 @@ func HandleNodeOffline(
 	for _, task := range suspendedTasks {
 		if hub != nil {
 			hub.Broadcast(&ws.Message{
-				Type: "task-status",
+				Type: ws.TopicTaskStatus,
 				Payload: map[string]interface{}{
 					"task_id":          task.ID,
 					"status":           model.TaskStatusSuspended,

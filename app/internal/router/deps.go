@@ -267,6 +267,8 @@ func newRouteDeps(
 	edgeNodeMetricsHandler *handler.EdgeNodeMetricsHandler,
 	alertRuleHandler *handler.AlertRuleHandler,
 	alertEventHandler *handler.AlertEventHandler,
+	// EdgeNodeService shared with the caller (Router).
+	edgeNodeSvc *service.EdgeNodeService,
 	alertEngine *service.AlertEngine,
 
 	// Phase 3: Remote Operations.
@@ -324,6 +326,7 @@ func newRouteDeps(
 		AlertRuleHandler:         alertRuleHandler,
 		AlertEventHandler:        alertEventHandler,
 		AlertEngine:              alertEngine,
+		EdgeNodeSvc:              edgeNodeSvc,
 
 		// Phase 3: Remote Operations.
 		EdgeNodeScheduledTaskRepo:    edgeNodeScheduledTaskRepo,

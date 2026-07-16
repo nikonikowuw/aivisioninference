@@ -197,13 +197,13 @@ export default function EdgeNodeList() {
     });
   }, [nodes, sortBy]);
 
-  if (initialLoading) {
-    return <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>;
-  }
 
   return (
     <Box pt={{ base: '130px', md: '80px', xl: '80px' }}>
-      <Flex direction="column" gap="20px">
+      {initialLoading ? (
+        <Center h="400px"><Spinner size="xl" color="brand.500" /></Center>
+      ) : (
+        <Flex direction="column" gap="20px">
         {/* Header */}
         <Flex justify="space-between" align="center">
           <Text fontSize="2xl" fontWeight="bold" color={textColor}>
@@ -348,6 +348,9 @@ export default function EdgeNodeList() {
           )}
         </Box>
 
+        </Flex>
+      )}
+
         {/* Delete Confirmation */}
         <ConfirmDialog
           isOpen={isDeleteOpen}
@@ -373,7 +376,6 @@ export default function EdgeNodeList() {
           onClose={onCreateClose}
           onSuccess={() => reloadNodes()}
         />
-      </Flex>
     </Box>
   );
 }

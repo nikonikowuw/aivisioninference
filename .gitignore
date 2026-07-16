@@ -79,3 +79,4 @@ docker-compose.override.yml
 # Test
 *.out
 test_json.go
+.opencode/

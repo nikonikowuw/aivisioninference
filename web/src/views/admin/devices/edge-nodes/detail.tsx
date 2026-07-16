@@ -32,6 +32,7 @@ import ConfirmDialog from "components/confirm-dialog/ConfirmDialog";
 import Terminal from "components/terminal/Terminal";
 import { useDateFormat } from "hooks/useDateFormat";
 import { useWebSocket } from "hooks/useWebSocket";
+import { WS_CMD, WS_TOPIC } from "constants/websocket";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -142,7 +143,7 @@ export default function EdgeNodeDetail() {
         if (!id || !hasLoaded) return;
         const timeParams = getTimeParams();
         setMetricsLoading(true);
-        Promise.all([
+        Promise.allSettled([
             edgeNodeMetricsApi.queryMetrics(id, { metric: "cpu_usage", ...timeParams }),
             edgeNodeMetricsApi.queryMetrics(id, { metric: "memory_usage", ...timeParams }),
             edgeNodeMetricsApi.queryMetrics(id, { metric: "net_rx_bytes", ...timeParams }),
@@ -150,7 +151,10 @@ export default function EdgeNodeDetail() {
             edgeNodeMetricsApi.queryMetrics(id, { metric: "accelerator_utilization", ...timeParams }),
             edgeNodeMetricsApi.queryMetrics(id, { metric: "active_stream_count", ...timeParams }),
         ])
-            .then(([cpu, mem, netRx, netTx, acc, streams]) => {
+            .then((results) => {
+                const [cpu, mem, netRx, netTx, acc, streams] = results.map(
+                    (r) => (r.status === 'fulfilled' ? r.value : { list: [] })
+                );
                 setCpuData(cpu.list || []);
                 setMemData(mem.list || []);
                 setNetRxData(netRx.list || []);
@@ -168,21 +172,21 @@ export default function EdgeNodeDetail() {
     const { send } = useWebSocket({
         onOpen: useCallback((ws: WebSocket) => {
             if (!id) return;
-            ws.send(JSON.stringify({ type: "subscribe", payload: { node_id: id, topic: "metrics" } }));
-            ws.send(JSON.stringify({ type: "subscribe", payload: { node_id: id, topic: "edge-node-status" } }));
-            ws.send(JSON.stringify({ type: "subscribe", payload: { node_id: id, topic: "edge-node-algo-status" } }));
+            ws.send(JSON.stringify({ type: WS_CMD.SUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.METRICS } }));
+            ws.send(JSON.stringify({ type: WS_CMD.SUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.EDGE_NODE_STATUS } }));
+            ws.send(JSON.stringify({ type: WS_CMD.SUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.EDGE_NODE_ALGO_STATUS } }));
         }, [id]),
         onMessage: useCallback((msg: any) => {
             if (msg.payload?.node_id !== id) return;
-            const statusChanged = msg.type === "edge-node-status";
-            const algoChanged = msg.type === "edge-node-algo-status";
+            const statusChanged = msg.type === WS_TOPIC.EDGE_NODE_STATUS;
+            const algoChanged = msg.type === WS_TOPIC.EDGE_NODE_ALGO_STATUS;
             if (statusChanged) {
                 edgeNodeApi.get(id).then(setNode).catch(() => { });
             }
             if (statusChanged || algoChanged) {
                 edgeNodeApi.getNodeAlgorithms(id).then(setAlgorithms).catch(() => { });
             }
-            if (msg.type === "edge-node-metrics") {
+            if (msg.type === WS_TOPIC.EDGE_NODE_METRICS) {
                 const payload = msg.payload || msg;
                 setLiveMetrics((prev) => {
                     const base = prev || {
@@ -211,7 +215,7 @@ export default function EdgeNodeDetail() {
                         temperature: payload.temperature ?? 0,
                     };
                 });
-            } else if (msg.type === "edge-node-engine-metrics") {
+            } else if (msg.type === WS_TOPIC.EDGE_NODE_ENGINE_METRICS) {
                 const payload = msg.payload || msg;
                 setLiveMetrics((prev) => {
                     const base = prev || {
@@ -242,13 +246,13 @@ export default function EdgeNodeDetail() {
 
     useEffect(() => {
         if (!id) return;
-        send({ type: "subscribe", payload: { node_id: id, topic: "metrics" } });
-        send({ type: "subscribe", payload: { node_id: id, topic: "edge-node-status" } });
-        send({ type: "subscribe", payload: { node_id: id, topic: "edge-node-algo-status" } });
+        send({ type: WS_CMD.SUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.METRICS } });
+        send({ type: WS_CMD.SUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.EDGE_NODE_STATUS } });
+        send({ type: WS_CMD.SUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.EDGE_NODE_ALGO_STATUS } });
         return () => {
-            send({ type: "unsubscribe", payload: { node_id: id, topic: "metrics" } });
-            send({ type: "unsubscribe", payload: { node_id: id, topic: "edge-node-status" } });
-            send({ type: "unsubscribe", payload: { node_id: id, topic: "edge-node-algo-status" } });
+            send({ type: WS_CMD.UNSUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.METRICS } });
+            send({ type: WS_CMD.UNSUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.EDGE_NODE_STATUS } });
+            send({ type: WS_CMD.UNSUBSCRIBE, payload: { node_id: id, topic: WS_TOPIC.EDGE_NODE_ALGO_STATUS } });
         };
     }, [id, send]);
 

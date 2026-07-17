@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -101,23 +102,41 @@ type OSSConfig struct {
 
 // LogConfig holds logging settings.
 type LogConfig struct {
-	Level  string        `mapstructure:"level"`
-	Format string        `mapstructure:"format"` // console | json
-	Output string        `mapstructure:"output"` // stdout | file | both
-	Access LogFileConfig `mapstructure:"access"`
-	App    LogFileConfig `mapstructure:"app"`
-	Error  LogFileConfig `mapstructure:"error"`
+	Level    string            `mapstructure:"level"`
+	Format   string            `mapstructure:"format"` // console | json
+	Output   string            `mapstructure:"output"` // stdout | file | both
+	Access   LogFileConfig     `mapstructure:"access"`
+	App      LogFileConfig     `mapstructure:"app"`
+	Error    LogFileConfig     `mapstructure:"error"`
+	Sanitize LogSanitizeConfig `mapstructure:"sanitize"`
+	Sampling LogSamplingConfig `mapstructure:"sampling"`
 }
 
 // LogFileConfig holds per-file log rotation settings.
 type LogFileConfig struct {
-	Enabled    bool   `mapstructure:"enabled"`
-	Path       string `mapstructure:"path"`
-	MaxSize    int    `mapstructure:"max_size"`    // MB; used by lumberjack (size-based rotation)
-	MaxBackups int    `mapstructure:"max_backups"` // file count
-	MaxAge     int    `mapstructure:"max_age"`     // days
-	Compress   bool   `mapstructure:"compress"`
-	TimeBased  bool   `mapstructure:"time_based"`  // enable daily time-based rotation with date-named files
+	Enabled      bool          `mapstructure:"enabled"`
+	Path         string        `mapstructure:"path"`
+	MaxSize      int           `mapstructure:"max_size"`    // MB; used by lumberjack (size-based rotation)
+	MaxBackups   int           `mapstructure:"max_backups"` // file count
+	MaxAge       int           `mapstructure:"max_age"`     // days
+	Compress     bool          `mapstructure:"compress"`
+	TimeBased    bool          `mapstructure:"time_based"`  // enable daily time-based rotation with date-named files
+	BufferSize   int           `mapstructure:"buffer_size"`    // bytes; 0 = no buffering
+	FlushInterval time.Duration `mapstructure:"flush_interval"` // default 5s
+}
+
+// LogSanitizeConfig holds sensitive data sanitization settings.
+type LogSanitizeConfig struct {
+	Enabled bool     `mapstructure:"enabled"`
+	Keys    []string `mapstructure:"keys"` // sensitive field keys to sanitize
+}
+
+// LogSamplingConfig holds log sampling settings.
+type LogSamplingConfig struct {
+	Enabled      bool `mapstructure:"enabled"`
+	Initial      int  `mapstructure:"initial"`       // initial sampling period
+	Thereafter   int  `mapstructure:"thereafter"`    // subsequent sampling period
+	TickInterval int  `mapstructure:"tick_interval"` // sampling tick interval (seconds)
 }
 
 // CORSConfig holds CORS settings.
@@ -288,6 +307,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.access.max_age", 7)
 	v.SetDefault("log.access.compress", true)
 	v.SetDefault("log.access.time_based", false)
+	v.SetDefault("log.access.buffer_size", 0)     // 0 = disabled by default (no buffering)
+	v.SetDefault("log.access.flush_interval", "5s")
 
 	// Log - App
 	v.SetDefault("log.app.enabled", true)
@@ -297,6 +318,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.app.max_age", 7)
 	v.SetDefault("log.app.compress", true)
 	v.SetDefault("log.app.time_based", false)
+	v.SetDefault("log.app.buffer_size", 262144)  // 256KB
+	v.SetDefault("log.app.flush_interval", "5s")
 
 	// Log - Error
 	v.SetDefault("log.error.enabled", true)
@@ -306,6 +329,21 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.error.max_age", 30)
 	v.SetDefault("log.error.compress", true)
 	v.SetDefault("log.error.time_based", false)
+	v.SetDefault("log.error.buffer_size", 65536)  // 64KB (error logs are lower volume)
+	v.SetDefault("log.error.flush_interval", "5s")
+
+	// Log - Sanitize
+	v.SetDefault("log.sanitize.enabled", false)
+	v.SetDefault("log.sanitize.keys", []string{
+		"password", "secret", "token", "access_token",
+		"refresh_token", "private_key", "authorization", "cookie",
+	})
+
+	// Log - Sampling (default off for stability)
+	v.SetDefault("log.sampling.enabled", false)
+	v.SetDefault("log.sampling.initial", 100)
+	v.SetDefault("log.sampling.thereafter", 100)
+	v.SetDefault("log.sampling.tick_interval", 1)
 
 	// CORS
 	v.SetDefault("cors.allow_origins", []string{"http://localhost:3000"})

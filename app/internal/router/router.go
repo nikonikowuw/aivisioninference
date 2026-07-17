@@ -48,6 +48,7 @@ type Router struct {
 	EdgeMqttHandler    *handler.EdgeMqttHandler
 	EdgeNodeSvc        *service.EdgeNodeService
 	EngineMetricsStore *service.EngineMetricsStore
+	logAtomicLevel     *zap.AtomicLevel
 }
 
 // RBAC returns the RBAC middleware, bound to the Router's cached dependencies.
@@ -103,21 +104,22 @@ type RouterEngineConfig struct {
 }
 
 // New creates a new Router with all dependencies wired.
-func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger, scheduler *asynq.Scheduler, mqttClient mqtt.Client) *Router {
+func New(db *gorm.DB, rdb *redis.Client, jwtManager *jwt.Manager, hub *ws.Hub, cfg *Config, accessLogger *zap.Logger, scheduler *asynq.Scheduler, mqttClient mqtt.Client, logAtomicLevel *zap.AtomicLevel) *Router {
 	engine := gin.New()
 
 	httpx.TrustedProxies = cfg.TrustedProxies
 
 	r := &Router{
-		engine:       engine,
-		db:           db,
-		rdb:          rdb,
-		jwtManager:   jwtManager,
-		hub:          hub,
-		config:       cfg,
-		accessLogger: accessLogger,
-		scheduler:    scheduler,
-		mqttClient:   mqttClient,
+		engine:         engine,
+		db:             db,
+		rdb:            rdb,
+		jwtManager:     jwtManager,
+		hub:            hub,
+		config:         cfg,
+		accessLogger:   accessLogger,
+		scheduler:      scheduler,
+		mqttClient:     mqttClient,
+		logAtomicLevel: logAtomicLevel,
 	}
 
 	r.setupMiddleware()
@@ -382,6 +384,11 @@ func (r *Router) registerSystemRoutes(authorized *gin.RouterGroup, v1 *gin.Route
 		}
 
 		sysRBAC.GET("/dashboard/stats", deps.DashboardHandler.Stats)
+
+		// 运行时日志级别调整
+		logHandler := handler.NewLogHandler(r.logAtomicLevel)
+		sysRBAC.PUT("/system/log/level", logHandler.SetLevel)
+		sysRBAC.GET("/system/log/level", logHandler.GetLevel)
 	}
 
 	// System Management (no RBAC, relies on internal auth)

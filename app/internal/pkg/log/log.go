@@ -4,10 +4,12 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -17,6 +19,7 @@ import (
 )
 
 // Logger holds the application loggers for different purposes.
+// level 字段所有应用日志 core 共享指针，运行时调级对所有 core 生效。
 type Logger struct {
 	Access *zap.Logger // HTTP request logs
 	App    *zap.Logger // All application logs
@@ -35,18 +38,39 @@ func (l *Logger) Ctx(ctx context.Context) *zap.Logger {
 
 // Init initializes the logging system based on the provided configuration.
 // It creates three loggers (access/app/error) with optional file output and rotation.
+// 所有应用日志 core 共享 logger.level 的指针，SetLevel 调级即时生效。
 func Init(cfg config.LogConfig) *Logger {
-	level := parseLevel(cfg.Level)
+	logger := &Logger{
+		level: parseLevel(cfg.Level),
+	}
 
 	// Build encoders
 	fileEncoder := buildFileEncoder(cfg.Format)
 	stdoutEncoder := buildConsoleEncoder(cfg.Format)
 
-	// Build cores: each logger gets separate file and stdout cores
-	// to avoid ANSI color codes leaking into log files
-	accessCore := buildCore(cfg.Access, level, fileEncoder, stdoutEncoder, cfg.Output)
-	appCore := buildCore(cfg.App, level, fileEncoder, stdoutEncoder, cfg.Output)
-	errorCore := buildCore(cfg.Error, zap.NewAtomicLevelAt(zap.ErrorLevel), fileEncoder, stdoutEncoder, cfg.Output)
+	// Build cores: 传递 &logger.level 使所有 core 共享同一 AtomicLevel 实例
+	// 运行时通过 SetLevel 调级对所有 core 即时生效
+	accessCore := buildCore(cfg.Access, &logger.level, fileEncoder, stdoutEncoder, cfg.Output)
+	appCore := buildCore(cfg.App, &logger.level, fileEncoder, stdoutEncoder, cfg.Output)
+
+	// errorCore 使用独立的固定 Error 级别，不受运行时调级影响
+	errorLevel := zap.NewAtomicLevelAt(zap.ErrorLevel)
+	errorCore := buildCore(cfg.Error, &errorLevel, fileEncoder, stdoutEncoder, cfg.Output)
+
+	// Wrap cores with SafeCore for sensitive data sanitization
+	if cfg.Sanitize.Enabled {
+		sanitizeKeys := cfg.Sanitize.Keys
+		accessCore = NewSafeCore(accessCore, sanitizeKeys)
+		appCore = NewSafeCore(appCore, sanitizeKeys)
+		errorCore = NewSafeCore(errorCore, sanitizeKeys)
+	}
+
+	// Apply sampling when configured
+	if cfg.Sampling.Enabled {
+		accessCore = wrapWithSampling(accessCore, cfg.Sampling)
+		appCore = wrapWithSampling(appCore, cfg.Sampling)
+		errorCore = wrapWithSampling(errorCore, cfg.Sampling)
+	}
 
 	// Compose: error core 不默认混入 app core，避免 error 级别日志双写
 	// 当 cfg.Error.Enabled 时，errorCore 追加到 appLogger 使其同时写入错误文件
@@ -63,17 +87,17 @@ func Init(cfg config.LogConfig) *Logger {
 	// Set global logger
 	zap.ReplaceGlobals(appLogger)
 
-	return &Logger{
-		Access: accessLogger,
-		App:    appLogger,
-		Error:  errorLogger,
-		level:  level,
-	}
+	logger.Access = accessLogger
+	logger.App = appLogger
+	logger.Error = errorLogger
+	return logger
 }
 
 // buildCore creates a zapcore.Core with separate file and stdout writers.
 // In "both" mode, file gets clean output (no ANSI colors) while stdout gets colored output.
-func buildCore(fileCfg config.LogFileConfig, level zap.AtomicLevel, fileEncoder, stdoutEncoder zapcore.Encoder, output string) zapcore.Core {
+// level 接受 *zap.AtomicLevel，zapcore.NewCore 将其作为 LevelEnabler 接口存储指针。
+// 所有调用方共享同一 AtomicLevel 实例，运行时调级对所有 core 生效。
+func buildCore(fileCfg config.LogFileConfig, level *zap.AtomicLevel, fileEncoder, stdoutEncoder zapcore.Encoder, output string) zapcore.Core {
 	fileSyncer := newFileWriter(fileCfg)
 	stdoutSyncer := zapcore.Lock(os.Stdout)
 
@@ -128,30 +152,88 @@ func parseLevel(s string) zap.AtomicLevel {
 // When cfg.TimeBased is true, it returns a dailyRotateSyncer that splits
 // logs by date with date-named files. Otherwise, it returns a lumberjack-backed
 // WriteSyncer with size-based rotation.
-// Returns a no-op WriteSyncer if file logging is disabled to prevent silent output to stdout.
+// newFileWriter creates a WriteSyncer for log file output, optionally wrapped with
+// BufferedWriteSyncer for performant buffered writes. Supports both lumberjack
+// (size-based) and dailyRotateSyncer (date-based) rotation backends.
+// Returns a no-op WriteSyncer if file logging is disabled.
 func newFileWriter(cfg config.LogFileConfig) zapcore.WriteSyncer {
 	if !cfg.Enabled || cfg.Path == "" {
 		return zapcore.AddSync(io.Discard)
 	}
 
-	// Time-based (daily) rotation with date-named files
+	// Build the base file syncer
+	var fileWriter io.Writer
 	if cfg.TimeBased {
-		return zapcore.AddSync(newDailyRotateSyncer(cfg))
+		// Time-based (daily) rotation with date-named files
+		fileWriter = newDailyRotateSyncer(cfg)
+	} else {
+		// Size-based rotation via lumberjack
+		dir := filepath.Dir(cfg.Path)
+		if dir != "" {
+			_ = os.MkdirAll(dir, 0o755)
+		}
+		fileWriter = &lumberjack.Logger{
+			Filename:   cfg.Path,
+			MaxSize:    cfg.MaxSize,
+			MaxBackups: cfg.MaxBackups,
+			MaxAge:     cfg.MaxAge,
+			Compress:   cfg.Compress,
+		}
 	}
 
-	// Size-based rotation via lumberjack (original behavior)
-	dir := filepath.Dir(cfg.Path)
-	if dir != "" {
-		_ = os.MkdirAll(dir, 0o755)
+	ws := zapcore.AddSync(fileWriter)
+
+	// Wrap with BufferedWriteSyncer when buffer size is configured
+	if cfg.BufferSize > 0 {
+		flushInterval := cfg.FlushInterval
+		if flushInterval <= 0 {
+			flushInterval = 5 * time.Second
+		}
+		ws = &zapcore.BufferedWriteSyncer{
+			WS:            ws,
+			Size:          cfg.BufferSize,
+			FlushInterval: flushInterval,
+		}
 	}
-	lj := &lumberjack.Logger{
-		Filename:   cfg.Path,
-		MaxSize:    cfg.MaxSize,
-		MaxBackups: cfg.MaxBackups,
-		MaxAge:     cfg.MaxAge,
-		Compress:   cfg.Compress,
+
+	return ws
+}
+
+// wrapWithSampling wraps a core with zap's sampling filter when enabled.
+func wrapWithSampling(core zapcore.Core, cfg config.LogSamplingConfig) zapcore.Core {
+	tickInterval := time.Duration(cfg.TickInterval) * time.Second
+	if tickInterval <= 0 {
+		tickInterval = time.Second
 	}
-	return zapcore.AddSync(lj)
+	initial := cfg.Initial
+	if initial <= 0 {
+		initial = 100
+	}
+	thereafter := cfg.Thereafter
+	if thereafter <= 0 {
+		thereafter = 100
+	}
+	return zapcore.NewSamplerWithOptions(
+		core,
+		tickInterval,
+		initial,
+		thereafter,
+	)
+}
+
+// SetLevel 动态设置日志级别。支持: debug, info, warn, error, dpanic, panic, fatal。
+// 仅接受 zap.UnmarshalText 识别的规范级别名（不含 "warning"）。
+func (l *Logger) SetLevel(level string) error {
+	if err := l.level.UnmarshalText([]byte(level)); err != nil {
+		return fmt.Errorf("invalid log level %q: %w", level, err)
+	}
+	return nil
+}
+
+// AtomicLevel 返回当前日志级别的指针。所有应用日志 core 共享此实例，
+// 通过返回的指针修改级别对所有 core 即时生效。
+func (l *Logger) AtomicLevel() *zap.AtomicLevel {
+	return &l.level
 }
 
 // buildFileEncoder creates an encoder for file output (no ANSI colors).

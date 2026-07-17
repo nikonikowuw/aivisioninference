@@ -10,6 +10,7 @@ import (
 
 // Logger returns a Gin middleware that logs each request using the provided
 // access logger with structured fields for method, path, status, latency, and client IP.
+// 它自动从 gin.Context 中提取 TraceID（由 TraceID 中间件注入）和 user_id（由 Auth 中间件注入）。
 func Logger(accessLogger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -32,6 +33,9 @@ func Logger(accessLogger *zap.Logger) gin.HandlerFunc {
 			zap.Int("body_size", c.Writer.Size()),
 			zap.Int("error_count", len(c.Errors)),
 		}
+
+		// 追加追踪字段：trace_id（TraceID 中间件）和 user_id（Auth 中间件）
+		fields = append(fields, ginTraceFields(c)...)
 
 		if len(c.Errors) > 0 {
 			fields = append(fields, zap.String("last_error", c.Errors.Last().Error()))

@@ -8,8 +8,10 @@ import (
 	"go.uber.org/zap"
 
 	apperrors "github.com/niko-admin/niko-admin/internal/pkg/errors"
+	applog "github.com/niko-admin/niko-admin/internal/pkg/log"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
 )
+
 
 // ErrorHandler returns a Gin middleware that catches errors attached to the
 // context via c.Error() during handler processing, logs them at the appropriate
@@ -45,23 +47,20 @@ func logAppError(c *gin.Context, err error) {
 		zap.String("path", c.Request.URL.Path),
 	}
 
-	if userID, exists := c.Get(ContextKeyUserID); exists {
-		if uid, ok := userID.(string); ok {
-			fields = append(fields, zap.String("user_id", uid))
-		}
-	}
+	// 追加追踪字段：trace_id 由 applog.Ctx() 通过 LogContext 注入，user_id 从 gin.Context 提取
+	fields = append(fields, ginTraceFields(c)...)
 
 	if appErr, ok := err.(*apperrors.AppError); ok {
 		fields = append(fields, zap.String("code", appErr.Code))
 
 		switch {
 		case strings.HasPrefix(appErr.Code, "INTERNAL"):
-			zap.L().Error("server error", fields...)
+			applog.Ctx(c.Request.Context()).Error("server error", fields...)
 		default:
-			zap.L().Warn("client error", fields...)
+			applog.Ctx(c.Request.Context()).Warn("client error", fields...)
 		}
 	} else {
 		fields = append(fields, zap.Error(err))
-		zap.L().Error("unknown error", fields...)
+		applog.Ctx(c.Request.Context()).Error("unknown error", fields...)
 	}
 }

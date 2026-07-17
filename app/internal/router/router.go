@@ -132,8 +132,9 @@ func (r *Router) Engine() *gin.Engine {
 }
 
 func (r *Router) setupMiddleware() {
-	// Global middleware
+	// Global middleware — TraceID 必须在 Logger 之前注册，确保日志能读取 Trace ID
 	r.engine.Use(middleware.Recovery())
+	r.engine.Use(middleware.TraceID())
 	r.engine.Use(middleware.Logger(r.accessLogger))
 	r.engine.Use(middleware.I18n())
 	r.engine.Use(middleware.CORS(r.config.AllowOrigins))

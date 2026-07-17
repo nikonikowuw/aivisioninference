@@ -3,6 +3,7 @@
 package log
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,6 +24,15 @@ type Logger struct {
 	level  zap.AtomicLevel
 }
 
+// Ctx 返回一个带有全链路追踪字段的 App Logger。
+// 当 context 中不存在 LogContext 时，返回 App Logger 自身。
+func (l *Logger) Ctx(ctx context.Context) *zap.Logger {
+	if l == nil || l.App == nil {
+		return zap.L()
+	}
+	return addContextFields(l.App, ctx)
+}
+
 // Init initializes the logging system based on the provided configuration.
 // It creates three loggers (access/app/error) with optional file output and rotation.
 func Init(cfg config.LogConfig) *Logger {
@@ -38,12 +48,17 @@ func Init(cfg config.LogConfig) *Logger {
 	appCore := buildCore(cfg.App, level, fileEncoder, stdoutEncoder, cfg.Output)
 	errorCore := buildCore(cfg.Error, zap.NewAtomicLevelAt(zap.ErrorLevel), fileEncoder, stdoutEncoder, cfg.Output)
 
-	// Compose: app core for all logs, error core for error+ only
-	mainCore := zapcore.NewTee(appCore, errorCore)
-
+	// Compose: error core 不默认混入 app core，避免 error 级别日志双写
+	// 当 cfg.Error.Enabled 时，errorCore 追加到 appLogger 使其同时写入错误文件
 	accessLogger := zap.New(accessCore, zap.AddCaller(), zap.AddCallerSkip(1))
-	appLogger := zap.New(mainCore, zap.AddCaller(), zap.AddCallerSkip(1))
+	appLogger := zap.New(appCore, zap.AddCaller(), zap.AddCallerSkip(1))
 	errorLogger := zap.New(errorCore, zap.AddCaller(), zap.AddCallerSkip(1))
+
+	// 仅在配置了独立错误文件时，将 errorCore 加入 appLogger
+	if cfg.Error.Enabled {
+		appCoreWithError := zapcore.NewTee(appCore, errorCore)
+		appLogger = zap.New(appCoreWithError, zap.AddCaller(), zap.AddCallerSkip(1))
+	}
 
 	// Set global logger
 	zap.ReplaceGlobals(appLogger)

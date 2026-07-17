@@ -16,6 +16,44 @@ namespace
             << " data=" << desc.data
             << " stride=" << desc.stride;
     }
+
+    hw_buffer_desc_t BuildAbiBufferDesc(const aivision::pipeline::HwBufferDesc &input_desc)
+    {
+        hw_buffer_desc_t desc{};
+        desc.dma_fd = input_desc.dma_fd;
+        desc.size = input_desc.size;
+        desc.width = input_desc.width;
+        desc.height = input_desc.height;
+        desc.pixel_format = input_desc.pixel_format;
+        desc.dma_buf_fd = input_desc.dma_buf_fd;
+        desc.phys_addr = input_desc.phys_addr;
+        desc.data = input_desc.data;
+        desc.stride = input_desc.stride;
+        desc.buffer_owner = HW_BUFFER_OWNER_ENGINE;
+        desc.buffer_type = HW_BUFFER_TYPE_DEFAULT;
+
+        if (input_desc.native_handle == nullptr)
+        {
+            return desc;
+        }
+
+        switch (input_desc.memory_type)
+        {
+        case aivision::pipeline::HwBufferMemoryType::CVPixelBuffer:
+            desc.buffer_type = HW_BUFFER_TYPE_APPLE_NATIVE;
+            desc.plat.apple.abi_version = HW_BUFFER_APPLE_ABI_VERSION;
+            desc.plat.apple.struct_size = sizeof(hw_buffer_apple_t);
+            desc.plat.apple.buffer_kind = HW_BUFFER_APPLE_CVPIXELBUFFER;
+            desc.plat.apple.pixel_format = input_desc.pixel_format;
+            desc.plat.apple.native_handle = reinterpret_cast<uint64_t>(input_desc.native_handle);
+            desc.plat.apple.plane_count = HW_BUFFER_PLANE_COUNT_UNKNOWN;
+            break;
+        default:
+            break;
+        }
+
+        return desc;
+    }
 }
 
 namespace aivision
@@ -74,16 +112,7 @@ namespace aivision
             active_infer_count_.fetch_add(1);
             state_.store(AlgoInstanceState::Running);
 
-            hw_buffer_desc_t fb_desc{};
-            fb_desc.dma_fd = input_desc.dma_fd;
-            fb_desc.size = input_desc.size;
-            fb_desc.width = input_desc.width;
-            fb_desc.height = input_desc.height;
-            fb_desc.pixel_format = input_desc.pixel_format;
-            fb_desc.dma_buf_fd = input_desc.dma_buf_fd;
-            fb_desc.phys_addr = input_desc.phys_addr;
-            fb_desc.data = input_desc.data;
-            fb_desc.stride = input_desc.stride;
+            const hw_buffer_desc_t fb_desc = BuildAbiBufferDesc(input_desc);
 
             infer_result_t result{};
             int ret = 0;

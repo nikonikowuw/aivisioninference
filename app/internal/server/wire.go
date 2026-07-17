@@ -18,6 +18,7 @@ func InitializeApp() (*App, error) {
 		config.Load,
 		provideLoggers,
 		provideAccessLogger,
+		provideLogLevel,
 		provideDB,
 		provideRedis,
 		provideJWTManager,

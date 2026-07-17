@@ -31,6 +31,10 @@ func provideAccessLogger(l *applog.Logger) *zap.Logger {
 	return l.Access
 }
 
+func provideLogLevel(l *applog.Logger) *zap.AtomicLevel {
+	return l.AtomicLevel()
+}
+
 func provideDB(cfg *config.Config) (*gorm.DB, error) {
 	return database.New(
 		fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",

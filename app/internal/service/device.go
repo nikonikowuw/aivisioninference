@@ -774,6 +774,7 @@ func toDeviceListResponse(item *model.Device) dto.DeviceListResponse {
 		s := item.LastOfflineAt.Format(time.RFC3339)
 		resp.LastOfflineAt = &s
 	}
+	resp.Groups = toDeviceGroupResponses(item.Groups)
 	return resp
 }
 
@@ -819,11 +820,18 @@ func toDeviceResponse(item *model.Device) *dto.DeviceResponse {
 	if !item.UpdatedAt.IsZero() {
 		resp.UpdatedAt = item.UpdatedAt.Format(time.RFC3339)
 	}
-	if len(item.Groups) > 0 {
-		resp.Groups = make([]dto.DeviceGroupResponse, len(item.Groups))
-		for i, g := range item.Groups {
-			resp.Groups[i] = *toDeviceGroupResponse(&g, 0)
-		}
+	resp.Groups = toDeviceGroupResponses(item.Groups)
+	return resp
+}
+
+// toDeviceGroupResponses 批量将 DeviceGroup 模型转换为响应 DTO（无设备计数）
+func toDeviceGroupResponses(items []model.DeviceGroup) []dto.DeviceGroupResponse {
+	if len(items) == 0 {
+		return nil
+	}
+	resp := make([]dto.DeviceGroupResponse, len(items))
+	for i, g := range items {
+		resp[i] = *toDeviceGroupResponse(&g, 0)
 	}
 	return resp
 }

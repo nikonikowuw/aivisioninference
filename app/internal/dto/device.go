@@ -100,16 +100,17 @@ type DeviceResponse struct {
 
 // DeviceListResponse 设备列表响应项（精简版，不含敏感信息）
 type DeviceListResponse struct {
-	ID            string  `json:"id"`
-	DeviceName    string  `json:"device_name"`
-	AccessType    string  `json:"access_type"`
-	Status        string  `json:"status"`
-	Enabled       bool    `json:"enabled"`
-	LastOnlineAt  *string `json:"last_online_at,omitempty"`
-	LastOfflineAt *string `json:"last_offline_at,omitempty"`
-	Manufacturer  string  `json:"manufacturer,omitempty"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
+	ID            string                `json:"id"`
+	DeviceName    string                `json:"device_name"`
+	AccessType    string                `json:"access_type"`
+	Status        string                `json:"status"`
+	Enabled       bool                  `json:"enabled"`
+	LastOnlineAt  *string               `json:"last_online_at,omitempty"`
+	LastOfflineAt *string               `json:"last_offline_at,omitempty"`
+	Manufacturer  string                `json:"manufacturer,omitempty"`
+	Groups        []DeviceGroupResponse `json:"groups,omitempty"`
+	CreatedAt     string                `json:"created_at"`
+	UpdatedAt     string                `json:"updated_at"`
 }
 
 // DeviceTestResultResponse 设备测试连接结果

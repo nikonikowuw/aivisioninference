@@ -1,5 +1,4 @@
-import { Box, Text, useColorModeValue } from '@chakra-ui/react';
-import { useTheme } from '@chakra-ui/react';
+import { Box, Button, Center, Spinner, Stack, Text, useColorModeValue, useTheme } from '@chakra-ui/react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,6 +19,10 @@ export interface MetricsTimeSeriesProps {
   data: MetricDataPoint[];
   /** Loading state */
   loading?: boolean;
+  /** Data loading failed */
+  error?: boolean;
+  /** Retry loading the data */
+  onRetry?: () => void;
   /** Unit suffix for the Y-axis */
   unit?: string;
   /** Chart color (Chakra color scheme name, e.g. 'blue', 'green') */
@@ -40,6 +43,8 @@ export default function MetricsTimeSeries({
   title,
   data,
   loading = false,
+  error = false,
+  onRetry,
   unit = '',
   colorScheme = 'blue',
   height = 300,
@@ -50,6 +55,8 @@ export default function MetricsTimeSeries({
   const theme = useTheme();
   const borderColor = useColorModeValue('gray.200', 'whiteAlpha.100');
   const textColor = useColorModeValue('gray.600', 'gray.300');
+  const errorColor = useColorModeValue('red.600', 'red.300');
+  const tooltipBg = useColorModeValue('white', 'gray.800');
 
   // Map Chakra color scheme to actual color values
   const chartColor = useMemo(() => {
@@ -106,7 +113,7 @@ export default function MetricsTimeSeries({
         : `${point.v.toFixed(2)}${unit ? ` ${unit}` : ''}`;
       return (
         <Box
-          bg={useColorModeValue('white', 'gray.800')}
+          bg={tooltipBg}
           border="1px solid"
           borderColor={borderColor}
           borderRadius="md"
@@ -121,24 +128,8 @@ export default function MetricsTimeSeries({
         </Box>
       );
     },
-    [borderColor, chartColor, formatTooltipLabel, unit],
+    [borderColor, chartColor, formatTooltipLabel, tooltipBg, unit],
   );
-
-  if (loading) {
-    return (
-      <Box h={`${height}px`} display="flex" alignItems="center" justifyContent="center">
-        <Text color="gray.400">{t('loading')}</Text>
-      </Box>
-    );
-  }
-
-  if (!data || data.length === 0) {
-    return (
-      <Box h={`${height}px`} display="flex" alignItems="center" justifyContent="center">
-        <Text color="gray.400">{t('noData')}</Text>
-      </Box>
-    );
-  }
 
   return (
     <Box>
@@ -146,44 +137,68 @@ export default function MetricsTimeSeries({
         {title}
       </Text>
       <Box h={`${height}px`}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <defs>
-              <linearGradient id={chartGradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={chartColor} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={chartColor} stopOpacity={0.0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={borderColor} />
-            <XAxis
-              dataKey="t"
-              tickFormatter={formatXAxis}
-              stroke={textColor}
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              minTickGap={30}
-            />
-            <YAxis
-              tickFormatter={formatYAxis}
-              stroke={textColor}
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              width={60}
-            />
-            <Tooltip content={renderTooltip} />
-            <Area
-              type="monotone"
-              dataKey="v"
-              stroke={chartColor}
-              strokeWidth={2}
-              fill={`url(#${chartGradientId})`}
-              dot={false}
-              activeDot={{ r: 4, strokeWidth: 0 }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <Center h="100%" role="status">
+            <Stack align="center" spacing={2}>
+              <Spinner size="sm" color={chartColor} />
+              <Text color={textColor} fontSize="sm">{t('status.loading')}</Text>
+            </Stack>
+          </Center>
+        ) : error ? (
+          <Center h="100%" role="alert">
+            <Stack align="center" spacing={3}>
+              <Text color={errorColor} fontSize="sm">{t('message.loadFailed')}</Text>
+              {onRetry ? (
+                <Button size="sm" minH={11} variant="outline" onClick={onRetry}>
+                  {t('button.refresh')}
+                </Button>
+              ) : null}
+            </Stack>
+          </Center>
+        ) : !data || data.length === 0 ? (
+          <Center h="100%">
+            <Text color={textColor} fontSize="sm">{t('empty.title')}</Text>
+          </Center>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <defs>
+                <linearGradient id={chartGradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={chartColor} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={chartColor} stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={borderColor} />
+              <XAxis
+                dataKey="t"
+                tickFormatter={formatXAxis}
+                stroke={textColor}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={30}
+              />
+              <YAxis
+                tickFormatter={formatYAxis}
+                stroke={textColor}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                width={60}
+              />
+              <Tooltip content={renderTooltip} />
+              <Area
+                type="monotone"
+                dataKey="v"
+                stroke={chartColor}
+                strokeWidth={2}
+                fill={`url(#${chartGradientId})`}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </Box>
     </Box>
   );

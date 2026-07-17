@@ -68,7 +68,7 @@ type Device struct {
 	Version          int           `gorm:"default:1" json:"version"`
 	AutoInfer        bool          `gorm:"default:false" json:"auto_infer"`
 	ParentNvrID      *string       `gorm:"type:uuid;index" json:"parent_nvr_id,omitempty"`
-	Groups           []DeviceGroup `gorm:"many2many:device_group_members;" json:"groups,omitempty"`
+	Groups           []DeviceGroup `gorm:"many2many:device_group_members;foreignKey:ID;joinForeignKey:DeviceID;references:ID;joinReferences:GroupID" json:"groups,omitempty"`
 }
 
 // SortableFields 返回允许排序的字段列表

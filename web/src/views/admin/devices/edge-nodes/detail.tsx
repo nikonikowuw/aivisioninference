@@ -121,6 +121,19 @@ export default function EdgeNodeDetail() {
     const [accData, setAccData] = useState<MetricDataPoint[]>([]);
     const [streamData, setStreamData] = useState<MetricDataPoint[]>([]);
     const [metricsLoading, setMetricsLoading] = useState(false);
+    const [metricsRequestVersion, setMetricsRequestVersion] = useState(0);
+    const [metricErrors, setMetricErrors] = useState({
+        cpu: false,
+        memory: false,
+        netRx: false,
+        netTx: false,
+        accelerator: false,
+        streams: false,
+    });
+
+    const retryMetrics = useCallback(() => {
+        setMetricsRequestVersion((version) => version + 1);
+    }, []);
 
     // Compute time range params
     const getTimeParams = useCallback(() => {
@@ -143,7 +156,16 @@ export default function EdgeNodeDetail() {
     useEffect(() => {
         if (!id || !hasLoaded) return;
         const timeParams = getTimeParams();
+        let cancelled = false;
         setMetricsLoading(true);
+        setMetricErrors({
+            cpu: false,
+            memory: false,
+            netRx: false,
+            netTx: false,
+            accelerator: false,
+            streams: false,
+        });
         Promise.allSettled([
             edgeNodeMetricsApi.queryMetrics(id, { metric: "cpu_usage", ...timeParams }),
             edgeNodeMetricsApi.queryMetrics(id, { metric: "memory_usage", ...timeParams }),
@@ -153,6 +175,7 @@ export default function EdgeNodeDetail() {
             edgeNodeMetricsApi.queryMetrics(id, { metric: "active_stream_count", ...timeParams }),
         ])
             .then((results) => {
+                if (cancelled) return;
                 const [cpu, mem, netRx, netTx, acc, streams] = results.map(
                     (r) => (r.status === 'fulfilled' ? r.value : { list: [] })
                 );
@@ -162,12 +185,23 @@ export default function EdgeNodeDetail() {
                 setNetTxData(netTx.list || []);
                 setAccData(acc.list || []);
                 setStreamData(streams.list || []);
+                setMetricErrors({
+                    cpu: results[0].status === 'rejected',
+                    memory: results[1].status === 'rejected',
+                    netRx: results[2].status === 'rejected',
+                    netTx: results[3].status === 'rejected',
+                    accelerator: results[4].status === 'rejected',
+                    streams: results[5].status === 'rejected',
+                });
             })
-            .catch((err) => {
-                console.error("Failed to load metrics:", err);
-            })
-            .finally(() => setMetricsLoading(false));
-    }, [id, hasLoaded, getTimeParams]);
+            .finally(() => {
+                if (!cancelled) setMetricsLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [id, hasLoaded, getTimeParams, metricsRequestVersion]);
 
     // WebSocket: auto-refresh node & algorithms when heartbeat/deployment status updates come in
     const { send } = useWebSocket({
@@ -601,6 +635,8 @@ export default function EdgeNodeDetail() {
                                 title={t("metrics.cpuUsage")}
                                 data={cpuData}
                                 loading={metricsLoading}
+                                error={metricErrors.cpu}
+                                onRetry={retryMetrics}
                                 unit="%"
                                 colorScheme="blue"
                                 height={200}
@@ -611,6 +647,8 @@ export default function EdgeNodeDetail() {
                                 title={t("metrics.memoryUsage")}
                                 data={memData}
                                 loading={metricsLoading}
+                                error={metricErrors.memory}
+                                onRetry={retryMetrics}
                                 unit="%"
                                 colorScheme="green"
                                 height={200}
@@ -621,6 +659,8 @@ export default function EdgeNodeDetail() {
                                 title={t("metrics.netRx")}
                                 data={netRxData}
                                 loading={metricsLoading}
+                                error={metricErrors.netRx}
+                                onRetry={retryMetrics}
                                 unit="B"
                                 colorScheme="purple"
                                 height={200}
@@ -631,6 +671,8 @@ export default function EdgeNodeDetail() {
                                 title={t("metrics.netTx")}
                                 data={netTxData}
                                 loading={metricsLoading}
+                                error={metricErrors.netTx}
+                                onRetry={retryMetrics}
                                 unit="B"
                                 colorScheme="orange"
                                 height={200}
@@ -641,6 +683,8 @@ export default function EdgeNodeDetail() {
                                 title={t('metrics.acceleratorUsage')}
                                 data={accData}
                                 loading={metricsLoading}
+                                error={metricErrors.accelerator}
+                                onRetry={retryMetrics}
                                 unit="%"
                                 colorScheme="cyan"
                                 height={200}
@@ -651,6 +695,8 @@ export default function EdgeNodeDetail() {
                                 title={t('metrics.activeVideoStreams')}
                                 data={streamData}
                                 loading={metricsLoading}
+                                error={metricErrors.streams}
+                                onRetry={retryMetrics}
                                 unit=""
                                 colorScheme="pink"
                                 height={200}

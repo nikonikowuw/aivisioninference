@@ -25,6 +25,7 @@ type Logger struct {
 	App    *zap.Logger // All application logs
 	Error  *zap.Logger // Error+ level logs
 	level  zap.AtomicLevel
+	hooks  []ErrorHook  // 错误日志告警回调
 }
 
 // Ctx 返回一个带有全链路追踪字段的 App Logger。
@@ -72,6 +73,30 @@ func Init(cfg config.LogConfig) *Logger {
 		errorCore = wrapWithSampling(errorCore, cfg.Sampling)
 	}
 
+	// Wrap with HookCore for error-level alert callbacks
+	if cfg.ErrorHook.Enabled {
+		minLevel := zapcore.ErrorLevel
+		switch strings.ToLower(cfg.ErrorHook.MinLevel) {
+		case "warn", "warning":
+			minLevel = zapcore.WarnLevel
+		case "error":
+			minLevel = zapcore.ErrorLevel
+		case "dpanic":
+			minLevel = zapcore.DPanicLevel
+		}
+
+		// Create the webhook hook if URL is configured
+		var hooks []ErrorHook
+		if cfg.ErrorHook.URL != "" {
+			hooks = append(hooks, NewWebhookErrorHook(cfg.ErrorHook.URL))
+		}
+		logger.hooks = hooks
+
+		accessCore = NewHookCore(accessCore, minLevel, hooks)
+		appCore = NewHookCore(appCore, minLevel, hooks)
+		errorCore = NewHookCore(errorCore, minLevel, hooks)
+	}
+
 	// Compose: error core 不默认混入 app core，避免 error 级别日志双写
 	// 当 cfg.Error.Enabled 时，errorCore 追加到 appLogger 使其同时写入错误文件
 	accessLogger := zap.New(accessCore, zap.AddCaller(), zap.AddCallerSkip(1))
@@ -91,6 +116,15 @@ func Init(cfg config.LogConfig) *Logger {
 	logger.App = appLogger
 	logger.Error = errorLogger
 	return logger
+}
+
+// RegisterErrorHook 注册一个错误日志告警回调。
+// 调用后，所有 >= Error 级别的日志条目会通过 hook 异步通知。
+func (l *Logger) RegisterErrorHook(hook ErrorHook) {
+	if l == nil {
+		return
+	}
+	l.hooks = append(l.hooks, hook)
 }
 
 // buildCore creates a zapcore.Core with separate file and stdout writers.

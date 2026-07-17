@@ -108,8 +108,9 @@ type LogConfig struct {
 	Access   LogFileConfig     `mapstructure:"access"`
 	App      LogFileConfig     `mapstructure:"app"`
 	Error    LogFileConfig     `mapstructure:"error"`
-	Sanitize LogSanitizeConfig `mapstructure:"sanitize"`
-	Sampling LogSamplingConfig `mapstructure:"sampling"`
+	Sanitize  LogSanitizeConfig   `mapstructure:"sanitize"`
+	Sampling  LogSamplingConfig   `mapstructure:"sampling"`
+	ErrorHook LogErrorHookConfig  `mapstructure:"error_hook"`
 }
 
 // LogFileConfig holds per-file log rotation settings.
@@ -137,6 +138,13 @@ type LogSamplingConfig struct {
 	Initial      int  `mapstructure:"initial"`       // initial sampling period
 	Thereafter   int  `mapstructure:"thereafter"`    // subsequent sampling period
 	TickInterval int  `mapstructure:"tick_interval"` // sampling tick interval (seconds)
+}
+
+// LogErrorHookConfig holds error hook settings for alert callbacks.
+type LogErrorHookConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	URL      string `mapstructure:"url"`
+	MinLevel string `mapstructure:"min_level"` // minimum level to trigger hook (warn|error|dpanic)
 }
 
 // CORSConfig holds CORS settings.
@@ -344,6 +352,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.sampling.initial", 100)
 	v.SetDefault("log.sampling.thereafter", 100)
 	v.SetDefault("log.sampling.tick_interval", 1)
+
+	// Log - Error Hook (default off)
+	v.SetDefault("log.error_hook.enabled", false)
+	v.SetDefault("log.error_hook.url", "")
+	v.SetDefault("log.error_hook.min_level", "error")
 
 	// CORS
 	v.SetDefault("cors.allow_origins", []string{"http://localhost:3000"})

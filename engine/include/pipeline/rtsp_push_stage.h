@@ -53,6 +53,7 @@ private:
     uint16_t rtp_seq_ = 0;
     uint32_t rtp_ssrc_ = 0;
     uint64_t first_timestamp_ns_ = 0;
+    bool awaiting_key_frame_ = true;
     std::atomic<uint64_t> total_bytes_sent_{0};
 };
 

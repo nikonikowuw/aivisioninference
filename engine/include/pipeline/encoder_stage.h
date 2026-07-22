@@ -41,6 +41,9 @@ public:
     /// 获取编码后的数据包 (供推流 Stage 使用)
     std::pair<EncodedPacket, bool> PopPacket(uint32_t timeout_ms = 100);
 
+    /// ClearPackets 丢弃尚未发送的编码包，供推流重连时避免追赶陈旧画面。
+    void ClearPackets();
+
 private:
     void Loop();
 

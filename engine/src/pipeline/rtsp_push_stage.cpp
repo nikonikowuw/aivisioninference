@@ -10,6 +10,7 @@
 #include <random>
 #include <sstream>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 namespace aivision {
@@ -102,6 +103,12 @@ std::vector<std::pair<const uint8_t*, size_t>> SplitAnnexBNals(const std::vector
     return nals;
 }
 
+bool HasNalType(const std::vector<std::pair<const uint8_t*, size_t>>& nals, uint8_t type) {
+    return std::any_of(nals.begin(), nals.end(), [type](const auto& nal) {
+        return nal.second > 0 && (nal.first[0] & 0x1F) == type;
+    });
+}
+
 uint32_t Timestamp90k(uint64_t first_timestamp_ns, uint64_t timestamp_ns) {
     if (timestamp_ns <= first_timestamp_ns) return 0;
     return static_cast<uint32_t>(((timestamp_ns - first_timestamp_ns) * kVideoClockRate) / 1000000000ULL);
@@ -152,6 +159,9 @@ void RtspPushStage::Loop() {
             if (Connect()) {
                 connected_.store(true);
                 reconnect_delay_ms = 5000;
+                // Replaying packets accumulated during reconnect creates a visible
+                // fast-forward jump and stale RTP timestamps. Resume from live edge.
+                encoder_->ClearPackets();
                 LOG_INFO("[RTSP] Publishing to {}", push_url_);
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms));
@@ -164,9 +174,9 @@ void RtspPushStage::Loop() {
         if (!ok) continue;
 
         if (!SendPacket(pkt)) {
-            LOG_ERROR("[RTSP] Send failed, reconnecting...");
+            LOG_ERROR("[RTSP] Send failed (errno={}), reconnecting...", errno);
             connected_.store(false);
-            Disconnect();
+            Disconnect(false);
         }
     }
 }
@@ -201,9 +211,15 @@ bool RtspPushStage::Connect() {
         return false;
     }
 
+    // A dead ZLM connection must not block RTSP setup or media writes indefinitely.
+    timeval io_timeout{3, 0};
+    ::setsockopt(socket_fd_, SOL_SOCKET, SO_RCVTIMEO, &io_timeout, sizeof(io_timeout));
+    ::setsockopt(socket_fd_, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout));
+
     cseq_ = 1;
     session_.clear();
     first_timestamp_ns_ = 0;
+    awaiting_key_frame_ = true;
 
     int status = 0;
     std::string response;
@@ -319,10 +335,22 @@ bool RtspPushStage::SendPacket(const EncodedPacket& pkt) {
     auto nals = SplitAnnexBNals(pkt.data);
     if (nals.empty()) return true;
 
+    // A reconnect starts a fresh decoder timeline. Drop inter-frame packets until
+    // an IDR arrives, otherwise ZLM/browser decoders cannot reconstruct references.
+    if (awaiting_key_frame_ && !pkt.is_key_frame) return true;
+
+    if (pkt.is_key_frame && !pkt.extra_data.empty() && !HasNalType(nals, 7)) {
+        auto headers = SplitAnnexBNals(pkt.extra_data);
+        for (const auto& header : headers) {
+            if (!SendH264Nal(header.first, header.second, rtp_timestamp, false)) return false;
+        }
+    }
+
     for (size_t i = 0; i < nals.size(); ++i) {
         bool marker = i + 1 == nals.size();
         if (!SendH264Nal(nals[i].first, nals[i].second, rtp_timestamp, marker)) return false;
     }
+    if (pkt.is_key_frame) awaiting_key_frame_ = false;
     return true;
 }
 

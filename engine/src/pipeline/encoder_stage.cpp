@@ -57,6 +57,12 @@ std::pair<EncodedPacket, bool> EncoderStage::PopPacket(uint32_t timeout_ms) {
     return {{}, false};
 }
 
+void EncoderStage::ClearPackets() {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    std::queue<EncodedPacket> empty;
+    packet_queue_.swap(empty);
+}
+
 void EncoderStage::Loop() {
     std::vector<uint8_t> buffer(1024 * 1024); // 1MB 临时缓冲
     

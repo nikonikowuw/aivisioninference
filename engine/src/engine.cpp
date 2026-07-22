@@ -182,6 +182,7 @@ InferenceEngine::InferenceEngine(const EngineConfig &config) : config_(config) {
   pipeline_config.fallback_hal_so_path = config.fallback_hal_so_path;
   pipeline_config.hal_config_json = config.hal_config_json;
   pipeline_config.rtsp_push_server = config.rtsp_push_server;
+  pipeline_config.zlm_secret = config.zlm_secret;
   pipeline_config.enable_ffmpeg_fallback = config.enable_ffmpeg_fallback;
   pipeline_mgr_ = std::make_unique<pipeline::PipelineManager>(pipeline_config);
   pipeline_mgr_->SetStreamQueueManager(queue_mgr_.get());

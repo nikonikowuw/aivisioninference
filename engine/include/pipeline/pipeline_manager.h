@@ -43,6 +43,7 @@ namespace aivision
             std::string fallback_hal_so_path;
             std::string hal_config_json = "{}";
             std::string rtsp_push_server = "rtsp://localhost:10554";
+            std::string zlm_secret = "";
             bool enable_ffmpeg_fallback = true;
         };
 

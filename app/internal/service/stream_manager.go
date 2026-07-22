@@ -119,6 +119,11 @@ func (m *StreamManager) Acquire(ctx context.Context, deviceID, reason string, me
 	if metadata != nil {
 		nodeID = metadata["target_node_id"]
 	}
+	if nodeID == "" {
+		if state := m.GetStream(ctx, deviceID); state != nil && state.NodeID != "" {
+			nodeID = state.NodeID
+		}
+	}
 	return m.AcquireOnNode(ctx, StreamRoute{NodeID: nodeID, DeviceID: deviceID}, reason, metadata)
 }
 

@@ -21,6 +21,7 @@ type MediaService struct {
 	zlmClient       *zlm.Client
 	mediaStreamRepo *repository.MediaStreamRepository
 	deviceRepo      *repository.DeviceRepository
+	edgeNodeRepo    *repository.EdgeNodeRepository
 	streamManager   *StreamManager
 	zlmBaseURL      string
 	zlmSecret       string
@@ -31,6 +32,7 @@ func NewMediaService(
 	zlmClient *zlm.Client,
 	mediaStreamRepo *repository.MediaStreamRepository,
 	deviceRepo *repository.DeviceRepository,
+	edgeNodeRepo *repository.EdgeNodeRepository,
 	streamManager *StreamManager,
 	zlmBaseURL string,
 	zlmSecret string,
@@ -39,6 +41,7 @@ func NewMediaService(
 		zlmClient:       zlmClient,
 		mediaStreamRepo: mediaStreamRepo,
 		deviceRepo:      deviceRepo,
+		edgeNodeRepo:    edgeNodeRepo,
 		streamManager:   streamManager,
 		zlmBaseURL:      zlmBaseURL,
 		zlmSecret:       zlmSecret,
@@ -73,16 +76,27 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		stream = deviceID + "_sub"
 	}
 
-	// 1. 通过 StreamManager 获取流引用
-	err := s.streamManager.Acquire(ctx, deviceID, "play", map[string]string{
+	metadata := map[string]string{
 		"protocol":    protocol,
 		"stream_type": streamType,
-	})
+	}
+
+	// 1. 动态节点选择：优先使用已有流关联节点，次选任意在线边缘节点
+	if state := s.streamManager.GetStream(ctx, deviceID); state != nil && state.NodeID != "" {
+		metadata["target_node_id"] = state.NodeID
+	} else if s.edgeNodeRepo != nil {
+		if node, err := s.edgeNodeRepo.FindAnyOnlineNode(ctx); err == nil && node != nil {
+			metadata["target_node_id"] = node.ID
+		}
+	}
+
+	// 2. 通过 StreamManager 获取流引用
+	err := s.streamManager.Acquire(ctx, deviceID, "play", metadata)
 	if err != nil {
 		return "", fmt.Errorf("acquire stream: %w", err)
 	}
 
-	// 2. 获取流状态以拿到播放地址
+	// 3. 获取流状态以拿到播放地址
 	state := s.streamManager.GetStream(ctx, deviceID)
 	if state == nil {
 		_ = s.streamManager.Release(ctx, deviceID, "play")

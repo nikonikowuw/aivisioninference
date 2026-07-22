@@ -105,7 +105,7 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 	}
 
 	zlmHost := state.ZLMHost
-	// 4. 如果边缘节点上报的 zlmHost 是环回地址（localhost/127.0.0.1），从关联边缘节点的 Endpoint 替换为实际节点 IP
+	// 如果边缘节点上报的 zlmHost 是环回地址（localhost/127.0.0.1），从关联边缘节点的 Endpoint 替换为实际节点 IP
 	if (zlmHost == "" || zlmHost == "localhost" || zlmHost == "127.0.0.1" || zlmHost == "::1") && state.NodeID != "" && s.edgeNodeRepo != nil {
 		if node, err := s.edgeNodeRepo.FindByID(ctx, state.NodeID); err == nil && node != nil && node.Endpoint != "" {
 			if u, err := url.Parse(node.Endpoint); err == nil && u.Hostname() != "" {

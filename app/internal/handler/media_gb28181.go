@@ -51,7 +51,7 @@ func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
 
 	response.OK(c, dto.PlayResponse{
 		URL:      url,
-		Protocol: zlm.ProtocolHLS,
+		Protocol: zlm.ProtocolWebRTC,
 		StreamID: streamID,
 	})
 }

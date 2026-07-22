@@ -446,7 +446,7 @@ func (s *SIPService) StartLiveStream(ctx context.Context, deviceCode, streamID s
 		}
 	}
 
-	return fmt.Sprintf("http://%s:%d/live/%s/hls.m3u8", s.zlmBaseIP, s.httpPort, streamID), nil
+	return fmt.Sprintf("webrtc://%s:%d/live/%s", s.zlmBaseIP, s.httpPort, streamID), nil
 }
 
 // StopLiveStream stops a live stream by sending SIP BYE and releasing ZLM resources.

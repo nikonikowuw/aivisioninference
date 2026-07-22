@@ -146,7 +146,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
               }
             });
-            flv.play()?.catch(() => {});
+            const playResult = flv.play();
+            if (playResult) playResult.catch(() => {});
             cleanupRef.current = () => {
               destroyed = true;
               try {
@@ -156,20 +157,88 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 flv.destroy();
               } catch {}
             };
+          } else {
+            tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
           }
+        }).catch(() => {
+          if (!destroyed) tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
         });
         return;
       }
 
-      // WebRTC 和 HLS 都走 StreamManager 共享
+      if (targetProtocol === 'hls') {
+        // HLS 直接绑定可见 video，避免 hidden video -> captureStream -> visible video
+        // 造成额外的解码、合成和固定 30 FPS 重采样。
+        let destroyed = false;
+        let hlsInstance: import('hls.js').default | null = null;
+        let mediaRecoveryAttempted = false;
+
+        cleanupRef.current = () => {
+          destroyed = true;
+          if (hlsInstance) {
+            hlsInstance.destroy();
+            hlsInstance = null;
+          }
+          video.removeAttribute('src');
+          video.load();
+        };
+
+        import('hls.js').then(({ default: Hls }) => {
+          if (destroyed || !mountedRef.current) return;
+
+          const fallback = (detail: string) => {
+            if (destroyed || !mountedRef.current) return;
+            console.warn(`[VideoPlayer] hls 失败: ${detail}`);
+            tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
+          };
+
+          if (Hls.isSupported()) {
+            hlsInstance = new Hls({
+              liveSyncDurationCount: 1,
+              liveMaxLatencyDurationCount: 3,
+              maxLiveSyncPlaybackRate: 1.5,
+            });
+            hlsInstance.attachMedia(video);
+            hlsInstance.on(Hls.Events.MEDIA_ATTACHED, () => hlsInstance?.loadSource(targetUrl));
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+              video.play().catch(() => {});
+            });
+            hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
+              if (!data.fatal) return;
+              if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !mediaRecoveryAttempted) {
+                mediaRecoveryAttempted = true;
+                hlsInstance?.recoverMediaError();
+                return;
+              }
+              fallback(data.details || data.type || 'unknown');
+            });
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = targetUrl;
+            video.play().catch(() => {});
+            video.onerror = () => fallback(video.error?.message || 'native playback error');
+          } else {
+            fallback('unsupported');
+          }
+
+          video.onplaying = () => {
+            if (mountedRef.current) setLoading(false);
+          };
+        }).catch(() => {
+          if (!destroyed) tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
+        });
+        return;
+      }
+
+      // WebRTC 走 StreamManager 复用连接。
       if (targetProtocol === 'webrtc' && !isWebRTCSupported()) {
         tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
         return;
       }
 
       try {
-        const result = await streamManager.subscribe(targetUrl, targetProtocol, video, {
+        const result = await streamManager.subscribe(targetUrl, video, {
           webrtcTimeout: config.webrtcTimeout,
+          onDisconnect: () => tryNextProtocolRef.current(attemptIndex + 1, originalUrl),
         });
 
         if (!mountedRef.current) {

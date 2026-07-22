@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,9 +13,20 @@ import (
 	"github.com/niko-admin/niko-admin/internal/pkg/scopes"
 )
 
+// edgeNodeCacheEntry 带 TTL 的节点缓存条目。
+type edgeNodeCacheEntry struct {
+	node      *model.EdgeNode
+	expiresAt time.Time
+}
+
 // EdgeNodeRepository handles database operations for EdgeNode model.
 type EdgeNodeRepository struct {
 	db *gorm.DB
+
+	// 节点查询缓存，避免高频播放请求重复查询同一节点。
+	// TTL 30 秒，节点变更时通过 InvalidateNodeCache 主动清除。
+	nodeCache sync.Map // map[string]*edgeNodeCacheEntry
+cacheTTL time.Duration
 }
 
 // DB returns the underlying GORM DB instance for manual transaction management.
@@ -24,12 +36,39 @@ func (r *EdgeNodeRepository) DB(ctx context.Context) *gorm.DB {
 
 // NewEdgeNodeRepository creates a new EdgeNodeRepository.
 func NewEdgeNodeRepository(db *gorm.DB) *EdgeNodeRepository {
-	return &EdgeNodeRepository{db: db}
+	return &EdgeNodeRepository{db: db, cacheTTL: 30 * time.Second}
 }
 
 // WithTx returns a repository bound to the provided transaction.
 func (r *EdgeNodeRepository) WithTx(tx *gorm.DB) *EdgeNodeRepository {
-	return &EdgeNodeRepository{db: tx}
+	return &EdgeNodeRepository{db: tx, cacheTTL: r.cacheTTL}
+}
+
+// getFromCache 从缓存获取节点，未命中或过期返回 nil。
+func (r *EdgeNodeRepository) getFromCache(key string) *model.EdgeNode {
+	val, ok := r.nodeCache.Load(key)
+	if !ok {
+		return nil
+	}
+	entry := val.(*edgeNodeCacheEntry)
+	if time.Now().After(entry.expiresAt) {
+		r.nodeCache.Delete(key)
+		return nil
+	}
+	return entry.node
+}
+
+// putToCache 写入缓存。
+func (r *EdgeNodeRepository) putToCache(key string, node *model.EdgeNode) {
+	r.nodeCache.Store(key, &edgeNodeCacheEntry{
+		node:      node,
+		expiresAt: time.Now().Add(r.cacheTTL),
+	})
+}
+
+// InvalidateNodeCache 主动清除指定节点的缓存（节点更新/删除时调用）。
+func (r *EdgeNodeRepository) InvalidateNodeCache(nodeID string) {
+	r.nodeCache.Delete(nodeID)
 }
 
 // Transaction wraps operations in a database transaction.
@@ -46,13 +85,18 @@ func (r *EdgeNodeRepository) Create(ctx context.Context, item *model.EdgeNode) e
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
-// FindByID finds an edge node by its ID.
+// FindByID finds an edge node by its ID, with TTL cache.
+// 节点信息变更频率低，但播放请求高频命中同一节点，缓存可显著减少 DB 查询。
 func (r *EdgeNodeRepository) FindByID(ctx context.Context, id string) (*model.EdgeNode, error) {
+	if cached := r.getFromCache(id); cached != nil {
+		return cached, nil
+	}
 	var item model.EdgeNode
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&item).Error
 	if err != nil {
 		return nil, err
 	}
+	r.putToCache(id, &item)
 	return &item, nil
 }
 
@@ -68,7 +112,11 @@ func (r *EdgeNodeRepository) FindByIDs(ctx context.Context, ids []string) ([]mod
 
 // Update saves changes to an edge node record.
 func (r *EdgeNodeRepository) Update(ctx context.Context, item *model.EdgeNode) error {
-	return r.db.WithContext(ctx).Save(item).Error
+	err := r.db.WithContext(ctx).Save(item).Error
+	if err == nil {
+		r.InvalidateNodeCache(item.ID)
+	}
+	return err
 }
 
 // ExistsByName 检查活动节点的名称是否已存在（排除指定 ID）
@@ -88,12 +136,16 @@ func (r *EdgeNodeRepository) ExistsByName(ctx context.Context, name, excludeID s
 
 // Delete soft deletes an edge node by setting its status to disabled and deleting the record.
 func (r *EdgeNodeRepository) Delete(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.EdgeNode{}).Where("id = ?", id).Update("status", model.NodeStatusDisabled).Error; err != nil {
 			return err
 		}
 		return tx.Where("id = ?", id).Delete(&model.EdgeNode{}).Error
 	})
+	if err == nil {
+		r.InvalidateNodeCache(id)
+	}
+	return err
 }
 
 // List returns a paginated list of edge nodes with optional filters.
@@ -119,10 +171,14 @@ func (r *EdgeNodeRepository) UpdateHeartbeatFields(ctx context.Context, id strin
 	allowed := []string{"status", "last_heartbeat", "current_load", "uptime", "engine_version",
 		"hal_platform", "cpu_model", "gpu_model", "total_memory", "embedding_capacity", "remark",
 		"cpu_usage", "memory_usage", "runtime_error"}
-	return r.db.WithContext(ctx).Model(&model.EdgeNode{}).
+	err := r.db.WithContext(ctx).Model(&model.EdgeNode{}).
 		Where("id = ?", id).
 		Select(allowed).
 		Updates(fields).Error
+	if err == nil {
+		r.InvalidateNodeCache(id)
+	}
+	return err
 }
 
 // FindByIDForUpdate finds an edge node by ID with pessimistic lock (for use in transactions).
@@ -226,9 +282,15 @@ func (r *EdgeNodeRepository) UpdateStatusBatch(ctx context.Context, ids []string
 	if len(ids) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).Model(&model.EdgeNode{}).
+	err := r.db.WithContext(ctx).Model(&model.EdgeNode{}).
 		Where("id IN ?", ids).
 		Update("status", status).Error
+	if err == nil {
+		for _, id := range ids {
+			r.InvalidateNodeCache(id)
+		}
+	}
+	return err
 }
 
 // MarkOffline transitions a non-disabled node to offline once.
@@ -237,6 +299,9 @@ func (r *EdgeNodeRepository) MarkOffline(ctx context.Context, id string) (bool, 
 		Where("id = ?", id).
 		Where("status NOT IN ?", []string{model.NodeStatusOffline, model.NodeStatusDisabled}).
 		Update("status", model.NodeStatusOffline)
+	if result.RowsAffected > 0 {
+		r.InvalidateNodeCache(id)
+	}
 	return result.RowsAffected > 0, result.Error
 }
 
@@ -274,6 +339,9 @@ func (r *EdgeNodeRepository) MarkOfflineIfTimedOut(ctx context.Context, id strin
 		Where("status = ?", model.NodeStatusOnline).
 		Where("last_heartbeat < ?", cutoff).
 		Update("status", model.NodeStatusOffline)
+	if result.RowsAffected > 0 {
+		r.InvalidateNodeCache(id)
+	}
 	return result.RowsAffected > 0, result.Error
 }
 

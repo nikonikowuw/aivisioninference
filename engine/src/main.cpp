@@ -341,6 +341,9 @@ int main(int argc, char *argv[])
     PrintVersion();
     PrintRuntimeConfig(config, env_file);
 
+    // 缓存 ZLM URL 解析结果，避免运行时重复解析
+    config.zlm_url_info = ParseZLMUrl(config.zlm_api_url);
+
     // Phase 2: 配置加载完成后初始化文件日志 sink
     {
         auto console_lvl = ParseLogLevel(config.log_level, LogLevel::Info);

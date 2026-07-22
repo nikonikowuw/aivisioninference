@@ -2,6 +2,13 @@ package zlm
 
 import "fmt"
 
+// 播放协议字符串常量，用于 ZLMediaKit 播放地址生成与前端协议协商。
+const (
+	ProtocolHLS    = "hls"
+	ProtocolFLV    = "flv"
+	ProtocolWebRTC = "webrtc"
+)
+
 // ZLMRsp is the standard response from ZLMediaKit API.
 type ZLMRsp struct {
 	Code int    `json:"code"`

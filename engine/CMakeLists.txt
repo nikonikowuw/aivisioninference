@@ -177,6 +177,8 @@ set(ENGINE_LIB_SOURCES
     src/pipeline/encoder_stage.cpp
     src/pipeline/inference_stage.cpp
     src/pipeline/rtsp_push_stage.cpp
+    src/hal/macos/videotoolbox_pipeline.cpp
+    src/hal/rockchip/rkmpp_pipeline.cpp
     src/algo/so_handle.cpp
     src/algo/algo_instance.cpp
     src/algo/algo_manager.cpp
@@ -252,18 +254,6 @@ add_library(aivision-engine-lib STATIC ${ENGINE_LIB_SOURCES})
 # 引擎可执行文件
 add_executable(aivision-engine ${ENGINE_SOURCES})
 
-add_library(aivision-hal-rkmpp SHARED
-    src/hal/rockchip/rkmpp_pipeline.cpp
-    src/pipeline/hw_buffer.cpp
-)
-
-if(APPLE)
-    add_library(aivision-hal-macos-videotoolbox SHARED
-        src/hal/macos/videotoolbox_pipeline.cpp
-        src/pipeline/hw_buffer.cpp
-    )
-endif()
-
 target_include_directories(aivision-engine-lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -271,16 +261,6 @@ target_include_directories(aivision-engine-lib PUBLIC
     ${FLATBUFFERS_INCLUDE_DIRS}
     ${asio_SOURCE_DIR}/asio/include
 )
-
-target_include_directories(aivision-hal-rkmpp PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-if(APPLE)
-    target_include_directories(aivision-hal-macos-videotoolbox PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-endif()
 
 target_link_libraries(aivision-engine-lib PUBLIC
     flatbuffers::flatbuffers
@@ -309,30 +289,23 @@ message(STATUS "FFmpeg/OpenCV software fallback enabled")
 # aivision-engine main executable links the static library
 target_link_libraries(aivision-engine PRIVATE aivision-engine-lib)
 
-target_link_libraries(aivision-hal-rkmpp PRIVATE
-    Threads::Threads
-    dl
-)
-
 if(AIVISION_WITH_RKMPP AND ROCKCHIP_MPP_LIB AND RGA_LIB)
-    target_compile_definitions(aivision-hal-rkmpp PRIVATE AIVISION_WITH_RKMPP)
-    target_include_directories(aivision-hal-rkmpp PRIVATE
+    target_compile_definitions(aivision-engine-lib PRIVATE AIVISION_WITH_RKMPP)
+    target_include_directories(aivision-engine-lib PRIVATE
         ${ROCKCHIP_MPP_INCLUDE}
         ${RGA_INCLUDE}
     )
-    target_link_libraries(aivision-hal-rkmpp PRIVATE
+    target_link_libraries(aivision-engine-lib PUBLIC
         ${ROCKCHIP_MPP_LIB}
         ${RGA_LIB}
     )
-    message(STATUS "RKMPP/RGA enabled for aivision-hal-rkmpp")
+    message(STATUS "RKMPP/RGA enabled for aivision-engine-lib")
 else()
     message(STATUS "RKMPP disabled (stub mode)")
 endif()
 
 if(APPLE)
-    target_link_libraries(aivision-hal-macos-videotoolbox PRIVATE
-        Threads::Threads
-        dl
+    target_link_libraries(aivision-engine-lib PUBLIC
         "-framework VideoToolbox"
         "-framework CoreMedia"
         "-framework CoreVideo"
@@ -486,10 +459,6 @@ endif()
 # ============================================================
 
 install(TARGETS aivision-engine DESTINATION bin)
-install(TARGETS aivision-hal-rkmpp DESTINATION lib/aivision)
-if(APPLE)
-    install(TARGETS aivision-hal-macos-videotoolbox DESTINATION lib/aivision)
-endif()
 install(FILES ${INSTALL_HEADERS} DESTINATION include/aivision-engine)
 
 # 安装 RK3568 相关工具

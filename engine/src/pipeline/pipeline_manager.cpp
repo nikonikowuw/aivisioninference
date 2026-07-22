@@ -106,49 +106,22 @@ namespace aivision
                 return true;
             };
 
-            // 2. 创建并启动 HAL (拉流/硬件解码)。推理场景下 fallback 也必须是真实 HAL。
-            std::vector<std::pair<std::string, std::string>> hal_candidates;
-            if (!config_.hal_so_path.empty())
-            {
-                hal_candidates.emplace_back("primary", config_.hal_so_path);
-            }
-            if (!config_.fallback_hal_so_path.empty() && config_.fallback_hal_so_path != config_.hal_so_path)
-            {
-                hal_candidates.emplace_back("fallback", config_.fallback_hal_so_path);
-            }
-            if (hal_candidates.empty())
-            {
-                std::cerr << "HAL .so path is not configured for device " << device_id << std::endl;
-                return create_ffmpeg_fallback();
-            }
-
-            std::unique_ptr<HALManager> hal;
+            // 2. 创建并启动 HAL (编译时确定的硬件流水线)
+            auto hal = std::make_unique<HALManager>();
             IMediaPipeline *media_pipeline = nullptr;
-            for (const auto &[kind, hal_path] : hal_candidates)
+            if (!hal->LoadPipeline())
             {
-                auto candidate = std::make_unique<HALManager>();
-                if (!candidate->LoadPipeline(hal_path, config_.hal_config_json))
-                {
-                    std::cerr << "Failed to load " << kind << " HAL pipeline for device "
-                              << device_id << ", hal_so=" << hal_path << std::endl;
-                    continue;
-                }
-                media_pipeline = candidate->GetPipeline();
-                if (!media_pipeline)
-                {
-                    std::cerr << kind << " HAL pipeline is null for device " << device_id << std::endl;
-                    continue;
-                }
-                hal = std::move(candidate);
-                std::cout << "Loaded " << kind << " HAL for device " << device_id
-                          << ", hal_so=" << hal_path << std::endl;
-                break;
-            }
-            if (!hal || !media_pipeline)
-            {
-                std::cerr << "No usable HAL pipeline for device " << device_id << std::endl;
+                std::cerr << "No HAL pipeline available for device " << device_id << std::endl;
                 return create_ffmpeg_fallback();
             }
+            media_pipeline = hal->GetPipeline();
+            if (!media_pipeline)
+            {
+                std::cerr << "HAL pipeline is null for device " << device_id << std::endl;
+                return create_ffmpeg_fallback();
+            }
+            std::cout << "HAL pipeline created for device " << device_id
+                      << ", platform=" << hal->GetLoadedPlatform() << std::endl;
             RingQueue *infer_queue = nullptr;
             if (enable_infer && queue_mgr_)
             {

@@ -54,8 +54,5 @@ else
 
     echo ""
     echo "=== 编译完成 ==="
-    echo "  引擎: ${BUILD_DIR}/aivision-engine"
-    echo "  库:   ${BUILD_DIR}/libaivision-hal-rkmpp.so"
-    echo ""
-    echo "部署: 将 libaivision-hal-rkmpp.so 复制到引擎的 hal_so_path 目录"
+    echo "  引擎: ${BUILD_DIR}/aivision-engine (含 HAL 静态链接)"
 fi

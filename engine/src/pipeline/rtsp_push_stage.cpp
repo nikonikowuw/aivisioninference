@@ -45,12 +45,20 @@ bool ParseRtspUrl(const std::string& url, std::string& host, uint16_t& port) {
     std::string authority = slash == std::string::npos ? rest : rest.substr(0, slash);
     if (authority.empty()) return false;
 
+    // 支持 user:password@host:port 格式
+    auto at_pos = authority.rfind('@');
+    if (at_pos != std::string::npos)
+        authority = authority.substr(at_pos + 1);
     size_t colon = authority.rfind(':');
     if (colon != std::string::npos) {
         host = authority.substr(0, colon);
-        int parsed_port = std::stoi(authority.substr(colon + 1));
-        if (parsed_port <= 0 || parsed_port > 65535) return false;
-        port = static_cast<uint16_t>(parsed_port);
+        try {
+            int parsed_port = std::stoi(authority.substr(colon + 1));
+            if (parsed_port <= 0 || parsed_port > 65535) return false;
+            port = static_cast<uint16_t>(parsed_port);
+        } catch (...) {
+            return false;
+        }
     } else {
         host = authority;
         port = 554;

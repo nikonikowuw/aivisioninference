@@ -103,7 +103,7 @@ func (c *MqttEngineClient) StartStream(ctx context.Context, req StreamStartReque
 		return StreamInfo{}, token.Error()
 	}
 
-	respPayload, err := c.syncManager.Wait(ctx, traceID, 5*time.Second)
+	respPayload, err := c.syncManager.Wait(ctx, traceID, 15*time.Second)
 	if err != nil {
 		return StreamInfo{}, fmt.Errorf("MQTT: wait stream status timeout: %w", err)
 	}
@@ -195,7 +195,7 @@ func (c *MqttEngineClient) StartPlayback(ctx context.Context, req StreamStartReq
 		return "", token.Error()
 	}
 
-	respPayload, err := c.syncManager.Wait(ctx, traceID, 5*time.Second)
+	respPayload, err := c.syncManager.Wait(ctx, traceID, 15*time.Second)
 	if err != nil {
 		return "", fmt.Errorf("MQTT: wait playback status timeout: %w", err)
 	}

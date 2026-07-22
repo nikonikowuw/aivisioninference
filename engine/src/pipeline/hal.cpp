@@ -1,64 +1,38 @@
 #include "pipeline/hal.h"
 
-#include <dlfcn.h>
+#if defined(__APPLE__)
+#include "hal/macos/videotoolbox_pipeline.h"
+#elif defined(AIVISION_WITH_RKMPP)
+#include "hal/rockchip/rkmpp_pipeline.h"
+#endif
+
 #include <iostream>
-#include <utility>
 
 namespace aivision
 {
     namespace pipeline
     {
 
-        bool HALManager::LoadPipeline(const std::string &so_path,
-                                      const std::string &config_json)
+        bool HALManager::LoadPipeline(const std::string &config_json)
         {
             Unload();
 
-            if (so_path.empty())
-            {
-                std::cerr << "HAL shared object path is empty" << std::endl;
-                return false;
-            }
+#if defined(__APPLE__)
+            pipeline_ = std::make_unique<VideoToolboxPipeline>();
+#elif defined(AIVISION_WITH_RKMPP)
+            pipeline_ = std::make_unique<hal::rockchip::RKMPPPipeline>();
+#else
+            std::cerr << "No platform HAL pipeline available at compile time" << std::endl;
+            return false;
+#endif
 
-            dl_handle_ = dlopen(so_path.c_str(), RTLD_NOW | RTLD_LOCAL);
-            if (!dl_handle_)
-            {
-                std::cerr << "Failed to load HAL shared object: " << so_path
-                          << ", error=" << dlerror() << std::endl;
-                return false;
-            }
-
-            auto create_fn = reinterpret_cast<CreatePipelineFunc>(dlsym(dl_handle_, "CreatePipeline"));
-            auto destroy_fn = reinterpret_cast<DestroyPipelineFunc>(dlsym(dl_handle_, "DestroyPipeline"));
-            if (!create_fn || !destroy_fn)
-            {
-                std::cerr << "HAL shared object missing CreatePipeline/DestroyPipeline symbols: "
-                          << so_path << std::endl;
-                dlclose(dl_handle_);
-                dl_handle_ = nullptr;
-                return false;
-            }
-
-            IMediaPipeline *raw = create_fn();
-            if (!raw)
-            {
-                std::cerr << "HAL CreatePipeline returned null: " << so_path << std::endl;
-                dlclose(dl_handle_);
-                dl_handle_ = nullptr;
-                return false;
-            }
-
-            pipeline_ = std::unique_ptr<IMediaPipeline, DestroyPipelineFunc>(raw, destroy_fn);
             if (!pipeline_->Initialize(config_json))
             {
-                std::cerr << "HAL pipeline initialize failed: " << so_path << std::endl;
+                std::cerr << "HAL pipeline Initialize failed" << std::endl;
                 pipeline_.reset();
-                dlclose(dl_handle_);
-                dl_handle_ = nullptr;
                 return false;
             }
 
-            so_path_ = so_path;
             return true;
         }
 
@@ -69,12 +43,6 @@ namespace aivision
                 pipeline_->Stop();
                 pipeline_.reset();
             }
-            if (dl_handle_)
-            {
-                dlclose(dl_handle_);
-                dl_handle_ = nullptr;
-            }
-            so_path_.clear();
         }
 
         std::string HALManager::GetLoadedPlatform() const

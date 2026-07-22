@@ -8,6 +8,8 @@
 #include <VideoToolbox/VTDecompressionSession.h>
 #include <VideoToolbox/VTCompressionSession.h>
 
+#include <openssl/md5.h>
+
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -31,18 +33,51 @@ static std::string Trim(const std::string& s) {
     return s.substr(a, b - a + 1);
 }
 
-static bool ParseRtspUrl(const std::string& url, std::string& host, int& port, std::string& path) {
+static std::string Base64Encode(const std::string& in) {
+    static const char* table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    std::string out;
+    out.reserve(((in.size() + 2) / 3) * 4);
+    uint8_t buf[3];
+    for (size_t i = 0; i < in.size(); i += 3) {
+        size_t n = std::min(size_t{3}, in.size() - i);
+        for (size_t j = 0; j < n; j++) buf[j] = static_cast<uint8_t>(in[i + j]);
+        out += table[buf[0] >> 2];
+        out += table[((buf[0] & 0x03) << 4) | (buf[1] >> 4)];
+        out += (n > 1) ? table[((buf[1] & 0x0F) << 2) | (buf[2] >> 6)] : '=';
+        out += (n > 2) ? table[buf[2] & 0x3F] : '=';
+    }
+    return out;
+}
+
+static bool ParseRtspUrl(const std::string& url, std::string& host, int& port,
+                          std::string& path, std::string& username, std::string& password) {
     std::string u = url;
     if (u.substr(0, 7) == "rtsp://") u = u.substr(7);
     auto slash = u.find('/');
-    std::string hostport = (slash == std::string::npos) ? u : u.substr(0, slash);
+    std::string userhost = (slash == std::string::npos) ? u : u.substr(0, slash);
     path = (slash == std::string::npos) ? "/" : u.substr(slash);
-    auto colon = hostport.find(':');
-    if (colon != std::string::npos) {
-        host = hostport.substr(0, colon);
-        port = std::stoi(hostport.substr(colon + 1));
+    // 支持 user:password@host:port 格式
+    auto at_pos = userhost.rfind('@');
+    if (at_pos != std::string::npos) {
+        username = userhost.substr(0, at_pos);
+        auto colon = username.find(':');
+        if (colon != std::string::npos) {
+            password = username.substr(colon + 1);
+            username = username.substr(0, colon);
+        }
+        userhost = userhost.substr(at_pos + 1);
+    }
+    auto colon = userhost.rfind(':');
+    if (colon != std::string::npos && colon > 0) {
+        host = userhost.substr(0, colon);
+        try {
+            port = std::stoi(userhost.substr(colon + 1));
+        } catch (...) {
+            port = 554;
+            host = userhost;
+        }
     } else {
-        host = hostport;
+        host = userhost;
         port = 554;
     }
     return !host.empty();
@@ -58,8 +93,8 @@ VideoToolboxPipeline::~VideoToolboxPipeline() { Stop(); }
 HALCapabilities VideoToolboxPipeline::GetCapabilities() const {
     HALCapabilities caps{};
     caps.platform = "macos-videotoolbox-native";
-    caps.decode_codecs = {VideoCodec::H264};
-    caps.encode_codecs = {VideoCodec::H264};
+    caps.decode_codecs = {VideoCodec::H264, VideoCodec::H265};
+    caps.encode_codecs = {VideoCodec::H264, VideoCodec::H265};
     caps.max_streams = 16;
     caps.max_width = 4096;
     caps.max_height = 4096;
@@ -79,7 +114,9 @@ bool VideoToolboxPipeline::Initialize(const std::string& /*config_json*/) {
 // ============================================================
 
 bool VideoToolboxPipeline::RtspConnect(const std::string& url) {
-    if (!ParseRtspUrl(url, host_, port_, path_)) {
+    username_.clear();
+    password_.clear();
+    if (!ParseRtspUrl(url, host_, port_, path_, username_, password_)) {
         last_status_ = HALStatus::Error(HALStatusCode::InvalidConfig, "Invalid RTSP URL");
         return false;
     }
@@ -127,7 +164,25 @@ bool VideoToolboxPipeline::RtspSendRequest(const std::string& req) {
         std::cerr << "[VideoToolbox] RTSP send failed: sent=" << sent << " expected=" << req.size() << " errno=" << errno << std::endl;
         return false;
     }
-    std::cout << "[VideoToolbox] >> " << req.substr(0, req.find("\r\n")) << std::endl;
+    // 打印请求行 + Authorization 状态方便调试
+    auto first_crlf = req.find("\r\n");
+    if (first_crlf != std::string::npos) {
+        std::cout << "[VideoToolbox] >> " << req.substr(0, first_crlf) << std::endl;
+        auto sess_pos = req.find("Session:");
+        if (sess_pos != std::string::npos) {
+            auto sess_end = req.find("\r\n", sess_pos);
+            std::cout << "[VideoToolbox] >> " << req.substr(sess_pos, sess_end - sess_pos) << std::endl;
+        }
+        auto auth_pos = req.find("Authorization:");
+        if (auth_pos != std::string::npos) {
+            auto auth_end = req.find("\r\n", auth_pos);
+            std::string auth_line = req.substr(auth_pos, auth_end - auth_pos);
+            if (auth_line.find("Digest") != std::string::npos)
+                std::cout << "[VideoToolbox] >> Authorization: Digest ****" << std::endl;
+            else
+                std::cout << "[VideoToolbox] >> Authorization: Basic ****" << std::endl;
+        }
+    }
     return true;
 }
 
@@ -150,22 +205,136 @@ bool VideoToolboxPipeline::RtspReadResponse(int& status_code, std::string& respo
     return status_code > 0;
 }
 
-bool VideoToolboxPipeline::RtspOptions() {
+static std::string ExtractQuoted(const std::string& haystack, const std::string& key) {
+    auto pos = haystack.find(key + "=\"");
+    if (pos == std::string::npos) return "";
+    pos += key.size() + 2;
+    auto end = haystack.find('"', pos);
+    if (end == std::string::npos) return "";
+    return haystack.substr(pos, end - pos);
+}
+
+static std::string MD5Hex(const std::string& in) {
+    unsigned char digest[MD5_DIGEST_LENGTH];
+    MD5(reinterpret_cast<const unsigned char*>(in.data()), in.size(), digest);
+    char hex[MD5_DIGEST_LENGTH * 2 + 1];
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
+        snprintf(hex + i * 2, 3, "%02x", digest[i]);
+    return hex;
+}
+
+// 根据 401 响应生成 Digest auth header
+std::string VideoToolboxPipeline::RtspDigestHeader(const std::string& method,
+                                                     const std::string& uri) const {
+    // HA1 = MD5(user:realm:pass)
+    std::string ha1 = MD5Hex(username_ + ":" + digest_realm_ + ":" + password_);
+    // HA2 = MD5(method:uri)
+    std::string ha2 = MD5Hex(method + ":" + uri);
+    // response = MD5(HA1:nonce:HA2)
+    std::string resp_hash = MD5Hex(ha1 + ":" + digest_nonce_ + ":" + ha2);
+
+    std::ostringstream hdr;
+    hdr << "Authorization: Digest username=\"" << username_
+        << "\", realm=\"" << digest_realm_
+        << "\", nonce=\"" << digest_nonce_
+        << "\", uri=\"" << uri
+        << "\", algorithm=MD5, response=\"" << resp_hash << "\"\r\n";
+    return hdr.str();
+}
+
+// 从 WWW-Authenticate 响应头提取 Digest 参数
+bool VideoToolboxPipeline::RtspParseAuthChallenge(const std::string& resp) {
+    auto www_pos = resp.find("WWW-Authenticate:");
+    if (www_pos == std::string::npos) www_pos = resp.find("www-authenticate:");
+    if (www_pos == std::string::npos) return false;
+    auto eol = resp.find("\r\n", www_pos);
+    std::string www_line = resp.substr(www_pos, eol - www_pos);
+
+    if (www_line.find("Digest") != std::string::npos ||
+        www_line.find("digest") != std::string::npos) {
+        digest_realm_ = ExtractQuoted(www_line, "realm");
+        digest_nonce_ = ExtractQuoted(www_line, "nonce");
+        return !digest_realm_.empty() && !digest_nonce_.empty();
+    }
+    // Basic 不需要记录参数
+    return www_line.find("Basic") != std::string::npos ||
+           www_line.find("basic") != std::string::npos;
+}
+
+// 发送 RTSP 命令，若收到 401 则自动用 Digest 或 Basic auth 重试一次
+bool VideoToolboxPipeline::RtspSendCommand(const std::string& method, std::string& resp,
+                                            const std::string& track,
+                                            bool include_transport) {
     std::string uri = "rtsp://" + host_ + ":" + std::to_string(port_) + path_;
+    std::string full_uri = uri + (track.empty() ? "" : "/" + track);
     std::ostringstream req;
-    req << "OPTIONS " << uri << " RTSP/1.0\r\n"
-        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n\r\n";
-    int status = 0; std::string resp;
-    return RtspSendRequest(req.str()) && RtspReadResponse(status, resp) && status >= 200 && status < 300;
+    req << method << " " << full_uri << " RTSP/1.0\r\n"
+        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
+    if (!username_.empty()) {
+        if (!digest_realm_.empty()) {
+            req << RtspDigestHeader(method, full_uri);
+        } else {
+            req << "Authorization: Basic " << Base64Encode(username_ + ":" + password_) << "\r\n";
+        }
+    }
+    if (method == "DESCRIBE")
+        req << "Accept: application/sdp\r\n";
+    if (method == "SETUP" && include_transport) {
+        req << "Transport: RTP/AVP/TCP;unicast;interleaved="
+            << interleaved_start_ << "-" << (interleaved_start_ + 1) << "\r\n";
+    }
+    if (!session_.empty() && (method == "SETUP" || method == "PLAY" || method == "TEARDOWN"))
+        req << "Session: " << session_ << "\r\n";
+    if (method == "PLAY") {
+        // 部分 RTSP 服务器要求 Range 头才能进入播放状态
+        req << "Range: npt=0.000-\r\n";
+    }
+    req << "\r\n";
+
+    int status = 0;
+    if (!RtspSendRequest(req.str()) || !RtspReadResponse(status, resp))
+        return false;
+
+    // 收到 401 且有凭证时，尝试 Digest 或 Basic auth
+    if (status == 401 && !username_.empty()) {
+        RtspParseAuthChallenge(resp);
+        std::cout << "[VideoToolbox] Server auth: realm=\"" << digest_realm_
+                  << "\" nonce=\"" << digest_nonce_ << "\"" << std::endl;
+        std::ostringstream req2;
+        req2 << method << " " << full_uri << " RTSP/1.0\r\n"
+             << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
+
+        if (!digest_realm_.empty())
+            req2 << RtspDigestHeader(method, full_uri);
+        else
+            req2 << "Authorization: Basic " << Base64Encode(username_ + ":" + password_) << "\r\n";
+
+        if (method == "DESCRIBE")
+            req2 << "Accept: application/sdp\r\n";
+        if (method == "SETUP" && include_transport)
+            req2 << "Transport: RTP/AVP/TCP;unicast;interleaved="
+                 << interleaved_start_ << "-" << (interleaved_start_ + 1) << "\r\n";
+        if (!session_.empty() && (method == "SETUP" || method == "PLAY" || method == "TEARDOWN"))
+            req2 << "Session: " << session_ << "\r\n";
+        if (method == "PLAY")
+            req2 << "Range: npt=0.000-\r\n";
+        req2 << "\r\n";
+
+        bool ok = RtspSendRequest(req2.str()) && RtspReadResponse(status, resp);
+        return ok && status >= 200 && status < 300;
+    }
+
+    return status >= 200 && status < 300;
+}
+
+bool VideoToolboxPipeline::RtspOptions() {
+    std::string resp;
+    return RtspSendCommand("OPTIONS", resp);
 }
 
 bool VideoToolboxPipeline::RtspDescribe(std::string& sdp) {
-    std::string uri = "rtsp://" + host_ + ":" + std::to_string(port_) + path_;
-    std::ostringstream req;
-    req << "DESCRIBE " << uri << " RTSP/1.0\r\n"
-        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\nAccept: application/sdp\r\n\r\n";
-    int status = 0; std::string resp;
-    if (!RtspSendRequest(req.str()) || !RtspReadResponse(status, resp) || status < 200 || status >= 300)
+    std::string resp;
+    if (!RtspSendCommand("DESCRIBE", resp))
         return false;
     auto pos = resp.find("\r\n\r\n");
     if (pos != std::string::npos) sdp = resp.substr(pos + 4);
@@ -173,47 +342,58 @@ bool VideoToolboxPipeline::RtspDescribe(std::string& sdp) {
 }
 
 bool VideoToolboxPipeline::RtspSetup() {
-    std::string uri = "rtsp://" + host_ + ":" + std::to_string(port_) + path_;
-    std::ostringstream req;
-    req << "SETUP " << uri << "/trackID=0 RTSP/1.0\r\n"
-        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n"
-        << "Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n\r\n";
-    int status = 0; std::string resp;
-    if (!RtspSendRequest(req.str()) || !RtspReadResponse(status, resp) || status < 200 || status >= 300)
+    if (sdp_tracks_.empty()) {
+        std::cerr << "[VideoToolbox] No SDP tracks to SETUP" << std::endl;
         return false;
-    auto pos = resp.find("Session:");
-    if (pos == std::string::npos) pos = resp.find("session:");
-    if (pos != std::string::npos) {
-        auto end = resp.find("\r\n", pos);
-        std::string line = resp.substr(pos + 8, end - (pos + 8));
-        auto semi = line.find(';');
-        session_ = Trim(semi == std::string::npos ? line : line.substr(0, semi));
     }
-    return true;
+    for (size_t i = 0; i < sdp_tracks_.size(); i++) {
+        const auto& track = sdp_tracks_[i];
+        // 只 SETUP video 类型的 track（部分相机不支持同时 SETUP audio+video）
+        if (track.first != "video") {
+            std::cout << "[VideoToolbox] Skipping non-video track: " << track.first << "=" << track.second << std::endl;
+            interleaved_start_ += 2;
+            continue;
+        }
+        std::string resp;
+        if (!RtspSendCommand("SETUP", resp, track.second, true)) {
+            std::cerr << "[VideoToolbox] SETUP failed for track " << i << " (" << track.second << ")" << std::endl;
+            return false;
+        }
+        auto pos = resp.find("Session:");
+        if (pos == std::string::npos) pos = resp.find("session:");
+        if (pos != std::string::npos) {
+            auto end = resp.find("\r\n", pos);
+            std::string line = resp.substr(pos + 8, end - (pos + 8));
+            auto semi = line.find(';');
+            session_ = Trim(semi == std::string::npos ? line : line.substr(0, semi));
+        }
+        // 解析 interleaved 通道
+        auto intr = resp.find("interleaved=");
+        if (intr != std::string::npos) {
+            auto val_start = resp.find_first_of("0123456789", intr);
+            if (val_start != std::string::npos)
+                interleaved_start_ = (resp[val_start] - '0') + 2;
+        } else {
+            interleaved_start_ += 2;
+        }
+    }
+    return !session_.empty();
 }
 
 bool VideoToolboxPipeline::RtspPlay() {
-    std::string uri = "rtsp://" + host_ + ":" + std::to_string(port_) + path_;
-    std::ostringstream req;
-    req << "PLAY " << uri << " RTSP/1.0\r\n"
-        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
-    if (!session_.empty()) req << "Session: " << session_ << "\r\n";
-    req << "\r\n";
-    int status = 0; std::string resp;
-    return RtspSendRequest(req.str()) && RtspReadResponse(status, resp) && status >= 200 && status < 300;
+    std::string resp;
+    // PLAY 使用 video track 的 URI（部分相机要求与 SETUP 的 URI 一致）
+    std::string video_track;
+    for (const auto& t : sdp_tracks_) {
+        if (t.first == "video") { video_track = t.second; break; }
+    }
+    return RtspSendCommand("PLAY", resp, video_track);
 }
 
 bool VideoToolboxPipeline::RtspTeardown() {
     if (rtsp_socket_ < 0) return false;
-    std::string uri = "rtsp://" + host_ + ":" + std::to_string(port_) + path_;
-    std::ostringstream req;
-    req << "TEARDOWN " << uri << " RTSP/1.0\r\n"
-        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
-    if (!session_.empty()) req << "Session: " << session_ << "\r\n";
-    req << "\r\n";
-    int status = 0; std::string resp;
-    RtspSendRequest(req.str());
-    RtspReadResponse(status, resp);
+    std::string resp;
+    RtspSendCommand("TEARDOWN", resp);
     return true;
 }
 
@@ -256,35 +436,57 @@ bool VideoToolboxPipeline::RecvRtpPacket(RtpPacket& pkt) {
 }
 
 // ============================================================
-// H264 NAL 处理
+// H264/H265 NAL 处理
 // ============================================================
 
 void VideoToolboxPipeline::EmitNal(const uint8_t* data, size_t size, uint32_t /*timestamp*/) {
     if (!data || size == 0) return;
-    uint8_t nalu_type = data[0] & 0x1F;
     static int nal_count = 0;
     if (++nal_count <= 5 || nal_count % 100 == 0)
-        std::cout << "[VideoToolbox] NAL type=" << (int)nalu_type << " size=" << size << " total=" << nal_count << std::endl;
+        std::cout << "[VideoToolbox] NAL size=" << size << " total=" << nal_count << std::endl;
 
-    if (nalu_type == 7) {  // SPS
-        sps_.assign(data, data + size);
-        have_sps_ = true;
-        if (have_sps_ && have_pps_ && !decoder_initialized_) {
+    if (is_hevc_) {
+        // HEVC: 2-byte NAL header, type in bits 1-6
+        uint8_t nalu_type = (data[0] >> 1) & 0x3F;
+        if (nalu_type == 32) {  // VPS
+            vps_.assign(data, data + size);
+            have_vps_ = true;
+        } else if (nalu_type == 33) {  // SPS
+            sps_.assign(data, data + size);
+            have_sps_ = true;
+        } else if (nalu_type == 34) {  // PPS
+            pps_.assign(data, data + size);
+            have_pps_ = true;
+        }
+        if (have_vps_ && have_sps_ && have_pps_ && !decoder_initialized_) {
             CreateFormatDescription();
             InitDecoder();
         }
-        return;
-    }
-    if (nalu_type == 8) {  // PPS
-        pps_.assign(data, data + size);
-        have_pps_ = true;
-        if (have_sps_ && have_pps_ && !decoder_initialized_) {
-            CreateFormatDescription();
-            InitDecoder();
+        if (decoder_initialized_ && nalu_type > 34)
+            FeedNalToDecoder(data, size);
+    } else {
+        // H264: 1-byte NAL header
+        uint8_t nalu_type = data[0] & 0x1F;
+        if (nalu_type == 7) {  // SPS
+            sps_.assign(data, data + size);
+            have_sps_ = true;
+            if (have_sps_ && have_pps_ && !decoder_initialized_) {
+                CreateFormatDescription();
+                InitDecoder();
+            }
+            return;
         }
-        return;
+        if (nalu_type == 8) {  // PPS
+            pps_.assign(data, data + size);
+            have_pps_ = true;
+            if (have_sps_ && have_pps_ && !decoder_initialized_) {
+                CreateFormatDescription();
+                InitDecoder();
+            }
+            return;
+        }
+        if (decoder_initialized_) FeedNalToDecoder(data, size);
     }
-    if (decoder_initialized_) FeedNalToDecoder(data, size);
 }
 
 void VideoToolboxPipeline::HandleRtpPacket(const RtpPacket& pkt) {
@@ -297,44 +499,122 @@ void VideoToolboxPipeline::HandleRtpPacket(const RtpPacket& pkt) {
 
     const uint8_t* data = pkt.payload.data();
     size_t size = pkt.payload.size();
-    uint8_t nalu_type = data[0] & 0x1F;
 
-    if (nalu_type >= 1 && nalu_type <= 23) {
-        EmitNal(data, size, pkt.timestamp);
-    } else if (nalu_type == 28) {  // FU-A
+    if (is_hevc_) {
+        // HEVC RTP 载荷格式 (RFC 7798)
         if (size < 2) return;
-        uint8_t fu_header = data[1];
-        bool start = (fu_header >> 7) & 0x01;
-        bool end = (fu_header >> 6) & 0x01;
-        uint8_t actual_type = fu_header & 0x1F;
-        if (start) {
-            fu_buffer_.clear();
-            fu_buffer_.push_back((data[0] & 0x60) | actual_type);
-            fu_buffer_.insert(fu_buffer_.end(), data + 2, data + size);
-        } else if (!fu_buffer_.empty()) {
-            fu_buffer_.insert(fu_buffer_.end(), data + 2, data + size);
-            if (end) {
-                EmitNal(fu_buffer_.data(), fu_buffer_.size(), pkt.timestamp);
+        uint8_t nal_type = (data[0] >> 1) & 0x3F;
+
+        if (nal_type >= 0 && nal_type <= 47) {
+            // 单 NAL 单元
+            EmitNal(data, size, pkt.timestamp);
+        } else if (nal_type == 49) {  // FU (Fragmentation Unit)
+            if (size < 3) return;
+            bool start = (data[2] >> 7) & 0x01;
+            bool end = (data[2] >> 6) & 0x01;
+            uint8_t fu_type = data[2] & 0x3F;
+            if (start) {
                 fu_buffer_.clear();
+                // 2-byte HEVC NAL header with correct type
+                fu_buffer_.push_back((data[0] & 0x81) | (fu_type << 1));
+                fu_buffer_.push_back(data[1]);
+                fu_buffer_.insert(fu_buffer_.end(), data + 3, data + size);
+            } else if (!fu_buffer_.empty()) {
+                fu_buffer_.insert(fu_buffer_.end(), data + 3, data + size);
+                if (end) {
+                    EmitNal(fu_buffer_.data(), fu_buffer_.size(), pkt.timestamp);
+                    fu_buffer_.clear();
+                }
+            }
+        } else if (nal_type == 50) {  // AP (Aggregation Packet)
+            size_t offset = 2;
+            while (offset + 2 < size) {
+                uint16_t nal_size = (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
+                offset += 2;
+                if (offset + nal_size > size) break;
+                EmitNal(data + offset, nal_size, pkt.timestamp);
+                offset += nal_size;
             }
         }
-    } else if (nalu_type == 24) {  // STAP-A
-        size_t offset = 1;
-        while (offset + 2 <= size) {
-            uint16_t nal_size = (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
-            offset += 2;
-            if (offset + nal_size > size) break;
-            EmitNal(data + offset, nal_size, pkt.timestamp);
-            offset += nal_size;
+    } else {
+        // H264 RTP 载荷格式
+        uint8_t nalu_type = data[0] & 0x1F;
+
+        if (nalu_type >= 1 && nalu_type <= 23) {
+            EmitNal(data, size, pkt.timestamp);
+        } else if (nalu_type == 28) {  // FU-A
+            if (size < 2) return;
+            uint8_t fu_header = data[1];
+            bool start = (fu_header >> 7) & 0x01;
+            bool end = (fu_header >> 6) & 0x01;
+            uint8_t actual_type = fu_header & 0x1F;
+            if (start) {
+                fu_buffer_.clear();
+                fu_buffer_.push_back((data[0] & 0x60) | actual_type);
+                fu_buffer_.insert(fu_buffer_.end(), data + 2, data + size);
+            } else if (!fu_buffer_.empty()) {
+                fu_buffer_.insert(fu_buffer_.end(), data + 2, data + size);
+                if (end) {
+                    EmitNal(fu_buffer_.data(), fu_buffer_.size(), pkt.timestamp);
+                    fu_buffer_.clear();
+                }
+            }
+        } else if (nalu_type == 24) {  // STAP-A
+            size_t offset = 1;
+            while (offset + 2 <= size) {
+                uint16_t nal_size = (static_cast<uint16_t>(data[offset]) << 8) | data[offset + 1];
+                offset += 2;
+                if (offset + nal_size > size) break;
+                EmitNal(data + offset, nal_size, pkt.timestamp);
+                offset += nal_size;
+            }
         }
     }
 }
 
 // ============================================================
-// SPS/PPS + FormatDescription
+// SPS/PPS/VPS + FormatDescription
 // ============================================================
 
-bool VideoToolboxPipeline::ParseSpsPps(const std::string& sdp) {
+auto B64Decode = [](const std::string& in) -> std::vector<uint8_t> {
+    static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::vector<uint8_t> out;
+    int val = 0, bits = 0;
+    for (char c : in) {
+        if (c == '=') break;
+        auto p = chars.find(c);
+        if (p == std::string::npos) continue;
+        val = (val << 6) | static_cast<int>(p);
+        bits += 6;
+        if (bits >= 8) { bits -= 8; out.push_back(static_cast<uint8_t>((val >> bits) & 0xFF)); }
+    }
+    return out;
+};
+
+bool VideoToolboxPipeline::ParseCodecParams(const std::string& sdp) {
+    // 检测是否为 HEVC
+    is_hevc_ = sdp.find("H265") != std::string::npos ||
+               sdp.find("HEVC") != std::string::npos ||
+               sdp.find("h265") != std::string::npos ||
+               sdp.find("hevc") != std::string::npos;
+
+    if (is_hevc_) {
+        std::cout << "[VideoToolbox] Detected HEVC/H265 stream" << std::endl;
+        auto extract_param = [&](const std::string& key, std::vector<uint8_t>& out, bool& flag) {
+            auto p = sdp.find(key + "=");
+            if (p == std::string::npos) return;
+            auto end = sdp.find_first_of(";\r\n", p);
+            std::string val = sdp.substr(p + key.size() + 1, end - (p + key.size() + 1));
+            out = B64Decode(val);
+            flag = !out.empty();
+        };
+        extract_param("sprop-vps", vps_, have_vps_);
+        extract_param("sprop-sps", sps_, have_sps_);
+        extract_param("sprop-pps", pps_, have_pps_);
+        return have_vps_ || have_sps_ || have_pps_;
+    }
+
+    // H264
     auto pos = sdp.find("sprop-parameter-sets=");
     if (pos == std::string::npos) return false;
     auto end = sdp.find_first_of(";\r\n", pos);
@@ -342,23 +622,8 @@ bool VideoToolboxPipeline::ParseSpsPps(const std::string& sdp) {
     auto comma = val.find(',');
     if (comma == std::string::npos) return false;
 
-    auto b64decode = [](const std::string& in) -> std::vector<uint8_t> {
-        static const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        std::vector<uint8_t> out;
-        int val = 0, bits = 0;
-        for (char c : in) {
-            if (c == '=') break;
-            auto p = chars.find(c);
-            if (p == std::string::npos) continue;
-            val = (val << 6) | static_cast<int>(p);
-            bits += 6;
-            if (bits >= 8) { bits -= 8; out.push_back(static_cast<uint8_t>((val >> bits) & 0xFF)); }
-        }
-        return out;
-    };
-
-    sps_ = b64decode(val.substr(0, comma));
-    pps_ = b64decode(val.substr(comma + 1));
+    sps_ = B64Decode(val.substr(0, comma));
+    pps_ = B64Decode(val.substr(comma + 1));
     have_sps_ = !sps_.empty();
     have_pps_ = !pps_.empty();
     return have_sps_ && have_pps_;
@@ -367,10 +632,24 @@ bool VideoToolboxPipeline::ParseSpsPps(const std::string& sdp) {
 bool VideoToolboxPipeline::CreateFormatDescription() {
     if (!have_sps_ || !have_pps_) return false;
     if (format_desc_) { CFRelease(format_desc_); format_desc_ = nullptr; }
-    const uint8_t* params[2] = {sps_.data(), pps_.data()};
-    const size_t sizes[2] = {sps_.size(), pps_.size()};
-    OSStatus status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
-        kCFAllocatorDefault, 2, params, sizes, 4, &format_desc_);
+
+    OSStatus status;
+    if (is_hevc_) {
+        if (!have_vps_) {
+            std::cerr << "[VideoToolbox] Missing VPS for HEVC format description" << std::endl;
+            return false;
+        }
+        const uint8_t* params[3] = {vps_.data(), sps_.data(), pps_.data()};
+        const size_t sizes[3] = {vps_.size(), sps_.size(), pps_.size()};
+        status = CMVideoFormatDescriptionCreateFromHEVCParameterSets(
+            kCFAllocatorDefault, 3, params, sizes, 4, nullptr, &format_desc_);
+    } else {
+        const uint8_t* params[2] = {sps_.data(), pps_.data()};
+        const size_t sizes[2] = {sps_.size(), pps_.size()};
+        status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
+            kCFAllocatorDefault, 2, params, sizes, 4, &format_desc_);
+    }
+
     if (status != noErr) {
         std::cerr << "[VideoToolbox] Format description failed: " << status << std::endl;
         return false;
@@ -570,8 +849,42 @@ bool VideoToolboxPipeline::Start(const std::string& url) {
 
     std::string sdp;
     if (!RtspDescribe(sdp)) { std::cerr << "[VideoToolbox] RtspDescribe failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "DESCRIBE failed"); return false; }
-    std::cout << "[VideoToolbox] SDP: " << sdp.substr(0, 200) << std::endl;
-    ParseSpsPps(sdp);
+    std::cout << "[VideoToolbox] Full SDP:\n" << sdp << std::endl;
+    ParseCodecParams(sdp);
+    // 解析 SDP 中的 media tracks (m= 行)
+    sdp_tracks_.clear();
+    size_t m_pos = 0;
+    while ((m_pos = sdp.find("\nm=", m_pos)) != std::string::npos ||
+           (m_pos == 0 && sdp.substr(0, 2) == "m=")) {
+        if (m_pos == 0 && sdp.substr(0, 2) == "m=")
+            m_pos = 0;
+        else
+            m_pos++;
+        auto eol = sdp.find("\n", m_pos);
+        if (eol == std::string::npos) eol = sdp.size() - 1;
+        std::string mline = sdp.substr(m_pos, eol - m_pos);
+        // m=video 0 RTP/AVP 96 或 m=audio 0 RTP/AVP 0
+        auto track_type = mline.substr(2, mline.find(' ') - 2);
+        auto track_pos = sdp_tracks_.size();
+        // 查找对应的 a=control:... 行
+        std::string track_id = "trackID=" + std::to_string(track_pos);
+        size_t ctrl_pos = sdp.find("a=control:", eol);
+        if (ctrl_pos != std::string::npos && ctrl_pos < sdp.find("\nm=", eol)) {
+            auto ctrl_eol = sdp.find("\n", ctrl_pos);
+            std::string ctrl = sdp.substr(ctrl_pos + 10, ctrl_eol - ctrl_pos - 10);
+            ctrl = Trim(ctrl);
+            if (ctrl != "*" && !ctrl.empty()) track_id = ctrl;
+        }
+        sdp_tracks_.push_back({track_type, track_id});
+        m_pos = eol;
+    }
+    if (sdp_tracks_.empty()) {
+        // 没有 m= 行（a=control:*），使用基础 URL
+        sdp_tracks_.push_back({"video", ""});
+    }
+    std::cout << "[VideoToolbox] SDP tracks:";
+    for (auto& t : sdp_tracks_) std::cout << " " << t.first << "=" << t.second;
+    std::cout << std::endl;
 
     if (!RtspSetup()) { std::cerr << "[VideoToolbox] RtspSetup failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "SETUP failed"); return false; }
     if (!RtspPlay()) { std::cerr << "[VideoToolbox] RtspPlay failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "PLAY failed"); return false; }
@@ -613,11 +926,3 @@ void VideoToolboxPipeline::Pause() { paused_ = true; }
 void VideoToolboxPipeline::Resume() { paused_ = false; }
 
 }} // namespace aivision::pipeline
-
-// HAL 插件导出
-extern "C" {
-aivision::pipeline::IMediaPipeline* CreatePipeline() {
-    return new aivision::pipeline::VideoToolboxPipeline();
-}
-void DestroyPipeline(aivision::pipeline::IMediaPipeline* p) { delete p; }
-}

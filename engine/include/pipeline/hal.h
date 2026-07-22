@@ -2,11 +2,7 @@
 #define AIVISION_PIPELINE_HAL_H
 
 // HAL (Hardware Abstraction Layer) — 硬件加速流水线接口。
-// 核心设计：
-//   1. 定义统一的拉流、解码、硬件缩放/Resize 接口。
-//   2. 各平台 (RKMPP, FFmpeg, Ascend) 编译为独立动态库。
-//   3. 引擎主程序通过配置文件动态加载指定平台的 .so。
-//   4. 使用智能指针管理动态库生命周期 (RAII)。
+// 各平台实现编译时直接链接进引擎，通过 #ifdef 选择（与项目中所有其他平台代码一致）。
 
 #include <cstdint>
 #include <functional>
@@ -163,20 +159,15 @@ namespace aivision
             virtual HALStatus GetLastStatus() const { return HALStatus::Success(); }
         };
 
-        /// 流水线工厂函数类型 (每个动态库导出此函数)
-        using CreatePipelineFunc = IMediaPipeline *(*)();
-        using DestroyPipelineFunc = void (*)(IMediaPipeline *);
-
-        /// HAL 管理器 — 动态加载平台流水线实现
+        /// HAL 管理器 — 根据编译时平台直接创建流水线实例
         class HALManager
         {
         public:
-            HALManager() : pipeline_(nullptr, nullptr) {}
+            HALManager() = default;
             ~HALManager() = default;
 
-            /// 加载指定平台的流水线动态库
-            bool LoadPipeline(const std::string &so_path,
-                              const std::string &config_json);
+            /// 创建并初始化当前平台的 HAL 流水线
+            bool LoadPipeline(const std::string &config_json = "{}");
 
             /// 获取当前加载的流水线实例
             IMediaPipeline *GetPipeline() const { return pipeline_.get(); }
@@ -190,13 +181,8 @@ namespace aivision
             /// 获取已加载的平台名称
             std::string GetLoadedPlatform() const;
 
-            /// 动态库路径
-            std::string GetSoPath() const { return so_path_; }
-
         private:
-            std::string so_path_;
-            void *dl_handle_ = nullptr;
-            std::unique_ptr<IMediaPipeline, DestroyPipelineFunc> pipeline_;
+            std::unique_ptr<IMediaPipeline> pipeline_;
         };
 
     } // namespace pipeline

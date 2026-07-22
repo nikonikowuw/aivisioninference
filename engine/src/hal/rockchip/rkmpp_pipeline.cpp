@@ -912,11 +912,20 @@ namespace aivision
                 auto slash = u.find('/');
                 std::string hostport = (slash == std::string::npos) ? u : u.substr(0, slash);
                 rtsp_path_ = (slash == std::string::npos) ? "/" : u.substr(slash);
-                auto colon = hostport.find(':');
-                if (colon != std::string::npos)
+                // 支持 user:password@host:port 格式
+                auto at_pos = hostport.rfind('@');
+                if (at_pos != std::string::npos)
+                    hostport = hostport.substr(at_pos + 1);
+                auto colon = hostport.rfind(':');
+                if (colon != std::string::npos && colon > 0)
                 {
                     rtsp_host_ = hostport.substr(0, colon);
-                    rtsp_port_ = std::stoi(hostport.substr(colon + 1));
+                    try {
+                        rtsp_port_ = std::stoi(hostport.substr(colon + 1));
+                    } catch (...) {
+                        rtsp_port_ = 554;
+                        rtsp_host_ = hostport;
+                    }
                 }
                 else
                 {
@@ -1804,16 +1813,3 @@ namespace aivision
         } // namespace rockchip
     } // namespace hal
 } // namespace aivision
-
-// ====================================================================
-// HAL 插件导出
-// ====================================================================
-extern "C" aivision::pipeline::IMediaPipeline *CreatePipeline()
-{
-    return new aivision::hal::rockchip::RKMPPPipeline();
-}
-
-extern "C" void DestroyPipeline(aivision::pipeline::IMediaPipeline *pipeline)
-{
-    delete pipeline;
-}

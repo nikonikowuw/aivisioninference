@@ -121,35 +121,6 @@ static uint32_t GetPositiveEnvUInt32(const char *name)
     }
 }
 
-static std::string JoinPath(const std::string &dir, const std::string &file)
-{
-    if (dir.empty())
-        return file;
-    if (dir.back() == '/')
-        return dir + file;
-    return dir + "/" + file;
-}
-
-static std::string DefaultHalPathForPlatform(const std::string &platform)
-{
-    std::string norm = platform;
-    for (char &c : norm) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    norm.erase(std::remove_if(norm.begin(), norm.end(), [](char c) { 
-        return c == '-' || c == '_' || c == ' '; 
-    }), norm.end());
-
-    const std::string hal_dir = GetEnvString("NIKO_ENGINE_HAL_DIR", "/usr/local/lib/aivision");
-    if (norm.empty() || norm == "none") return "";
-    
-    if (norm == "mac" || norm == "macos" || norm == "apple" || norm == "applesilicon" || norm == "mseries" || norm == "videotoolbox")
-        return JoinPath(hal_dir, "libaivision-hal-macos-videotoolbox.dylib");
-    if (norm == "rk" || norm == "rknn" || norm == "rkmpp" || norm == "rockchip" || norm == "rk3568" || norm == "rk3588")
-        return JoinPath(hal_dir, "libaivision-hal-rkmpp.so");
-    if (norm == "ascend" || norm == "atlas" || norm == "huawei" || norm == "cann")
-        return JoinPath(hal_dir, "libaivision-hal-ascend.so");
-    return platform;
-}
-
 static std::string FindEnvFileArg(int argc, char *argv[])
 {
     for (int i = 1; i < argc; ++i)
@@ -165,9 +136,6 @@ static EngineConfig LoadConfigFromEnv()
 {
     EngineConfig config;
     config.worker_count = GetEnvUInt32("NIKO_ENGINE_WORKERS", config.worker_count);
-    config.hal_so_path = GetEnvString("NIKO_ENGINE_HAL_SO", config.hal_so_path);
-    config.fallback_hal_so_path = GetEnvString("NIKO_ENGINE_FALLBACK_HAL_SO", config.fallback_hal_so_path);
-    config.hal_config_json = GetEnvString("NIKO_ENGINE_HAL_CONFIG", config.hal_config_json);
     config.enable_ffmpeg_fallback = GetEnvBool("NIKO_ENGINE_ENABLE_FFMPEG_FALLBACK", config.enable_ffmpeg_fallback);
     config.metrics_interval_ms = GetEnvUInt32("NIKO_ENGINE_METRICS_MS", config.metrics_interval_ms);
 	config.max_preview_streams = GetPositiveEnvUInt32("NIKO_ENGINE_MAX_PREVIEW_STREAMS");
@@ -194,14 +162,6 @@ static EngineConfig LoadConfigFromEnv()
     config.device_enable_external_commands = GetEnvBool("NIKO_ENGINE_DEVICE_ENABLE_COMMANDS", config.device_enable_external_commands);
     config.device_command_timeout_ms = GetEnvUInt32("NIKO_ENGINE_DEVICE_COMMAND_TIMEOUT_MS", config.device_command_timeout_ms);
 
-    std::string hal_platform = GetEnvString("NIKO_ENGINE_HAL_PLATFORM");
-    if (config.hal_so_path.empty() && !hal_platform.empty())
-        config.hal_so_path = DefaultHalPathForPlatform(hal_platform);
-
-    std::string fallback_platform = GetEnvString("NIKO_ENGINE_FALLBACK_HAL_PLATFORM");
-    if (config.fallback_hal_so_path.empty() && !fallback_platform.empty())
-        config.fallback_hal_so_path = DefaultHalPathForPlatform(fallback_platform);
-
     return config;
 }
 
@@ -220,9 +180,7 @@ static std::string DisplayBool(bool val, const std::string& t_label = "true", co
 }
 
 static void PrintRuntimeConfig(const EngineConfig &config,
-                               const std::string &env_file,
-                               const std::string &hal_platform,
-                               const std::string &fallback_hal_platform)
+                               const std::string &env_file)
 {
     std::string env_display = env_file;
     if (env_display.empty()) {
@@ -232,10 +190,6 @@ static void PrintRuntimeConfig(const EngineConfig &config,
     std::cout << "[Config] workers=" << config.worker_count
               << " metrics_ms=" << config.metrics_interval_ms
 			  << " max_preview_streams=" << config.max_preview_streams << std::endl;
-    std::cout << "[Config] hal_platform=" << DisplayVal(hal_platform)
-              << " hal_so=" << DisplayVal(config.hal_so_path) << std::endl;
-    std::cout << "[Config] fallback_hal_platform=" << DisplayVal(fallback_hal_platform)
-              << " fallback_hal_so=" << DisplayVal(config.fallback_hal_so_path) << std::endl;
     std::cout << "[Config] ffmpeg_fallback=" << DisplayBool(config.enable_ffmpeg_fallback, "enabled", "disabled")
               << " rtsp_push=" << config.rtsp_push_server
               << " zlm_url=" << config.zlm_api_url
@@ -277,11 +231,6 @@ static void PrintUsage(const char *prog)
     std::cout << "Options:" << std::endl;
     std::cout << "  --env-file PATH      Load environment variables from file (default: .env)" << std::endl;
     std::cout << "  --workers N          Worker thread count (default: 4)" << std::endl;
-    std::cout << "  --hal-platform NAME  HAL platform name: macos/rkmpp/ascend" << std::endl;
-    std::cout << "  --hal-so PATH        HAL platform pipeline .so/.dylib path" << std::endl;
-    std::cout << "  --fallback-hal-platform NAME  Fallback HAL platform name" << std::endl;
-    std::cout << "  --fallback-hal-so PATH  Fallback HAL .so/.dylib path; must decode and output frames for inference" << std::endl;
-    std::cout << "  --hal-config JSON    HAL configuration JSON" << std::endl;
     std::cout << "  --disable-ffmpeg-fallback  Disable playback-only FFmpeg relay fallback (enabled by default)" << std::endl;
     std::cout << "  --metrics-ms N       Metrics report interval in ms (default: 5000)" << std::endl;
     std::cout << "  --rtsp-push URL      RTSP publish base URL (default: rtsp://localhost:10554)" << std::endl;
@@ -306,8 +255,6 @@ int main(int argc, char *argv[])
 
     // 配置加载优先级：默认值 < .env < 环境变量 < 命令行参数
     EngineConfig config = LoadConfigFromEnv();
-    std::string hal_platform = GetEnvString("NIKO_ENGINE_HAL_PLATFORM");
-    std::string fallback_hal_platform = GetEnvString("NIKO_ENGINE_FALLBACK_HAL_PLATFORM");
 
     for (int i = 1; i < argc; ++i)
     {
@@ -329,28 +276,6 @@ int main(int argc, char *argv[])
         else if (arg == "--workers" && i + 1 < argc)
         {
             config.worker_count = static_cast<uint32_t>(std::stoul(argv[++i]));
-        }
-        else if (arg == "--hal-platform" && i + 1 < argc)
-        {
-            hal_platform = argv[++i];
-            config.hal_so_path = DefaultHalPathForPlatform(hal_platform);
-        }
-        else if (arg == "--hal-so" && i + 1 < argc)
-        {
-            config.hal_so_path = argv[++i];
-        }
-        else if (arg == "--fallback-hal-platform" && i + 1 < argc)
-        {
-            fallback_hal_platform = argv[++i];
-            config.fallback_hal_so_path = DefaultHalPathForPlatform(fallback_hal_platform);
-        }
-        else if (arg == "--fallback-hal-so" && i + 1 < argc)
-        {
-            config.fallback_hal_so_path = argv[++i];
-        }
-        else if (arg == "--hal-config" && i + 1 < argc)
-        {
-            config.hal_config_json = argv[++i];
         }
         else if (arg == "--disable-ffmpeg-fallback")
         {
@@ -401,7 +326,7 @@ int main(int argc, char *argv[])
     }
 
     PrintVersion();
-    PrintRuntimeConfig(config, env_file, hal_platform, fallback_hal_platform);
+    PrintRuntimeConfig(config, env_file);
 
     // 注册信号处理
     std::signal(SIGINT, SignalHandler);

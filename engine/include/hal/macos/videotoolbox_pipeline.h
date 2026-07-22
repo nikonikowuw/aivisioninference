@@ -57,6 +57,11 @@ private:
     void RtspDisconnect();
     bool RtspSendRequest(const std::string& req);
     bool RtspReadResponse(int& status_code, std::string& response);
+    std::string RtspDigestHeader(const std::string& method, const std::string& uri) const;
+    bool RtspParseAuthChallenge(const std::string& resp);
+    bool RtspSendCommand(const std::string& method, std::string& resp,
+                          const std::string& track = "",
+                          bool include_transport = true);
     bool RtspOptions();
     bool RtspDescribe(std::string& sdp);
     bool RtspSetup();
@@ -67,8 +72,8 @@ private:
     void HandleRtpPacket(const RtpPacket& pkt);
     void EmitNal(const uint8_t* data, size_t size, uint32_t timestamp);
 
-    // ---- H264 ----
-    bool ParseSpsPps(const std::string& sdp);
+    // ---- H264/H265 ----
+    bool ParseCodecParams(const std::string& sdp);
     bool CreateFormatDescription();
 
     // ---- VideoToolbox 解码 ----
@@ -94,17 +99,26 @@ private:
 
     // RTSP/RTP
     int rtsp_socket_ = -1;
+    std::string username_;
+    std::string password_;
     std::string host_;
     int port_ = 0;
     std::string path_;
     int cseq_ = 0;
     std::string session_;
+    std::string digest_realm_;
+    std::string digest_nonce_;
+    std::vector<std::pair<std::string, std::string>> sdp_tracks_;
+    int interleaved_start_ = 0;
     uint16_t expected_seq_ = 0;
     bool have_seq_ = false;
 
-    // H264
+    // H264/H265
+    bool is_hevc_ = false;
     std::vector<uint8_t> sps_;
     std::vector<uint8_t> pps_;
+    std::vector<uint8_t> vps_;
+    bool have_vps_ = false;
     bool have_sps_ = false;
     bool have_pps_ = false;
     std::vector<uint8_t> fu_buffer_;

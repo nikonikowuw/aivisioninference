@@ -1039,10 +1039,12 @@ export const mediaApi = {
   listStreams: () => request<StreamState[]>('/media/streams'),
   getPlayUrl: (params: { device_id: string; protocol?: string; stream_type?: string }) => {
     const query = buildQuery(params);
-    return request<{ url: string; protocol: string; stream_type: string; expires: number }>(`/media/play${query}`);
+    return request<{ url: string; protocol: string; stream_type: string; codec?: string; expires: number }>(`/media/play${query}`);
   },
-  stopPlay: (deviceId: string) =>
-    request(`/media/stop?device_id=${deviceId}`, { method: 'POST' }),
+  stopPlay: (deviceId: string, streamType: string = 'main') => {
+    const query = buildQuery({ device_id: deviceId, stream_type: streamType });
+    return request(`/media/stop${query}`, { method: 'POST' });
+  },
   getSnapshot: (deviceId: string) => `${API_BASE}/media/snapshot?device_id=${deviceId}&token=${getAccessToken()}`,
 };
 

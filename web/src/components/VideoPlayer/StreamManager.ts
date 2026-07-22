@@ -3,13 +3,8 @@
  *
  * 核心逻辑：
  * 1. 同一个 URL 只建立一次连接
- * 2. HLS/WebRTC 均支持多 video 共享同一帧画面
- * 3. 引用计数：所有订阅者移除后才关闭连接
- *
- * HLS 复用原理：
- *   - 一个隐藏的 <video> 播放 HLS 流
- *   - 通过 video.captureStream() 获取 MediaStream
- *   - 所有可见 <video> 共享该 MediaStream，画面完全同步
+ * 2. 所有订阅者共享同一个 WebRTC MediaStream
+ * 3. 最后一个订阅者移除后关闭连接
  */
 
 type Protocol = 'webrtc' | 'hls' | 'flv';
@@ -17,17 +12,12 @@ type Protocol = 'webrtc' | 'hls' | 'flv';
 interface StreamEntry {
   id: string;
   url: string;
-  protocol: Protocol;
-  /** 共享的 MediaStream（captureStream 产生） */
+  /** 共享的 WebRTC MediaStream */
   stream: MediaStream | null;
-  /** 隐藏的源 video 元素（HLS 用） */
-  sourceVideo: HTMLVideoElement | null;
   /** 播放器清理函数 */
   destroy: () => void;
-  /** 引用计数 */
-  refCount: number;
-  /** 订阅的 video 元素 */
-  subscribers: Set<HTMLVideoElement>;
+  /** 订阅元素及其断流降级回调。 */
+  subscribers: Map<HTMLVideoElement, { onDisconnect?: (error: string) => void }>;
   status: 'loading' | 'ready' | 'error';
   error: string | null;
   waitQueue: Array<{
@@ -64,17 +54,15 @@ class StreamManager {
    */
   async subscribe(
     url: string,
-    protocol: Protocol,
     video: HTMLVideoElement,
-    options?: { webrtcTimeout?: number },
+    options?: { webrtcTimeout?: number; onDisconnect?: (error: string) => void },
   ): Promise<{ stream: MediaStream | null; destroy: () => void }> {
     const id = generateStreamId(url);
     let entry = this.streams.get(id);
 
     if (entry) {
-      entry.refCount++;
-      entry.subscribers.add(video);
-      console.log(`[StreamManager] 复用流: ${id}, 引用: ${entry.refCount}`);
+      entry.subscribers.set(video, { onDisconnect: options?.onDisconnect });
+      console.log(`[StreamManager] 复用流: ${id}, 引用: ${entry.subscribers.size}`);
 
       if (entry.status === 'ready' && entry.stream) {
         video.srcObject = entry.stream;
@@ -99,7 +87,7 @@ class StreamManager {
         // 重置，重新尝试
         entry.destroy();
         this.streams.delete(id);
-        return this.subscribe(url, protocol, video, options);
+        return this.subscribe(url, video, options);
       }
     }
 
@@ -107,12 +95,9 @@ class StreamManager {
     entry = {
       id,
       url,
-      protocol,
       stream: null,
-      sourceVideo: null,
       destroy: () => { },
-      refCount: 1,
-      subscribers: new Set([video]),
+      subscribers: new Map([[video, { onDisconnect: options?.onDisconnect }]]),
       status: 'loading',
       error: null,
       waitQueue: [],
@@ -120,16 +105,14 @@ class StreamManager {
     this.streams.set(id, entry);
 
     try {
-      if (protocol === 'webrtc') {
-        await this.connectWebrtc(entry, options?.webrtcTimeout || 10000);
-      } else {
-        await this.connectHls(entry);
-      }
+      await this.connectWebrtc(entry, options?.webrtcTimeout || 10000);
     } catch (error) {
       entry.status = 'error';
       entry.error = error instanceof Error ? error.message : String(error);
       entry.waitQueue.forEach((w) => w.reject(entry!.error!));
       entry.waitQueue = [];
+      entry.destroy();
+      if (this.streams.get(id) === entry) this.streams.delete(id);
       throw error;
     }
 
@@ -147,10 +130,9 @@ class StreamManager {
     if (!entry) return;
 
     entry.subscribers.delete(video);
-    entry.refCount--;
     video.srcObject = null;
 
-    if (entry.refCount <= 0) {
+    if (entry.subscribers.size === 0) {
       console.log(`[StreamManager] 销毁流: ${id}`);
       entry.destroy();
       this.streams.delete(id);
@@ -234,12 +216,16 @@ class StreamManager {
       });
 
       const handleError = (msg: string) => {
-        if (resolved) return;
-        resolved = true;
+        if (entry.status === 'error') return;
         clearTimeout(timeoutTimer);
-        tempVideo.remove();
         entry.status = 'error';
         entry.error = msg;
+        if (resolved) {
+          Array.from(entry.subscribers.values()).forEach(({ onDisconnect }) => onDisconnect?.(msg));
+          return;
+        }
+        resolved = true;
+        tempVideo.remove();
         reject(new Error(msg));
       };
 
@@ -255,130 +241,9 @@ class StreamManager {
     });
   }
 
-  // ==================== HLS 连接（单源多副本） ====================
-
-  private async connectHls(entry: StreamEntry): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const hiddenVideo = this.createHiddenVideo();
-      entry.sourceVideo = hiddenVideo;
-
-      let hlsInstance: any = null;
-      let resolved = false;
-
-      entry.destroy = () => {
-        if (hlsInstance) {
-          hlsInstance.destroy();
-          hlsInstance = null;
-        }
-        hiddenVideo.remove();
-      };
-
-      // 加载 HLS.js（如果原生支持则直接播放）
-      import('hls.js').then(({ default: Hls }) => {
-        if (Hls.isSupported()) {
-          hlsInstance = new Hls();
-          hlsInstance.loadSource(entry.url);
-          hlsInstance.attachMedia(hiddenVideo);
-
-          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            hiddenVideo.play().then(() => {
-              this.shareViaCaptureStream(entry, hiddenVideo, resolve);
-              resolved = true;
-            }).catch((e) => {
-              if (!resolved) {
-                resolved = true;
-                reject(e);
-              }
-            });
-          });
-
-          hlsInstance.on(Hls.Events.ERROR, (_event: any, data: any) => {
-            if (data.fatal && !resolved) {
-              resolved = true;
-              const detail = data.details || data.type || 'unknown';
-              console.error(`[StreamManager] HLS fatal error: ${detail}`, data);
-              reject(new Error(`HLS playback failed: ${detail}`));
-            }
-          });
-        } else if (hiddenVideo.canPlayType('application/vnd.apple.mpegurl')) {
-          // Safari 原生 HLS
-          hiddenVideo.src = entry.url;
-          hiddenVideo.addEventListener('loadedmetadata', () => {
-            hiddenVideo.play().then(() => {
-              this.shareViaCaptureStream(entry, hiddenVideo, resolve);
-              resolved = true;
-            }).catch((e) => {
-              if (!resolved) {
-                resolved = true;
-                reject(e);
-              }
-            });
-          });
-          hiddenVideo.addEventListener('error', (e) => {
-            if (!resolved) {
-              resolved = true;
-              const mediaError = (hiddenVideo.error as MediaError)?.message || 'unknown';
-              console.error(`[StreamManager] HLS native error: ${mediaError}`);
-              reject(new Error(`HLS native playback failed: ${mediaError}`));
-            }
-          });
-        } else {
-          resolved = true;
-          reject(new Error('HLS not supported'));
-        }
-      }).catch(() => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('Failed to load HLS library'));
-        }
-      });
-    });
-  }
-
-  /**
-   * 通过 captureStream() 将隐藏 video 的输出共享给所有订阅者
-   */
-  private shareViaCaptureStream(
-    entry: StreamEntry,
-    hiddenVideo: HTMLVideoElement,
-    resolve: (value: void) => void,
-  ): void {
-    try {
-      const captureStream = (hiddenVideo as any).captureStream?.(30)
-        ?? (hiddenVideo as any).mozCaptureStream?.(30)
-        ?? null;
-
-      if (captureStream) {
-        entry.stream = captureStream;
-      } else {
-        console.warn('[StreamManager] captureStream not supported, fallback to independent playback');
-      }
-
-      entry.status = 'ready';
-
-      entry.subscribers.forEach((subVideo) => {
-        if (entry.stream) {
-          subVideo.srcObject = entry.stream;
-          subVideo.play().catch(() => { });
-        }
-      });
-
-      entry.waitQueue.forEach((w) => w.resolve(entry.stream!));
-      entry.waitQueue = [];
-      resolve();
-    } catch {
-      entry.stream = null;
-      entry.status = 'ready';
-      entry.waitQueue.forEach((w) => w.resolve(null as any));
-      entry.waitQueue = [];
-      resolve();
-    }
-  }
-
   // ==================== 工具函数 ====================
 
-  // display:none 会阻止部分浏览器初始化视频解码管线，导致 MSE SourceBuffer 创建失败。
-  // 改用 visibility 方案确保浏览器正确渲染视频帧，使 captureStream + hls.js MSE 正常工作。
+  // display:none 会阻止部分浏览器初始化视频解码管线。
   private createHiddenVideo(): HTMLVideoElement {
     const video = document.createElement('video');
     video.style.position = 'absolute';
@@ -426,8 +291,8 @@ class StreamManager {
     return Array.from(this.streams.values()).map((e) => ({
       id: e.id,
       url: e.url,
-      protocol: e.protocol,
-      refs: e.refCount,
+      protocol: 'webrtc',
+      refs: e.subscribers.size,
       status: e.status,
     }));
   }

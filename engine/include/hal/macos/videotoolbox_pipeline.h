@@ -127,6 +127,7 @@ private:
     VTDecompressionSessionRef decode_session_ = nullptr;
     CMVideoFormatDescriptionRef format_desc_ = nullptr;
     bool decoder_initialized_ = false;
+    uint64_t nal_count_ = 0;
 
     // VideoToolbox 编码
     VTCompressionSessionRef encode_session_ = nullptr;

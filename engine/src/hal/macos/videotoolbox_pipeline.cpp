@@ -267,32 +267,36 @@ bool VideoToolboxPipeline::RtspSendCommand(const std::string& method, std::strin
                                             bool include_transport) {
     std::string uri = "rtsp://" + host_ + ":" + std::to_string(port_) + path_;
     std::string full_uri = uri + (track.empty() ? "" : "/" + track);
-    std::ostringstream req;
-    req << method << " " << full_uri << " RTSP/1.0\r\n"
-        << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
-    if (!username_.empty()) {
-        if (!digest_realm_.empty()) {
-            req << RtspDigestHeader(method, full_uri);
-        } else {
-            req << "Authorization: Basic " << Base64Encode(username_ + ":" + password_) << "\r\n";
+
+    auto build_request = [&]() {
+        std::ostringstream req;
+        req << method << " " << full_uri << " RTSP/1.0\r\n"
+            << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
+        if (!username_.empty()) {
+            if (!digest_realm_.empty()) {
+                req << RtspDigestHeader(method, full_uri);
+            } else {
+                req << "Authorization: Basic " << Base64Encode(username_ + ":" + password_) << "\r\n";
+            }
         }
-    }
-    if (method == "DESCRIBE")
-        req << "Accept: application/sdp\r\n";
-    if (method == "SETUP" && include_transport) {
-        req << "Transport: RTP/AVP/TCP;unicast;interleaved="
-            << interleaved_start_ << "-" << (interleaved_start_ + 1) << "\r\n";
-    }
-    if (!session_.empty() && (method == "SETUP" || method == "PLAY" || method == "TEARDOWN"))
-        req << "Session: " << session_ << "\r\n";
-    if (method == "PLAY") {
-        // 部分 RTSP 服务器要求 Range 头才能进入播放状态
-        req << "Range: npt=0.000-\r\n";
-    }
-    req << "\r\n";
+        if (method == "DESCRIBE")
+            req << "Accept: application/sdp\r\n";
+        if (method == "SETUP" && include_transport) {
+            req << "Transport: RTP/AVP/TCP;unicast;interleaved="
+                << interleaved_start_ << "-" << (interleaved_start_ + 1) << "\r\n";
+        }
+        if (!session_.empty() && (method == "SETUP" || method == "PLAY" || method == "TEARDOWN"))
+            req << "Session: " << session_ << "\r\n";
+        if (method == "PLAY") {
+            // 部分 RTSP 服务器要求 Range 头才能进入播放状态
+            req << "Range: npt=0.000-\r\n";
+        }
+        req << "\r\n";
+        return req.str();
+    };
 
     int status = 0;
-    if (!RtspSendRequest(req.str()) || !RtspReadResponse(status, resp))
+    if (!RtspSendRequest(build_request()) || !RtspReadResponse(status, resp))
         return false;
 
     // 收到 401 且有凭证时，尝试 Digest 或 Basic auth
@@ -300,27 +304,8 @@ bool VideoToolboxPipeline::RtspSendCommand(const std::string& method, std::strin
         RtspParseAuthChallenge(resp);
         std::cout << "[VideoToolbox] Server auth: realm=\"" << digest_realm_
                   << "\" nonce=\"" << digest_nonce_ << "\"" << std::endl;
-        std::ostringstream req2;
-        req2 << method << " " << full_uri << " RTSP/1.0\r\n"
-             << "CSeq: " << cseq_++ << "\r\nUser-Agent: aivision-engine\r\n";
 
-        if (!digest_realm_.empty())
-            req2 << RtspDigestHeader(method, full_uri);
-        else
-            req2 << "Authorization: Basic " << Base64Encode(username_ + ":" + password_) << "\r\n";
-
-        if (method == "DESCRIBE")
-            req2 << "Accept: application/sdp\r\n";
-        if (method == "SETUP" && include_transport)
-            req2 << "Transport: RTP/AVP/TCP;unicast;interleaved="
-                 << interleaved_start_ << "-" << (interleaved_start_ + 1) << "\r\n";
-        if (!session_.empty() && (method == "SETUP" || method == "PLAY" || method == "TEARDOWN"))
-            req2 << "Session: " << session_ << "\r\n";
-        if (method == "PLAY")
-            req2 << "Range: npt=0.000-\r\n";
-        req2 << "\r\n";
-
-        bool ok = RtspSendRequest(req2.str()) && RtspReadResponse(status, resp);
+        bool ok = RtspSendRequest(build_request()) && RtspReadResponse(status, resp);
         return ok && status >= 200 && status < 300;
     }
 
@@ -371,8 +356,13 @@ bool VideoToolboxPipeline::RtspSetup() {
         auto intr = resp.find("interleaved=");
         if (intr != std::string::npos) {
             auto val_start = resp.find_first_of("0123456789", intr);
-            if (val_start != std::string::npos)
-                interleaved_start_ = (resp[val_start] - '0') + 2;
+            if (val_start != std::string::npos) {
+                try {
+                    interleaved_start_ = std::stoi(resp.substr(val_start)) + 2;
+                } catch (...) {
+                    interleaved_start_ += 2;
+                }
+            }
         } else {
             interleaved_start_ += 2;
         }
@@ -441,9 +431,8 @@ bool VideoToolboxPipeline::RecvRtpPacket(RtpPacket& pkt) {
 
 void VideoToolboxPipeline::EmitNal(const uint8_t* data, size_t size, uint32_t /*timestamp*/) {
     if (!data || size == 0) return;
-    static int nal_count = 0;
-    if (++nal_count <= 5 || nal_count % 100 == 0)
-        std::cout << "[VideoToolbox] NAL size=" << size << " total=" << nal_count << std::endl;
+    if (++nal_count_ <= 5 || nal_count_ % 100 == 0)
+        std::cout << "[VideoToolbox] NAL size=" << size << " total=" << nal_count_ << std::endl;
 
     if (is_hevc_) {
         // HEVC: 2-byte NAL header, type in bits 1-6
@@ -462,7 +451,7 @@ void VideoToolboxPipeline::EmitNal(const uint8_t* data, size_t size, uint32_t /*
             CreateFormatDescription();
             InitDecoder();
         }
-        if (decoder_initialized_ && nalu_type > 34)
+        if (decoder_initialized_ && (nalu_type < 32 || nalu_type > 34))
             FeedNalToDecoder(data, size);
     } else {
         // H264: 1-byte NAL header

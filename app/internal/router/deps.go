@@ -417,6 +417,7 @@ func provideSIPServiceWithZLM(
 func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.StreamManager, sipSvc *service.SIPService) (*handler.MediaWebhookHandler, *handler.MediaPlayHandler, *handler.MediaRecordingHandler, *handler.DeviceStagingHandler) {
 	zlmClient := provideZLMClient(cfg)
 	deviceRepo := repository.NewDeviceRepository(db)
+	edgeNodeRepo := repository.NewEdgeNodeRepository(db)
 	mediaStreamRepo := repository.NewMediaStreamRepository(db)
 	recordingRepo := repository.NewRecordingRepository(db)
 	stagingRepo := repository.NewDiscoveredDeviceRepository(db)
@@ -428,7 +429,7 @@ func provideMediaServices(db *gorm.DB, cfg *Config, streamManager *service.Strea
 	stagingSvc := service.NewDeviceStagingService(stagingRepo, deviceRepo, gbDeviceRepo, deviceSipConfigRepo)
 	discoverySvc := service.NewDeviceDiscoveryService(stagingSvc, onvifScanner, nil)
 
-	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, streamManager, cfg.ZLMAPIURL, cfg.ZLMSecret)
+	mediaSvc := service.NewMediaService(zlmClient, mediaStreamRepo, deviceRepo, edgeNodeRepo, streamManager, cfg.ZLMAPIURL, cfg.ZLMSecret)
 	recordingSvc := service.NewRecordingService(recordingRepo, zlmClient)
 
 	webhookHandler := handler.NewMediaWebhookHandler(mediaSvc, sipSvc, streamManager, stagingSvc)

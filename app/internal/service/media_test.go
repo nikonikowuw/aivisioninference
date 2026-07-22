@@ -44,7 +44,7 @@ func TestStreamViewerTracker_RemoveZero(t *testing.T) {
 }
 
 func TestNewMediaService(t *testing.T) {
-	svc := &MediaService{zlmSecret: "secret"}
+	svc := NewMediaService(nil, nil, nil, nil, nil, "http://localhost:8000", "secret")
 	assert.NotNil(t, svc)
 	assert.Equal(t, "secret", svc.zlmSecret)
 }

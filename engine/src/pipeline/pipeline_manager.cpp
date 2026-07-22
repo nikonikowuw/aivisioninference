@@ -74,7 +74,7 @@ namespace aivision
                     runtime.playback_enabled = true;
                 }
                 if (enable_infer) {
-                    runtime.infer_enabled = true;
+                    runtime.inference_enabled = true;
                 }
                 return true;
             }

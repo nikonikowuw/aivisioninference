@@ -275,6 +275,8 @@ target_include_directories(aivision-engine-lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/monitor
     ${FLATBUFFERS_INCLUDE_DIRS}
     ${asio_SOURCE_DIR}/asio/include
+)
+target_include_directories(aivision-engine-lib SYSTEM PUBLIC
     ${spdlog_SOURCE_DIR}/include
 )
 

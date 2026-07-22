@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,14 +14,27 @@ import (
 )
 
 const (
-	rateLimitPrefix = "rate_limit:"
+	rateLimitPrefix        = "rate_limit:"
+	edgeNodeHeartbeatRoute = "/api/v1/edge-nodes/:id/heartbeat"
 )
+
+func isRateLimitExemptRoute(route string) bool {
+	// These machine-to-machine endpoints have their own shared-secret or node-token
+	// authentication. Sharing the public client-IP bucket can reject ZLM publishing
+	// callbacks and tear down an otherwise healthy media stream.
+	return strings.HasPrefix(route, "/zlm/callback/") || route == edgeNodeHeartbeatRoute
+}
 
 // RateLimit returns a Gin middleware that implements Redis-based sliding window
 // rate limiting. It uses INCR + EXPIRE for a fixed-window approach per client IP.
 // Returns HTTP 429 when the limit is exceeded.
 func RateLimit(rdb *redis.Client, requestsPerMinute int) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if isRateLimitExemptRoute(c.FullPath()) {
+			c.Next()
+			return
+		}
+
 		// Redis 未启用或限流值无效时降级为 no-op，避免启动配置关闭 Redis 后请求 panic。
 		if rdb == nil || requestsPerMinute <= 0 {
 			c.Next()

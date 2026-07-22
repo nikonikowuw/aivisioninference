@@ -108,6 +108,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     cleanupRef.current = null;
   }, []);
 
+  const tryNextProtocolRef = useRef<(attemptIndex: number, originalUrl: string) => void>(() => {});
+
   const tryPlay = useCallback(
     async (targetProtocol: Protocol, originalUrl: string, attemptIndex: number) => {
       const video = videoRef.current;
@@ -117,7 +119,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       const targetUrl = convertUrl(originalUrl, targetProtocol);
       if (!targetUrl) {
-        tryNextProtocol(attemptIndex + 1, originalUrl);
+        tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
         return;
       }
 
@@ -141,7 +143,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             flv.on(Flv.Events.ERROR, (errType: string, errDetail: string) => {
               console.warn(`[VideoPlayer] flv 失败 (${errType}): ${errDetail}`);
               if (!destroyed && mountedRef.current) {
-                tryNextProtocol(attemptIndex + 1, originalUrl);
+                tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
               }
             });
             flv.play()?.catch(() => {});
@@ -161,7 +163,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       // WebRTC 和 HLS 都走 StreamManager 共享
       if (targetProtocol === 'webrtc' && !isWebRTCSupported()) {
-        tryNextProtocol(attemptIndex + 1, originalUrl);
+        tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
         return;
       }
 
@@ -179,10 +181,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         cleanupRef.current = result.destroy;
       } catch (err) {
         console.warn(`[VideoPlayer] ${targetProtocol} 失败:`, err);
-        tryNextProtocol(attemptIndex + 1, originalUrl);
+        tryNextProtocolRef.current(attemptIndex + 1, originalUrl);
       }
     },
-    [cleanup, config, onProtocolChange, tryNextProtocol],
+    [cleanup, config, onProtocolChange],
   );
 
   const tryNextProtocol = useCallback(
@@ -198,6 +200,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     },
     [config, onError, tryPlay],
   );
+
+  useEffect(() => {
+    tryNextProtocolRef.current = tryNextProtocol;
+  }, [tryNextProtocol]);
 
   useEffect(() => {
     if (!url) return;

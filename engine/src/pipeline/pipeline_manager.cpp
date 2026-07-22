@@ -68,8 +68,15 @@ namespace aivision
 
             if (pipelines_.find(device_id) != pipelines_.end())
             {
-                LOG_ERROR("Pipeline for device {} already exists", device_id);
-                return false;
+                LOG_WARN("Pipeline for device {} already exists, reusing existing pipeline", device_id);
+                auto &runtime = media_runtime_[device_id];
+                if (enable_playback) {
+                    runtime.playback_enabled = true;
+                }
+                if (enable_infer) {
+                    runtime.infer_enabled = true;
+                }
+                return true;
             }
 
             // 1. 创建 Pipeline 实例

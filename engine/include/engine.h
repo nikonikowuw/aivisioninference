@@ -26,6 +26,7 @@
 #include "monitor/command_executor.h"
 #include "monitor/pty_module.h"
 #include "response_router.h"
+#include "zlm_url.h"
 
 namespace aivision
 {
@@ -58,6 +59,9 @@ namespace aivision
 
         /// ZLM API URL (如 "http://localhost:80")
         std::string zlm_api_url = "http://localhost:80";
+
+        /// ZLM API URL 解析结果（配置加载时一次性解析，避免运行时重复解析）
+        ZLMUrlInfo zlm_url_info;
 
         /// ZLM Secret
         std::string zlm_secret = "";

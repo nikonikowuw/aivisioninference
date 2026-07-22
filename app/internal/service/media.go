@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,33 +104,65 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		return "", errors.New(errors.ErrStreamStateNotFound, "")
 	}
 
-	return s.buildPlayURL(app, stream, state.ZLMHost, state.ZLMHTTPPort), nil
+	zlmHost := state.ZLMHost
+	// 4. 如果边缘节点上报的 zlmHost 是环回地址（localhost/127.0.0.1），从关联边缘节点的 Endpoint 替换为实际节点 IP
+	if (zlmHost == "" || zlmHost == "localhost" || zlmHost == "127.0.0.1" || zlmHost == "::1") && state.NodeID != "" && s.edgeNodeRepo != nil {
+		if node, err := s.edgeNodeRepo.FindByID(ctx, state.NodeID); err == nil && node != nil && node.Endpoint != "" {
+			if u, err := url.Parse(node.Endpoint); err == nil && u.Hostname() != "" {
+				zlmHost = u.Hostname()
+			} else {
+				h := strings.TrimPrefix(strings.TrimPrefix(node.Endpoint, "http://"), "https://")
+				if idx := strings.Index(h, ":"); idx > 0 {
+					h = h[:idx]
+				}
+				if h != "" {
+					zlmHost = h
+				}
+			}
+		}
+	}
+
+	return s.buildPlayURL(app, stream, zlmHost, state.ZLMHTTPPort, protocol), nil
 }
 
-func (s *MediaService) buildPlayURL(app, stream string, zlmHost string, zlmHTTPPort int) string {
+func (s *MediaService) buildPlayURL(app, stream string, zlmHost string, zlmHTTPPort int, protocol string) string {
 	token := s.GeneratePlayToken(stream, "anonymous", 30*time.Minute)
 
 	host := zlmHost
 	httpPort := zlmHTTPPort
-	if host == "" {
-		// Fallback: 从 zlmBaseURL 提取 host
-		if u, err := url.Parse(s.zlmBaseURL); err == nil && u.Hostname() != "" {
-			host = u.Hostname()
+	if host == "" || httpPort == 0 || httpPort == 80 {
+		if u, err := url.Parse(s.zlmBaseURL); err == nil {
+			if host == "" && u.Hostname() != "" {
+				host = u.Hostname()
+			}
+			if (httpPort == 0 || httpPort == 80) && u.Port() != "" {
+				if p, err := strconv.Atoi(u.Port()); err == nil && p > 0 {
+					httpPort = p
+				}
+			}
 		}
 		if host == "" {
 			host = s.zlmBaseURL
+			host = strings.TrimPrefix(host, "http://")
+			host = strings.TrimPrefix(host, "https://")
+			if idx := strings.Index(host, ":"); idx > 0 {
+				host = host[:idx]
+			}
 		}
-		host = strings.TrimPrefix(host, "http://")
-		host = strings.TrimPrefix(host, "https://")
-		if idx := strings.Index(host, ":"); idx > 0 {
-			host = host[:idx]
+		if httpPort == 0 {
+			httpPort = 8000
 		}
-	}
-	if httpPort == 0 {
-		httpPort = 80
 	}
 
-	return fmt.Sprintf("http://%s:%d/%s/%s/hls.m3u8?token=%s", host, httpPort, app, stream, token)
+	if protocol == zlm.ProtocolHLS {
+		return fmt.Sprintf("http://%s:%d/%s/%s/hls.m3u8?token=%s", host, httpPort, app, stream, token)
+	}
+	if protocol == zlm.ProtocolFLV {
+		return fmt.Sprintf("http://%s:%d/%s/%s.flv?token=%s", host, httpPort, app, stream, token)
+	}
+
+	// 默认返回 webrtc:// 协议，供前端 VideoPlayer 自动尝试 WebRTC -> HLS -> FLV 降级
+	return fmt.Sprintf("%s://%s:%d/%s/%s?token=%s", zlm.ProtocolWebRTC, host, httpPort, app, stream, token)
 }
 
 // StopPlayURL closes the stream proxy for a device (stop preview).

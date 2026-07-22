@@ -40,22 +40,26 @@ function isWebRTCSupported(): boolean {
   return !!(window.RTCPeerConnection);
 }
 
-/** 将 webrtc:// 转换为 HLS/FLV URL */
+/** 转换不同协议的播放 URL (WebRTC / HLS / FLV) */
 function convertUrl(url: string, targetProtocol: Protocol): string | null {
   const currentProtocol = detectProtocol(url);
   if (currentProtocol === targetProtocol) return url;
-  if (!url.startsWith('webrtc://')) return null;
 
   try {
-    const urlObj = new URL(url.replace('webrtc://', 'http://'));
+    const httpUrl = url.startsWith('webrtc://') ? url.replace('webrtc://', 'http://') : url;
+    const urlObj = new URL(httpUrl);
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
     if (pathParts.length < 2) return null;
-    const [app, stream] = pathParts;
+    const app = pathParts[0];
+    let stream = pathParts[1];
+    stream = stream.replace(/\.m3u8$/, '').replace(/\.flv$/, '');
+
     const token = urlObj.searchParams.get('token');
     const query = token ? `?token=${token}` : '';
-    const host = urlObj.host.replace(':8000', ':80');
+    const host = urlObj.host;
 
     switch (targetProtocol) {
+      case 'webrtc': return `webrtc://${host}/${app}/${stream}${query}`;
       case 'hls': return `http://${host}/${app}/${stream}/hls.m3u8${query}`;
       case 'flv': return `http://${host}/${app}/${stream}.flv${query}`;
       default: return null;
@@ -117,7 +121,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         return;
       }
 
-      console.log(`[VideoPlayer] 尝试: ${targetProtocol}, url: ${targetUrl}`);
       setCurrentProtocol(targetProtocol);
       setError(null);
       setFallbackInfo(attemptIndex > 0 ? `降级自 ${config.fallbackOrder[attemptIndex - 1]}` : null);
@@ -135,13 +138,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             video.onplaying = () => {
               if (mountedRef.current) setLoading(false);
             };
-            flv.play();
+            flv.on(Flv.Events.ERROR, (errType: string, errDetail: string) => {
+              console.warn(`[VideoPlayer] flv 失败 (${errType}): ${errDetail}`);
+              if (!destroyed && mountedRef.current) {
+                tryNextProtocol(attemptIndex + 1, originalUrl);
+              }
+            });
+            flv.play()?.catch(() => {});
             cleanupRef.current = () => {
               destroyed = true;
-              flv.pause();
-              flv.unload();
-              flv.detachMediaElement();
-              flv.destroy();
+              try {
+                flv.pause();
+                flv.unload();
+                flv.detachMediaElement();
+                flv.destroy();
+              } catch {}
             };
           }
         });
@@ -171,7 +182,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         tryNextProtocol(attemptIndex + 1, originalUrl);
       }
     },
-    [cleanup, config, onProtocolChange],
+    [cleanup, config, onProtocolChange, tryNextProtocol],
   );
 
   const tryNextProtocol = useCallback(

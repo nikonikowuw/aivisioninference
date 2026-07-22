@@ -328,6 +328,9 @@ int main(int argc, char *argv[])
     PrintVersion();
     PrintRuntimeConfig(config, env_file);
 
+    // 缓存 ZLM URL 解析结果，避免运行时重复解析
+    config.zlm_url_info = ParseZLMUrl(config.zlm_api_url);
+
     // 注册信号处理
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);

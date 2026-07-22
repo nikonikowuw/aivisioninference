@@ -8,6 +8,7 @@ import (
 
 	"github.com/niko-admin/niko-admin/internal/dto"
 	"github.com/niko-admin/niko-admin/internal/pkg/response"
+	"github.com/niko-admin/niko-admin/internal/pkg/zlm"
 	"github.com/niko-admin/niko-admin/internal/service"
 )
 
@@ -50,7 +51,7 @@ func (h *MediaGB28181Handler) StartLive(c *gin.Context) {
 
 	response.OK(c, dto.PlayResponse{
 		URL:      url,
-		Protocol: "hls",
+		Protocol: zlm.ProtocolHLS,
 		StreamID: streamID,
 	})
 }
@@ -116,7 +117,7 @@ func (h *MediaGB28181Handler) StartPlayback(c *gin.Context) {
 
 	response.OK(c, dto.PlayResponse{
 		URL:      url,
-		Protocol: "flv",
+		Protocol: zlm.ProtocolFLV,
 		StreamID: streamID,
 	})
 }

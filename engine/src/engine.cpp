@@ -41,22 +41,6 @@ std::string BuildLivePlayURL(const std::string &base_url,
   return play_url + "/live/" + device_id;
 }
 
-std::string ExtractZLMHost(const std::string &zlm_api_url) {
-  std::string host = zlm_api_url;
-  // 移除协议前缀
-  size_t proto_end = host.find("://");
-  if (proto_end != std::string::npos)
-    host = host.substr(proto_end + 3);
-  // 移除端口和路径
-  size_t colon_pos = host.find(":");
-  if (colon_pos != std::string::npos)
-    host = host.substr(0, colon_pos);
-  size_t slash_pos = host.find("/");
-  if (slash_pos != std::string::npos)
-    host = host.substr(0, slash_pos);
-  return host;
-}
-
 constexpr uint32_t FourCC(char a, char b, char c, char d) {
   return static_cast<uint32_t>(a) | (static_cast<uint32_t>(b) << 8) |
          (static_cast<uint32_t>(c) << 16) | (static_cast<uint32_t>(d) << 24);
@@ -695,21 +679,24 @@ std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
 
   std::cout << "[ZLM] Response: " << response << std::endl;
 
-  // 解析响应，检查 code 是否为 0
   std::string code_str = ExtractJsonField(response, "code");
+  std::string msg = ExtractJsonField(response, "msg");
   if (code_str != "0") {
-    std::cerr << "[ZLM] addStreamProxy error: code=" << code_str << std::endl;
-    std::string msg = ExtractJsonField(response, "msg");
-    if (!msg.empty())
-      std::cerr << "[ZLM] msg: " << msg << std::endl;
-    return "";
+    // NOTE: 依赖 ZLM 英文错误消息匹配，ZLM 版本升级后需确认消息格式未变化
+    if (msg.find("already exists") != std::string::npos) {
+      std::cout << "[ZLM] Stream proxy already exists, reusing existing stream." << std::endl;
+    } else {
+      std::cerr << "[ZLM] addStreamProxy error: code=" << code_str << std::endl;
+      if (!msg.empty())
+        std::cerr << "[ZLM] msg: " << msg << std::endl;
+      return "";
+    }
   }
 
   // 构建播放 URL
   // RTSP: rtsp://{host}:554/live/{device_id}
   // WebRTC: webrtc://{host}:8000/live/{device_id}
-  // 提取 host（复用 ExtractZLMHost）
-  std::string host = ExtractZLMHost(config_.zlm_api_url);
+  const std::string &host = config_.zlm_url_info.host;
 
   std::string play_url = "rtsp://" + host + ":554/live/" + device_id;
   std::cout << "[ZLM] Stream proxy added, play URL: " << play_url << std::endl;
@@ -845,13 +832,12 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
       std::cout << "[Control] ZLM addStreamProxy succeeded: " << proxy_result << std::endl;
     }
   }
-  std::string zlm_host = ExtractZLMHost(config_.zlm_api_url);
   flatbuffers::FlatBufferBuilder fbb(512);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = fbb.CreateString(started ? play_url : "");
-  auto zlm_host_str = !zlm_host.empty() ? fbb.CreateString(zlm_host) : 0;
+  auto zlm_host_str = !config_.zlm_url_info.host.empty() ? fbb.CreateString(config_.zlm_url_info.host) : 0;
   auto resp = aivision::control::CreateStreamStatusRspMsg(
-      fbb, device_id_str, started, 0, 0, 0, play_url_str, zlm_host_str, 80);
+      fbb, device_id_str, started, 0, 0, 0, play_url_str, zlm_host_str, config_.zlm_url_info.http_port);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();
@@ -938,13 +924,12 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
     }
   }
 
-  std::string zlm_host = ExtractZLMHost(config_.zlm_api_url);
   flatbuffers::FlatBufferBuilder fbb(256);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = started ? fbb.CreateString(play_url) : 0;
-  auto zlm_host_str = !zlm_host.empty() ? fbb.CreateString(zlm_host) : 0;
+  auto zlm_host_str = !config_.zlm_url_info.host.empty() ? fbb.CreateString(config_.zlm_url_info.host) : 0;
   auto resp = aivision::control::CreateStreamStatusRspMsg(
-      fbb, device_id_str, started, 0, 0, 0, play_url_str, zlm_host_str, 80);
+      fbb, device_id_str, started, 0, 0, 0, play_url_str, zlm_host_str, config_.zlm_url_info.http_port);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();
@@ -1002,14 +987,13 @@ void InferenceEngine::HandleStreamStatus(const uint8_t *payload, size_t size,
   auto *pipeline = pipeline_mgr_->GetPipeline(device_id);
   bool running = pipeline != nullptr;
   std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
-  std::string zlm_host = ExtractZLMHost(config_.zlm_api_url);
 
   flatbuffers::FlatBufferBuilder fbb(512);
   auto device_id_str = fbb.CreateString(device_id);
   auto play_url_str = fbb.CreateString(running ? play_url : "");
-  auto zlm_host_str = !zlm_host.empty() ? fbb.CreateString(zlm_host) : 0;
+  auto zlm_host_str = !config_.zlm_url_info.host.empty() ? fbb.CreateString(config_.zlm_url_info.host) : 0;
   auto resp = aivision::control::CreateStreamStatusRspMsg(
-      fbb, device_id_str, running, 0, 0, 0, play_url_str, zlm_host_str, 80);
+      fbb, device_id_str, running, 0, 0, 0, play_url_str, zlm_host_str, config_.zlm_url_info.http_port);
   fbb.Finish(resp);
 
   int client_fd = response_router_->GetActiveClientFd();

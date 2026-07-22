@@ -42,6 +42,10 @@ export default {
   refresh: "更新",
   addDeviceHint: "一時デバイスを追加（実デバイスIDを入力してください）",
   loadFailed: "読み込み失敗",
+  stream: {
+    main: "メイン (HD)",
+    sub: "サブ (SD)",
+  },
   streamStatus: {
     title: "配信ステータス",
     runningStreams: "稼働中のストリーム",

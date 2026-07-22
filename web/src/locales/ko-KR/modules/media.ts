@@ -42,6 +42,10 @@ export default {
   refresh: "새로고침",
   addDeviceHint: "임시 장치 추가 (실제 장치 ID를 입력하세요)",
   loadFailed: "로드 실패",
+  stream: {
+    main: "메인 (HD)",
+    sub: "서브 (SD)",
+  },
   streamStatus: {
     title: "스트림 상태 대시보드",
     runningStreams: "실행 중인 스트림",

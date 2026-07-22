@@ -12,7 +12,7 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import VideoPlayer from 'components/VideoPlayer';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdClose, MdFullscreen, MdFullscreenExit, MdRefresh } from 'react-icons/md';
 import { mediaApi } from 'services/api';
@@ -98,10 +98,8 @@ const LiveView: React.FC = () => {
   };
 
   const removeTile = (index: number) => {
-    setTiles(prev => {
-      stopTilePlay(prev[index]);
-      return prev.filter((_, i) => i !== index);
-    });
+    stopTilePlay(tiles[index]);
+    setTiles(prev => prev.filter((_, i) => i !== index));
     if (focusedIndex === index) {
       setFocusedIndex(null);
     } else if (focusedIndex !== null && focusedIndex > index) {
@@ -111,33 +109,29 @@ const LiveView: React.FC = () => {
 
   // Switch stream type for all tiles when layout changes or single tile focused
   const updateTileStreams = useCallback(async (targetLayout: number, targetFocusedIndex: number | null) => {
-    setTiles(prevTiles => {
-      const isSingleView = targetLayout === 1 || targetFocusedIndex !== null;
-      
-      prevTiles.forEach(async (tile, idx) => {
-        const desiredType: 'main' | 'sub' = isSingleView && (targetFocusedIndex === null || targetFocusedIndex === idx)
-          ? 'main'
-          : 'sub';
+    const currentTiles = tilesRef.current;
+    const isSingleView = targetLayout === 1 || targetFocusedIndex !== null;
 
-        if (tile.streamType !== desiredType && tile.url) {
-          // Release previous stream
-          mediaApi.stopPlay(tile.deviceId, tile.streamType).catch(() => {});
+    // Synchronous transition: set loading + prevUrl for tiles that need switching
+    setTiles(prev => prev.map((t, idx) => {
+      const desiredType: 'main' | 'sub' = isSingleView && (targetFocusedIndex === null || targetFocusedIndex === idx)
+        ? 'main' : 'sub';
+      if (t.streamType !== desiredType && t.url) {
+        mediaApi.stopPlay(t.deviceId, t.streamType).catch(() => {});
+        return { ...t, loading: true, prevUrl: t.url, streamType: desiredType };
+      }
+      return t;
+    }));
 
-          // Pre-roll frame transition: keep prevUrl active while fetching new stream
-          setTiles(curr => curr.map((t, i) => i === idx ? {
-            ...t,
-            loading: true,
-            prevUrl: t.url,
-            streamType: desiredType,
-          } : t));
-
-          const updated = await loadTileStream(tile.deviceId, desiredType, tile);
-          setTiles(curr => curr.map((t, i) => i === idx ? updated : t));
-        }
-      });
-
-      return prevTiles;
-    });
+    // Async fetches outside state updater — concurrent, coordinated
+    await Promise.allSettled(currentTiles.map(async (tile, idx) => {
+      const desiredType: 'main' | 'sub' = isSingleView && (targetFocusedIndex === null || targetFocusedIndex === idx)
+        ? 'main' : 'sub';
+      if (tile.streamType !== desiredType && tile.url) {
+        const updated = await loadTileStream(tile.deviceId, desiredType, tile);
+        setTiles(prev => prev.map((t, i) => i === idx ? updated : t));
+      }
+    }));
   }, [loadTileStream]);
 
   const handleLayoutChange = (n: number) => {
@@ -154,9 +148,12 @@ const LiveView: React.FC = () => {
 
   const layoutConfig = LAYOUTS[layout] || LAYOUTS[4];
 
-  const visibleTiles = focusedIndex !== null && tiles[focusedIndex]
-    ? [{ tile: tiles[focusedIndex], originalIndex: focusedIndex }]
-    : tiles.map((t, i) => ({ tile: t, originalIndex: i }));
+  const visibleTiles = useMemo(() =>
+    focusedIndex !== null && tiles[focusedIndex]
+      ? [{ tile: tiles[focusedIndex], originalIndex: focusedIndex }]
+      : tiles.map((t, i) => ({ tile: t, originalIndex: i })),
+    [tiles, focusedIndex]
+  );
 
   return (
     <Box p={4} h="calc(100vh - 80px)">
@@ -234,7 +231,7 @@ const LiveView: React.FC = () => {
 
               <HStack position="absolute" top={1} left={1} zIndex={2} spacing={1}>
                 <Badge colorScheme={tile.streamType === 'main' ? 'green' : 'cyan'} fontSize="xs">
-                  {tile.streamType === 'main' ? '主流 (HD)' : '子流 (SD)'}
+                  {tile.streamType === 'main' ? t('stream.main') : t('stream.sub')}
                 </Badge>
                 {tile.codec && (
                   <Badge colorScheme={tile.codec.toLowerCase() === 'h265' ? 'purple' : 'gray'} fontSize="xs">

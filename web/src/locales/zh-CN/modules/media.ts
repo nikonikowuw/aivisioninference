@@ -42,6 +42,10 @@ export default {
   refresh: "刷新",
   addDeviceHint: "添加临时设备（请输入真实设备ID）",
   loadFailed: "加载失败",
+  stream: {
+    main: "主流 (HD)",
+    sub: "子流 (SD)",
+  },
   streamStatus: {
     title: "流状态看板",
     runningStreams: "正在运行的流",

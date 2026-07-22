@@ -42,6 +42,10 @@ export default {
   refresh: "Segarkan",
   addDeviceHint: "Tambahkan perangkat sementara (masukkan ID perangkat asli)",
   loadFailed: "Gagal memuat",
+  stream: {
+    main: "Utama (HD)",
+    sub: "Sub (SD)",
+  },
   streamStatus: {
     title: "Dasbor Status Aliran",
     runningStreams: "Aliran yang Berjalan",

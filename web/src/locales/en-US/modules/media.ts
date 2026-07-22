@@ -42,6 +42,10 @@ export default {
   refresh: "Refresh",
   addDeviceHint: "Add temporary device (please enter a real device ID)",
   loadFailed: "Load failed",
+  stream: {
+    main: "Main (HD)",
+    sub: "Sub (SD)",
+  },
   streamStatus: {
     title: "Stream Status",
     runningStreams: "Running Streams",

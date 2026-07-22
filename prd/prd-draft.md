@@ -2804,7 +2804,7 @@ graph TD
 - **并发控制**：实现 GB28181 点播任务启动队列，限制任务启动频率（如每秒最多启动 2 个点播）。
 - **重连退避**：实现流断开后的指数退避重连策略（5s, 10s, 20s...），防止频繁 Invite 导致信令栈崩溃。
 - 完成 GB28181 基础能力：注册、心跳、目录查询和 Invite 点播。
-- C++ 推理引擎完成 TCP 通信、ZLM 本地流拉取、FFmpeg/OpenCV 软解和 Mock 算法调用。
+- C++ 推理引擎完成 TCP 通信、ZLM 本地流拉取、FFmpeg 软解和 Mock 算法调用。
 - 跑通 `Device Ingest -> ZLM -> C++ Decode -> Infer -> Result -> Go Event Router -> Preview Overlay` 主链路。
 - 管理后台完成设备管理、算法包管理、任务配置、实时预览和基础智能记录页面。
 - ✅ **人员管理基础能力**：人员 CRUD、分组管理、图片双模式上传（分片 + multipart）、图片 MD5 去重、Asynq 异步特征提取（占位实现）、批量导入（ZIP/TAR.GZ/TAR.BZ2）、Excel 导出（内嵌图片）、批量操作（删除/启禁用/重提特征）、前端国际化（6 种语言）。

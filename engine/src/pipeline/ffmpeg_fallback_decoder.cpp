@@ -5,14 +5,13 @@
 #include <cstring>
 #include <vector>
 
-#ifdef AIVISION_WITH_FFMPEG_OPENCV
+#ifdef AIVISION_WITH_FFMPEG
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 }
-#include <opencv2/imgproc.hpp>
 #endif
 
 namespace aivision
@@ -35,13 +34,13 @@ namespace aivision
                                           uint32_t output_height,
                                           FrameCallback callback)
         {
-#ifndef AIVISION_WITH_FFMPEG_OPENCV
+#ifndef AIVISION_WITH_FFMPEG
             (void)rtsp_url;
             (void)device_id;
             (void)output_width;
             (void)output_height;
             (void)callback;
-            LOG_ERROR("[FFmpegFallback] software decode fallback is not compiled in; install libavformat/libavcodec/libavutil/libswscale and opencv4 dev packages");
+            LOG_ERROR("[FFmpegFallback] software decode fallback is not compiled in; install libavformat/libavcodec/libavutil/libswscale development packages");
             return false;
 #else
             if (running_.load())
@@ -81,7 +80,7 @@ namespace aivision
                                                uint32_t output_height,
                                                FrameCallback callback)
         {
-#ifndef AIVISION_WITH_FFMPEG_OPENCV
+#ifndef AIVISION_WITH_FFMPEG
             (void)rtsp_url;
             (void)device_id;
             (void)output_width;

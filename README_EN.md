@@ -44,7 +44,7 @@ AIVisionInference is an **AI vision inference platform** for edge devices and vi
 - Smart-record persistence for inference results, alarms, snapshots, and task state.
 - Edge-node management with health monitoring, package deployment, and version compatibility checks.
 - Reused admin-platform capabilities including JWT auth, RBAC, audit logs, file handling, i18n, and Swagger.
-- Hardware-adaptation hooks for RKMPP, RGA, FFmpeg/OpenCV fallback, and future accelerators.
+- Hardware-adaptation hooks for RKMPP, RGA, FFmpeg software fallback, and future accelerators.
 
 ---
 
@@ -87,7 +87,7 @@ Handler → Service → Repository → Model
 
 ### Data Plane and Protocols
 
-- Inference engine: C++17, CMake, MQTT, FlatBuffers, FFmpeg, OpenCV, dynamic-library ABI
+- Inference engine: C++17, CMake, MQTT, FlatBuffers, FFmpeg, dynamic-library ABI
 - Hardware adaptation: RKMPP, RGA, DMA Buffer, VideoToolbox/macOS stub, x86_64 stub fallback
 - Streaming: ZLMediaKit, using `zlmediakit/zlmediakit:latest` in the root `docker-compose.yml`
 
@@ -101,7 +101,7 @@ Handler → Service → Repository → Model
 - Node.js 18+ / npm
 - Docker and Docker Compose
 - CMake, a C++17 compiler, and FlatBuffers `flatc`
-- Optional: FFmpeg, OpenCV, Rockchip MPP/RGA development packages
+- Optional: FFmpeg and Rockchip MPP/RGA development packages
 
 ### 1. Start PostgreSQL and Redis
 

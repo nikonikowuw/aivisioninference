@@ -5,6 +5,7 @@
 #include "command_dispatcher.h"
 #include "monitor/device_monitor.h"
 #include "monitor/heartbeat_reporter.h"
+#include "media/image_decoder.h"
 #include "mqtt_control_plane.h"
 #include "pipeline/hw_buffer.h"
 #include "pipeline/pipeline_manager.h"
@@ -20,7 +21,6 @@
 #include <filesystem>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <opencv2/imgcodecs.hpp>
 #include <regex>
 #include <vector>
 
@@ -1126,21 +1126,20 @@ void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
       response =
           JsonError("INVALID_IMAGE_BASE64", "image_base64 decode failed");
     } else {
-      cv::Mat encoded(1, static_cast<int>(image_bytes.size()), CV_8UC1,
-                      image_bytes.data());
-      cv::Mat image = cv::imdecode(encoded, cv::IMREAD_COLOR);
-      if (image.empty()) {
+      media::DecodeImageResult image;
+      if (!media::DecodeImageToBGR24(image_bytes.data(), image_bytes.size(),
+                                     &image)) {
         response = JsonError("INVALID_IMAGE", "image decode failed");
       } else {
         pipeline::HwBufferDesc desc{};
         desc.memory_type = pipeline::HwBufferMemoryType::HostMemory;
         desc.dma_fd = -1;
         desc.dma_buf_fd = -1;
-        desc.size = image.total() * image.elemSize();
-        desc.data = image.data;
-        desc.stride = static_cast<uint32_t>(image.step);
-        desc.width = static_cast<uint32_t>(image.cols);
-        desc.height = static_cast<uint32_t>(image.rows);
+        desc.size = image.pixels.size();
+        desc.data = image.pixels.data();
+        desc.stride = image.stride;
+        desc.width = image.width;
+        desc.height = image.height;
         desc.pixel_format = kPixelFormatBGR24;
 
         if (response.empty()) {

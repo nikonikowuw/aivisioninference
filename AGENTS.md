@@ -9,7 +9,7 @@
 | 层         | 技术                                                             |
 | ---------- | ---------------------------------------------------------------- |
 | 控制面后端 | Go 1.26+, Gin, GORM, PostgreSQL 16+, Redis 7+, Asynq, JWT, Wire  |
-| 推理引擎   | C++17, CMake, FlatBuffers, FFmpeg/OpenCV, RKNN/Ascend/CUDA/Metal |
+| 推理引擎   | C++17, CMake, FlatBuffers, FFmpeg, RKNN/Ascend/CUDA/Metal        |
 | 管理端前端 | React 19, TypeScript, Vite 6, Chakra UI 2, i18next               |
 | 流媒体     | ZLMediaKit (GB28181/RTSP)                                        |
 | Engine 通信 | MQTT 命令/响应、HTTP 节点心跳、FlatBuffers 事件载荷              |

@@ -22,7 +22,6 @@ all: dev
 # 开发模式构建 (不启用 RKMPP)
 # ============================================================
 .PHONY: dev
-dev: export PKG_CONFIG_PATH ?= /opt/homebrew/opt/opencv@4/lib/pkgconfig
 dev: flatbuf
 	@mkdir -p $(BUILD_DIR)
 	cmake -B $(BUILD_DIR) -DAIVISION_WITH_RKMPP=OFF -DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) $(CMAKE_POLICY_ARGS)

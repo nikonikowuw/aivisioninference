@@ -44,7 +44,7 @@ AIVisionInference 是面向边缘设备与视频流场景的 **AI 视觉推理�
 - 🧾 **智能记录沉淀**：推理结果、告警事件、截图/证据与任务状态可回传控制面并落库。
 - 🔗 **边缘节点管理**：边缘推理节点的注册、状态监控、算法包下发（MinIO 预签名 URL）与引擎版本兼容性校验。
 - 🔐 **后台管理能力**：继承 Niko Admin 的 JWT 双 Token、RBAC、审计日志、文件管理、i18n 与 Swagger 能力。
-- ⚙️ **边缘硬件适配**：C++ engine 支持 FFmpeg/OpenCV fallback，并预留 RKMPP/RGA 等硬件加速 HAL。
+- ⚙️ **边缘硬件适配**：C++ engine 支持 FFmpeg 软解 fallback，并预留 RKMPP/RGA 等硬件加速 HAL。
 
 ---
 
@@ -87,7 +87,7 @@ Handler → Service → Repository → Model
 
 ### 数据面与协议
 
-- **推理引擎**：C++17、CMake、MQTT、FlatBuffers、FFmpeg、OpenCV、动态库算法 ABI。
+- **推理引擎**：C++17、CMake、MQTT、FlatBuffers、FFmpeg、动态库算法 ABI。
 - **硬件适配**：RKMPP、RGA、DMA Buffer、VideoToolbox/macOS stub、x86_64 stub fallback。
 - **流媒体**：ZLMediaKit，项目根目录 `docker-compose.yml` 默认使用 `zlmediakit/zlmediakit:latest`。
 
@@ -101,7 +101,7 @@ Handler → Service → Repository → Model
 - Node.js 18+ / npm
 - Docker & Docker Compose
 - CMake、C++17 编译器、FlatBuffers `flatc`
-- 可选：FFmpeg、OpenCV、Rockchip MPP/RGA 开发包
+- 可选：FFmpeg、Rockchip MPP/RGA 开发包
 
 ### 1. 启动数据库与缓存
 

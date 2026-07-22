@@ -97,11 +97,10 @@ set(PAHO_BUILD_SAMPLES OFF CACHE BOOL "Build samples" FORCE)
 set(PAHO_BUILD_DOCUMENTATION OFF CACHE BOOL "Build documentation" FORCE)
 FetchContent_MakeAvailable(paho-mqtt-cpp)
 
-# FFmpeg + OpenCV software fallback decoder is required.
+# FFmpeg software fallback and compressed image decoder are required.
 # 推理 fallback 必须能完成软件解码、resize，并向 Worker 提供 HostMemory 帧。
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG_FALLBACK REQUIRED libavformat libavcodec libavutil libswscale)
-pkg_check_modules(OPENCV4_FALLBACK REQUIRED opencv4)
 
 # ============================================================
 # Rockchip MPP/RGA 硬件加速
@@ -174,6 +173,7 @@ endif()
 # 核心库源文件（不含 main，包含新模块）
 set(ENGINE_LIB_SOURCES
     src/engine.cpp
+    src/media/image_decoder.cpp
     src/response_router.cpp
     src/pipeline/hw_buffer.cpp
     src/pipeline/ring_queue.cpp
@@ -289,20 +289,17 @@ target_link_libraries(aivision-engine-lib PUBLIC
     dl
 )
 
-target_compile_definitions(aivision-engine-lib PRIVATE AIVISION_WITH_FFMPEG_OPENCV)
+target_compile_definitions(aivision-engine-lib PRIVATE AIVISION_WITH_FFMPEG)
 target_include_directories(aivision-engine-lib PRIVATE
     ${FFMPEG_FALLBACK_INCLUDE_DIRS}
-    ${OPENCV4_FALLBACK_INCLUDE_DIRS}
 )
 target_link_directories(aivision-engine-lib PUBLIC
     ${FFMPEG_FALLBACK_LIBRARY_DIRS}
-    ${OPENCV4_FALLBACK_LIBRARY_DIRS}
 )
 target_link_libraries(aivision-engine-lib PUBLIC
     ${FFMPEG_FALLBACK_LIBRARIES}
-    ${OPENCV4_FALLBACK_LIBRARIES}
 )
-message(STATUS "FFmpeg/OpenCV software fallback enabled")
+message(STATUS "FFmpeg software fallback and image decoding enabled")
 
 # aivision-engine main executable links the static library
 target_link_libraries(aivision-engine PRIVATE aivision-engine-lib)
@@ -370,6 +367,22 @@ if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
     endif()
 
     add_test(NAME rkmpp_pipeline COMMAND test_rkmpp_pipeline)
+
+    add_executable(test_image_decoder
+        tests/test_image_decoder.cpp
+        src/media/image_decoder.cpp
+    )
+    target_include_directories(test_image_decoder PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${FFMPEG_FALLBACK_INCLUDE_DIRS}
+    )
+    target_link_directories(test_image_decoder PRIVATE
+        ${FFMPEG_FALLBACK_LIBRARY_DIRS}
+    )
+    target_link_libraries(test_image_decoder PRIVATE
+        ${FFMPEG_FALLBACK_LIBRARIES}
+    )
+    add_test(NAME image_decoder COMMAND test_image_decoder)
 
     add_executable(test_heartbeat_reporter
         tests/test_heartbeat_reporter.cpp

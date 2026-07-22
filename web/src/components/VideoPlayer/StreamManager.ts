@@ -295,7 +295,9 @@ class StreamManager {
           hlsInstance.on(Hls.Events.ERROR, (_event: any, data: any) => {
             if (data.fatal && !resolved) {
               resolved = true;
-              reject(new Error('HLS playback failed'));
+              const detail = data.details || data.type || 'unknown';
+              console.error(`[StreamManager] HLS fatal error: ${detail}`, data);
+              reject(new Error(`HLS playback failed: ${detail}`));
             }
           });
         } else if (hiddenVideo.canPlayType('application/vnd.apple.mpegurl')) {
@@ -312,10 +314,12 @@ class StreamManager {
               }
             });
           });
-          hiddenVideo.addEventListener('error', () => {
+          hiddenVideo.addEventListener('error', (e) => {
             if (!resolved) {
               resolved = true;
-              reject(new Error('HLS native playback failed'));
+              const mediaError = (hiddenVideo.error as MediaError)?.message || 'unknown';
+              console.error(`[StreamManager] HLS native error: ${mediaError}`);
+              reject(new Error(`HLS native playback failed: ${mediaError}`));
             }
           });
         } else {
@@ -373,11 +377,18 @@ class StreamManager {
 
   // ==================== 工具函数 ====================
 
+  // display:none 会阻止部分浏览器初始化视频解码管线，导致 MSE SourceBuffer 创建失败。
+  // 改用 visibility 方案确保浏览器正确渲染视频帧，使 captureStream + hls.js MSE 正常工作。
   private createHiddenVideo(): HTMLVideoElement {
     const video = document.createElement('video');
-    video.style.display = 'none';
+    video.style.position = 'absolute';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0';
+    video.style.pointerEvents = 'none';
     video.muted = true;
     video.playsInline = true;
+    video.setAttribute('playsinline', '');
     document.body.appendChild(video);
     return video;
   }

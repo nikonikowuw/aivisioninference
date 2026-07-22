@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "logger/logger.h"
 #include "algo/algo_utils.h"
 #include "algo/so_handle.h"
 #include "command_dispatcher.h"
@@ -453,7 +454,7 @@ void InferenceEngine::Run(const std::function<bool()> &should_stop) {
   // 启动 MQTT Control Plane
   if (config_.enable_mqtt && mqtt_control_plane_) {
     if (!mqtt_control_plane_->Start()) {
-      std::cerr << "Failed to start MQTT Control Plane" << std::endl;
+      LOG_ERROR("Failed to start MQTT Control Plane");
     }
   }
 
@@ -501,7 +502,7 @@ void InferenceEngine::Shutdown() {
   if (mqtt_control_plane_)
     mqtt_control_plane_->Stop();
 
-  std::cout << "Engine shutdown complete" << std::endl;
+  LOG_INFO("Engine shutdown complete");
 }
 
 bool InferenceEngine::PublishEvent(uint16_t signal_type,
@@ -520,7 +521,7 @@ void InferenceEngine::HandleStartStream(const uint8_t *payload, size_t size,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[Control] Received StartStream" << std::endl;
+  LOG_INFO("[Control] Received StartStream");
 }
 
 void InferenceEngine::HandleStopStream(const uint8_t *payload, size_t size,
@@ -528,7 +529,7 @@ void InferenceEngine::HandleStopStream(const uint8_t *payload, size_t size,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[Control] Received StopStream" << std::endl;
+  LOG_INFO("[Control] Received StopStream");
 }
 
 void InferenceEngine::HandleUpdateAlgoConfig(const uint8_t *payload,
@@ -536,7 +537,7 @@ void InferenceEngine::HandleUpdateAlgoConfig(const uint8_t *payload,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[Control] Received UpdateAlgoConfig" << std::endl;
+  LOG_INFO("[Control] Received UpdateAlgoConfig");
 }
 
 void InferenceEngine::HandleHeartbeat(const uint8_t *payload, size_t size,
@@ -551,7 +552,7 @@ void InferenceEngine::HandleShutdown(const uint8_t *payload, size_t size,
   (void)payload;
   (void)size;
   (void)seq;
-  std::cout << "[Control] Received Shutdown command" << std::endl;
+  LOG_INFO("[Control] Received Shutdown command");
   Shutdown();
 }
 
@@ -619,7 +620,7 @@ std::string ExtractJsonRawField(const std::string &json_str,
 std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
                                             const std::string &rtsp_url) {
   if (config_.zlm_api_url.empty()) {
-    std::cerr << "[ZLM] zlm_api_url not configured" << std::endl;
+    LOG_ERROR("[ZLM] zlm_api_url not configured");
     return "";
   }
 
@@ -650,15 +651,14 @@ std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
       "&secret=" + config_.zlm_secret + "&retry_count=3" + "&rtp_type=0" // TCP
       + "&timeout_sec=10";
 
-  std::cout << "[ZLM] Calling addStreamProxy for device: " << device_id
-            << std::endl;
-  std::cout << "[ZLM] URL: " << api_url << std::endl;
+  LOG_INFO("[ZLM] Calling addStreamProxy for device: {}", device_id);
+  LOG_INFO("[ZLM] URL: {}", api_url);
 
   // 发送 HTTP 请求
   std::string response;
   CURL *curl_handle = curl_easy_init();
   if (!curl_handle) {
-    std::cerr << "[ZLM] Failed to init curl" << std::endl;
+    LOG_ERROR("[ZLM] Failed to init curl");
     return "";
   }
 
@@ -672,23 +672,23 @@ std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
   curl_easy_cleanup(curl_handle);
 
   if (res != CURLE_OK) {
-    std::cerr << "[ZLM] addStreamProxy failed: " << curl_easy_strerror(res)
-              << std::endl;
+    LOG_ERROR("[ZLM] addStreamProxy failed: {}", curl_easy_strerror(res));
     return "";
   }
 
-  std::cout << "[ZLM] Response: " << response << std::endl;
+  LOG_INFO("[ZLM] Response: {}", response);
 
   std::string code_str = ExtractJsonField(response, "code");
   std::string msg = ExtractJsonField(response, "msg");
   if (code_str != "0") {
     // NOTE: 依赖 ZLM 英文错误消息匹配，ZLM 版本升级后需确认消息格式未变化
     if (msg.find("already exists") != std::string::npos) {
-      std::cout << "[ZLM] Stream proxy already exists, reusing existing stream." << std::endl;
+      LOG_INFO("[ZLM] Stream proxy already exists, reusing existing stream.");
+      // 已存在不算错误，继续使用
     } else {
-      std::cerr << "[ZLM] addStreamProxy error: code=" << code_str << std::endl;
+      LOG_ERROR("[ZLM] addStreamProxy error: code={}", code_str);
       if (!msg.empty())
-        std::cerr << "[ZLM] msg: " << msg << std::endl;
+        LOG_ERROR("[ZLM] msg: {}", msg);
       return "";
     }
   }
@@ -699,7 +699,7 @@ std::string InferenceEngine::AddStreamProxy(const std::string &device_id,
   const std::string &host = config_.zlm_url_info.host;
 
   std::string play_url = "rtsp://" + host + ":554/live/" + device_id;
-  std::cout << "[ZLM] Stream proxy added, play URL: " << play_url << std::endl;
+  LOG_INFO("[ZLM] Stream proxy added, play URL: {}", play_url);
 
   return play_url;
 }
@@ -717,8 +717,7 @@ bool InferenceEngine::CloseStreamProxy(const std::string &device_id) {
                         "&stream=" + device_id + "&force=1" +
                         "&secret=" + config_.zlm_secret;
 
-  std::cout << "[ZLM] Closing stream proxy for device: " << device_id
-            << std::endl;
+  LOG_INFO("[ZLM] Closing stream proxy for device: {}", device_id);
 
   std::string response;
   CURL *curl = curl_easy_init();
@@ -734,19 +733,18 @@ bool InferenceEngine::CloseStreamProxy(const std::string &device_id) {
   curl_easy_cleanup(curl);
 
   if (res != CURLE_OK) {
-    std::cerr << "[ZLM] closeStream failed: " << curl_easy_strerror(res)
-              << std::endl;
+    LOG_ERROR("[ZLM] closeStream failed: {}", curl_easy_strerror(res));
     return false;
   }
 
-  std::cout << "[ZLM] closeStream response: " << response << std::endl;
+  LOG_INFO("[ZLM] closeStream response: {}", response);
   return true;
 }
 
 void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
                                         uint64_t seq) {
   (void)seq;
-  std::cout << "[Control] Received StreamStart" << std::endl;
+  LOG_INFO("[Control] Received StreamStart");
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -763,16 +761,11 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
     algo_params_json = "{}";
   }
 
-  std::cout << "[Control] StreamStart device_id=" << device_id
-            << ", stream_url=" << stream_url
-            << ", enable_infer=" << enable_infer
-            << ", enable_playback=" << enable_playback << ", algo=" << algo_name
-            << ", so_path=" << so_path << std::endl;
+  LOG_INFO("[Control] StreamStart device_id={}, stream_url={}, enable_infer={}, enable_playback={}, algo={}, so_path={}",
+           device_id, stream_url, enable_infer, enable_playback, algo_name, so_path);
 
   if (device_id.empty() || stream_url.empty()) {
-    std::cerr << "[Control] Invalid StreamStart payload: missing device_id or "
-                 "stream_url"
-              << std::endl;
+    LOG_ERROR("[Control] Invalid StreamStart payload: missing device_id or stream_url");
     flatbuffers::FlatBufferBuilder fbb(256);
     auto device_id_str = fbb.CreateString("");
     auto resp =
@@ -788,16 +781,13 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   bool algo_ready = true;
   if (enable_infer) {
     if (algo_name.empty() || so_path.empty()) {
-      std::cerr << "[Control] StreamStart infer enabled but algo_name or "
-                   "so_path is empty"
-                << std::endl;
+      LOG_ERROR("[Control] StreamStart infer enabled but algo_name or so_path is empty");
       algo_ready = false;
     } else {
       auto instance =
           algo_mgr_->Load(algo_name, algo_version, so_path, algo_params_json);
       if (!instance) {
-        std::cerr << "[Control] Failed to load algorithm for stream: "
-                  << algo_name << ", so_path=" << so_path << std::endl;
+        LOG_ERROR("[Control] Failed to load algorithm for stream: {}, so_path={}", algo_name, so_path);
         algo_ready = false;
       } else {
         pipeline::AlgoConfig config;
@@ -806,8 +796,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
         config.algo_params_json = algo_params_json;
         snapshot_mgr_->UpdateConfig(algo_name, config);
         snapshot_mgr_->BindStreamAlgos(device_id, {algo_name});
-        std::cout << "[Control] Algorithm bound to stream device_id="
-                  << device_id << ", algo=" << algo_name << std::endl;
+        LOG_INFO("[Control] Algorithm bound to stream device_id={}, algo={}", device_id, algo_name);
       }
     }
   }
@@ -819,8 +808,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   }
   if (!started) {
     snapshot_mgr_->RemoveStreamBinding(device_id);
-    std::cerr << "[Control] Failed to create hardware pipeline for device: "
-              << device_id << std::endl;
+    LOG_ERROR("[Control] Failed to create hardware pipeline for device: {}", device_id);
   }
 
   std::string play_url = BuildLivePlayURL(config_.rtsp_push_server, device_id);
@@ -829,7 +817,7 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   if (started && enable_playback) {
     std::string proxy_result = AddStreamProxy(device_id, play_url);
     if (!proxy_result.empty()) {
-      std::cout << "[Control] ZLM addStreamProxy succeeded: " << proxy_result << std::endl;
+      LOG_INFO("[Control] ZLM addStreamProxy succeeded: {}", proxy_result);
     }
   }
   flatbuffers::FlatBufferBuilder fbb(512);
@@ -844,20 +832,17 @@ void InferenceEngine::HandleStreamStart(const uint8_t *payload, size_t size,
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 301, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[Control] StreamStart response sent for device: " << device_id
-              << ", started=" << started
-              << ", play_url=" << (started ? play_url : "") << std::endl;
+    LOG_INFO("[Control] StreamStart response sent for device: {}, started={}, play_url={}",
+             device_id, started, (started ? play_url : ""));
   } else {
-    std::cerr
-        << "[Control] Failed to send StreamStart response: no active client"
-        << std::endl;
+    LOG_ERROR("[Control] Failed to send StreamStart response: no active client");
   }
 }
 
 void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
                                        uint64_t seq) {
   (void)seq;
-  std::cout << "[Control] Received StreamStop" << std::endl;
+  LOG_INFO("[Control] Received StreamStop");
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -865,7 +850,7 @@ void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
     device_id = payload_str;
   }
 
-  std::cout << "[Control] StreamStop device_id=" << device_id << std::endl;
+  LOG_INFO("[Control] StreamStop device_id={}", device_id);
 
   if (!device_id.empty()) {
     pipeline_mgr_->DestroyPipeline(device_id);
@@ -883,15 +868,14 @@ void InferenceEngine::HandleStreamStop(const uint8_t *payload, size_t size,
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 302, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[Control] StreamStop response sent for device: " << device_id
-              << std::endl;
+    LOG_INFO("[Control] StreamStop response sent for device: {}", device_id);
   }
 }
 
 void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
                                                 size_t size, uint64_t seq) {
   (void)seq;
-  std::cout << "[Control] Received StreamPlaybackStart" << std::endl;
+  LOG_INFO("[Control] Received StreamPlaybackStart");
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -900,8 +884,7 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
     device_id = payload_str;
   }
 
-  std::cout << "[Control] StreamPlaybackStart device_id=" << device_id
-            << ", stream_url=" << stream_url << std::endl;
+  LOG_INFO("[Control] StreamPlaybackStart device_id={}, stream_url={}", device_id, stream_url);
 
   bool started = false;
   if (!device_id.empty()) {
@@ -920,7 +903,7 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
     std::string push_url = play_url;
     std::string proxy_result = AddStreamProxy(device_id, push_url);
     if (!proxy_result.empty()) {
-      std::cout << "[Control] ZLM addStreamProxy succeeded: " << proxy_result << std::endl;
+      LOG_INFO("[Control] ZLM addStreamProxy succeeded: {}", proxy_result);
     }
   }
 
@@ -936,15 +919,14 @@ void InferenceEngine::HandleStreamPlaybackStart(const uint8_t *payload,
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 303, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[Control] StreamPlaybackStart response sent for device: "
-              << device_id << std::endl;
+    LOG_INFO("[Control] StreamPlaybackStart response sent for device: {}", device_id);
   }
 }
 
 void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
                                                size_t size, uint64_t seq) {
   (void)seq;
-  std::cout << "[Control] Received StreamPlaybackStop" << std::endl;
+  LOG_INFO("[Control] Received StreamPlaybackStop");
 
   std::string payload_str = PayloadToString(payload, size);
   std::string device_id = ExtractJsonField(payload_str, "device_id");
@@ -952,8 +934,7 @@ void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
     device_id = payload_str;
   }
 
-  std::cout << "[Control] StreamPlaybackStop device_id=" << device_id
-            << std::endl;
+  LOG_INFO("[Control] StreamPlaybackStop device_id={}", device_id);
 
   if (!device_id.empty()) {
     pipeline_mgr_->DestroyPipeline(device_id);
@@ -970,8 +951,7 @@ void InferenceEngine::HandleStreamPlaybackStop(const uint8_t *payload,
   if (client_fd != -1) {
     response_router_->SendResponse(client_fd, 304, fbb.GetBufferPointer(),
                                    fbb.GetSize());
-    std::cout << "[Control] StreamPlaybackStop response sent for device: "
-              << device_id << std::endl;
+    LOG_INFO("[Control] StreamPlaybackStop response sent for device: {}", device_id);
   }
 }
 
@@ -1034,10 +1014,8 @@ void InferenceEngine::HandleFaceLibraryUpdate(const uint8_t *payload,
     }
   }
 
-  std::cout << "[Control] FaceLibraryUpdate"
-            << " algo=" << algo_name
-            << " payload_size=" << face_library_json.size()
-            << " success=" << success << std::endl;
+  LOG_INFO("[Control] FaceLibraryUpdate algo={} payload_size={} success={}",
+           algo_name, face_library_json.size(), success);
 
   const std::string response =
       std::string("{\"success\":") + (success ? "true" : "false") +
@@ -1104,9 +1082,7 @@ void InferenceEngine::HandleAlgoWarmup(const uint8_t *payload, size_t size,
     }
   }
 
-  std::cout << "[Control] AlgoWarmup"
-            << " algo=" << algo_name << " version=" << algo_version
-            << " success=" << success << std::endl;
+  LOG_INFO("[Control] AlgoWarmup algo={} version={} success={}", algo_name, algo_version, success);
 
   const std::string response =
       std::string("{\"success\":") + (success ? "true" : "false") +
@@ -1179,10 +1155,8 @@ void InferenceEngine::HandleFaceEmbeddingExtract(const uint8_t *payload,
     }
   }
 
-  std::cout << "[Control] FaceEmbeddingExtract"
-            << " algo=" << algo_name << " success=" << success
-            << " infer_time_us=" << infer_time_us
-            << " response_size=" << response.size() << std::endl;
+  LOG_INFO("[Control] FaceEmbeddingExtract algo={} success={} infer_time_us={} response_size={}",
+           algo_name, success, infer_time_us, response.size());
 
   int client_fd = response_router_->GetActiveClientFd();
   if (client_fd != -1) {
@@ -1209,12 +1183,12 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
                                            uint64_t seq) {
   (void)size;
   (void)seq;
-  std::cout << "[Control] Received StartSelfCheck command" << std::endl;
+  LOG_INFO("[Control] Received StartSelfCheck command");
 
   const aivision::control::StartSelfCheckCmd *cmd =
       flatbuffers::GetRoot<aivision::control::StartSelfCheckCmd>(payload);
   if (!cmd) {
-    std::cerr << "Failed to parse StartSelfCheckCmd" << std::endl;
+    LOG_ERROR("Failed to parse StartSelfCheckCmd");
     return;
   }
 
@@ -1225,13 +1199,11 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
 
   // ⚠️ 安全校验：验证所有来自 algo_meta.yaml 的标识符，防止命令注入
   if (!validateAlgoIdentifier(algo_name) || !validateAlgoIdentifier(version)) {
-    std::cerr << "[SECURITY] Invalid algo_name or version, rejected: algo="
-              << algo_name << ", version=" << version << std::endl;
+    LOG_ERROR("[SECURITY] Invalid algo_name or version, rejected: algo={}, version={}", algo_name, version);
     return;
   }
 
-  std::cout << "Starting self check for: " << algo_name
-            << " (version: " << version << ")" << std::endl;
+  LOG_INFO("Starting self check for: {} (version: {})", algo_name, version);
 
   std::string temp_tar_path = "/tmp/algo_check_" + algo_name + ".tar";
   std::string extract_dir = "/tmp/algo_check_" + algo_name + "_dir";
@@ -1399,13 +1371,11 @@ void InferenceEngine::HandleStartSelfCheck(const uint8_t *payload, size_t size,
   // 8. Write response back on the active client connection
   int client_fd = response_router_->GetActiveClientFd();
   if (client_fd != -1) {
-    std::cout << "Sending self check response. Success=" << success
-              << ", time=" << load_time_ms << "ms" << std::endl;
+    LOG_INFO("Sending self check response. Success={}, time={}ms", success, load_time_ms);
     response_router_->SendResponse(client_fd, 514, fbb.GetBufferPointer(),
                                    fbb.GetSize());
   } else {
-    std::cerr << "Failed to send response: no active client connection"
-              << std::endl;
+    LOG_ERROR("Failed to send response: no active client connection");
   }
 }
 
@@ -1430,8 +1400,7 @@ void InferenceEngine::HandleShellExec(const uint8_t *payload,
     try { timeout_seconds = std::stoi(timeout_str); } catch (...) {}
   }
 
-  std::cout << "[Engine] HandleShellExec: trace_id=" << trace_id
-            << " execution_id=" << execution_id << std::endl;
+  LOG_INFO("[Engine] HandleShellExec: trace_id={} execution_id={}", trace_id, execution_id);
 
   if (command.empty()) {
     json error_json = {
@@ -1488,10 +1457,8 @@ void InferenceEngine::HandleShellExec(const uint8_t *payload,
     mqtt_control_plane_->PublishResponse("shell_exec_result", result_json.dump());
   }
 
-  std::cout << "[Engine] ShellExec result: execution_id=" << execution_id
-            << " status=" << (result.success ? "success" : "failed")
-            << " exit_code=" << result.exit_code
-            << " duration=" << result.duration_ms << "ms" << std::endl;
+  LOG_INFO("[Engine] ShellExec result: execution_id={} status={} exit_code={} duration={}ms",
+           execution_id, (result.success ? "success" : "failed"), result.exit_code, result.duration_ms);
 }
 
 // ============================================================
@@ -1505,21 +1472,21 @@ void InferenceEngine::HandlePtyOpen(const uint8_t *payload,
   const std::string payload_str = PayloadToString(payload, size);
   std::string session_id = ExtractJsonField(payload_str, "session_id");
 
-  std::cout << "[Engine] HandlePtyOpen: session_id=" << session_id << std::endl;
+  LOG_INFO("[Engine] HandlePtyOpen: session_id={}", session_id);
 
   if (session_id.empty()) {
-    std::cerr << "[Engine] PtyOpen: missing session_id" << std::endl;
+    LOG_ERROR("[Engine] PtyOpen: missing session_id");
     return;
   }
 
   if (!pty_module_) {
-    std::cerr << "[Engine] PtyOpen: PTY module not initialized" << std::endl;
+    LOG_ERROR("[Engine] PtyOpen: PTY module not initialized");
     return;
   }
 
   bool ok = pty_module_->OpenSession(session_id);
   if (!ok) {
-    std::cerr << "[Engine] PtyOpen: failed to open session: " << session_id << std::endl;
+    LOG_ERROR("[Engine] PtyOpen: failed to open session: {}", session_id);
     json error_json = {
         {"type", "pty_error"},
         {"session_id", session_id},
@@ -1574,7 +1541,7 @@ void InferenceEngine::HandlePtyResize(const uint8_t *payload,
       pty_module_->ResizeSession(session_id, cols, rows);
     }
   } catch (const std::exception& e) {
-    std::cerr << "[Engine] PtyResize error: " << e.what() << std::endl;
+    LOG_ERROR("[Engine] PtyResize error: {}", e.what());
   }
 }
 

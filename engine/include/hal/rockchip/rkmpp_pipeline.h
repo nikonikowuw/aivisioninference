@@ -64,6 +64,7 @@ private:
     std::string rtsp_path_;
     std::string rtsp_session_;
     int rtsp_cseq_ = 1;
+    std::vector<uint8_t> rx_buffer_;
 
     bool RtspConnect(const std::string& url);
     void RtspDisconnect();
@@ -77,6 +78,7 @@ private:
 
     // ================ RTP 接收 ================
     std::unique_ptr<std::thread> pull_thread_;
+    bool ReadExact(uint8_t* dst, size_t count);
     bool RecvRtpPacket(RtpPacket& pkt);
 
     // ================ H.264/H.265 NAL 处理 ================

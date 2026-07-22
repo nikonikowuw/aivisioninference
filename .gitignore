@@ -74,6 +74,7 @@ zlm/build/
 # Docker
 .docker/
 *.log
+logs/
 docker-compose.override.yml
 
 # Test

@@ -1,6 +1,6 @@
 #include "pipeline/pipeline.h"
+#include "logger/logger.h"
 #include <algorithm>
-#include <iostream>
 
 namespace aivision
 {
@@ -33,15 +33,13 @@ namespace aivision
 
             if (it != stages_.end())
             {
-                std::cerr << "Stage " << stage->GetName() << " already exists in pipeline "
-                          << device_id_ << std::endl;
+                LOG_ERROR("Stage {} already exists in pipeline {}", stage->GetName(), device_id_);
                 return false;
             }
 
             if (!stage->Init(ctx_))
             {
-                std::cerr << "Failed to initialize stage " << stage->GetName()
-                          << " in pipeline " << device_id_ << std::endl;
+                LOG_ERROR("Failed to initialize stage {} in pipeline {}", stage->GetName(), device_id_);
                 return false;
             }
 
@@ -49,8 +47,7 @@ namespace aivision
             {
                 if (!stage->Run())
                 {
-                    std::cerr << "Failed to start stage " << stage->GetName()
-                              << " in pipeline " << device_id_ << std::endl;
+                    LOG_ERROR("Failed to start stage {} in pipeline {}", stage->GetName(), device_id_);
                     return false;
                 }
             }
@@ -93,8 +90,7 @@ namespace aivision
             {
                 if (!stage->Run())
                 {
-                    std::cerr << "Failed to run stage " << stage->GetName()
-                              << " during pipeline start, rolling back" << std::endl;
+                    LOG_ERROR("Failed to run stage {} during pipeline start, rolling back", stage->GetName());
                     // 回滚：停止已启动的 Stage
                     for (size_t i = 0; i < started; ++i)
                     {

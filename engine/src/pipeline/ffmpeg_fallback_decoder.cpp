@@ -1,8 +1,8 @@
 #include "pipeline/ffmpeg_fallback_decoder.h"
+#include "logger/logger.h"
 
 #include <chrono>
 #include <cstring>
-#include <iostream>
 #include <vector>
 
 #ifdef AIVISION_WITH_FFMPEG_OPENCV
@@ -41,7 +41,7 @@ namespace aivision
             (void)output_width;
             (void)output_height;
             (void)callback;
-            std::cerr << "[FFmpegFallback] software decode fallback is not compiled in; install libavformat/libavcodec/libavutil/libswscale and opencv4 dev packages" << std::endl;
+            LOG_ERROR("[FFmpegFallback] software decode fallback is not compiled in; install libavformat/libavcodec/libavutil/libswscale and opencv4 dev packages");
             return false;
 #else
             if (running_.load())
@@ -50,7 +50,7 @@ namespace aivision
             }
             if (!callback)
             {
-                std::cerr << "[FFmpegFallback] frame callback is empty" << std::endl;
+                LOG_ERROR("[FFmpegFallback] frame callback is empty");
                 return false;
             }
             running_.store(true);
@@ -95,8 +95,7 @@ namespace aivision
 
             if (avformat_open_input(&fmt_ctx, rtsp_url.c_str(), nullptr, &opts) < 0)
             {
-                std::cerr << "[FFmpegFallback] failed to open input device=" << device_id
-                          << ", url=" << rtsp_url << std::endl;
+                LOG_ERROR("[FFmpegFallback] failed to open input device={}, url={}", device_id, rtsp_url);
                 av_dict_free(&opts);
                 running_.store(false);
                 return;
@@ -105,7 +104,7 @@ namespace aivision
 
             if (avformat_find_stream_info(fmt_ctx, nullptr) < 0)
             {
-                std::cerr << "[FFmpegFallback] failed to read stream info device=" << device_id << std::endl;
+                LOG_ERROR("[FFmpegFallback] failed to read stream info device={}", device_id);
                 avformat_close_input(&fmt_ctx);
                 running_.store(false);
                 return;
@@ -114,7 +113,7 @@ namespace aivision
             int video_index = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
             if (video_index < 0)
             {
-                std::cerr << "[FFmpegFallback] no video stream device=" << device_id << std::endl;
+                LOG_ERROR("[FFmpegFallback] no video stream device={}", device_id);
                 avformat_close_input(&fmt_ctx);
                 running_.store(false);
                 return;
@@ -124,7 +123,7 @@ namespace aivision
             const AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
             if (!codec)
             {
-                std::cerr << "[FFmpegFallback] decoder not found device=" << device_id << std::endl;
+                LOG_ERROR("[FFmpegFallback] decoder not found device={}", device_id);
                 avformat_close_input(&fmt_ctx);
                 running_.store(false);
                 return;
@@ -134,7 +133,7 @@ namespace aivision
             avcodec_parameters_to_context(codec_ctx, stream->codecpar);
             if (avcodec_open2(codec_ctx, codec, nullptr) < 0)
             {
-                std::cerr << "[FFmpegFallback] failed to open decoder device=" << device_id << std::endl;
+                LOG_ERROR("[FFmpegFallback] failed to open decoder device={}", device_id);
                 avcodec_free_context(&codec_ctx);
                 avformat_close_input(&fmt_ctx);
                 running_.store(false);
@@ -155,8 +154,7 @@ namespace aivision
                                              target_width, target_height, AV_PIX_FMT_BGR24,
                                              SWS_BILINEAR, nullptr, nullptr, nullptr);
             uint64_t frame_count = 0;
-            std::cout << "[FFmpegFallback] decoder started device=" << device_id
-                      << " output=" << target_width << "x" << target_height << std::endl;
+            LOG_INFO("[FFmpegFallback] decoder started device={} output={}x{}", device_id, target_width, target_height);
 
             while (running_.load() && av_read_frame(fmt_ctx, packet) >= 0)
             {
@@ -190,15 +188,14 @@ namespace aivision
                         frame_count++;
                         if (frame_count == 1 || frame_count % 100 == 0)
                         {
-                            std::cout << "[FFmpegFallback] frame decoded device=" << device_id
-                                      << " count=" << frame_count << std::endl;
+                            LOG_INFO("[FFmpegFallback] frame decoded device={} count={}", device_id, frame_count);
                         }
                     }
                 }
                 av_packet_unref(packet);
             }
 
-            std::cout << "[FFmpegFallback] decoder stopped device=" << device_id << std::endl;
+            LOG_INFO("[FFmpegFallback] decoder stopped device={}", device_id);
             sws_freeContext(sws);
             av_packet_free(&packet);
             av_frame_free(&bgr_frame);

@@ -184,6 +184,33 @@ func TestAcquireAndReleaseRefCount(t *testing.T) {
 	assert.Equal(t, "inactive", state.Status)
 }
 
+func TestResolveStreamRTSPURL(t *testing.T) {
+	deviceRepo := newMockDeviceRepo()
+	manager := NewStreamManager(&MockEngineClient{}, deviceRepo, newMockStreamRepo(), zap.NewNop())
+	ctx := context.Background()
+	require.NoError(t, deviceRepo.Create(ctx, &model.Device{
+		BaseModel: model.BaseModel{ID: "camera-1"},
+		RtspURL:   "  rtsp://camera.local/stream1  ",
+	}))
+
+	tests := []struct {
+		name     string
+		streamID string
+		want     string
+	}{
+		{name: "main stream", streamID: "camera-1", want: "rtsp://camera.local/stream1"},
+		{name: "sub stream", streamID: "camera-1_sub", want: "rtsp://camera.local/stream2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := manager.resolveStreamRTSPURL(ctx, tt.streamID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestStreamManagerSeparatesSameDeviceAcrossNodes(t *testing.T) {
 	sm := setupTestSM()
 	ctx := context.Background()

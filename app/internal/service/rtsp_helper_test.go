@@ -41,6 +41,16 @@ func TestDeriveSubStreamURL(t *testing.T) {
 			expected: "rtsp://admin:pass@192.168.1.64:554/custom_stream",
 		},
 		{
+			name:     "Pattern in credentials is not rewritten",
+			mainURL:  "rtsp://admin:subtype=0@192.168.1.64:554/custom_stream",
+			expected: "rtsp://admin:subtype=0@192.168.1.64:554/custom_stream",
+		},
+		{
+			name:     "Path pattern in query is not rewritten",
+			mainURL:  "rtsp://192.168.1.64:554/custom?fallback=/stream1",
+			expected: "rtsp://192.168.1.64:554/custom?fallback=/stream1",
+		},
+		{
 			name:     "Empty URL",
 			mainURL:  "",
 			expected: "",

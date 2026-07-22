@@ -70,15 +70,9 @@ func (s *MediaService) VerifyPlayAuth(ctx context.Context, app, stream, params s
 // Supported protocols: auto, webrtc, flv, hls.
 // streamType: "main" for main stream, "sub" for sub-stream.
 // For RTSP devices, this will automatically start pulling the stream via StreamManager.
-// Supported protocols: auto, webrtc, flv, hls.
-// streamType: "main" for main stream, "sub" for sub-stream.
-// For RTSP devices, this will automatically start pulling the stream via StreamManager.
 func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, streamType string) (string, string, error) {
 	app := "live"
-	stream := deviceID
-	if streamType == "sub" || streamType == "auxiliary" {
-		stream = deviceID + "_sub"
-	}
+	stream := playbackStreamID(deviceID, streamType)
 
 	metadata := map[string]string{
 		"protocol":    protocol,
@@ -175,11 +169,7 @@ func (s *MediaService) buildPlayURL(app, stream string, zlmHost string, zlmHTTPP
 
 // StopPlayURL closes the stream proxy for a device and stream type (stop preview).
 func (s *MediaService) StopPlayURL(ctx context.Context, deviceID, streamType string) error {
-	stream := deviceID
-	if streamType == "sub" || streamType == "auxiliary" {
-		stream = deviceID + "_sub"
-	}
-	return s.streamManager.Release(ctx, stream, "play")
+	return s.streamManager.Release(ctx, playbackStreamID(deviceID, streamType), "play")
 }
 
 // GetSnapshot captures a snapshot from the device stream.

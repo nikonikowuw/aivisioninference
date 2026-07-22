@@ -182,17 +182,11 @@ func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, re
 	state.RefCount.Store(newCount)
 
 	if newCount == 1 {
-		realDeviceID := strings.TrimSuffix(route.DeviceID, "_sub")
-		dev, err := m.deviceRepo.FindByID(ctx, realDeviceID)
+		rtspURL, err := m.resolveStreamRTSPURL(ctx, route.DeviceID)
 		if err != nil {
 			state.Consumers.Delete(reason)
 			m.recalculateRefCount(state)
 			return err
-		}
-
-		rtspURL := strings.TrimSpace(dev.RtspURL)
-		if strings.HasSuffix(route.DeviceID, "_sub") {
-			rtspURL = DeriveSubStreamURL(rtspURL)
 		}
 
 		req := StreamStartRequest{
@@ -226,15 +220,10 @@ func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, re
 		go m.syncToDatabase(ctx, state, reason)
 	} else {
 		if reason == "play" {
-			realDeviceID := strings.TrimSuffix(route.DeviceID, "_sub")
-			dev, err := m.deviceRepo.FindByID(ctx, realDeviceID)
+			rtspURL, err := m.resolveStreamRTSPURL(ctx, route.DeviceID)
 			if err != nil {
 				m.logger.Warn("load playback device failed", zap.Error(err), zap.String("device_id", route.DeviceID))
 				return err
-			}
-			rtspURL := strings.TrimSpace(dev.RtspURL)
-			if strings.HasSuffix(route.DeviceID, "_sub") {
-				rtspURL = DeriveSubStreamURL(rtspURL)
 			}
 			_, err = m.engine.StartPlayback(ctx, StreamStartRequest{
 				NodeID:         route.NodeID,
@@ -510,15 +499,9 @@ func (m *StreamManager) reacquire(ctx context.Context, state *StreamState) {
 		return
 	}
 
-	realDeviceID := strings.TrimSuffix(state.DeviceID, "_sub")
-	dev, err := m.deviceRepo.FindByID(ctx, realDeviceID)
+	rtspURL, err := m.resolveStreamRTSPURL(ctx, state.DeviceID)
 	if err != nil {
 		return
-	}
-
-	rtspURL := strings.TrimSpace(dev.RtspURL)
-	if strings.HasSuffix(state.DeviceID, "_sub") {
-		rtspURL = DeriveSubStreamURL(rtspURL)
 	}
 
 	req := state.StartRequest
@@ -527,6 +510,24 @@ func (m *StreamManager) reacquire(ctx context.Context, state *StreamState) {
 	req.RtspURL = rtspURL
 
 	_, _ = m.engine.StartStream(ctx, req)
+}
+
+func (m *StreamManager) resolveStreamRTSPURL(ctx context.Context, streamID string) (string, error) {
+	deviceID, isSubStream := strings.CutSuffix(streamID, subStreamSuffix)
+	if !isSubStream {
+		deviceID = streamID
+	}
+
+	device, err := m.deviceRepo.FindByID(ctx, deviceID)
+	if err != nil {
+		return "", err
+	}
+
+	rtspURL := strings.TrimSpace(device.RtspURL)
+	if isSubStream {
+		rtspURL = DeriveSubStreamURL(rtspURL)
+	}
+	return rtspURL, nil
 }
 
 // VerifyPlaybackAuth 验证播放权限

@@ -1,16 +1,11 @@
 // Worker Pool 实现
 #include "pipeline/worker_pool.h"
-#include <iostream>
+#include "logger/logger.h"
 #include <mutex>
 
 #ifdef __linux__
 #include <pthread.h>
 #endif
-
-namespace
-{
-    std::mutex g_worker_log_mutex;
-}
 
 namespace aivision
 {
@@ -27,7 +22,7 @@ namespace aivision
             running_.store(true);
             idle_count_.store(static_cast<int32_t>(config_.worker_count));
             workers_.reserve(config_.worker_count);
-            std::cout << "[WorkerPool] starting workers count=" << config_.worker_count << std::endl;
+            LOG_INFO("[WorkerPool] starting workers count={}", config_.worker_count);
             for (uint32_t i = 0; i < config_.worker_count; ++i)
             {
                 workers_.emplace_back(
@@ -68,8 +63,7 @@ namespace aivision
             pthread_setname_np(pthread_self(), thread_name.substr(0, 15).c_str());
 #endif
             {
-                std::lock_guard<std::mutex> lock(g_worker_log_mutex);
-                std::cout << "[WorkerPool] worker started id=" << worker_id << std::endl;
+                LOG_INFO("[WorkerPool] worker started id={}", worker_id);
             }
             while (running_.load())
             {
@@ -103,13 +97,8 @@ namespace aivision
                         uint64_t current_frame = processed_frames_.fetch_add(1) + 1;
                         if (current_frame == 1 || current_frame % 100 == 0)
                         {
-                            std::lock_guard<std::mutex> lock(g_worker_log_mutex);
-                            std::cout << "[WorkerPool] frame dequeued"
-                                      << " worker=" << worker_id
-                                      << " stream=" << task_id
-                                      << " total=" << current_frame
-                                      << " queue_size=" << queue->Size()
-                                      << std::endl;
+                            LOG_INFO("[WorkerPool] frame dequeued worker={} stream={} total={} queue_size={}",
+                                     worker_id, task_id, current_frame, queue->Size());
                         }
 
                         if (algo_mgr_ && snapshot_mgr_)
@@ -117,9 +106,7 @@ namespace aivision
                             auto algo_names = snapshot_mgr_->GetStreamAlgos(task_id);
                             if (algo_names.empty())
                             {
-                                std::lock_guard<std::mutex> lock(g_worker_log_mutex);
-                                std::cerr << "[Worker] No algorithms bound for stream: "
-                                          << task_id << std::endl;
+                                LOG_WARN("[Worker] No algorithms bound for stream: {}", task_id);
                             }
                             else
                             {
@@ -153,13 +140,11 @@ namespace aivision
 
             std::string context_json = frame.accumulated_json;
 
-            {
-                std::lock_guard<std::mutex> lock(g_worker_log_mutex);
-                std::cout << "[Worker] executing algo chain"
-                          << " stream=" << frame.task_id
-                          << " algos=" << algo_names.size()
-                          << " frame_ts_ns=" << frame.timestamp_ns
-                          << std::endl;
+            static std::atomic<uint64_t> exec_seq{0};
+            uint64_t seq = exec_seq.fetch_add(1);
+            if (seq % 100 == 0) {
+                LOG_INFO("[Worker] executing algo chain stream={} algos={} frame_ts_ns={}",
+                         frame.task_id, algo_names.size(), frame.timestamp_ns);
             }
 
             for (const auto &algo_name : algo_names)
@@ -169,9 +154,7 @@ namespace aivision
                                                          config_.infer_timeout_ms);
                 if (!ok || !instance)
                 {
-                    std::lock_guard<std::mutex> lock(g_worker_log_mutex);
-                    std::cerr << "[Worker] Failed to acquire algo: "
-                              << algo_name << std::endl;
+                    LOG_ERROR("[Worker] Failed to acquire algo: {}", algo_name);
                     result.success = false;
                     break;
                 }
@@ -188,18 +171,9 @@ namespace aivision
                     if (!infer_ok)
                     {
                         const auto &desc = frame.buffer->Desc();
-                        std::lock_guard<std::mutex> lock(g_worker_log_mutex);
-                        std::cerr << "[Worker] Infer failed for algo: "
-                                  << algo_name
-                                  << " stream=" << frame.task_id
-                                  << " width=" << desc.width
-                                  << " height=" << desc.height
-                                  << " size=" << desc.size
-                                  << " dma_fd=" << desc.dma_fd
-                                  << " data=" << desc.data
-                                  << " stride=" << desc.stride
-                                  << " pixel_format=" << desc.pixel_format
-                                  << std::endl;
+                        LOG_ERROR("[Worker] Infer failed for algo: {} stream={} width={} height={} size={} dma_fd={} data={} stride={} pixel_format={}",
+                                 algo_name, frame.task_id, desc.width, desc.height, desc.size,
+                                 desc.dma_fd, desc.data, desc.stride, desc.pixel_format);
                         result.success = false;
                     }
                 }

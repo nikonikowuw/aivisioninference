@@ -14,24 +14,16 @@
 #include <netdb.h>
 #include <unistd.h>
 
+#include "string_utils.h"
+#include "logger/logger.h"
 #include <algorithm>
 #include <chrono>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 
 namespace aivision { namespace pipeline {
 
-// ============================================================
-// 工具函数
-// ============================================================
 
-static std::string Trim(const std::string& s) {
-    size_t a = s.find_first_not_of(" \t\r\n");
-    if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t\r\n");
-    return s.substr(a, b - a + 1);
-}
 
 static std::string Base64Encode(const std::string& in) {
     static const char* table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -144,43 +136,44 @@ bool VideoToolboxPipeline::RtspConnect(const std::string& url) {
     }
     freeaddrinfo(result);
     if (rtsp_socket_ < 0) {
-        std::cerr << "[VideoToolbox] TCP connect failed: " << host_ << ":" << port_str << std::endl;
+        LOG_ERROR("[VideoToolbox] TCP connect failed: {}:{}", host_, port_str);
         last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "TCP connect failed");
         return false;
     }
-    std::cout << "[VideoToolbox] RTSP connected to " << host_ << ":" << port_ << std::endl;
+    LOG_INFO("[VideoToolbox] RTSP connected to {}:{}", host_, port_);
     cseq_ = 1;
     session_.clear();
     return true;
 }
 
 void VideoToolboxPipeline::RtspDisconnect() {
+    rx_buffer_.clear();
     if (rtsp_socket_ >= 0) { ::close(rtsp_socket_); rtsp_socket_ = -1; }
 }
 
 bool VideoToolboxPipeline::RtspSendRequest(const std::string& req) {
     ssize_t sent = ::send(rtsp_socket_, req.data(), req.size(), 0);
     if (sent != static_cast<ssize_t>(req.size())) {
-        std::cerr << "[VideoToolbox] RTSP send failed: sent=" << sent << " expected=" << req.size() << " errno=" << errno << std::endl;
+        LOG_ERROR("[VideoToolbox] RTSP send failed: sent={} expected={} errno={}", sent, req.size(), errno);
         return false;
     }
     // 打印请求行 + Authorization 状态方便调试
     auto first_crlf = req.find("\r\n");
     if (first_crlf != std::string::npos) {
-        std::cout << "[VideoToolbox] >> " << req.substr(0, first_crlf) << std::endl;
+        LOG_INFO("[VideoToolbox] >> {}", req.substr(0, first_crlf));
         auto sess_pos = req.find("Session:");
         if (sess_pos != std::string::npos) {
             auto sess_end = req.find("\r\n", sess_pos);
-            std::cout << "[VideoToolbox] >> " << req.substr(sess_pos, sess_end - sess_pos) << std::endl;
+            LOG_INFO("[VideoToolbox] >> {}", req.substr(sess_pos, sess_end - sess_pos));
         }
         auto auth_pos = req.find("Authorization:");
         if (auth_pos != std::string::npos) {
             auto auth_end = req.find("\r\n", auth_pos);
             std::string auth_line = req.substr(auth_pos, auth_end - auth_pos);
             if (auth_line.find("Digest") != std::string::npos)
-                std::cout << "[VideoToolbox] >> Authorization: Digest ****" << std::endl;
+                LOG_INFO("[VideoToolbox] >> Authorization: Digest ****");
             else
-                std::cout << "[VideoToolbox] >> Authorization: Basic ****" << std::endl;
+                LOG_INFO("[VideoToolbox] >> Authorization: Basic ****");
         }
     }
     return true;
@@ -189,10 +182,28 @@ bool VideoToolboxPipeline::RtspSendRequest(const std::string& req) {
 bool VideoToolboxPipeline::RtspReadResponse(int& status_code, std::string& response) {
     response.clear();
     char buf[4096];
-    while (response.find("\r\n\r\n") == std::string::npos) {
+    while (true) {
+        auto pos = response.find("\r\n\r\n");
+        if (pos != std::string::npos) {
+            size_t header_end = pos + 4;
+            if (header_end < response.size()) {
+                const char* leftover = response.data() + header_end;
+                size_t leftover_len = response.size() - header_end;
+                rx_buffer_.insert(rx_buffer_.end(), leftover, leftover + leftover_len);
+                response.resize(header_end);
+            }
+            break;
+        }
+
+        if (!rx_buffer_.empty()) {
+            response.append(reinterpret_cast<const char*>(rx_buffer_.data()), rx_buffer_.size());
+            rx_buffer_.clear();
+            continue;
+        }
+
         ssize_t n = ::recv(rtsp_socket_, buf, sizeof(buf), 0);
         if (n <= 0) {
-            std::cerr << "[VideoToolbox] RTSP recv failed: n=" << n << " errno=" << errno << std::endl;
+            LOG_ERROR("[VideoToolbox] RTSP recv failed: n={} errno={}", n, errno);
             return false;
         }
         response.append(buf, static_cast<size_t>(n));
@@ -201,7 +212,7 @@ bool VideoToolboxPipeline::RtspReadResponse(int& status_code, std::string& respo
     std::istringstream stream(response);
     std::string version;
     stream >> version >> status_code;
-    std::cout << "[VideoToolbox] << " << version << " " << status_code << std::endl;
+    LOG_INFO("[VideoToolbox] << {} {}", version, status_code);
     return status_code > 0;
 }
 
@@ -302,8 +313,7 @@ bool VideoToolboxPipeline::RtspSendCommand(const std::string& method, std::strin
     // 收到 401 且有凭证时，尝试 Digest 或 Basic auth
     if (status == 401 && !username_.empty()) {
         RtspParseAuthChallenge(resp);
-        std::cout << "[VideoToolbox] Server auth: realm=\"" << digest_realm_
-                  << "\" nonce=\"" << digest_nonce_ << "\"" << std::endl;
+        LOG_INFO("[VideoToolbox] Server auth: realm=\"{}\" nonce=\"{}\"", digest_realm_, digest_nonce_);
 
         bool ok = RtspSendRequest(build_request()) && RtspReadResponse(status, resp);
         return ok && status >= 200 && status < 300;
@@ -328,20 +338,20 @@ bool VideoToolboxPipeline::RtspDescribe(std::string& sdp) {
 
 bool VideoToolboxPipeline::RtspSetup() {
     if (sdp_tracks_.empty()) {
-        std::cerr << "[VideoToolbox] No SDP tracks to SETUP" << std::endl;
+        LOG_ERROR("[VideoToolbox] No SDP tracks to SETUP");
         return false;
     }
     for (size_t i = 0; i < sdp_tracks_.size(); i++) {
         const auto& track = sdp_tracks_[i];
         // 只 SETUP video 类型的 track（部分相机不支持同时 SETUP audio+video）
         if (track.first != "video") {
-            std::cout << "[VideoToolbox] Skipping non-video track: " << track.first << "=" << track.second << std::endl;
+            LOG_INFO("[VideoToolbox] Skipping non-video track: {}={}", track.first, track.second);
             interleaved_start_ += 2;
             continue;
         }
         std::string resp;
         if (!RtspSendCommand("SETUP", resp, track.second, true)) {
-            std::cerr << "[VideoToolbox] SETUP failed for track " << i << " (" << track.second << ")" << std::endl;
+            LOG_ERROR("[VideoToolbox] SETUP failed for track {} ({})", i, track.second);
             return false;
         }
         auto pos = resp.find("Session:");
@@ -391,25 +401,58 @@ bool VideoToolboxPipeline::RtspTeardown() {
 // RTP 解包
 // ============================================================
 
-bool VideoToolboxPipeline::RecvRtpPacket(RtpPacket& pkt) {
-    uint8_t header[4];
+bool VideoToolboxPipeline::ReadExact(uint8_t* dst, size_t count) {
     size_t got = 0;
-    while (got < 4) {
-        ssize_t n = ::recv(rtsp_socket_, header + got, 4 - got, 0);
+    if (!rx_buffer_.empty()) {
+        size_t available = std::min(count, rx_buffer_.size());
+        std::memcpy(dst, rx_buffer_.data(), available);
+        rx_buffer_.erase(rx_buffer_.begin(), rx_buffer_.begin() + static_cast<ptrdiff_t>(available));
+        got += available;
+    }
+    while (got < count) {
+        ssize_t n = ::recv(rtsp_socket_, dst + got, count - got, 0);
         if (n <= 0) return false;
         got += static_cast<size_t>(n);
     }
-    if (header[0] != 0x24) return false;
+    return true;
+}
+
+bool VideoToolboxPipeline::RecvRtpPacket(RtpPacket& pkt) {
+    uint8_t header[4];
+    if (!ReadExact(header, 4)) return false;
+
+    // 若首字节不是 0x24 ($)，在字节流中同步搜索 0x24
+    if (header[0] != 0x24) {
+        LOG_WARN("[VideoToolbox] Misaligned RTP marker: 0x{:02x}, searching for 0x24 ($)...", header[0]);
+        uint8_t byte = 0;
+        int max_search = 65536;
+        bool found = false;
+        std::vector<uint8_t> search_buf(header + 1, header + 4);
+        while (max_search-- > 0) {
+            if (!search_buf.empty()) {
+                byte = search_buf.front();
+                search_buf.erase(search_buf.begin());
+            } else {
+                if (!ReadExact(&byte, 1)) return false;
+            }
+            if (byte == 0x24) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            LOG_ERROR("[VideoToolbox] Failed to resynchronize RTP stream ($ marker not found)");
+            return false;
+        }
+        header[0] = 0x24;
+        if (!ReadExact(header + 1, 3)) return false;
+    }
+
     uint16_t len = (static_cast<uint16_t>(header[2]) << 8) | header[3];
     if (len < 12 || len > 65535) return false;
 
     std::vector<uint8_t> buf(len);
-    got = 0;
-    while (got < len) {
-        ssize_t n = ::recv(rtsp_socket_, buf.data() + got, len - got, 0);
-        if (n <= 0) return false;
-        got += static_cast<size_t>(n);
-    }
+    if (!ReadExact(buf.data(), len)) return false;
 
     uint8_t version = (buf[0] >> 6) & 0x03;
     if (version != 2) return false;
@@ -432,7 +475,7 @@ bool VideoToolboxPipeline::RecvRtpPacket(RtpPacket& pkt) {
 void VideoToolboxPipeline::EmitNal(const uint8_t* data, size_t size, uint32_t /*timestamp*/) {
     if (!data || size == 0) return;
     if (++nal_count_ <= 5 || nal_count_ % 100 == 0)
-        std::cout << "[VideoToolbox] NAL size=" << size << " total=" << nal_count_ << std::endl;
+        LOG_INFO("[VideoToolbox] NAL size={} total={}", size, nal_count_);
 
     if (is_hevc_) {
         // HEVC: 2-byte NAL header, type in bits 1-6
@@ -588,7 +631,7 @@ bool VideoToolboxPipeline::ParseCodecParams(const std::string& sdp) {
                sdp.find("hevc") != std::string::npos;
 
     if (is_hevc_) {
-        std::cout << "[VideoToolbox] Detected HEVC/H265 stream" << std::endl;
+        LOG_INFO("[VideoToolbox] Detected HEVC/H265 stream");
         auto extract_param = [&](const std::string& key, std::vector<uint8_t>& out, bool& flag) {
             auto p = sdp.find(key + "=");
             if (p == std::string::npos) return;
@@ -625,7 +668,7 @@ bool VideoToolboxPipeline::CreateFormatDescription() {
     OSStatus status;
     if (is_hevc_) {
         if (!have_vps_) {
-            std::cerr << "[VideoToolbox] Missing VPS for HEVC format description" << std::endl;
+            LOG_ERROR("[VideoToolbox] Missing VPS for HEVC format description");
             return false;
         }
         const uint8_t* params[3] = {vps_.data(), sps_.data(), pps_.data()};
@@ -640,7 +683,7 @@ bool VideoToolboxPipeline::CreateFormatDescription() {
     }
 
     if (status != noErr) {
-        std::cerr << "[VideoToolbox] Format description failed: " << status << std::endl;
+        LOG_ERROR("[VideoToolbox] Format description failed: {}", status);
         return false;
     }
     return true;
@@ -676,12 +719,12 @@ bool VideoToolboxPipeline::InitDecoder() {
     CFRelease(decoderSpec);
     CFRelease(outDict);
     if (status != noErr) {
-        std::cerr << "[VideoToolbox] Decompression session failed: " << status << std::endl;
+        LOG_ERROR("[VideoToolbox] Decompression session failed: {}", status);
         last_status_ = HALStatus::Error(HALStatusCode::DecodeFailed, "VideoToolbox hardware decoder unavailable");
         return false;
     }
     decoder_initialized_ = true;
-    std::cout << "[VideoToolbox] Hardware decompression session created" << std::endl;
+    LOG_INFO("[VideoToolbox] Hardware decompression session created");
     return true;
 }
 
@@ -779,7 +822,7 @@ bool VideoToolboxPipeline::InitEncoder(int width, int height) {
     VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Main_AutoLevel);
     VTCompressionSessionPrepareToEncodeFrames(encode_session_);
     encoder_initialized_ = true;
-    std::cout << "[VideoToolbox] Encoder: " << width << "x" << height << std::endl;
+    LOG_INFO("[VideoToolbox] Encoder: {}x{}", width, height);
     return true;
 }
 
@@ -833,12 +876,12 @@ bool VideoToolboxPipeline::Start(const std::string& url) {
     state_ = PipelineState::Connecting;
     if (state_callback_) state_callback_(state_);
 
-    if (!RtspConnect(url)) { std::cerr << "[VideoToolbox] RtspConnect failed" << std::endl; running_ = false; state_ = PipelineState::Error; return false; }
-    if (!RtspOptions()) { std::cerr << "[VideoToolbox] RtspOptions failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "OPTIONS failed"); return false; }
+    if (!RtspConnect(url)) { LOG_ERROR("[VideoToolbox] RtspConnect failed"); running_ = false; state_ = PipelineState::Error; return false; }
+    if (!RtspOptions()) { LOG_ERROR("[VideoToolbox] RtspOptions failed"); RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "OPTIONS failed"); return false; }
 
     std::string sdp;
-    if (!RtspDescribe(sdp)) { std::cerr << "[VideoToolbox] RtspDescribe failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "DESCRIBE failed"); return false; }
-    std::cout << "[VideoToolbox] Full SDP:\n" << sdp << std::endl;
+    if (!RtspDescribe(sdp)) { LOG_ERROR("[VideoToolbox] RtspDescribe failed"); RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "DESCRIBE failed"); return false; }
+    LOG_INFO("[VideoToolbox] Full SDP:\n{}", sdp);
     ParseCodecParams(sdp);
     // 解析 SDP 中的 media tracks (m= 行)
     sdp_tracks_.clear();
@@ -871,16 +914,17 @@ bool VideoToolboxPipeline::Start(const std::string& url) {
         // 没有 m= 行（a=control:*），使用基础 URL
         sdp_tracks_.push_back({"video", ""});
     }
-    std::cout << "[VideoToolbox] SDP tracks:";
-    for (auto& t : sdp_tracks_) std::cout << " " << t.first << "=" << t.second;
-    std::cout << std::endl;
-
-    if (!RtspSetup()) { std::cerr << "[VideoToolbox] RtspSetup failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "SETUP failed"); return false; }
-    if (!RtspPlay()) { std::cerr << "[VideoToolbox] RtspPlay failed" << std::endl; RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "PLAY failed"); return false; }
+    {
+        std::string track_str;
+        for (auto& t : sdp_tracks_) track_str += " " + t.first + "=" + t.second;
+        LOG_INFO("[VideoToolbox] SDP tracks:{}", track_str);
+    }
+    if (!RtspSetup()) { LOG_ERROR("[VideoToolbox] RtspSetup failed"); RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "SETUP failed"); return false; }
+    if (!RtspPlay()) { LOG_ERROR("[VideoToolbox] RtspPlay failed"); RtspDisconnect(); running_ = false; last_status_ = HALStatus::Error(HALStatusCode::OpenStreamFailed, "PLAY failed"); return false; }
 
     state_ = PipelineState::Streaming;
     if (state_callback_) state_callback_(state_);
-    std::cout << "[VideoToolbox] RTSP playing: " << url << std::endl;
+    LOG_INFO("[VideoToolbox] RTSP playing: {}", url);
 
     pull_thread_ = std::make_unique<std::thread>(&VideoToolboxPipeline::PullLoop, this);
     return true;
@@ -891,11 +935,11 @@ void VideoToolboxPipeline::PullLoop() {
     int pkt_count = 0;
     while (running_ && !paused_) {
         if (!RecvRtpPacket(pkt)) {
-            if (running_) { std::cerr << "[VideoToolbox] RecvRtp failed" << std::endl; std::this_thread::sleep_for(std::chrono::seconds(1)); continue; }
+            if (running_) { LOG_ERROR("[VideoToolbox] RecvRtp failed"); std::this_thread::sleep_for(std::chrono::seconds(1)); continue; }
             break;
         }
         if (++pkt_count <= 3 || pkt_count % 200 == 0)
-            std::cout << "[VideoToolbox] RTP pkt seq=" << pkt.seq << " type=" << (int)pkt.payload_type << " size=" << pkt.payload.size() << " count=" << pkt_count << std::endl;
+            LOG_INFO("[VideoToolbox] RTP pkt seq={} type={} size={} count={}", pkt.seq, static_cast<int>(pkt.payload_type), pkt.payload.size(), pkt_count);
         HandleRtpPacket(pkt);
     }
 }

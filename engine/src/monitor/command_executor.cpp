@@ -1,9 +1,9 @@
 #include "monitor/command_executor.h"
+#include "logger/logger.h"
 
 #include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 #include <memory>
 #include <sstream>
 #include <thread>
@@ -97,7 +97,11 @@ namespace aivision
                 execl("/bin/sh", "sh", "-c", request.command.c_str(), nullptr);
 
                 // If execl returns, it failed
-                std::cerr << "[CommandExecutor] execl failed: " << strerror(errno) << std::endl;
+                // Note: async-signal-safe write(2) — LOG_ERROR is unsafe after fork
+                static const char fail_msg[] = "[CommandExecutor] execl failed: ";
+                (void)::write(STDERR_FILENO, fail_msg, sizeof(fail_msg) - 1);
+                (void)::write(STDERR_FILENO, ::strerror(errno), ::strlen(::strerror(errno)));
+                (void)::write(STDERR_FILENO, "\n", 1);
                 _exit(127);
             }
 

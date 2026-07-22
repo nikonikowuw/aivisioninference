@@ -1,7 +1,7 @@
 #include "monitor/pty_module.h"
 
+#include "logger/logger.h"
 #include <cstring>
-#include <iostream>
 #include <sstream>
 
 #include <fcntl.h>
@@ -61,14 +61,14 @@ namespace aivision
             int master_fd = open("/dev/ptmx", O_RDWR | O_NOCTTY);
             if (master_fd < 0)
             {
-                std::cerr << "[PTYModule] Failed to open /dev/ptmx: " << strerror(errno) << std::endl;
+                LOG_ERROR("[PTYModule] Failed to open /dev/ptmx: {}", strerror(errno));
                 return false;
             }
 
             // Grant access and unlock slave
             if (grantpt(master_fd) < 0 || unlockpt(master_fd) < 0)
             {
-                std::cerr << "[PTYModule] grantpt/unlockpt failed: " << strerror(errno) << std::endl;
+                LOG_ERROR("[PTYModule] grantpt/unlockpt failed: {}", strerror(errno));
                 close(master_fd);
                 return false;
             }
@@ -77,7 +77,7 @@ namespace aivision
             const char* slave_name = ptsname(master_fd);
             if (!slave_name)
             {
-                std::cerr << "[PTYModule] ptsname failed: " << strerror(errno) << std::endl;
+                LOG_ERROR("[PTYModule] ptsname failed: {}", strerror(errno));
                 close(master_fd);
                 return false;
             }
@@ -86,7 +86,7 @@ namespace aivision
             pid_t pid = fork();
             if (pid < 0)
             {
-                std::cerr << "[PTYModule] fork failed: " << strerror(errno) << std::endl;
+                LOG_ERROR("[PTYModule] fork failed: {}", strerror(errno));
                 close(master_fd);
                 return false;
             }
@@ -147,8 +147,7 @@ namespace aivision
             std::thread reader(&PTYModule::ReadLoop, this, session_id, master_fd);
             reader.detach();
 
-            std::cout << "[PTYModule] Session opened: " << session_id
-                      << " (slave=" << slave_name << ", pid=" << pid << ")" << std::endl;
+            LOG_INFO("[PTYModule] Session opened: {} (slave={}, pid={})", session_id, slave_name, pid);
 
             return true;
         }
@@ -160,7 +159,7 @@ namespace aivision
             auto it = sessions_.find(session_id);
             if (it == sessions_.end() || !it->second->active)
             {
-                std::cerr << "[PTYModule] Write to inactive session: " << session_id << std::endl;
+                LOG_ERROR("[PTYModule] Write to inactive session: {}", session_id);
                 return false;
             }
 
@@ -175,7 +174,7 @@ namespace aivision
                 if (written < 0)
                 {
                     if (errno == EINTR) continue;
-                    std::cerr << "[PTYModule] Write failed: " << strerror(errno) << std::endl;
+                    LOG_ERROR("[PTYModule] Write failed: {}", strerror(errno));
                     return false;
                 }
                 total_written += written;
@@ -203,7 +202,7 @@ namespace aivision
 
             if (ioctl(it->second->master_fd, TIOCSWINSZ, &ws) < 0)
             {
-                std::cerr << "[PTYModule] Resize failed: " << strerror(errno) << std::endl;
+                LOG_ERROR("[PTYModule] Resize failed: {}", strerror(errno));
                 return false;
             }
 
@@ -307,7 +306,7 @@ namespace aivision
 
             sessions_.erase(session_id);
 
-            std::cout << "[PTYModule] Session cleaned up: " << session_id << std::endl;
+            LOG_INFO("[PTYModule] Session cleaned up: {}", session_id);
         }
 
     } // namespace monitor

@@ -1,11 +1,11 @@
 #include "hal/rockchip/rkmpp_pipeline.h"
 
+#include "logger/logger.h"
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cctype>
 #include <cstring>
-#include <iostream>
 #include <sstream>
 #include <thread>
 
@@ -57,12 +57,8 @@ namespace aivision
             using namespace pipeline;
 
 // ====================================================================
-// 日志宏
+// 日志宏 (已内联为直接 LOG_* 调用，无 RK_LOG_* 痕迹)
 // ====================================================================
-#define RK_LOG_D(msg) std::cout << "[RKMPP] " << msg << std::endl
-#define RK_LOG_I(msg) std::cout << "[RKMPP] " << msg << std::endl
-#define RK_LOG_W(msg) std::cerr << "[RKMPP WARN] " << msg << std::endl
-#define RK_LOG_E(msg) std::cerr << "[RKMPP ERROR] " << msg << std::endl
 
             // ====================================================================
             // 构造函数 / 析构函数
@@ -129,7 +125,7 @@ namespace aivision
 
                 if (rga_enabled_ && (rga_dst_width_ <= 0 || rga_dst_height_ <= 0))
                 {
-                    RK_LOG_W("rga_enable=true but invalid rga_output_width/height, disabling RGA");
+                    LOG_WARN("[RKMPP WARN] rga_enable=true but invalid rga_output_width/height, disabling RGA");
                     rga_enabled_ = false;
                 }
 
@@ -143,8 +139,7 @@ namespace aivision
                     enc_gop_ = find_json_int("\"enc_gop\"", 50);
                 }
 
-                RK_LOG_I("Initialized. RGA=" << (rga_enabled_ ? "on" : "off")
-                                             << (rga_enabled_ ? " dst=" + std::to_string(rga_dst_width_) + "x" + std::to_string(rga_dst_height_) : ""));
+                LOG_INFO("[RKMPP] Initialized. RGA={}{}", (rga_enabled_ ? "on" : "off"), (rga_enabled_ ? " dst=" + std::to_string(rga_dst_width_) + "x" + std::to_string(rga_dst_height_) : ""));
 #endif
 
                 return true;
@@ -164,14 +159,14 @@ namespace aivision
                 last_status_ = HALStatus::Error(
                     HALStatusCode::Unsupported,
                     "RKMPP SDK is not enabled at build time; rebuild with AIVISION_WITH_RKMPP and link MPP/RGA");
-                RK_LOG_E(last_status_.message);
+                LOG_ERROR("[RKMPP ERROR] {}", last_status_.message);
                 if (state_cb_)
                     state_cb_(state_);
                 return false;
 #else
                 if (running_.load())
                 {
-                    RK_LOG_W("Already running, stop first");
+                    LOG_WARN("[RKMPP WARN] Already running, stop first");
                     return false;
                 }
 
@@ -203,7 +198,7 @@ namespace aivision
                 // 1. RTSP 连接
                 if (!RtspConnect(url))
                 {
-                    RK_LOG_E("RTSP connect failed");
+                    LOG_ERROR("[RKMPP ERROR] RTSP connect failed");
                     notify_state();
                     return false;
                 }
@@ -220,7 +215,7 @@ namespace aivision
                 {
                     return fail_after_connect();
                 }
-                RK_LOG_I("SDP: " << sdp.substr(0, 200));
+                LOG_INFO("[RKMPP] SDP: {}", sdp.substr(0, 200));
 
                 int coding_type = MPP_VIDEO_CodingAVC;
                 std::string codec_sdp = sdp;
@@ -229,7 +224,7 @@ namespace aivision
                 if (codec_sdp.find("h265") != std::string::npos || codec_sdp.find("hevc") != std::string::npos)
                 {
                     coding_type = MPP_VIDEO_CodingHEVC;
-                    RK_LOG_I("Detected H.265 codec from SDP");
+                    LOG_INFO("[RKMPP] Detected H.265 codec from SDP");
                 }
 
                 // 解析 SPS/PPS（H.264）
@@ -269,7 +264,7 @@ namespace aivision
                 fu_buffer_.clear();
 
                 pull_thread_ = std::make_unique<std::thread>(&RKMPPPipeline::PullLoop, this);
-                RK_LOG_I("RTSP playing: " << url);
+                LOG_INFO("[RKMPP] RTSP playing: {}", url);
                 return true;
 #endif
             }
@@ -299,7 +294,7 @@ namespace aivision
                 rga_dst_buf_size_ = 0;
 
                 DestroyDecoder();
-                RK_LOG_I("Stopped");
+                LOG_INFO("[RKMPP] Stopped");
 #endif
 
                 SetState(PipelineState::Stopped);
@@ -500,7 +495,7 @@ namespace aivision
                 ret = mpp_buffer_import(&enc_buf, &buf_info);
                 if (ret != MPP_OK || !enc_buf)
                 {
-                    RK_LOG_W("mpp_buffer_import failed for DMA fd " << hw_desc.dma_fd);
+                    LOG_WARN("[RKMPP WARN] mpp_buffer_import failed for DMA fd {}", hw_desc.dma_fd);
                     last_status_ = HALStatus::Error(
                         HALStatusCode::EncodeFailed,
                         "mpp_buffer_import failed: " + std::to_string(ret));
@@ -547,7 +542,7 @@ namespace aivision
                 ret = static_cast<MppApi *>(mpp_enc_mpi_)->encode_put_frame(static_cast<MppCtx>(mpp_enc_ctx_), enc_frame);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("encode_put_frame failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] encode_put_frame failed: {}", ret);
                     mpp_packet_deinit(&enc_packet);
                     mpp_frame_deinit(&enc_frame);
                     mpp_buffer_put(enc_buf);
@@ -560,7 +555,7 @@ namespace aivision
                 ret = static_cast<MppApi *>(mpp_enc_mpi_)->encode_get_packet(static_cast<MppCtx>(mpp_enc_ctx_), &enc_packet);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("encode_get_packet failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] encode_get_packet failed: {}", ret);
                     mpp_packet_deinit(&enc_packet);
                     mpp_frame_deinit(&enc_frame);
                     mpp_buffer_put(enc_buf);
@@ -609,7 +604,7 @@ namespace aivision
                     }
                     else
                     {
-                        RK_LOG_W("Output buffer too small: " << pkt_len << " > " << size);
+                        LOG_WARN("[RKMPP WARN] Output buffer too small: {} > {}", pkt_len, size);
                         mpp_packet_deinit(&enc_packet);
                         mpp_frame_deinit(&enc_frame);
                         mpp_buffer_put(enc_buf);
@@ -684,7 +679,7 @@ namespace aivision
                 ret = mpp_create(&ctx, &mpi);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_create failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_create failed: {}", ret);
                     return false;
                 }
                 mpp_dec_ctx_ = ctx;
@@ -694,7 +689,7 @@ namespace aivision
                 ret = mpp_init(ctx, MPP_CTX_DEC, static_cast<MppCodingType>(coding_type));
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_init DEC failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_init DEC failed: {}", ret);
                     mpp_destroy(ctx);
                     mpp_dec_ctx_ = nullptr;
                     mpp_dec_mpi_ = nullptr;
@@ -710,7 +705,7 @@ namespace aivision
                     ret = mpi->control(ctx, MPP_DEC_SET_CFG, cfg);
                     if (ret != MPP_OK)
                     {
-                        RK_LOG_W("MPP_DEC_SET_CFG failed, continuing: " << ret);
+                        LOG_WARN("[RKMPP WARN] MPP_DEC_SET_CFG failed, continuing: {}", ret);
                     }
                     mpp_dec_cfg_deinit(cfg);
                 }
@@ -720,12 +715,12 @@ namespace aivision
                 ret = mpi->control(ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_W("MPP_SET_INPUT_TIMEOUT failed: " << ret);
+                    LOG_WARN("[RKMPP WARN] MPP_SET_INPUT_TIMEOUT failed: {}", ret);
                 }
                 ret = mpi->control(ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_W("MPP_SET_OUTPUT_TIMEOUT failed: " << ret);
+                    LOG_WARN("[RKMPP WARN] MPP_SET_OUTPUT_TIMEOUT failed: {}", ret);
                 }
 
                 // 5. 创建内部 buffer group
@@ -733,7 +728,7 @@ namespace aivision
                 ret = mpp_buffer_group_get_internal(&frame_group, MPP_BUFFER_TYPE_DRM);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_buffer_group_get_internal failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_buffer_group_get_internal failed: {}", ret);
                     mpp_destroy(ctx);
                     mpp_dec_ctx_ = nullptr;
                     mpp_dec_mpi_ = nullptr;
@@ -745,20 +740,20 @@ namespace aivision
                 ret = mpi->control(ctx, MPP_DEC_SET_EXT_BUF_GROUP, frame_group);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_W("MPP_DEC_SET_EXT_BUF_GROUP failed: " << ret);
+                    LOG_WARN("[RKMPP WARN] MPP_DEC_SET_EXT_BUF_GROUP failed: {}", ret);
                 }
 
                 ret = mpp_buffer_group_limit_config(frame_group, 0, 16);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_W("mpp_buffer_group_limit_config failed: " << ret);
+                    LOG_WARN("[RKMPP WARN] mpp_buffer_group_limit_config failed: {}", ret);
                 }
 
                 decoder_initialized_ = true;
                 dec_width_ = 0;
                 dec_height_ = 0;
 
-                RK_LOG_I("MPP decoder initialized, coding_type=" << coding_type);
+                LOG_INFO("[RKMPP] MPP decoder initialized, coding_type={}", coding_type);
                 return true;
             }
 
@@ -783,7 +778,7 @@ namespace aivision
                 decoder_initialized_ = false;
                 dec_width_ = 0;
                 dec_height_ = 0;
-                RK_LOG_I("MPP decoder destroyed");
+                LOG_INFO("[RKMPP] MPP decoder destroyed");
             }
 
             // ---------- 解码循环（线程函数） ----------
@@ -792,7 +787,7 @@ namespace aivision
             // ============================================================
             void RKMPPPipeline::PullLoop()
             {
-                RK_LOG_I("PullLoop started");
+                LOG_INFO("[RKMPP] PullLoop started");
                 RtpPacket pkt;
                 int pkt_count = 0;
 
@@ -802,7 +797,7 @@ namespace aivision
                     {
                         if (running_.load())
                         {
-                            RK_LOG_W("RecvRtp failed, retrying...");
+                            LOG_WARN("[RKMPP WARN] RecvRtp failed, retrying...");
                             std::this_thread::sleep_for(std::chrono::seconds(1));
                             continue;
                         }
@@ -845,7 +840,7 @@ namespace aivision
                     }
                 }
 
-                RK_LOG_I("PullLoop ended, packets=" << pkt_count);
+                LOG_INFO("[RKMPP] PullLoop ended, packets={}", pkt_count);
             }
 
             // ============================================================
@@ -866,7 +861,7 @@ namespace aivision
                 ret = mpp_packet_init(&packet, const_cast<void *>(static_cast<const void *>(data)), size);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_packet_init failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_packet_init failed: {}", ret);
                     return;
                 }
 
@@ -876,7 +871,7 @@ namespace aivision
                 if (ret != MPP_OK)
                 {
                     if (ret != MPP_ERR_BUFFER_FULL)
-                        RK_LOG_W("decode_put_packet failed: " << ret);
+                        LOG_WARN("[RKMPP WARN] decode_put_packet failed: {}", ret);
                     mpp_packet_deinit(&packet);
                     return;
                 }
@@ -977,7 +972,7 @@ namespace aivision
                     return false;
                 }
 
-                RK_LOG_I("RTSP connected to " << rtsp_host_ << ":" << rtsp_port_);
+                LOG_INFO("[RKMPP] RTSP connected to {}:{}", rtsp_host_, rtsp_port_);
                 rtsp_cseq_ = 1;
                 rtsp_session_.clear();
                 return true;
@@ -985,6 +980,7 @@ namespace aivision
 
             void RKMPPPipeline::RtspDisconnect()
             {
+                rx_buffer_.clear();
                 if (rtsp_socket_ >= 0)
                 {
                     ::shutdown(rtsp_socket_, SHUT_RDWR);
@@ -998,10 +994,10 @@ namespace aivision
                 ssize_t sent = ::send(rtsp_socket_, req.data(), req.size(), 0);
                 if (sent != static_cast<ssize_t>(req.size()))
                 {
-                    RK_LOG_E("RTSP send failed: sent=" << sent << " expected=" << req.size() << " errno=" << errno);
+                    LOG_ERROR("[RKMPP ERROR] RTSP send failed: sent={} expected={} errno={}", sent, req.size(), errno);
                     return false;
                 }
-                RK_LOG_D(">> " << req.substr(0, req.find("\r\n")));
+                LOG_DEBUG("[RKMPP] >> {}", req.substr(0, req.find("\r\n")));
                 return true;
             }
 
@@ -1009,12 +1005,33 @@ namespace aivision
             {
                 response.clear();
                 char buf[4096];
-                while (response.find("\r\n\r\n") == std::string::npos)
+                while (true)
                 {
+                    auto pos = response.find("\r\n\r\n");
+                    if (pos != std::string::npos)
+                    {
+                        size_t header_end = pos + 4;
+                        if (header_end < response.size())
+                        {
+                            const char *leftover = response.data() + header_end;
+                            size_t leftover_len = response.size() - header_end;
+                            rx_buffer_.insert(rx_buffer_.end(), leftover, leftover + leftover_len);
+                            response.resize(header_end);
+                        }
+                        break;
+                    }
+
+                    if (!rx_buffer_.empty())
+                    {
+                        response.append(reinterpret_cast<const char *>(rx_buffer_.data()), rx_buffer_.size());
+                        rx_buffer_.clear();
+                        continue;
+                    }
+
                     ssize_t n = ::recv(rtsp_socket_, buf, sizeof(buf), 0);
                     if (n <= 0)
                     {
-                        RK_LOG_E("RTSP recv failed: n=" << n << " errno=" << errno);
+                        LOG_ERROR("[RKMPP ERROR] RTSP recv failed: n={} errno={}", n, errno);
                         return false;
                     }
                     response.append(buf, static_cast<size_t>(n));
@@ -1024,7 +1041,7 @@ namespace aivision
                 std::istringstream stream(response);
                 std::string version;
                 stream >> version >> status_code;
-                RK_LOG_D("<< " << version << " " << status_code);
+                LOG_DEBUG("[RKMPP] << {} {}", version, status_code);
                 return status_code > 0;
             }
 
@@ -1128,25 +1145,68 @@ namespace aivision
             // ============================================================
             // RTP 包接收 (TCP 交织模式)
             // ============================================================
+            bool RKMPPPipeline::ReadExact(uint8_t *dst, size_t count)
+            {
+                size_t got = 0;
+                if (!rx_buffer_.empty())
+                {
+                    size_t available = std::min(count, rx_buffer_.size());
+                    std::memcpy(dst, rx_buffer_.data(), available);
+                    rx_buffer_.erase(rx_buffer_.begin(), rx_buffer_.begin() + static_cast<ptrdiff_t>(available));
+                    got += available;
+                }
+                while (got < count)
+                {
+                    ssize_t n = ::recv(rtsp_socket_, dst + got, count - got, 0);
+                    if (n <= 0)
+                        return false;
+                    got += static_cast<size_t>(n);
+                }
+                return true;
+            }
+
             bool RKMPPPipeline::RecvRtpPacket(RtpPacket &pkt)
             {
                 if (rtsp_socket_ < 0)
                     return false;
 
                 uint8_t header[4];
-                size_t got = 0;
-                while (got < 4)
-                {
-                    ssize_t n = ::recv(rtsp_socket_, header + got, 4 - got, 0);
-                    if (n <= 0)
-                        return false;
-                    got += static_cast<size_t>(n);
-                }
+                if (!ReadExact(header, 4))
+                    return false;
 
                 if (header[0] != 0x24)
                 {
-                    RK_LOG_W("Invalid RTP marker: 0x" << std::hex << (int)header[0] << std::dec);
-                    return false;
+                    LOG_WARN("[RKMPP WARN] Misaligned RTP marker: 0x{:02x}, searching for 0x24 ($)...", header[0]);
+                    uint8_t byte = 0;
+                    int max_search = 65536;
+                    bool found = false;
+                    std::vector<uint8_t> search_buf(header + 1, header + 4);
+                    while (max_search-- > 0)
+                    {
+                        if (!search_buf.empty())
+                        {
+                            byte = search_buf.front();
+                            search_buf.erase(search_buf.begin());
+                        }
+                        else
+                        {
+                            if (!ReadExact(&byte, 1))
+                                return false;
+                        }
+                        if (byte == 0x24)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        LOG_ERROR("[RKMPP ERROR] Failed to resynchronize RTP stream ($ marker not found)");
+                        return false;
+                    }
+                    header[0] = 0x24;
+                    if (!ReadExact(header + 1, 3))
+                        return false;
                 }
 
                 uint16_t len = (static_cast<uint16_t>(header[2]) << 8) | header[3];
@@ -1154,14 +1214,8 @@ namespace aivision
                     return false;
 
                 std::vector<uint8_t> buf(len);
-                got = 0;
-                while (got < len)
-                {
-                    ssize_t n = ::recv(rtsp_socket_, buf.data() + got, len - got, 0);
-                    if (n <= 0)
-                        return false;
-                    got += static_cast<size_t>(n);
-                }
+                if (!ReadExact(buf.data(), len))
+                    return false;
 
                 uint8_t version = (buf[0] >> 6) & 0x03;
                 if (version != 2)
@@ -1369,7 +1423,7 @@ namespace aivision
                 pps_ = b64decode(val.substr(comma + 1));
                 has_sps_ = !sps_.empty();
                 has_pps_ = !pps_.empty();
-                RK_LOG_I("Parsed SPS=" << sps_.size() << " bytes, PPS=" << pps_.size() << " bytes");
+                LOG_INFO("[RKMPP] Parsed SPS={} bytes, PPS={} bytes", sps_.size(), pps_.size());
                 return has_sps_ && has_pps_;
             }
 
@@ -1388,9 +1442,7 @@ namespace aivision
                     RK_U32 new_ver_stride = mpp_frame_get_ver_stride(mpp_frame);
                     size_t buf_size = mpp_frame_get_buf_size(mpp_frame);
 
-                    RK_LOG_I("Info change: " << new_width << "x" << new_height
-                                             << " stride=" << new_hor_stride << "x" << new_ver_stride
-                                             << " buf_size=" << buf_size);
+                    LOG_INFO("[RKMPP] Info change: {}x{} stride={}x{} buf_size={}", new_width, new_height, new_hor_stride, new_ver_stride, buf_size);
 
                     dec_width_ = new_width;
                     dec_height_ = new_height;
@@ -1428,14 +1480,14 @@ namespace aivision
                 // 检查 EOS
                 if (mpp_frame_get_eos(mpp_frame))
                 {
-                    RK_LOG_I("Received EOS frame");
+                    LOG_INFO("[RKMPP] Received EOS frame");
                     return;
                 }
 
                 // 检查丢弃帧
                 if (mpp_frame_get_discard(mpp_frame) || mpp_frame_get_errinfo(mpp_frame))
                 {
-                    RK_LOG_W("Discard/errinfo frame");
+                    LOG_WARN("[RKMPP WARN] Discard/errinfo frame");
                     mpp_frame_deinit(&mpp_frame);
                     return;
                 }
@@ -1461,7 +1513,7 @@ namespace aivision
                     }
                     else
                     {
-                        RK_LOG_W("RGA resize failed, using original frame");
+                        LOG_WARN("[RKMPP WARN] RGA resize failed, using original frame");
                     }
                 }
 
@@ -1552,7 +1604,7 @@ namespace aivision
                     RK_FORMAT_YCbCr_420_SP);
                 if (src_handle <= 0)
                 {
-                    RK_LOG_W("RGA import src buffer failed");
+                    LOG_WARN("[RKMPP WARN] RGA import src buffer failed");
                     return false;
                 }
 
@@ -1564,7 +1616,7 @@ namespace aivision
                 if (dst_handle <= 0)
                 {
                     releasebuffer_handle(src_handle);
-                    RK_LOG_W("RGA import dst buffer failed");
+                    LOG_WARN("[RKMPP WARN] RGA import dst buffer failed");
                     return false;
                 }
 
@@ -1580,7 +1632,7 @@ namespace aivision
                 IM_STATUS check_ret = imcheck(src_img, dst_img, {}, {});
                 if (check_ret != IM_STATUS_NOERROR && check_ret != IM_STATUS_SUCCESS)
                 {
-                    RK_LOG_W("RGA imcheck failed: " << imStrError(check_ret));
+                    LOG_WARN("[RKMPP WARN] RGA imcheck failed: {}", imStrError(check_ret));
                     releasebuffer_handle(src_handle);
                     releasebuffer_handle(dst_handle);
                     return false;
@@ -1591,7 +1643,7 @@ namespace aivision
                 IM_STATUS ret = imresize(src_img, dst_img);
                 if (ret != IM_STATUS_SUCCESS)
                 {
-                    RK_LOG_W("RGA imresize failed: " << imStrError(ret));
+                    LOG_WARN("[RKMPP WARN] RGA imresize failed: {}", imStrError(ret));
                     releasebuffer_handle(src_handle);
                     releasebuffer_handle(dst_handle);
                     return false;
@@ -1636,7 +1688,7 @@ namespace aivision
                 ret = mpp_create(&ctx, &mpi);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_create for encoder failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_create for encoder failed: {}", ret);
                     return false;
                 }
                 mpp_enc_ctx_ = ctx;
@@ -1647,14 +1699,14 @@ namespace aivision
                 ret = mpi->control(ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_W("MPP_SET_OUTPUT_TIMEOUT failed: " << ret);
+                    LOG_WARN("[RKMPP WARN] MPP_SET_OUTPUT_TIMEOUT failed: {}", ret);
                 }
 
                 // 3. 初始化编码器
                 ret = mpp_init(ctx, MPP_CTX_ENC, static_cast<MppCodingType>(coding_type));
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_init ENC failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_init ENC failed: {}", ret);
                     mpp_destroy(ctx);
                     mpp_enc_ctx_ = nullptr;
                     mpp_enc_mpi_ = nullptr;
@@ -1666,7 +1718,7 @@ namespace aivision
                 ret = mpp_enc_cfg_init(&cfg);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("mpp_enc_cfg_init failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] mpp_enc_cfg_init failed: {}", ret);
                     mpp_destroy(ctx);
                     mpp_enc_ctx_ = nullptr;
                     mpp_enc_mpi_ = nullptr;
@@ -1678,7 +1730,7 @@ namespace aivision
                 ret = mpi->control(ctx, MPP_ENC_GET_CFG, cfg);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("MPP_ENC_GET_CFG failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] MPP_ENC_GET_CFG failed: {}", ret);
                     mpp_enc_cfg_deinit(cfg);
                     mpp_destroy(ctx);
                     mpp_enc_ctx_ = nullptr;
@@ -1736,7 +1788,7 @@ namespace aivision
                 ret = mpi->control(ctx, MPP_ENC_SET_CFG, cfg);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_E("MPP_ENC_SET_CFG failed: " << ret);
+                    LOG_ERROR("[RKMPP ERROR] MPP_ENC_SET_CFG failed: {}", ret);
                     mpp_enc_cfg_deinit(cfg);
                     mpp_destroy(ctx);
                     mpp_enc_ctx_ = nullptr;
@@ -1751,7 +1803,7 @@ namespace aivision
                     MPP_BUFFER_TYPE_DRM);
                 if (ret != MPP_OK)
                 {
-                    RK_LOG_W("mpp_buffer_group_get_internal for encoder failed: " << ret);
+                    LOG_WARN("[RKMPP WARN] mpp_buffer_group_get_internal for encoder failed: {}", ret);
                     enc_buf_grp_ = nullptr;
                 }
 
@@ -1766,18 +1818,13 @@ namespace aivision
                         size_t hdr_len = mpp_packet_get_length(hdr_packet);
                         if (hdr_len > 0)
                         {
-                            RK_LOG_I("Encoder header size=" << hdr_len << " bytes");
+                            LOG_INFO("[RKMPP] Encoder header size={} bytes", hdr_len);
                         }
                     }
                     mpp_packet_deinit(&hdr_packet);
                 }
 
-                RK_LOG_I("MPP encoder initialized: "
-                         << (coding_type == MPP_VIDEO_CodingAVC ? "H.264" : "H.265")
-                         << " " << width << "x" << height
-                         << " @" << enc_fps_ << "fps"
-                         << " " << bps / 1000 << "kbps"
-                         << " GOP=" << enc_gop_);
+                LOG_INFO("[RKMPP] MPP encoder initialized: {} {}x{} @{}fps {}kbps GOP={}", (coding_type == MPP_VIDEO_CodingAVC ? "H.264" : "H.265"), width, height, enc_fps_, bps / 1000, enc_gop_);
                 return true;
             }
 
@@ -1805,7 +1852,7 @@ namespace aivision
                     enc_buf_grp_ = nullptr;
                 }
                 encoder_initialized_ = false;
-                RK_LOG_I("MPP encoder destroyed");
+                LOG_INFO("[RKMPP] MPP encoder destroyed");
             }
 
 #endif // AIVISION_WITH_RKMPP

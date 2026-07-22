@@ -1,12 +1,11 @@
 #include "pipeline/hal.h"
+#include "logger/logger.h"
 
 #if defined(__APPLE__)
 #include "hal/macos/videotoolbox_pipeline.h"
 #elif defined(AIVISION_WITH_RKMPP)
 #include "hal/rockchip/rkmpp_pipeline.h"
 #endif
-
-#include <iostream>
 
 namespace aivision
 {
@@ -22,13 +21,13 @@ namespace aivision
 #elif defined(AIVISION_WITH_RKMPP)
             pipeline_ = std::make_unique<hal::rockchip::RKMPPPipeline>();
 #else
-            std::cerr << "No platform HAL pipeline available at compile time" << std::endl;
+            LOG_ERROR("No platform HAL pipeline available at compile time");
             return false;
 #endif
 
             if (!pipeline_->Initialize(config_json))
             {
-                std::cerr << "HAL pipeline Initialize failed" << std::endl;
+                LOG_ERROR("HAL pipeline Initialize failed");
                 pipeline_.reset();
                 return false;
             }

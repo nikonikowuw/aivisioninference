@@ -106,6 +106,15 @@ namespace aivision
 
         /// 设备监控昂贵指标采样周期 (毫秒)
         uint32_t device_expensive_probe_interval_ms = 20000;
+
+        /// Logger 日志输出根目录
+        std::string log_dir = "logs";
+
+        /// 终端日志级别 (trace/debug/info/warn/error)
+        std::string log_level = "info";
+
+        /// 文件日志最低级别 (trace/debug/info/warn/error)
+        std::string log_file_level = "trace";
     };
 
     namespace monitor { class HeartbeatReporter; class DeviceMonitor; }

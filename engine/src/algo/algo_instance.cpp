@@ -1,23 +1,10 @@
 // AlgoInstance 实现
 #include "algo/algo_instance.h"
-#include <iostream>
+#include "logger/logger.h"
 #include <mutex>
 
-namespace
-{
-    std::mutex g_infer_log_mutex;
-
-    void AppendInferInputFields(std::ostream &out, const hw_buffer_desc_t &desc)
-    {
-        out << " input_width=" << desc.width
-            << " input_height=" << desc.height
-            << " input_size=" << desc.size
-            << " dma_fd=" << desc.dma_fd
-            << " data=" << desc.data
-            << " stride=" << desc.stride;
-    }
-
-    hw_buffer_desc_t BuildAbiBufferDesc(const aivision::pipeline::HwBufferDesc &input_desc)
+namespace {
+hw_buffer_desc_t BuildAbiBufferDesc(const aivision::pipeline::HwBufferDesc &input_desc)
     {
         hw_buffer_desc_t desc{};
         desc.dma_fd = input_desc.dma_fd;
@@ -53,8 +40,8 @@ namespace
         }
 
         return desc;
-    }
 }
+} // namespace
 
 namespace aivision
 {
@@ -100,12 +87,8 @@ namespace aivision
         {
             if (!so_handle_)
             {
-                std::lock_guard<std::mutex> lock(g_infer_log_mutex);
-                std::cerr << "[AlgoInstance] infer skipped"
-                          << " algo=" << algo_name_
-                          << " version=" << version_
-                          << " reason=no_so_handle"
-                          << std::endl;
+                LOG_ERROR("[AlgoInstance] infer skipped algo={} version={} reason=no_so_handle",
+                         algo_name_, version_);
                 return false;
             }
 
@@ -123,8 +106,7 @@ namespace aivision
                     if (active_infer_count_.fetch_sub(1) == 1) {
                         state_.store(AlgoInstanceState::Ready);
                     }
-                    std::lock_guard<std::mutex> lock(g_infer_log_mutex);
-                    std::cerr << "[AlgoInstance] infer skipped reason=not_initialized algo=" << algo_name_ << std::endl;
+                    LOG_ERROR("[AlgoInstance] infer skipped reason=not_initialized algo={}", algo_name_);
                     return false;
                 }
                 ret = so_handle_->Infer(
@@ -142,13 +124,11 @@ namespace aivision
             }
             else if (ret != 0)
             {
-                std::lock_guard<std::mutex> lock(g_infer_log_mutex);
-                std::cerr << "[AlgoInstance] infer failed"
-                          << " algo=" << algo_name_
-                          << " version=" << version_
-                          << " ret=" << ret;
-                AppendInferInputFields(std::cerr, fb_desc);
-                std::cerr << std::endl;
+                LOG_ERROR("[AlgoInstance] infer failed algo={} version={} ret={} "
+                         "input_width={} input_height={} input_size={} dma_fd={} data={} stride={}",
+                         algo_name_, version_, ret,
+                         fb_desc.width, fb_desc.height, fb_desc.size,
+                         fb_desc.dma_fd, fb_desc.data, fb_desc.stride);
             }
 
             if (active_infer_count_.fetch_sub(1) == 1) {
@@ -179,41 +159,28 @@ namespace aivision
             std::lock_guard<std::mutex> lock(infer_mutex_);
             if (!algo_handle_ || !so_handle_)
             {
-                std::cerr << "[AlgoInstance] face library update skipped"
-                          << " algo=" << algo_name_
-                          << " version=" << version_
-                          << " reason=not_initialized"
-                          << std::endl;
+                LOG_ERROR("[AlgoInstance] face library update skipped algo={} version={} reason=not_initialized",
+                         algo_name_, version_);
                 return false;
             }
 
             if (!so_handle_->HasFaceLibraryUpdater())
             {
-                std::cerr << "[AlgoInstance] face library update skipped"
-                          << " algo=" << algo_name_
-                          << " version=" << version_
-                          << " reason=symbol_not_found"
-                          << std::endl;
+                LOG_ERROR("[AlgoInstance] face library update skipped algo={} version={} reason=symbol_not_found",
+                         algo_name_, version_);
                 return false;
             }
 
             const int ret = so_handle_->UpdateFaceLibrary(algo_handle_, face_library_json.c_str());
             if (ret != 0)
             {
-                std::cerr << "[AlgoInstance] face library update failed"
-                          << " algo=" << algo_name_
-                          << " version=" << version_
-                          << " ret=" << ret
-                          << " payload_size=" << face_library_json.size()
-                          << std::endl;
+                LOG_ERROR("[AlgoInstance] face library update failed algo={} version={} ret={} payload_size={}",
+                         algo_name_, version_, ret, face_library_json.size());
                 return false;
             }
 
-            std::cout << "[AlgoInstance] face library updated"
-                      << " algo=" << algo_name_
-                      << " version=" << version_
-                      << " payload_size=" << face_library_json.size()
-                      << std::endl;
+            LOG_INFO("[AlgoInstance] face library updated algo={} version={} payload_size={}",
+                     algo_name_, version_, face_library_json.size());
             return true;
         }
 

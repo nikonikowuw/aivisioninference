@@ -69,6 +69,7 @@ private:
     bool RtspTeardown();
 
     bool RecvRtpPacket(RtpPacket& pkt);
+    bool ReadExact(uint8_t* dst, size_t count);
     void HandleRtpPacket(const RtpPacket& pkt);
     void EmitNal(const uint8_t* data, size_t size, uint32_t timestamp);
 
@@ -112,6 +113,7 @@ private:
     int interleaved_start_ = 0;
     uint16_t expected_seq_ = 0;
     bool have_seq_ = false;
+    std::vector<uint8_t> rx_buffer_;
 
     // H264/H265
     bool is_hevc_ = false;

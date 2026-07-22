@@ -1,10 +1,11 @@
+#include "string_utils.h"
 #include "pipeline/rtsp_push_stage.h"
+#include "logger/logger.h"
 
 #include <algorithm>
 #include <arpa/inet.h>
 #include <chrono>
 #include <cstring>
-#include <iostream>
 #include <netdb.h>
 #include <random>
 #include <sstream>
@@ -29,12 +30,7 @@ bool SendAll(int fd, const void* data, size_t size) {
     return true;
 }
 
-std::string Trim(const std::string& value) {
-    size_t start = value.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) return "";
-    size_t end = value.find_last_not_of(" \t\r\n");
-    return value.substr(start, end - start + 1);
-}
+
 
 bool ParseRtspUrl(const std::string& url, std::string& host, uint16_t& port) {
     constexpr const char* prefix = "rtsp://";
@@ -156,7 +152,7 @@ void RtspPushStage::Loop() {
             if (Connect()) {
                 connected_.store(true);
                 reconnect_delay_ms = 5000;
-                std::cout << "[RTSP] Publishing to " << push_url_ << std::endl;
+                LOG_INFO("[RTSP] Publishing to {}", push_url_);
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms));
                 reconnect_delay_ms = std::min(reconnect_delay_ms * 2, 120000u);
@@ -168,7 +164,7 @@ void RtspPushStage::Loop() {
         if (!ok) continue;
 
         if (!SendPacket(pkt)) {
-            std::cerr << "[RTSP] Send failed, reconnecting..." << std::endl;
+            LOG_ERROR("[RTSP] Send failed, reconnecting...");
             connected_.store(false);
             Disconnect();
         }
@@ -178,7 +174,7 @@ void RtspPushStage::Loop() {
 bool RtspPushStage::Connect() {
     Disconnect();
     if (!ParseRtspUrl(push_url_, host_, port_)) {
-        std::cerr << "[RTSP] Invalid push URL: " << push_url_ << std::endl;
+        LOG_ERROR("[RTSP] Invalid push URL: {}", push_url_);
         return false;
     }
 
@@ -188,7 +184,7 @@ bool RtspPushStage::Connect() {
     addrinfo* result = nullptr;
     std::string port_str = std::to_string(port_);
     if (getaddrinfo(host_.c_str(), port_str.c_str(), &hints, &result) != 0) {
-        std::cerr << "[RTSP] Failed to resolve host: " << host_ << std::endl;
+        LOG_ERROR("[RTSP] Failed to resolve host: {}", host_);
         return false;
     }
 
@@ -201,7 +197,7 @@ bool RtspPushStage::Connect() {
     }
     freeaddrinfo(result);
     if (socket_fd_ < 0) {
-        std::cerr << "[RTSP] Failed to connect: " << host_ << ':' << port_ << std::endl;
+        LOG_ERROR("[RTSP] Failed to connect: {}:{}", host_, port_);
         return false;
     }
 
@@ -255,7 +251,7 @@ bool RtspPushStage::Connect() {
         session_ = Trim(semicolon == std::string::npos ? line : line.substr(0, semicolon));
     }
     if (session_.empty()) {
-        std::cerr << "[RTSP] SETUP response missing Session header" << std::endl;
+        LOG_ERROR("[RTSP] SETUP response missing Session header");
         return false;
     }
 
@@ -306,11 +302,11 @@ bool RtspPushStage::ReadResponse(int& status_code, std::string& response) {
     std::string version;
     stream >> version >> status_code;
     if (status_code <= 0) {
-        std::cerr << "[RTSP] Invalid response: " << response << std::endl;
+        LOG_ERROR("[RTSP] Invalid response: {}", response);
         return false;
     }
     if (status_code < 200 || status_code >= 300) {
-        std::cerr << "[RTSP] Request failed, status=" << status_code << ", response=" << response << std::endl;
+        LOG_ERROR("[RTSP] Request failed, status={}, response={}", status_code, response);
     }
     return true;
 }

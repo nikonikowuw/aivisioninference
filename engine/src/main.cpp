@@ -8,9 +8,27 @@
 #include <fstream>
 #include <iostream>
 
+#include "string_utils.h"
 #include "engine.h"
+#include "logger/logger.h"
 
 using namespace aivision;
+
+// Helper to parse log level string from env/config
+static LogLevel ParseLogLevel(const std::string &level, LogLevel default_level)
+{
+    std::string lc;
+    lc.reserve(level.size());
+    for (char c : level) {
+        lc.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    if (lc == "trace") return LogLevel::Trace;
+    if (lc == "debug") return LogLevel::Debug;
+    if (lc == "info")  return LogLevel::Info;
+    if (lc == "warn")  return LogLevel::Warn;
+    if (lc == "error") return LogLevel::Error;
+    return default_level;
+}
 
 namespace
 {
@@ -18,14 +36,7 @@ namespace
 // 信号标志 (async-signal-safe)
 static volatile sig_atomic_t g_signal_received = 0;
 
-static std::string Trim(const std::string &value)
-{
-    size_t begin = value.find_first_not_of(" \t\r\n");
-    if (begin == std::string::npos)
-        return "";
-    size_t end = value.find_last_not_of(" \t\r\n");
-    return value.substr(begin, end - begin + 1);
-}
+
 
 static std::string GetEnvString(const char *name, const std::string &default_value = "")
 {
@@ -106,7 +117,7 @@ static uint32_t GetPositiveEnvUInt32(const char *name)
 {
     std::string value = GetEnvString(name);
     if (value.empty()) {
-        std::cerr << "[Config] " << name << " is missing; preview scheduling disabled" << std::endl;
+        LOG_WARN("[Config] {} is missing; preview scheduling disabled", name);
         return 0;
     }
     try {
@@ -116,7 +127,7 @@ static uint32_t GetPositiveEnvUInt32(const char *name)
             throw std::out_of_range("not a positive uint32");
         return static_cast<uint32_t>(result);
     } catch (...) {
-        std::cerr << "[Config] " << name << " must be a positive integer; preview scheduling disabled" << std::endl;
+        LOG_WARN("[Config] {} must be a positive integer; preview scheduling disabled", name);
         return 0;
     }
 }
@@ -147,6 +158,9 @@ static EngineConfig LoadConfigFromEnv()
     config.node_id = GetEnvString("NIKO_ENGINE_NODE_ID", config.node_id);
     config.auth_token = GetEnvString("NIKO_ENGINE_AUTH_TOKEN", config.auth_token);
     config.algo_dir = GetEnvString("NIKO_ENGINE_ALGO_DIR", config.algo_dir);
+    config.log_dir = GetEnvString("NIKO_ENGINE_LOG_DIR", config.log_dir);
+    config.log_level = GetEnvString("NIKO_ENGINE_LOG_LEVEL", config.log_level);
+    config.log_file_level = GetEnvString("NIKO_ENGINE_LOG_FILE_LEVEL", config.log_file_level);
     config.enable_mqtt = GetEnvBool("NIKO_ENGINE_ENABLE_MQTT", config.enable_mqtt);
     config.mqtt_broker = GetEnvString("NIKO_ENGINE_MQTT_BROKER", config.mqtt_broker);
     config.mqtt_client_id = GetEnvString("NIKO_ENGINE_MQTT_CLIENT_ID", config.mqtt_client_id);
@@ -186,27 +200,23 @@ static void PrintRuntimeConfig(const EngineConfig &config,
     if (env_display.empty()) {
         env_display = GetEnvString("NIKO_ENGINE_ENV_FILE", ".env");
     }
-    std::cout << "[Config] env_file=" << env_display << std::endl;
-    std::cout << "[Config] workers=" << config.worker_count
-              << " metrics_ms=" << config.metrics_interval_ms
-			  << " max_preview_streams=" << config.max_preview_streams << std::endl;
-    std::cout << "[Config] ffmpeg_fallback=" << DisplayBool(config.enable_ffmpeg_fallback, "enabled", "disabled")
-              << " rtsp_push=" << config.rtsp_push_server
-              << " zlm_url=" << config.zlm_api_url
-              << " zlm_secret=" << DisplayVal(config.zlm_secret, "<empty>") << std::endl;
-    std::cout << "[Config] platform_url=" << DisplayVal(config.platform_url)
-              << " node_id=" << DisplayVal(config.node_id)
-              << " auth_token=" << DisplayVal(config.auth_token, "<empty>") << std::endl;
-    std::cout << "[Config] algo_dir=" << config.algo_dir << std::endl;
-    std::cout << "[Config] enable_mqtt=" << DisplayBool(config.enable_mqtt)
-              << " mqtt_broker=" << config.mqtt_broker
-              << " mqtt_client_id=" << config.mqtt_client_id
-              << " mqtt_user=" << config.mqtt_username
-              << " mqtt_pass=" << DisplayVal(config.mqtt_password, "<empty>") << std::endl;
-    std::cout << "[Config] device_platform=" << DisplayVal(config.device_platform)
-              << " device_storage_path=" << config.device_storage_path
-              << " device_enable_commands=" << DisplayBool(config.device_enable_external_commands)
-              << " device_command_timeout_ms=" << config.device_command_timeout_ms << std::endl;
+    LOG_INFO("[Config] env_file={}", env_display);
+    LOG_INFO("[Config] workers={} metrics_ms={} max_preview_streams={}",
+             config.worker_count, config.metrics_interval_ms, config.max_preview_streams);
+    LOG_INFO("[Config] ffmpeg_fallback={} rtsp_push={} zlm_url={} zlm_secret={}",
+             DisplayBool(config.enable_ffmpeg_fallback, "enabled", "disabled"),
+             config.rtsp_push_server, config.zlm_api_url,
+             DisplayVal(config.zlm_secret, "<empty>"));
+    LOG_INFO("[Config] platform_url={} node_id={} auth_token={}",
+             DisplayVal(config.platform_url), DisplayVal(config.node_id),
+             DisplayVal(config.auth_token, "<empty>"));
+    LOG_INFO("[Config] algo_dir={}", config.algo_dir);
+    LOG_INFO("[Config] enable_mqtt={} mqtt_broker={} mqtt_client_id={} mqtt_user={} mqtt_pass={}",
+             DisplayBool(config.enable_mqtt), config.mqtt_broker, config.mqtt_client_id,
+             config.mqtt_username, DisplayVal(config.mqtt_password, "<empty>"));
+    LOG_INFO("[Config] device_platform={} device_storage_path={} device_enable_commands={} device_command_timeout_ms={}",
+             DisplayVal(config.device_platform), config.device_storage_path,
+             DisplayBool(config.device_enable_external_commands), config.device_command_timeout_ms);
 }
 
 } // namespace
@@ -252,6 +262,9 @@ int main(int argc, char *argv[])
         LoadDotEnvFile(env_file);
     else
         LoadDotEnv();
+
+    // Phase 1: 尽早初始化终端日志
+    Logger::InitConsole(LogLevel::Debug);
 
     // 配置加载优先级：默认值 < .env < 环境变量 < 命令行参数
     EngineConfig config = LoadConfigFromEnv();
@@ -319,7 +332,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            std::cerr << "Unknown option: " << arg << std::endl;
+            LOG_ERROR("Unknown option: {}", arg);
             PrintUsage(argv[0]);
             return 1;
         }
@@ -327,6 +340,13 @@ int main(int argc, char *argv[])
 
     PrintVersion();
     PrintRuntimeConfig(config, env_file);
+
+    // Phase 2: 配置加载完成后初始化文件日志 sink
+    {
+        auto console_lvl = ParseLogLevel(config.log_level, LogLevel::Info);
+        auto app_lvl     = ParseLogLevel(config.log_file_level, LogLevel::Trace);
+        Logger::InitFileSinks(config.log_dir, app_lvl, LogLevel::Error, console_lvl);
+    }
 
     // 注册信号处理
     std::signal(SIGINT, SignalHandler);
@@ -337,11 +357,11 @@ int main(int argc, char *argv[])
 
     if (!engine.Initialize())
     {
-        std::cerr << "Engine initialization failed" << std::endl;
+        LOG_ERROR("Engine initialization failed");
         return 1;
     }
 
-    std::cout << "Engine initialized, starting main loop..." << std::endl;
+    LOG_INFO("Engine initialized, starting main loop...");
 
     // 运行主循环 (阻塞)
     engine.Run([]() { return g_signal_received != 0; });
@@ -349,11 +369,12 @@ int main(int argc, char *argv[])
     // 检查信号标志 (async-signal-safe)
     if (g_signal_received)
     {
-        std::cerr << "Received signal " << g_signal_received << ", shutting down..." << std::endl;
+        LOG_INFO("Received signal {}, shutting down...", g_signal_received);
     }
 
     engine.Shutdown();
 
-    std::cout << "Engine shut down gracefully" << std::endl;
+    LOG_INFO("Engine shut down gracefully");
+    Logger::Shutdown();
     return 0;
 }

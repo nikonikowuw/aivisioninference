@@ -26,6 +26,15 @@ find_package(CURL REQUIRED)
 # OpenSSL (for MD5 verification in AlgorithmDownloader)
 find_package(OpenSSL REQUIRED)
 
+# spdlog (Header-only logging library)
+include(FetchContent)
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.14.1
+)
+FetchContent_MakeAvailable(spdlog)
+
 # nlohmann/json (Modern JSON library, header-only)
 include(FetchContent)
 FetchContent_Declare(
@@ -186,6 +195,9 @@ set(ENGINE_LIB_SOURCES
     src/monitor/heartbeat_reporter.cpp
     src/monitor/metrics_flattener.cpp
     src/algo/algorithm_downloader.cpp
+    src/logger/logger.cpp
+    src/logger/daily_dir_sink.cpp
+    src/logger/json_formatter.cpp
     src/command_dispatcher.cpp
     src/mqtt_control_plane.cpp
     src/monitor/device_monitor.cpp
@@ -229,6 +241,9 @@ set(INSTALL_HEADERS
     include/monitor/metrics_flattener.h
     include/monitor/device_monitor.h
     include/algo/algorithm_downloader.h
+    include/logger/logger.h
+    include/logger/daily_dir_sink.h
+    include/logger/json_formatter.h
     include/command_dispatcher.h
     include/mqtt_control_plane.h
     include/monitor/command_executor.h
@@ -260,6 +275,7 @@ target_include_directories(aivision-engine-lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/monitor
     ${FLATBUFFERS_INCLUDE_DIRS}
     ${asio_SOURCE_DIR}/asio/include
+    ${spdlog_SOURCE_DIR}/include
 )
 
 target_link_libraries(aivision-engine-lib PUBLIC
@@ -332,11 +348,11 @@ if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
 
     target_include_directories(test_rkmpp_pipeline PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${spdlog_SOURCE_DIR}/include
     )
 
     target_link_libraries(test_rkmpp_pipeline PRIVATE
-        Threads::Threads
-        dl
+        aivision-engine-lib
     )
 
     if(AIVISION_WITH_RKMPP AND ROCKCHIP_MPP_LIB AND RGA_LIB)
@@ -452,6 +468,18 @@ if(BUILD_TESTING OR NOT DEFINED BUILD_TESTING)
         aivision-engine-lib
     )
     add_test(NAME device_probe_macos COMMAND test_device_probe_macos)
+
+    add_executable(test_logger
+        tests/test_logger.cpp
+    )
+    target_include_directories(test_logger PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${spdlog_SOURCE_DIR}/include
+    )
+    target_link_libraries(test_logger PRIVATE
+        aivision-engine-lib
+    )
+    add_test(NAME logger COMMAND test_logger)
 endif()
 
 # ============================================================

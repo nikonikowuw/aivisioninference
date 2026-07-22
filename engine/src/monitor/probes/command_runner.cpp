@@ -6,10 +6,10 @@
 #include <sys/select.h>
 #include <signal.h>
 #include <fcntl.h>
+#include "logger/logger.h"
 #include <cstring>
 #include <chrono>
 #include <algorithm>
-#include <iostream>
 
 namespace aivision
 {
@@ -71,7 +71,11 @@ namespace aivision
                 // Ensure child doesn't inherit signals or unnecessary FDs if needed
                 // But for monitor probes, execvp is standard.
                 execvp(argv[0], argv.data());
-                std::cerr << "execvp failed: " << strerror(errno) << std::endl;
+                // Note: async-signal-safe write(2) — LOG_ERROR is unsafe after fork
+                static const char fail_msg[] = "[CommandRunner] execvp failed: ";
+                (void)::write(STDERR_FILENO, fail_msg, sizeof(fail_msg) - 1);
+                (void)::write(STDERR_FILENO, ::strerror(errno), ::strlen(::strerror(errno)));
+                (void)::write(STDERR_FILENO, "\n", 1);
                 _exit(127);
             }
 

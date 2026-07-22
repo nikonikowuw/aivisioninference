@@ -7,6 +7,7 @@
 #include "monitor/device_monitor.h"
 #include "monitor/device_snapshot_json.h"
 #include "pipeline/pipeline_manager.h"
+#include "logger/logger.h"
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -411,7 +412,7 @@ namespace aivision
             curl_handle_->reset();
 
             if (!curl_handle_->is_valid()) {
-                std::cerr << "[HeartbeatReporter] Failed to initialize CURL" << std::endl;
+                LOG_ERROR("[HeartbeatReporter] Failed to initialize CURL");
                 consecutive_failures_++;
                 return;
             }
@@ -453,21 +454,21 @@ namespace aivision
                     try {
                         ParseAndDeploy(response_data);
                     } catch (const std::exception& e) {
-                        std::cerr << "[HeartbeatReporter] Failed to parse response: " << e.what() << std::endl;
+                        LOG_ERROR("[HeartbeatReporter] Failed to parse response: {}", e.what());
                     }
                 }
                 else
                 {
                     consecutive_failures_++;
-                    std::cerr << "[HeartbeatReporter] Heartbeat failed with HTTP code " << response_code
-                              << ": node_id=" << config.node_id << ", url=" << url << std::endl;
+                    LOG_ERROR("[HeartbeatReporter] Heartbeat failed with HTTP code {}: node_id={}, url={}",
+                             response_code, config.node_id, url);
                 }
             }
             else
             {
                 consecutive_failures_++;
-                std::cerr << "[HeartbeatReporter] Heartbeat failed: node_id=" << config.node_id
-                          << ", url=" << url << ", error=" << curl_easy_strerror(res) << std::endl;
+                LOG_ERROR("[HeartbeatReporter] Heartbeat failed: node_id={}, url={}, error={}",
+                         config.node_id, url, curl_easy_strerror(res));
             }
         }
 
@@ -620,14 +621,13 @@ namespace aivision
                 // The Go backend returns "code" as a string — "OK" for success,
                 // or an error code like "NODE_NOT_FOUND", "ENGINE_VERSION_INCOMPATIBLE" etc.
                 if (!response.contains("code") || !response["code"].is_string()) {
-                    std::cerr << "[HeartbeatReporter] Heartbeat response missing or invalid 'code' field" << std::endl;
+                    LOG_ERROR("[HeartbeatReporter] Heartbeat response missing or invalid 'code' field");
                     return;
                 }
                 const std::string code = response["code"].get<std::string>();
                 if (code != "OK") {
-                    std::cerr << "[HeartbeatReporter] Heartbeat response error: code=" << code
-                              << ", message=" << (response.contains("message") ? response["message"].get<std::string>() : "unknown")
-                              << std::endl;
+                    LOG_ERROR("[HeartbeatReporter] Heartbeat response error: code={}, message={}",
+                             code, (response.contains("message") ? response["message"].get<std::string>() : "unknown"));
                     return;
                 }
 
@@ -638,7 +638,7 @@ namespace aivision
 
                 const auto& pending_deployments = response["data"]["pending_deployments"];
                 if (!pending_deployments.is_array()) {
-                    std::cerr << "[HeartbeatReporter] Invalid pending_deployments format" << std::endl;
+                    LOG_ERROR("[HeartbeatReporter] Invalid pending_deployments format");
                     return;
                 }
 
@@ -648,7 +648,7 @@ namespace aivision
                     if (!deployment.contains("algo_package_id") || !deployment.contains("download_url") ||
                         !deployment.contains("md5") || !deployment.contains("extract_path") ||
                         !deployment.contains("algo_name") || !deployment.contains("version")) {
-                        std::cerr << "[HeartbeatReporter] Skipping deployment with missing fields" << std::endl;
+                        LOG_ERROR("[HeartbeatReporter] Skipping deployment with missing fields");
                         continue;
                     }
 
@@ -662,12 +662,11 @@ namespace aivision
                     // Validate non-empty values
                     if (pkg_id.empty() || url.empty() || md5.empty() ||
                         path.empty() || name.empty() || version.empty()) {
-                        std::cerr << "[HeartbeatReporter] Skipping deployment with empty fields" << std::endl;
+                        LOG_ERROR("[HeartbeatReporter] Skipping deployment with empty fields");
                         continue;
                     }
 
-                    std::cout << "[HeartbeatReporter] Scheduling deploy for: " << name
-                              << " (package " << pkg_id << ")" << std::endl;
+                    LOG_INFO("[HeartbeatReporter] Scheduling deploy for: {} (package {})", name, pkg_id);
 
                     algo::AlgorithmDownloader::StartDeploy(
                         engine_->GetAlgoManager(),
@@ -681,12 +680,11 @@ namespace aivision
                     );
                 }
             } catch (const json::parse_error& e) {
-                std::cerr << "[HeartbeatReporter] JSON parse error: " << e.what()
-                          << " at byte " << e.byte << std::endl;
+                LOG_ERROR("[HeartbeatReporter] JSON parse error: {} at byte {}", e.what(), e.byte);
             } catch (const json::type_error& e) {
-                std::cerr << "[HeartbeatReporter] JSON type error: " << e.what() << std::endl;
+                LOG_ERROR("[HeartbeatReporter] JSON type error: {}", e.what());
             } catch (const std::exception& e) {
-                std::cerr << "[HeartbeatReporter] Unexpected error parsing response: " << e.what() << std::endl;
+                LOG_ERROR("[HeartbeatReporter] Unexpected error parsing response: {}", e.what());
             }
         }
 

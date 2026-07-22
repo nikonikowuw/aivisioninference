@@ -1,8 +1,8 @@
 #include "command_dispatcher.h"
 #include "engine.h"
 #include "response_router.h"
+#include "logger/logger.h"
 
-#include <iostream>
 #include <nlohmann/json.hpp>
 
 #include "proto/flatbuf/commands_generated.h"
@@ -23,7 +23,7 @@ namespace aivision
         }
         catch (const std::exception &e)
         {
-            std::cerr << "[CommandDispatcher] Failed to parse MQTT JSON: " << e.what() << std::endl;
+            LOG_ERROR("[CommandDispatcher] Failed to parse MQTT JSON: {}", e.what());
             return;
         }
 
@@ -32,8 +32,7 @@ namespace aivision
         // 使用 RAII 守护类设置 thread_local 状态为 MQTT 响应模式
         ScopedMqttContext mqtt_guard(trace_id);
 
-        std::cout << "[CommandDispatcher] Dispatching MQTT command: " << cmd_name 
-                  << " trace_id=" << trace_id << std::endl;
+        LOG_INFO("[CommandDispatcher] Dispatching MQTT command: {} trace_id={}", cmd_name, trace_id);
 
         const uint8_t *payload_ptr = reinterpret_cast<const uint8_t *>(payload_json.data());
         size_t payload_size = payload_json.size();
@@ -120,7 +119,7 @@ namespace aivision
         }
         else
         {
-            std::cerr << "[CommandDispatcher] Unknown MQTT command: " << cmd_name << std::endl;
+            LOG_WARN("[CommandDispatcher] Unknown MQTT command: {}", cmd_name);
         }
     }
 

@@ -1,6 +1,6 @@
 // Ring Queue 实现
 #include "pipeline/ring_queue.h"
-#include <iostream>
+#include "logger/logger.h"
 
 namespace aivision
 {
@@ -26,14 +26,12 @@ namespace aivision
                 // 预警日志
                 if (!first_evict_logged_)
                 {
-                    std::cerr << "[RingQueue] First frame evicted for capacity="
-                              << capacity_ << std::endl;
+                    LOG_WARN("[RingQueue] First frame evicted for capacity={}", capacity_);
                     first_evict_logged_ = true;
                 }
                 if (evict_count_.load() % log_interval_ == 0)
                 {
-                    std::cerr << "[RingQueue] Evicted " << evict_count_.load()
-                              << " frames so far" << std::endl;
+                    LOG_WARN("[RingQueue] Evicted {} frames so far", evict_count_.load());
                 }
 
                 // 回调通知

@@ -7,10 +7,10 @@
 #include <sys/select.h>
 #include <signal.h>
 #include <fcntl.h>
+#include "logger/logger.h"
 #include <cstring>
 #include <vector>
 #include <string>
-#include <iostream>
 #include <chrono>
 #include <algorithm>
 #include <unordered_map>
@@ -142,7 +142,7 @@ namespace aivision
             }
             catch (const std::exception& e)
             {
-                std::cerr << "DeviceMonitor initialize error: " << e.what() << std::endl;
+                LOG_ERROR("DeviceMonitor initialize error: {}", e.what());
                 DeviceSnapshot initial;
                 initial.timestamp_ms = GetCurrentTimeMs();
                 PublishSnapshot(initial);
@@ -150,7 +150,7 @@ namespace aivision
             }
             catch (...)
             {
-                std::cerr << "DeviceMonitor initialize unknown error" << std::endl;
+                LOG_ERROR("DeviceMonitor initialize unknown error");
                 DeviceSnapshot initial;
                 initial.timestamp_ms = GetCurrentTimeMs();
                 PublishSnapshot(initial);
@@ -225,7 +225,7 @@ namespace aivision
                             }
                             catch (const std::exception& e)
                             {
-                                std::cerr << "Probe " << probe->Name() << " CollectStaticInfo error: " << e.what() << std::endl;
+                                LOG_ERROR("Probe {} CollectStaticInfo error: {}", probe->Name(), e.what());
                             }
                         }
                         last_static_run = now;
@@ -244,7 +244,7 @@ namespace aivision
                             }
                             catch (const std::exception& e)
                             {
-                                std::cerr << "Probe " << probe->Name() << " CollectDynamicMetrics error: " << e.what() << std::endl;
+                                LOG_ERROR("Probe {} CollectDynamicMetrics error: {}", probe->Name(), e.what());
                             }
                         }
                         last_light_run = now;
@@ -268,7 +268,7 @@ namespace aivision
                                 }
                                 catch (const std::exception& e)
                                 {
-                                    std::cerr << "Probe " << name << " CollectExpensiveMetrics error: " << e.what() << std::endl;
+                                    LOG_ERROR("Probe {} CollectExpensiveMetrics error: {}", name, e.what());
                                     backoff.RecordFailure(now_ms);
                                 }
                             }
@@ -288,7 +288,7 @@ namespace aivision
                             }
                             catch (const std::exception& e)
                             {
-                                std::cerr << "Probe " << probe->Name() << " CollectExtendedSnapshot error: " << e.what() << std::endl;
+                                LOG_ERROR("Probe {} CollectExtendedSnapshot error: {}", probe->Name(), e.what());
                             }
                         }
                         changed = true;
@@ -312,11 +312,11 @@ namespace aivision
                 }
                 catch (const std::exception& e)
                 {
-                    std::cerr << "DeviceMonitor loop error: " << e.what() << std::endl;
+                    LOG_ERROR("DeviceMonitor loop error: {}", e.what());
                 }
                 catch (...)
                 {
-                    std::cerr << "DeviceMonitor loop unknown error" << std::endl;
+                    LOG_ERROR("DeviceMonitor loop unknown error");
                 }
 
                 // Sleep in small increments to allow fast shutdown response

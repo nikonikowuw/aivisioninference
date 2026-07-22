@@ -1,6 +1,6 @@
 // AlgoManager 实现
 #include "algo/algo_manager.h"
-#include <iostream>
+#include "logger/logger.h"
 #include <thread>
 #include <chrono>
 
@@ -32,7 +32,7 @@ namespace aivision
             {
                 if (it->second->GetRefCount() == 0 && it->second->GetIdleTimeMs() >= idle_timeout_ms)
                 {
-                    std::cout << "[AlgoManager] GC destroying idle instance: " << it->first << std::endl;
+                    LOG_INFO("[AlgoManager] GC destroying idle instance: {}", it->first);
                     it->second->Destroy();
                     it = instances_.erase(it);
                 }
@@ -51,8 +51,7 @@ namespace aivision
             // 检查资源
             if (!CanLoad(so_path))
             {
-                std::cerr << "[AlgoManager] Cannot load " << so_path
-                          << ": insufficient resources" << std::endl;
+                LOG_ERROR("[AlgoManager] Cannot load {}: insufficient resources", so_path);
                 return nullptr;
             }
 
@@ -64,8 +63,7 @@ namespace aivision
 
                 if (!instance->Initialize(config_json))
                 {
-                    std::cerr << "[AlgoManager] Failed to initialize algo: "
-                              << algo_name << std::endl;
+                    LOG_ERROR("[AlgoManager] Failed to initialize algo: {}", algo_name);
                     return nullptr;
                 }
 
@@ -75,8 +73,7 @@ namespace aivision
             }
             catch (const SoLoadException &e)
             {
-                std::cerr << "[AlgoManager] SoLoadException: " << e.what()
-                          << std::endl;
+                LOG_ERROR("[AlgoManager] SoLoadException: {}", e.what());
                 return nullptr;
             }
         }
@@ -140,10 +137,7 @@ namespace aivision
             auto [instance, ok] = Acquire(algo_name, timeout_ms);
             if (!ok || !instance)
             {
-                std::cerr << "[AlgoManager] face library update failed"
-                          << " algo=" << algo_name
-                          << " reason=instance_not_available"
-                          << std::endl;
+                LOG_ERROR("[AlgoManager] face library update failed algo={} reason=instance_not_available", algo_name);
                 return false;
             }
 
@@ -161,10 +155,7 @@ namespace aivision
             auto [instance, ok] = Acquire(algo_name, timeout_ms);
             if (!ok || !instance)
             {
-                std::cerr << "[AlgoManager] face embedding extract failed"
-                          << " algo=" << algo_name
-                          << " reason=instance_not_available"
-                          << std::endl;
+                LOG_ERROR("[AlgoManager] face embedding extract failed algo={} reason=instance_not_available", algo_name);
                 return false;
             }
 
@@ -212,8 +203,7 @@ namespace aivision
                                 .count() >= drain_timeout_ms)
                         {
                             drain_timed_out_.store(true);
-                            std::cerr << "[AlgoManager] Drain timeout for "
-                                      << algo_name << std::endl;
+                            LOG_ERROR("[AlgoManager] Drain timeout for {}", algo_name);
                             break;
                         }
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));

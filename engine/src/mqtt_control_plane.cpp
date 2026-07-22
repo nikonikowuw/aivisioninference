@@ -1,9 +1,9 @@
 #include "mqtt_control_plane.h"
 #include "engine.h"
 #include "command_dispatcher.h"
+#include "logger/logger.h"
 #include "mqtt/async_client.h"
 #include "proto/flatbuf/envelope_generated.h"
-#include <iostream>
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -39,9 +39,27 @@ namespace aivision
             catch (...) {}
         }
 
+        void connected(const std::string &cause) override
+        {
+            LOG_INFO("[MQTT] Connected/Reconnected: {}", cause.empty() ? "ok" : cause);
+            connected_ = true;
+            try
+            {
+                std::string cmd_topic = "aivision/edge/" + node_id_ + "/cmd/#";
+                client_->subscribe(cmd_topic, 1);
+                client_->subscribe("aivision/edge/self_check/cmd", 1);
+                std::string lwt_topic = "aivision/edge/" + node_id_ + "/status/lifecycle";
+                client_->publish(lwt_topic, "online", 1, true);
+            }
+            catch (const mqtt::exception &exc)
+            {
+                LOG_ERROR("[MQTT] Error restoring subscriptions on reconnect: {}", exc.what());
+            }
+        }
+
         void connection_lost(const std::string &cause) override
         {
-            std::cerr << "[MQTT] Connection lost: " << cause << std::endl;
+            LOG_WARN("[MQTT] Connection lost: {}", cause.empty() ? "broker closed connection or client id collision" : cause);
             connected_ = false;
         }
 
@@ -84,7 +102,7 @@ namespace aivision
                 }
                 catch (const std::exception &e)
                 {
-                    std::cerr << "[MQTT] Exception in message processing task: " << e.what() << std::endl;
+                    LOG_ERROR("[MQTT] Exception in message processing task: {}", e.what());
                 }
             });
         }
@@ -151,10 +169,10 @@ namespace aivision
             mqtt::will_options will(lwt_topic, std::string("offline"), 1, true);
             connOpts.set_will(will);
 
-            std::cout << "[MQTT] Connecting to broker " << engine_->GetConfig().mqtt_broker << "..." << std::endl;
+            LOG_INFO("[MQTT] Connecting to broker {}...", engine_->GetConfig().mqtt_broker);
             impl_->client_->connect(connOpts)->wait();
             impl_->connected_ = true;
-            std::cout << "[MQTT] Connected successfully." << std::endl;
+            LOG_INFO("[MQTT] Connected successfully.");
 
             // Subscribe to control topics
             std::string cmd_topic = "aivision/edge/" + impl_->node_id_ + "/cmd/#";
@@ -162,7 +180,7 @@ namespace aivision
 
             impl_->client_->subscribe("aivision/edge/self_check/cmd", 1)->wait();
 
-            std::cout << "[MQTT] Subscribed to command topics." << std::endl;
+            LOG_INFO("[MQTT] Subscribed to command topics.");
 
             // Publish lifecycle "online"
             impl_->client_->publish(lwt_topic, "online", 1, true)->wait();
@@ -171,7 +189,7 @@ namespace aivision
         }
         catch (const mqtt::exception &exc)
         {
-            std::cerr << "[MQTT] Connection failed: " << exc.what() << std::endl;
+            LOG_ERROR("[MQTT] Connection failed: {}", exc.what());
             return false;
         }
     }
@@ -230,7 +248,7 @@ namespace aivision
         }
         catch (const mqtt::exception &exc)
         {
-            std::cerr << "[MQTT] Publish event failed: " << exc.what() << std::endl;
+            LOG_ERROR("[MQTT] Publish event failed: {}", exc.what());
             return false;
         }
     }
@@ -246,7 +264,7 @@ namespace aivision
         }
         catch (const mqtt::exception &exc)
         {
-            std::cerr << "[MQTT] Publish response failed: " << exc.what() << std::endl;
+            LOG_ERROR("[MQTT] Publish response failed: {}", exc.what());
             return false;
         }
     }

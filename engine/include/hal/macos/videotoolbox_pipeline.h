@@ -134,8 +134,11 @@ private:
     // VideoToolbox 编码
     VTCompressionSessionRef encode_session_ = nullptr;
     bool encoder_initialized_ = false;
+    int enc_bitrate_ = 4'000'000;
+    int enc_fps_ = 25;
+    int enc_gop_ = 50;
+    bool sps_pps_sent_ = false;
     std::mutex enc_mu_;
-    std::vector<uint8_t>* encode_output_ = nullptr;  // 编码输出临时指针
 
     // 线程
     std::unique_ptr<std::thread> pull_thread_;

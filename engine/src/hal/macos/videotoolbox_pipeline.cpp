@@ -2,6 +2,8 @@
 // 零 FFmpeg 依赖：原生 socket RTSP/RTP + VTDecompressionSession + VTCompressionSession
 #include "hal/macos/videotoolbox_pipeline.h"
 
+#include <nlohmann/json.hpp>
+
 #include <CoreMedia/CMFormatDescription.h>
 #include <CoreMedia/CMSampleBuffer.h>
 #include <CoreVideo/CVPixelBuffer.h>
@@ -331,8 +333,17 @@ bool VideoToolboxPipeline::RtspDescribe(std::string& sdp) {
     std::string resp;
     if (!RtspSendCommand("DESCRIBE", resp))
         return false;
-    auto pos = resp.find("\r\n\r\n");
-    if (pos != std::string::npos) sdp = resp.substr(pos + 4);
+    // RtspReadResponse 会把 \r\n\r\n 之后的正文（即 SDP）剥离到 rx_buffer_ 中，
+    // 为后续 PullLoop 的 RTP interleaved 帧做准备。但 DESCRIBE 的响应正文必须解析，
+    // 因此优先从 rx_buffer_ 中读取 SDP。
+    if (!rx_buffer_.empty()) {
+        sdp.assign(reinterpret_cast<const char*>(rx_buffer_.data()), rx_buffer_.size());
+        rx_buffer_.clear();
+    }
+    if (sdp.empty()) {
+        auto pos = resp.find("\r\n\r\n");
+        if (pos != std::string::npos) sdp = resp.substr(pos + 4);
+    }
     return !sdp.empty();
 }
 
@@ -794,35 +805,127 @@ bool VideoToolboxPipeline::FeedNalToDecoder(const uint8_t* data, size_t size) {
 // VTCompressionSession
 // ============================================================
 
+namespace {
+struct EncodeOutputContext {
+    std::vector<uint8_t>* output;
+    bool* sps_pps_sent;
+    bool is_key_frame = false;
+};
+}  // namespace
+
 static void EncodeOutputCallback(void* /*refcon*/, void* src, OSStatus status,
                                   VTEncodeInfoFlags /*flags*/, CMSampleBufferRef sb) {
     if (status != noErr || !sb || !src) return;
-    auto* output = static_cast<std::vector<uint8_t>*>(src);
+    auto* context = static_cast<EncodeOutputContext*>(src);
+    auto* output = context->output;
+
+    // 每个 NAL 前插入 Annex B 起始码 (00 00 00 01)，
+    // 将 VT 默认的 AVCC 格式转为 Annex B，使下游 RtspPushStage 能正确解析。
+    static const uint8_t kAnnexBStartCode[4] = {0x00, 0x00, 0x00, 0x01};
+
+    // VT 只通过 CMFormatDescription 暴露参数集，不内联在码流中。每个 IDR
+    // 重复携带 SPS/PPS，确保 RTSP 重连后的新解码器能从当前关键帧起播。
+    context->is_key_frame = true;
+    CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sb, false);
+    if (attachments && CFArrayGetCount(attachments) > 0) {
+        auto attachment = static_cast<CFDictionaryRef>(CFArrayGetValueAtIndex(attachments, 0));
+        auto not_sync = static_cast<CFBooleanRef>(CFDictionaryGetValue(attachment, kCMSampleAttachmentKey_NotSync));
+        context->is_key_frame = not_sync != kCFBooleanTrue;
+    }
+
     CMBlockBufferRef block = CMSampleBufferGetDataBuffer(sb);
     if (!block) return;
-    char* ptr = nullptr;
-    size_t total = 0, at_offset = 0;
-    if (CMBlockBufferGetDataPointer(block, 0, &at_offset, &total, &ptr) != noErr) return;
-    if (ptr && total > 0) output->insert(output->end(), reinterpret_cast<uint8_t*>(ptr), reinterpret_cast<uint8_t*>(ptr) + total);
+    size_t total_len = 0, at_offset = 0;
+    char* raw = nullptr;
+    if (CMBlockBufferGetDataPointer(block, 0, &at_offset, &total_len, &raw) != noErr || !raw || total_len < 4)
+        return;
+    output->reserve(total_len + 256);
+
+    if (!*context->sps_pps_sent || context->is_key_frame) {
+        CMFormatDescriptionRef fmt = CMSampleBufferGetFormatDescription(sb);
+        bool header_added = false;
+        if (fmt) {
+            size_t sps_count = 0, pps_count = 0;
+            const uint8_t* sps_ptr = nullptr; size_t sps_size = 0;
+            const uint8_t* pps_ptr = nullptr; size_t pps_size = 0;
+            CMVideoFormatDescriptionGetH264ParameterSetAtIndex(fmt, 0, &sps_ptr, &sps_size, &sps_count, nullptr);
+            CMVideoFormatDescriptionGetH264ParameterSetAtIndex(fmt, 1, &pps_ptr, &pps_size, &pps_count, nullptr);
+            if (sps_ptr && sps_size > 0) {
+                output->insert(output->end(), kAnnexBStartCode, kAnnexBStartCode + 4);
+                output->insert(output->end(), sps_ptr, sps_ptr + sps_size);
+                header_added = true;
+            }
+            if (pps_ptr && pps_size > 0) {
+                output->insert(output->end(), kAnnexBStartCode, kAnnexBStartCode + 4);
+                output->insert(output->end(), pps_ptr, pps_ptr + pps_size);
+                header_added = true;
+            }
+        }
+        *context->sps_pps_sent = *context->sps_pps_sent || header_added;
+    }
+
+    // 遍历 CMBlockBuffer 中的 NAL 单元（AVCC 格式：4 字节长度 + NAL 数据），
+    // 将每个 NAL 转为 Annex B 格式。
+    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(raw);
+    size_t offset = 0;
+    while (offset + 4 <= total_len) {
+        uint32_t nal_len = (static_cast<uint32_t>(ptr[offset]) << 24) |
+                           (static_cast<uint32_t>(ptr[offset + 1]) << 16) |
+                           (static_cast<uint32_t>(ptr[offset + 2]) << 8) |
+                            static_cast<uint32_t>(ptr[offset + 3]);
+        offset += 4;
+        if (nal_len == 0 || offset + nal_len > total_len) break;
+        output->insert(output->end(), kAnnexBStartCode, kAnnexBStartCode + 4);
+        output->insert(output->end(), ptr + offset, ptr + offset + nal_len);
+        offset += nal_len;
+    }
 }
 
-bool VideoToolboxPipeline::EncodeInit(const std::string& /*config_json*/) { return true; }
+bool VideoToolboxPipeline::EncodeInit(const std::string& config_json) {
+    // 解析编码器配置 JSON，默认值对齐 EncoderStage
+    enc_bitrate_ = 4'000'000;
+    enc_fps_ = 25;
+    enc_gop_ = 50;
+    auto j = nlohmann::json::parse(config_json, nullptr, false);
+    if (j.is_object()) {
+        if (j.contains("bitrate") && j["bitrate"].is_number()) enc_bitrate_ = j["bitrate"].get<int>();
+        if (j.contains("fps") && j["fps"].is_number()) enc_fps_ = j["fps"].get<int>();
+        if (j.contains("gop") && j["gop"].is_number()) enc_gop_ = j["gop"].get<int>();
+    }
+    LOG_INFO("[VideoToolbox] Encoder config: bitrate={}, fps={}, gop={}", enc_bitrate_, enc_fps_, enc_gop_);
+    return true;
+}
 
 bool VideoToolboxPipeline::InitEncoder(int width, int height) {
     std::lock_guard<std::mutex> lock(enc_mu_);
     if (encoder_initialized_) return true;
     OSStatus s = VTCompressionSessionCreate(kCFAllocatorDefault, width, height,
-        kCMVideoCodecType_H264, nullptr, nullptr, nullptr, EncodeOutputCallback, this, &encode_session_);
+        kCMVideoCodecType_H264, nullptr, nullptr, nullptr, EncodeOutputCallback, nullptr, &encode_session_);
     if (s != noErr) return false;
+
     VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_RealTime, kCFBooleanTrue);
-    int32_t br = width * height * 3;
-    CFNumberRef brNum = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &br);
+    VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Main_AutoLevel);
+    VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse);
+    // 不允许 B 帧，降低端到端延迟
+
+    int bitrate = enc_bitrate_ > 0 ? enc_bitrate_ : 4'000'000;
+    CFNumberRef brNum = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &bitrate);
     VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_AverageBitRate, brNum);
     CFRelease(brNum);
-    VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Main_AutoLevel);
+
+    int fps = enc_fps_ > 0 ? enc_fps_ : 25;
+    CFNumberRef fpsNum = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &fps);
+    VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_ExpectedFrameRate, fpsNum);
+    CFRelease(fpsNum);
+
+    int gop = enc_gop_ > 0 ? enc_gop_ : 50;
+    CFNumberRef gopNum = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &gop);
+    VTSessionSetProperty(encode_session_, kVTCompressionPropertyKey_MaxKeyFrameInterval, gopNum);
+    CFRelease(gopNum);
+
     VTCompressionSessionPrepareToEncodeFrames(encode_session_);
     encoder_initialized_ = true;
-    LOG_INFO("[VideoToolbox] Encoder: {}x{}", width, height);
+    LOG_INFO("[VideoToolbox] Encoder: {}x{} bitrate={} fps={} gop={}", width, height, bitrate, fps, gop);
     return true;
 }
 
@@ -830,6 +933,7 @@ void VideoToolboxPipeline::DestroyEncoder() {
     std::lock_guard<std::mutex> lock(enc_mu_);
     if (encode_session_) { VTCompressionSessionInvalidate(encode_session_); CFRelease(encode_session_); encode_session_ = nullptr; }
     encoder_initialized_ = false;
+    sps_pps_sent_ = false;
 }
 
 bool VideoToolboxPipeline::EncodeFrame(HwBufferPtr frame, uint8_t* data, size_t size, size_t& out_size) {
@@ -847,21 +951,20 @@ bool VideoToolboxPipeline::EncodeFrameEx(HwBufferPtr frame, uint8_t* data, size_
     if (!encoder_initialized_ && !InitEncoder(w, h)) return false;
 
     std::vector<uint8_t> output;
-    encode_output_ = &output;
+    EncodeOutputContext output_context{&output, &sps_pps_sent_};
 
     CMTime pts = CMTimeMake(
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(), 1000000);
     VTEncodeInfoFlags flags = 0;
-    OSStatus s = VTCompressionSessionEncodeFrame(encode_session_, cvpb, pts, kCMTimeInvalid, nullptr, &output, &flags);
+    OSStatus s = VTCompressionSessionEncodeFrame(encode_session_, cvpb, pts, kCMTimeInvalid, nullptr, &output_context, &flags);
     if (s == noErr) s = VTCompressionSessionCompleteFrames(encode_session_, kCMTimeInvalid);
-    encode_output_ = nullptr;
 
     if (s != noErr || output.empty()) return false;
 
     out_size = std::min(size, output.size());
     std::memcpy(data, output.data(), out_size);
     desc.codec = VideoCodec::H264;
-    desc.is_key_frame = true;  // VTCompressionSession 不方便判断，保守标记
+    desc.is_key_frame = output_context.is_key_frame;
     return true;
 }
 

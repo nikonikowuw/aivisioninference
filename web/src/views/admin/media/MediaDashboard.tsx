@@ -23,7 +23,7 @@ import {
   MdPlayCircle,
   MdSearch, MdVideocam,
 } from 'react-icons/md';
-import { deviceGroupsApi, devicesApi, mediaApi, request } from 'services/api';
+import { deviceGroupsApi, devicesApi, mediaApi } from 'services/api';
 import { startGB28181Live, stopGB28181Live } from 'services/gb28181';
 
 // ── Types ──
@@ -200,12 +200,12 @@ export default function MediaDashboard() {
     if (shouldUseGB28181Live(device)) {
       return startGB28181Live(device.id);
     }
-    return request<PlayResponse>(`/media/play?device_id=${device.id}&protocol=hls`);
+    return mediaApi.getPlayUrl({ device_id: device.id, protocol: 'webrtc' });
   }, []);
 
   const stopTilePlay = useCallback((tile: Tile | null | undefined) => {
     if (!tile || tile.loading || !tile.url) return;
-    if (tile.protocol === 'hls' && tile.streamId) {
+    if (tile.streamId) {
       stopGB28181Live(tile.deviceId, tile.streamId).catch(() => { });
       return;
     }

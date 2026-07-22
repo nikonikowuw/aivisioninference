@@ -42,9 +42,17 @@ export function useThrottledInference(
     if (!ctx) return;
 
     let isActive = true;
+    let lastRenderAt = 0;
+    const renderIntervalMs = 100;
 
-    const renderLoop = () => {
+    const renderLoop = (timestamp: number) => {
       if (!isActive) return;
+
+      if (timestamp - lastRenderAt < renderIntervalMs) {
+        animationFrameRef.current = requestAnimationFrame(renderLoop);
+        return;
+      }
+      lastRenderAt = timestamp;
 
       if (video.videoWidth > 0 && video.videoHeight > 0) {
         // Synchronize canvas logical resolution with layout size of the video element
@@ -120,7 +128,7 @@ export function useThrottledInference(
       animationFrameRef.current = requestAnimationFrame(renderLoop);
     };
 
-    renderLoop();
+    animationFrameRef.current = requestAnimationFrame(renderLoop);
 
     return () => {
       isActive = false;

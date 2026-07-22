@@ -45,6 +45,9 @@ type StreamState struct {
 	PlayURLWebrtc string
 	PlayURLHls    string
 
+	// 视频编码格式 ("h264", "h265")
+	Codec string
+
 	// ZLM 外部可访问地址（引擎上报），供构造 HLS 播放 URL
 	ZLMHost     string
 	ZLMHTTPPort int
@@ -179,17 +182,23 @@ func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, re
 	state.RefCount.Store(newCount)
 
 	if newCount == 1 {
-		dev, err := m.deviceRepo.FindByID(ctx, route.DeviceID)
+		realDeviceID := strings.TrimSuffix(route.DeviceID, "_sub")
+		dev, err := m.deviceRepo.FindByID(ctx, realDeviceID)
 		if err != nil {
 			state.Consumers.Delete(reason)
 			m.recalculateRefCount(state)
 			return err
 		}
 
+		rtspURL := strings.TrimSpace(dev.RtspURL)
+		if strings.HasSuffix(route.DeviceID, "_sub") {
+			rtspURL = DeriveSubStreamURL(rtspURL)
+		}
+
 		req := StreamStartRequest{
 			NodeID:         route.NodeID,
 			DeviceID:       route.DeviceID,
-			RtspURL:        strings.TrimSpace(dev.RtspURL),
+			RtspURL:        rtspURL,
 			EnableInfer:    strings.HasPrefix(reason, "infer"),
 			EnablePlayback: reason == "play",
 		}
@@ -217,15 +226,20 @@ func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, re
 		go m.syncToDatabase(ctx, state, reason)
 	} else {
 		if reason == "play" {
-			dev, err := m.deviceRepo.FindByID(ctx, route.DeviceID)
+			realDeviceID := strings.TrimSuffix(route.DeviceID, "_sub")
+			dev, err := m.deviceRepo.FindByID(ctx, realDeviceID)
 			if err != nil {
 				m.logger.Warn("load playback device failed", zap.Error(err), zap.String("device_id", route.DeviceID))
 				return err
 			}
+			rtspURL := strings.TrimSpace(dev.RtspURL)
+			if strings.HasSuffix(route.DeviceID, "_sub") {
+				rtspURL = DeriveSubStreamURL(rtspURL)
+			}
 			_, err = m.engine.StartPlayback(ctx, StreamStartRequest{
 				NodeID:         route.NodeID,
 				DeviceID:       route.DeviceID,
-				RtspURL:        dev.RtspURL,
+				RtspURL:        rtspURL,
 				EnablePlayback: true,
 			})
 			if err != nil {
@@ -235,7 +249,7 @@ func (m *StreamManager) AcquireOnNode(ctx context.Context, route StreamRoute, re
 				info, retryErr := m.engine.StartStream(ctx, StreamStartRequest{
 					NodeID:         route.NodeID,
 					DeviceID:       route.DeviceID,
-					RtspURL:        strings.TrimSpace(dev.RtspURL),
+					RtspURL:        rtspURL,
 					EnableInfer:    false,
 					EnablePlayback: true,
 				})
@@ -496,15 +510,21 @@ func (m *StreamManager) reacquire(ctx context.Context, state *StreamState) {
 		return
 	}
 
-	dev, err := m.deviceRepo.FindByID(ctx, state.DeviceID)
+	realDeviceID := strings.TrimSuffix(state.DeviceID, "_sub")
+	dev, err := m.deviceRepo.FindByID(ctx, realDeviceID)
 	if err != nil {
 		return
+	}
+
+	rtspURL := strings.TrimSpace(dev.RtspURL)
+	if strings.HasSuffix(state.DeviceID, "_sub") {
+		rtspURL = DeriveSubStreamURL(rtspURL)
 	}
 
 	req := state.StartRequest
 	req.NodeID = state.NodeID
 	req.DeviceID = state.DeviceID
-	req.RtspURL = dev.RtspURL
+	req.RtspURL = rtspURL
 
 	_, _ = m.engine.StartStream(ctx, req)
 }

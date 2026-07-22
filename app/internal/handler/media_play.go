@@ -41,7 +41,7 @@ func (h *MediaPlayHandler) GetPlayURL(c *gin.Context) {
 		return
 	}
 
-	url, err := h.mediaService.GetPlayURL(c.Request.Context(), deviceID, protocol, streamType)
+	url, codec, err := h.mediaService.GetPlayURL(c.Request.Context(), deviceID, protocol, streamType)
 	if err != nil {
 		zap.L().Error("get play url failed", zap.String("device_id", deviceID), zap.Error(err))
 		response.Err(c, apperrors.New(apperrors.ErrInternal, ""))
@@ -52,6 +52,7 @@ func (h *MediaPlayHandler) GetPlayURL(c *gin.Context) {
 		"url":         url,
 		"protocol":    protocol,
 		"stream_type": streamType,
+		"codec":       codec,
 		"expires":     time.Now().Add(30 * time.Minute).Unix(),
 	})
 }
@@ -59,12 +60,13 @@ func (h *MediaPlayHandler) GetPlayURL(c *gin.Context) {
 // StopPlay 停止设备的流代理（关闭预览）。
 func (h *MediaPlayHandler) StopPlay(c *gin.Context) {
 	deviceID := c.Query("device_id")
+	streamType := c.DefaultQuery("stream_type", "main")
 	if deviceID == "" {
 		response.Err(c, apperrors.New(apperrors.ErrBadRequest, ""))
 		return
 	}
 
-	if err := h.mediaService.StopPlayURL(c.Request.Context(), deviceID); err != nil {
+	if err := h.mediaService.StopPlayURL(c.Request.Context(), deviceID, streamType); err != nil {
 		zap.L().Warn("stop play failed", zap.String("device_id", deviceID), zap.Error(err))
 		// 关闭失败不是致命错误
 	}

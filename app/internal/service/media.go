@@ -70,7 +70,10 @@ func (s *MediaService) VerifyPlayAuth(ctx context.Context, app, stream, params s
 // Supported protocols: auto, webrtc, flv, hls.
 // streamType: "main" for main stream, "sub" for sub-stream.
 // For RTSP devices, this will automatically start pulling the stream via StreamManager.
-func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, streamType string) (string, error) {
+// Supported protocols: auto, webrtc, flv, hls.
+// streamType: "main" for main stream, "sub" for sub-stream.
+// For RTSP devices, this will automatically start pulling the stream via StreamManager.
+func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, streamType string) (string, string, error) {
 	app := "live"
 	stream := deviceID
 	if streamType == "sub" || streamType == "auxiliary" {
@@ -83,7 +86,7 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 	}
 
 	// 1. 动态节点选择：优先使用已有流关联节点，次选任意在线边缘节点
-	if state := s.streamManager.GetStream(ctx, deviceID); state != nil && state.NodeID != "" {
+	if state := s.streamManager.GetStream(ctx, stream); state != nil && state.NodeID != "" {
 		metadata["target_node_id"] = state.NodeID
 	} else if s.edgeNodeRepo != nil {
 		if node, err := s.edgeNodeRepo.FindAnyOnlineNode(ctx); err == nil && node != nil {
@@ -91,17 +94,17 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		}
 	}
 
-	// 2. 通过 StreamManager 获取流引用
-	err := s.streamManager.Acquire(ctx, deviceID, "play", metadata)
+	// 2. 通过 StreamManager 获取流引用 (使用 stream 标识主流与子流)
+	err := s.streamManager.Acquire(ctx, stream, "play", metadata)
 	if err != nil {
-		return "", fmt.Errorf("acquire stream: %w", err)
+		return "", "", fmt.Errorf("acquire stream: %w", err)
 	}
 
 	// 3. 获取流状态以拿到播放地址
-	state := s.streamManager.GetStream(ctx, deviceID)
+	state := s.streamManager.GetStream(ctx, stream)
 	if state == nil {
-		_ = s.streamManager.Release(ctx, deviceID, "play")
-		return "", errors.New(errors.ErrStreamStateNotFound, "")
+		_ = s.streamManager.Release(ctx, stream, "play")
+		return "", "", errors.New(errors.ErrStreamStateNotFound, "")
 	}
 
 	zlmHost := state.ZLMHost
@@ -122,7 +125,12 @@ func (s *MediaService) GetPlayURL(ctx context.Context, deviceID, protocol, strea
 		}
 	}
 
-	return s.buildPlayURL(app, stream, zlmHost, state.ZLMHTTPPort, protocol), nil
+	codec := state.Codec
+	if codec == "" {
+		codec = "h264"
+	}
+
+	return s.buildPlayURL(app, stream, zlmHost, state.ZLMHTTPPort, protocol), codec, nil
 }
 
 func (s *MediaService) buildPlayURL(app, stream string, zlmHost string, zlmHTTPPort int, protocol string) string {
@@ -165,9 +173,13 @@ func (s *MediaService) buildPlayURL(app, stream string, zlmHost string, zlmHTTPP
 	return fmt.Sprintf("%s://%s:%d/%s/%s?token=%s", zlm.ProtocolWebRTC, host, httpPort, app, stream, token)
 }
 
-// StopPlayURL closes the stream proxy for a device (stop preview).
-func (s *MediaService) StopPlayURL(ctx context.Context, deviceID string) error {
-	return s.streamManager.Release(ctx, deviceID, "play")
+// StopPlayURL closes the stream proxy for a device and stream type (stop preview).
+func (s *MediaService) StopPlayURL(ctx context.Context, deviceID, streamType string) error {
+	stream := deviceID
+	if streamType == "sub" || streamType == "auxiliary" {
+		stream = deviceID + "_sub"
+	}
+	return s.streamManager.Release(ctx, stream, "play")
 }
 
 // GetSnapshot captures a snapshot from the device stream.
